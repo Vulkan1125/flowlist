@@ -38,7 +38,10 @@ pub fn parse_repeat(input: &str, reference: DateTime<Utc>) -> Result<RepeatRule>
         rule.end = RepeatEnd::OnDate(stamp.local_date());
     } else if let Some(index) = text.find(" for ") {
         let rest = &text[index + " for ".len()..];
-        let count_text = rest.trim().trim_end_matches(" times").trim_end_matches(" time");
+        let count_text = rest
+            .trim()
+            .trim_end_matches(" times")
+            .trim_end_matches(" time");
         let count: u32 = count_text
             .split_whitespace()
             .next()
@@ -84,11 +87,7 @@ fn parse_interval(text: &str) -> Result<(u32, IntervalUnit)> {
         "week" => IntervalUnit::Weeks,
         "month" => IntervalUnit::Months,
         "year" => IntervalUnit::Years,
-        other => {
-            return Err(Error::invalid(format!(
-                "unknown repeat unit “{other}”"
-            )))
-        }
+        other => return Err(Error::invalid(format!("unknown repeat unit “{other}”"))),
     };
     Ok((every, unit))
 }

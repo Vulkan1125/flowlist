@@ -117,20 +117,40 @@ pub enum TaskStatus {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Condition {
-    Project { id: ProjectId },
-    Folder { id: FolderId, include_children: bool },
-    Tag { id: TagId, include_children: bool },
+    Project {
+        id: ProjectId,
+    },
+    Folder {
+        id: FolderId,
+        include_children: bool,
+    },
+    Tag {
+        id: TagId,
+        include_children: bool,
+    },
     InInbox,
-    Flagged { value: bool },
-    Status { value: TaskStatus },
-    Due { window: DueWindow },
-    Deferred { window: DueWindow },
-    HasRepeat { value: bool },
+    Flagged {
+        value: bool,
+    },
+    Status {
+        value: TaskStatus,
+    },
+    Due {
+        window: DueWindow,
+    },
+    Deferred {
+        window: DueWindow,
+    },
+    HasRepeat {
+        value: bool,
+    },
     Estimate {
         min_minutes: Option<u32>,
         max_minutes: Option<u32>,
     },
-    Text { value: String },
+    Text {
+        value: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]

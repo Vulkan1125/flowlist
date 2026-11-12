@@ -35,10 +35,7 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     let tmp: PathBuf = parent.join(format!(".{file_name}.tmp-{}-{stamp}", std::process::id()));
 
     {
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&tmp)?;
+        let mut file = OpenOptions::new().create_new(true).write(true).open(&tmp)?;
         file.write_all(bytes)?;
         file.sync_all()?;
     }

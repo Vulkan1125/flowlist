@@ -16,8 +16,16 @@ pub fn sort_rows(db: &Db, rows: &mut [TaskRow], sort: SortBy) {
             option_cmp(left, right)
         }),
         SortBy::Defer => rows.sort_by(|a, b| {
-            let left = db.tasks.get(&a.id).and_then(|task| task.defer).map(|s| s.at);
-            let right = db.tasks.get(&b.id).and_then(|task| task.defer).map(|s| s.at);
+            let left = db
+                .tasks
+                .get(&a.id)
+                .and_then(|task| task.defer)
+                .map(|s| s.at);
+            let right = db
+                .tasks
+                .get(&b.id)
+                .and_then(|task| task.defer)
+                .map(|s| s.at);
             option_cmp(left, right)
         }),
         SortBy::Name => rows.sort_by(|a, b| {
@@ -34,14 +42,8 @@ pub fn sort_rows(db: &Db, rows: &mut [TaskRow], sort: SortBy) {
             left.cmp(&right)
         }),
         SortBy::Flagged => rows.sort_by(|a, b| {
-            let left = db
-                .tasks
-                .get(&a.id)
-                .is_some_and(|task| task.flagged);
-            let right = db
-                .tasks
-                .get(&b.id)
-                .is_some_and(|task| task.flagged);
+            let left = db.tasks.get(&a.id).is_some_and(|task| task.flagged);
+            let right = db.tasks.get(&b.id).is_some_and(|task| task.flagged);
             right.cmp(&left)
         }),
         SortBy::Estimate => rows.sort_by(|a, b| {

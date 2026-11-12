@@ -41,8 +41,7 @@ impl Geo {
         let lat2 = other.lat.to_radians();
         let dlat = (other.lat - self.lat).to_radians();
         let dlon = (other.lon - self.lon).to_radians();
-        let a = (dlat / 2.0).sin().powi(2)
-            + lat1.cos() * lat2.cos() * (dlon / 2.0).sin().powi(2);
+        let a = (dlat / 2.0).sin().powi(2) + lat1.cos() * lat2.cos() * (dlon / 2.0).sin().powi(2);
         2.0 * earth_km * a.sqrt().asin()
     }
 }

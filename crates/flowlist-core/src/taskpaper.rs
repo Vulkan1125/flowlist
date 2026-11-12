@@ -21,10 +21,10 @@ use crate::db::Db;
 use crate::error::{Error, Result};
 use crate::ids::{ContainerId, FolderId, ProjectId, TagId, TaskId};
 use crate::model::{RepeatRule, Task};
-use crate::time::Stamp;
 use crate::parse::dates::parse_stamp;
 use crate::parse::duration::parse_duration;
 use crate::parse::repeat::parse_repeat;
+use crate::time::Stamp;
 use crate::time::{format_duration, now};
 
 pub fn export(db: &Db) -> String {
@@ -322,7 +322,9 @@ fn parse_task_line(input: &str, reference: DateTime<Utc>) -> Result<(String, Att
         }
         let mut j = i + 1;
         let mut key = String::new();
-        while j < chars.len() && (chars[j].is_ascii_alphanumeric() || chars[j] == '_' || chars[j] == '-') {
+        while j < chars.len()
+            && (chars[j].is_ascii_alphanumeric() || chars[j] == '_' || chars[j] == '-')
+        {
             key.push(chars[j]);
             j += 1;
         }

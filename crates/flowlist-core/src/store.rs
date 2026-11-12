@@ -216,10 +216,7 @@ impl Store {
                 if !history.can_undo() {
                     return Err(Error::invalid("nothing to undo"));
                 }
-                let label = history
-                    .label_for_undo()
-                    .unwrap_or("change")
-                    .to_string();
+                let label = history.label_for_undo().unwrap_or("change").to_string();
                 history.cursor -= 1;
                 (label, history.current().cloned())
             }
@@ -227,10 +224,7 @@ impl Store {
                 if !history.can_redo() {
                     return Err(Error::invalid("nothing to redo"));
                 }
-                let label = history
-                    .label_for_redo()
-                    .unwrap_or("change")
-                    .to_string();
+                let label = history.label_for_redo().unwrap_or("change").to_string();
                 history.cursor += 1;
                 (label, history.current().cloned())
             }
@@ -309,5 +303,7 @@ fn push_history(history: &mut HistoryFile, label: String, state: Db) {
 }
 
 fn mtime(path: &std::path::Path) -> Option<SystemTime> {
-    std::fs::metadata(path).and_then(|meta| meta.modified()).ok()
+    std::fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
 }

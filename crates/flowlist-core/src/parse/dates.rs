@@ -7,9 +7,7 @@
 use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveTime, Utc};
 
 use crate::error::{Error, Result};
-use crate::time::{
-    IntervalUnit, Stamp, add_interval, local_date, next_weekday, parse_weekday,
-};
+use crate::time::{IntervalUnit, Stamp, add_interval, local_date, next_weekday, parse_weekday};
 
 pub fn parse_stamp(input: &str, reference: DateTime<Utc>) -> Result<Stamp> {
     let cleaned = input
@@ -127,10 +125,9 @@ fn parse_date_tokens(tokens: &[String], today: NaiveDate) -> Option<NaiveDate> {
         "tomorrow" if tokens.len() == 1 => return Some(today + Duration::days(1)),
         "yesterday" if tokens.len() == 1 => return Some(today - Duration::days(1)),
         "weekend" if tokens.len() == 1 => {
-            let until_saturday =
-                (chrono::Weekday::Sat.num_days_from_monday() as i64
-                    - today.weekday().num_days_from_monday() as i64)
-                    .rem_euclid(7);
+            let until_saturday = (chrono::Weekday::Sat.num_days_from_monday() as i64
+                - today.weekday().num_days_from_monday() as i64)
+                .rem_euclid(7);
             return Some(today + Duration::days(until_saturday));
         }
         "in" => {
@@ -173,7 +170,9 @@ fn parse_date_tokens(tokens: &[String], today: NaiveDate) -> Option<NaiveDate> {
             if tokens.len() != 2 {
                 return None;
             }
-            return Some(next_weekday(today, parse_weekday(&tokens[1])?, false) - Duration::days(7));
+            return Some(
+                next_weekday(today, parse_weekday(&tokens[1])?, false) - Duration::days(7),
+            );
         }
         _ => {}
     }
@@ -350,13 +349,25 @@ mod tests {
     fn explicit_dates_and_times() {
         let reference = reference();
         let stamp = parse_stamp("2026-12-01 17:30", reference).unwrap();
-        assert_eq!(stamp.local_date(), NaiveDate::from_ymd_opt(2026, 12, 1).unwrap());
-        assert_eq!(stamp.local_time(), NaiveTime::from_hms_opt(17, 30, 0).unwrap());
+        assert_eq!(
+            stamp.local_date(),
+            NaiveDate::from_ymd_opt(2026, 12, 1).unwrap()
+        );
+        assert_eq!(
+            stamp.local_time(),
+            NaiveTime::from_hms_opt(17, 30, 0).unwrap()
+        );
         assert!(stamp.has_time);
 
         let stamp = parse_stamp("nov 20 5pm", reference).unwrap();
-        assert_eq!(stamp.local_date(), NaiveDate::from_ymd_opt(2026, 11, 20).unwrap());
-        assert_eq!(stamp.local_time(), NaiveTime::from_hms_opt(17, 0, 0).unwrap());
+        assert_eq!(
+            stamp.local_date(),
+            NaiveDate::from_ymd_opt(2026, 11, 20).unwrap()
+        );
+        assert_eq!(
+            stamp.local_time(),
+            NaiveTime::from_hms_opt(17, 0, 0).unwrap()
+        );
     }
 
     #[test]

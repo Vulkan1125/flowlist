@@ -41,11 +41,7 @@ pub fn parse_duration(input: &str) -> Result<u32> {
             "h" | "hr" | "hrs" | "hour" | "hours" => 60.0,
             "d" | "day" | "days" => 1440.0,
             "w" | "wk" | "week" | "weeks" => 10080.0,
-            other => {
-                return Err(Error::invalid(format!(
-                    "unknown duration unit “{other}”"
-                )))
-            }
+            other => return Err(Error::invalid(format!("unknown duration unit “{other}”"))),
         };
         *total += amount * minutes;
         number.clear();

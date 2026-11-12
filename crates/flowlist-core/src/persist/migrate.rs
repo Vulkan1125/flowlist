@@ -79,8 +79,12 @@ fn migrate_0_to_1(value: &mut Value) -> Result<()> {
     db_object
         .entry("settings")
         .or_insert_with(|| Value::Object(Map::new()));
-    db_object.entry("created_at").or_insert_with(|| json!(now()));
-    db_object.entry("modified_at").or_insert_with(|| json!(now()));
+    db_object
+        .entry("created_at")
+        .or_insert_with(|| json!(now()));
+    db_object
+        .entry("modified_at")
+        .or_insert_with(|| json!(now()));
     Ok(())
 }
 

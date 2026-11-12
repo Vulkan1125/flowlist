@@ -237,9 +237,7 @@ pub fn add_interval(date: NaiveDate, every: u32, unit: IntervalUnit) -> NaiveDat
     match unit {
         IntervalUnit::Days => date + Duration::days(every as i64),
         IntervalUnit::Weeks => date + Duration::days(every as i64 * 7),
-        IntervalUnit::Months => date
-            .checked_add_months(Months::new(every))
-            .unwrap_or(date),
+        IntervalUnit::Months => date.checked_add_months(Months::new(every)).unwrap_or(date),
         IntervalUnit::Years => date
             .checked_add_months(Months::new(every.saturating_mul(12)))
             .unwrap_or(date),

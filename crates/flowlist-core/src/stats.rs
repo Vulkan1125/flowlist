@@ -64,9 +64,7 @@ pub fn compute(db: &Db, at: DateTime<Utc>) -> Stats {
         }
         match availability::availability(db, &task.id, at) {
             Availability::Available => stats.available += 1,
-            Availability::Deferred(_) | Availability::ProjectDeferred(_, _) => {
-                stats.deferred += 1
-            }
+            Availability::Deferred(_) | Availability::ProjectDeferred(_, _) => stats.deferred += 1,
             Availability::Completed => {}
             _ => stats.blocked += 1,
         }

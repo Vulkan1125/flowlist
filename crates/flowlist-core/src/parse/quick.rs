@@ -17,10 +17,10 @@ use chrono::{DateTime, Utc};
 use crate::command::NewTask;
 use crate::error::{Error, Result};
 use crate::model::RepeatRule;
-use crate::time::Stamp;
 use crate::parse::dates::parse_stamp;
 use crate::parse::duration::parse_duration;
 use crate::parse::repeat::parse_repeat;
+use crate::time::Stamp;
 
 #[derive(Clone, Debug, Default)]
 pub struct QuickEntry {

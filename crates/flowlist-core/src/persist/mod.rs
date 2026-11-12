@@ -87,7 +87,11 @@ impl HistoryFile {
 
     pub fn label_for_undo(&self) -> Option<&str> {
         self.can_undo()
-            .then(|| self.entries.get(self.cursor).map(|entry| entry.label.as_str()))
+            .then(|| {
+                self.entries
+                    .get(self.cursor)
+                    .map(|entry| entry.label.as_str())
+            })
             .flatten()
     }
 

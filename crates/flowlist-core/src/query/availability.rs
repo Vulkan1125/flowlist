@@ -56,7 +56,11 @@ impl Availability {
         match self {
             Availability::BlockedByTag(id) => {
                 let tag = db.tags.get(id)?;
-                Some(format!("“{}” is {}", tag.name, tag.status.label().to_lowercase()))
+                Some(format!(
+                    "“{}” is {}",
+                    tag.name,
+                    tag.status.label().to_lowercase()
+                ))
             }
             Availability::BlockedBySequence(id) => db
                 .tasks
@@ -65,9 +69,10 @@ impl Availability {
             Availability::Deferred(stamp) => {
                 Some(format!("Deferred until {}", stamp.to_input_string()))
             }
-            Availability::ProjectDeferred(_, stamp) => {
-                Some(format!("Project deferred until {}", stamp.to_input_string()))
-            }
+            Availability::ProjectDeferred(_, stamp) => Some(format!(
+                "Project deferred until {}",
+                stamp.to_input_string()
+            )),
             Availability::ParentUnavailable(id) => db
                 .tasks
                 .get(id)
@@ -134,9 +139,10 @@ fn availability_inner(db: &Db, task: &Task, at: DateTime<Utc>) -> Availability {
     }
     for tag_id in tags {
         if let Some(tag) = db.tags.get(tag_id) {
-            let inherited_blocked = tag.parent.as_ref().is_some_and(|parent| {
-                !db.tag_is_available(parent)
-            });
+            let inherited_blocked = tag
+                .parent
+                .as_ref()
+                .is_some_and(|parent| !db.tag_is_available(parent));
             if tag.status != TagStatus::Available || inherited_blocked {
                 return Availability::BlockedByTag(tag_id.clone());
             }
@@ -195,12 +201,7 @@ pub fn due_today(db: &Db, at: DateTime<Utc>) -> Vec<TaskId> {
     let mut out: Vec<TaskId> = db
         .tasks
         .values()
-        .filter(|task| {
-            !task.completed
-                && task
-                    .due
-                    .is_some_and(|stamp| stamp.local_date() == today)
-        })
+        .filter(|task| !task.completed && task.due.is_some_and(|stamp| stamp.local_date() == today))
         .map(|task| task.id.clone())
         .collect();
     out.sort_by_key(|id| db.tasks[id].due.map(|stamp| stamp.at));
@@ -212,12 +213,7 @@ pub fn overdue(db: &Db, at: DateTime<Utc>) -> Vec<TaskId> {
     let mut out: Vec<TaskId> = db
         .tasks
         .values()
-        .filter(|task| {
-            !task.completed
-                && task
-                    .due
-                    .is_some_and(|stamp| stamp.local_date() < today)
-        })
+        .filter(|task| !task.completed && task.due.is_some_and(|stamp| stamp.local_date() < today))
         .map(|task| task.id.clone())
         .collect();
     out.sort_by_key(|id| db.tasks[id].due.map(|stamp| stamp.at));

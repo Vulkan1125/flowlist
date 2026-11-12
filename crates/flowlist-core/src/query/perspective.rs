@@ -16,12 +16,7 @@ pub fn matches(db: &Db, task: &Task, node: &FilterNode, at: DateTime<Utc>) -> bo
     }
 }
 
-pub fn condition_matches(
-    db: &Db,
-    task: &Task,
-    condition: &Condition,
-    at: DateTime<Utc>,
-) -> bool {
+pub fn condition_matches(db: &Db, task: &Task, condition: &Condition, at: DateTime<Utc>) -> bool {
     match condition {
         Condition::Project { id } => db.effective_project(&task.id).as_ref() == Some(id),
         Condition::Folder {
