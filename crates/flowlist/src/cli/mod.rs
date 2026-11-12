@@ -37,7 +37,7 @@ use crate::render;
 #[command(
     name = "flowlist",
     version,
-    about = "A fast, local-first OmniFocus-style task manager",
+    about = "A fast, local-first task manager",
     long_about = "Flowlist keeps your tasks in one JSON library shared by the GUI, CLI and MCP server. \
 Add tasks with quick-entry syntax, work in perspectives, and undo anything."
 )]

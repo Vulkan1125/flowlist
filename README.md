@@ -1,6 +1,6 @@
 # Flowlist
 
-Flowlist is a local-first, OmniFocus-style task manager written in Rust. A native
+Flowlist is a local-first task manager written in Rust. A native
 [GPUI](https://gpui.rs) desktop app, a scriptable CLI and a Model Context Protocol
 server all read and write the same JSON library. Nothing leaves your machine.
 
