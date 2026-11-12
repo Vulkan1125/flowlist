@@ -128,6 +128,8 @@ pub struct Session {
     pub group: Option<String>,
     #[serde(default)]
     pub show_completed: Option<bool>,
+    #[serde(default)]
+    pub vim_mode: Option<bool>,
 }
 
 impl Session {

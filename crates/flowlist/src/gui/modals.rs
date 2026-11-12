@@ -48,6 +48,7 @@ pub enum Modal {
         review_days: TextBuffer,
         completed_days: TextBuffer,
         radius: TextBuffer,
+        vim_mode: bool,
     },
     Location {
         lat: TextBuffer,
@@ -114,6 +115,7 @@ impl Modal {
             review_days: TextBuffer::new(settings.default_review_days.to_string()),
             completed_days: TextBuffer::new(settings.show_completed_days.to_string()),
             radius: TextBuffer::new(settings.nearby_radius_km.to_string()),
+            vim_mode: app.vim_mode,
         }
     }
 
@@ -197,6 +199,7 @@ impl Modal {
                 review_days,
                 completed_days,
                 radius,
+                ..
             } => match index {
                 0 => Some(review_days),
                 1 => Some(completed_days),
@@ -227,6 +230,7 @@ impl Modal {
                 review_days,
                 completed_days,
                 radius,
+                ..
             } => match index {
                 0 => Some(review_days),
                 1 => Some(completed_days),
@@ -354,6 +358,7 @@ impl FlowlistApp {
         let is_help = matches!(modal, Modal::Help);
         let is_perspective = matches!(modal, Modal::NewPerspective { .. });
         let is_import = matches!(modal, Modal::Import { .. });
+        let is_settings = matches!(modal, Modal::Settings { .. });
         let mut card = div()
             .flex()
             .flex_col()
@@ -399,6 +404,7 @@ impl FlowlistApp {
                             .cursor_pointer()
                             .text_color(theme.text_faint)
                             .hover(|style| style.text_color(theme.text))
+                            .tooltip(widgets::tip(theme, "Close (Esc)"))
                             .child("×")
                             .on_click(cx.listener(|this, _, _, cx| this.close_modal(cx))),
                     ),
@@ -415,6 +421,9 @@ impl FlowlistApp {
             }
             if is_import {
                 card = card.child(self.render_import_controls(cx));
+            }
+            if is_settings {
+                card = card.child(self.render_settings_controls(cx));
             }
             card = card.child(
                 div()
@@ -576,6 +585,33 @@ impl FlowlistApp {
             )
     }
 
+    fn render_settings_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let vim = matches!(&self.modal, Some(Modal::Settings { vim_mode: true, .. }));
+        div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .child(
+                div()
+                    .id("modal-vim-mode")
+                    .child(widgets::button(
+                        theme,
+                        if vim { "Vim mode ✓" } else { "Vim mode off" },
+                        vim,
+                    ))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Settings { vim_mode, .. }) = &mut this.modal {
+                            *vim_mode = !*vim_mode;
+                        }
+                        cx.notify();
+                    })),
+            )
+            .child(div().text_xs().text_color(theme.text_faint).child(
+                "hjkl motions, counts, operators and pane focus. ⌘ shortcuts stay available.",
+            ))
+    }
+
     fn render_import_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let merge = matches!(&self.modal, Some(Modal::Import { merge: true, .. }));
@@ -644,12 +680,30 @@ fn help_body(theme: super::theme::Theme) -> impl IntoElement {
             vec![
                 ("↑ / ↓", "move selection"),
                 ("⇧↑ / ⇧↓", "extend selection"),
-                ("1…8", "built-in perspectives"),
+                ("⌘1…⌘8", "jump to perspective"),
                 ("n", "quick capture"),
                 ("/", "search"),
                 ("⌘F", "search"),
                 ("i", "toggle inspector"),
-                ("⌘1…⌘8", "jump to perspective"),
+            ],
+        ),
+        (
+            "Vim mode",
+            vec![
+                ("j / k", "move down / up (counts: 3j)"),
+                ("h / l", "outdent / indent, or collapse / expand"),
+                ("gg / G", "top / bottom (5G jumps to line 5)"),
+                ("Ctrl-d / Ctrl-u", "half page down / up"),
+                ("o / O", "new task below / above"),
+                ("x", "complete or reopen"),
+                ("!", "flag or unflag"),
+                ("dd / yy / p", "delete / yank / paste"),
+                ("u / Ctrl-r", "undo / redo"),
+                ("r / e", "rename / edit title"),
+                ("⇧J / ⇧K", "move task down / up among siblings"),
+                ("Ctrl-w h l j", "focus sidebar / content / checklist"),
+                ("?", "this help"),
+                ("Esc", "clear counts, selection and search"),
             ],
         ),
         (

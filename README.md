@@ -88,8 +88,8 @@ Key behaviour:
   not tasks and never appear in perspectives.
 - Import JSON or TaskPaper, export TaskPaper with `⇧⌘E`, and undo everything
   with `⌘Z`.
-- Session state (view, selection, inspector, sort, grouping, theme mode) is
-  persisted in `session.json`.
+- Session state (view, selection, inspector, sort, grouping, theme mode, vim
+  mode) is persisted in `session.json`.
 
 Frequently used shortcuts:
 
@@ -107,12 +107,41 @@ Frequently used shortcuts:
 | `⌘L` | add a checklist step |
 | `⌘R` | rename current project, folder, tag or perspective |
 | `⌘Z` / `⇧⌘Z` | undo / redo |
-| `1…8` | built-in perspectives |
+| `⌘1…⌘8` | built-in perspectives |
 | `⌘N` | quick capture |
 | `⇧⌘N` | new project |
 | `⌘,` | settings |
 | `⌘O` | import |
 | `?` | keyboard and mouse help |
+
+### Vim mode
+
+Vim mode is on by default and covers the whole window: the task list, the
+sidebar and the checklist pane. It can be turned off in **Settings**
+(`⌘,`). macOS shortcuts keep working at the same time.
+
+| Keys | Action |
+| --- | --- |
+| `j` / `k` | move down / up; a count multiplies (`3j`) |
+| `h` / `l` | outdent / indent a task; collapse / expand a folder or tag |
+| `gg` / `G` | jump to top / bottom; `5G` jumps to line 5 |
+| `Ctrl-d` / `Ctrl-u` | half page down / up |
+| `o` / `O` | new task below / above |
+| `x` | complete or reopen |
+| `!` | flag or unflag |
+| `dd` / `yy` / `p` | delete / yank / paste |
+| `u` / `Ctrl-r` | undo / redo |
+| `r` / `e` | rename / edit the selected title |
+| `⇧J` / `⇧K` | move a task down / up among its siblings |
+| `Ctrl-w h` | focus the sidebar |
+| `Ctrl-w l` | focus the task list |
+| `Ctrl-w j` | focus the checklist pane |
+| `/`, `n`, `N` | search, next match, previous match |
+| `?` | help |
+| `Esc` | clear counts, selection and search |
+
+In vim mode unmodified digits build a count, so perspectives move to
+`⌘1…⌘8`.
 
 ## CLI
 

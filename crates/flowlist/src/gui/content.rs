@@ -9,7 +9,7 @@ use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
 
 use super::drag::{DragTask, ghost};
-use super::{EditField, FlowlistApp, View, group_label, sort_label, widgets};
+use super::{EditField, FlowlistApp, FocusArea, View, group_label, sort_label, widgets};
 
 impl FlowlistApp {
     pub(super) fn render_content(
@@ -28,6 +28,17 @@ impl FlowlistApp {
             .h_full()
             .bg(theme.bg)
             .overflow_hidden()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    if this.focus != FocusArea::Content {
+                        this.focus = FocusArea::Content;
+                        this.checklist_cursor = None;
+                        this.vim.reset();
+                        cx.notify();
+                    }
+                }),
+            )
             .child(self.render_content_header(cx))
             .child(self.render_capture_bar(cx));
 
@@ -490,6 +501,14 @@ impl FlowlistApp {
             .child(
                 div()
                     .id(super::sid(format!("check:{}", checkbox_id)))
+                    .tooltip(widgets::tip(
+                        theme,
+                        if completed {
+                            "Reopen task (x)"
+                        } else {
+                            "Complete task (x)"
+                        },
+                    ))
                     .child(widgets::checkbox(
                         theme,
                         completed,
@@ -505,6 +524,14 @@ impl FlowlistApp {
                     .id(super::sid(format!("disclosure:{}", disclosure_id)))
                     .w(px(12.))
                     .text_color(theme.text_faint)
+                    .tooltip(widgets::tip(
+                        theme,
+                        if expanded {
+                            "Collapse subtasks"
+                        } else {
+                            "Expand subtasks"
+                        },
+                    ))
                     .child(if expanded { "▾" } else { "▸" })
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
@@ -526,6 +553,14 @@ impl FlowlistApp {
                     .opacity(if flagged { 1.0 } else { 0.35 })
                     .cursor_pointer()
                     .hover(|style| style.opacity(1.0))
+                    .tooltip(widgets::tip(
+                        theme,
+                        if flagged {
+                            "Unflag task (!)"
+                        } else {
+                            "Flag task (!)"
+                        },
+                    ))
                     .child("⚑")
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();

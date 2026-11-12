@@ -1,14 +1,23 @@
 //! The left rail: built-in perspectives, saved perspectives, the project tree
 //! and the tag tree. Projects and tags are drop targets for task drags.
 
-use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px};
+use gpui::{AnyElement, Context, IntoElement, MouseButton, Window, div, prelude::*, px};
 
-use flowlist_core::ids::{ContainerId, FolderId, TagId};
+use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId};
 use flowlist_core::model::BuiltinPerspective;
 
 use super::drag::DragTask;
 use super::modals;
-use super::{FlowlistApp, View, widgets};
+use super::{FlowlistApp, FocusArea, View, widgets};
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum SidebarTarget {
+    Builtin(BuiltinPerspective),
+    Custom(PerspectiveId),
+    Folder(FolderId),
+    Project(ProjectId),
+    Tag(TagId),
+}
 
 fn glyph(perspective: BuiltinPerspective) -> &'static str {
     match perspective {
@@ -39,6 +48,7 @@ impl FlowlistApp {
             .text_color(theme.text_faint)
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.text).bg(theme.hover))
+            .tooltip(widgets::tip(theme, "Rename"))
             .child("✎")
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
@@ -63,6 +73,7 @@ impl FlowlistApp {
             .text_color(theme.text_faint)
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.danger).bg(theme.hover))
+            .tooltip(widgets::tip(theme, "Delete"))
             .child("×")
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
@@ -74,6 +85,189 @@ impl FlowlistApp {
                 cx.notify();
             }))
     }
+    pub(super) fn sidebar_targets(&self) -> Vec<SidebarTarget> {
+        let db = self.store.db();
+        let mut out = Vec::new();
+        for perspective in BuiltinPerspective::ALL {
+            out.push(SidebarTarget::Builtin(perspective));
+        }
+        for perspective in db.perspectives.values() {
+            out.push(SidebarTarget::Custom(perspective.id.clone()));
+        }
+        self.container_targets(None, &mut out);
+        self.tag_targets(None, &mut out);
+        out
+    }
+
+    fn container_targets(&self, parent: Option<FolderId>, out: &mut Vec<SidebarTarget>) {
+        let db = self.store.db();
+        for container in db.container_children(parent) {
+            match container {
+                ContainerId::Folder(id) => {
+                    let open = self.is_open(&format!("folder:{id}"), true);
+                    let child_parent = id.clone();
+                    out.push(SidebarTarget::Folder(id.clone()));
+                    if open {
+                        self.container_targets(Some(child_parent), out);
+                    }
+                }
+                ContainerId::Project(id) => {
+                    if db
+                        .projects
+                        .get(&id)
+                        .is_some_and(|project| project.status.is_open())
+                    {
+                        out.push(SidebarTarget::Project(id.clone()));
+                    }
+                }
+            }
+        }
+    }
+
+    fn tag_targets(&self, parent: Option<TagId>, out: &mut Vec<SidebarTarget>) {
+        let db = self.store.db();
+        let tags = match &parent {
+            Some(tag) => db.tag_children(tag).to_vec(),
+            None => db.tag_roots().to_vec(),
+        };
+        for tag in tags {
+            let open = self.is_open(&format!("tag:{tag}"), true);
+            let child_parent = tag.clone();
+            out.push(SidebarTarget::Tag(tag));
+            if open && !db.tag_children(&child_parent).is_empty() {
+                self.tag_targets(Some(child_parent), out);
+            }
+        }
+    }
+
+    pub(super) fn target_for_view(&self, view: &View) -> Option<SidebarTarget> {
+        match view {
+            View::Builtin(perspective) => Some(SidebarTarget::Builtin(*perspective)),
+            View::Project(id) => Some(SidebarTarget::Project(id.clone())),
+            View::Folder(id) => Some(SidebarTarget::Folder(id.clone())),
+            View::Tag(id) => Some(SidebarTarget::Tag(id.clone())),
+            View::Custom(id) => Some(SidebarTarget::Custom(id.clone())),
+        }
+    }
+
+    pub(super) fn sidebar_cursor_is(&self, target: &SidebarTarget) -> bool {
+        self.focus == FocusArea::Sidebar && self.sidebar_cursor.as_ref() == Some(target)
+    }
+
+    pub(super) fn sidebar_move(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let targets = self.sidebar_targets();
+        if targets.is_empty() {
+            return;
+        }
+        let current = self
+            .sidebar_cursor
+            .as_ref()
+            .and_then(|cursor| targets.iter().position(|target| target == cursor));
+        let next = match current {
+            Some(index) => (index as isize + delta).clamp(0, targets.len() as isize - 1) as usize,
+            None => {
+                if delta < 0 {
+                    targets.len() - 1
+                } else {
+                    0
+                }
+            }
+        };
+        self.sidebar_cursor = Some(targets[next].clone());
+        cx.notify();
+    }
+
+    pub(super) fn sidebar_select(&mut self, index: usize, cx: &mut Context<Self>) {
+        let targets = self.sidebar_targets();
+        if targets.is_empty() {
+            return;
+        }
+        let index = index.min(targets.len() - 1);
+        self.sidebar_cursor = Some(targets[index].clone());
+        cx.notify();
+    }
+
+    pub(super) fn sidebar_activate(&mut self, target: SidebarTarget, cx: &mut Context<Self>) {
+        let view = match &target {
+            SidebarTarget::Builtin(perspective) => View::Builtin(*perspective),
+            SidebarTarget::Custom(id) => View::Custom(id.clone()),
+            SidebarTarget::Folder(id) => View::Folder(id.clone()),
+            SidebarTarget::Project(id) => View::Project(id.clone()),
+            SidebarTarget::Tag(id) => View::Tag(id.clone()),
+        };
+        self.open_view(view, cx);
+        self.sidebar_cursor = Some(target);
+        self.focus = FocusArea::Sidebar;
+        self.save_session();
+        cx.notify();
+    }
+
+    pub(super) fn sidebar_expand(&mut self, expand: bool, cx: &mut Context<Self>) -> bool {
+        let Some(target) = self.sidebar_cursor.clone() else {
+            return false;
+        };
+        let (key, has_children) = match &target {
+            SidebarTarget::Folder(id) => (
+                format!("folder:{id}"),
+                !self
+                    .store
+                    .db()
+                    .container_children(Some(id.clone()))
+                    .is_empty(),
+            ),
+            SidebarTarget::Tag(id) => (
+                format!("tag:{id}"),
+                !self.store.db().tag_children(id).is_empty(),
+            ),
+            _ => return false,
+        };
+        let open = self.is_open(&key, true);
+        if expand {
+            if !open && has_children {
+                self.toggle_open(key);
+                cx.notify();
+                return true;
+            }
+            return false;
+        }
+        if open && has_children {
+            self.toggle_open(key);
+            cx.notify();
+            return true;
+        }
+        false
+    }
+
+    pub(super) fn sidebar_parent(&self) -> Option<SidebarTarget> {
+        let target = self.sidebar_cursor.clone()?;
+        let db = self.store.db();
+        match target {
+            SidebarTarget::Folder(id) => db
+                .folders
+                .get(&id)
+                .and_then(|folder| folder.parent.clone())
+                .map(SidebarTarget::Folder),
+            SidebarTarget::Project(id) => db
+                .projects
+                .get(&id)
+                .and_then(|project| project.folder.clone())
+                .map(SidebarTarget::Folder),
+            SidebarTarget::Tag(id) => db
+                .tags
+                .get(&id)
+                .and_then(|tag| tag.parent.clone())
+                .map(SidebarTarget::Tag),
+            _ => None,
+        }
+    }
+
+    pub(super) fn sidebar_parent_move(&mut self, cx: &mut Context<Self>) {
+        if let Some(parent) = self.sidebar_parent() {
+            self.sidebar_cursor = Some(parent);
+            cx.notify();
+        }
+    }
+
     pub(super) fn render_sidebar(
         &mut self,
         _window: &mut Window,
@@ -90,7 +284,17 @@ impl FlowlistApp {
             .border_r_1()
             .border_color(theme.border)
             .text_sm()
-            .overflow_hidden();
+            .overflow_hidden()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.focus = FocusArea::Sidebar;
+                    if this.sidebar_cursor.is_none() {
+                        this.sidebar_cursor = this.target_for_view(&this.view);
+                    }
+                    cx.notify();
+                }),
+            );
 
         rail = rail.child(widgets::section_label(theme, "PERSPECTIVES"));
         for perspective in BuiltinPerspective::ALL {
@@ -195,6 +399,7 @@ impl FlowlistApp {
         let theme = self.theme;
         let active = self.view == View::Builtin(perspective);
         let count = self.perspective_count(perspective);
+        let cursor = self.sidebar_cursor_is(&SidebarTarget::Builtin(perspective));
         div()
             .id(super::sid(format!("perspective:{}", perspective.slug())))
             .flex()
@@ -209,15 +414,16 @@ impl FlowlistApp {
             } else {
                 theme.sidebar
             })
+            .when(cursor, |this| this.bg(theme.hover))
             .text_color(if active { theme.accent } else { theme.text_dim })
             .cursor_pointer()
             .hover(|style| style.bg(theme.hover))
             .child(div().w(px(16.)).text_center().child(glyph(perspective)))
             .child(div().flex_1().min_w_0().child(perspective.label()))
             .when(count > 0, |this| this.child(widgets::count(theme, count)))
-            .on_click(
-                cx.listener(move |this, _, _, cx| this.open_view(View::Builtin(perspective), cx)),
-            )
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.sidebar_activate(SidebarTarget::Builtin(perspective), cx)
+            }))
     }
 
     fn custom_perspective_row(
@@ -228,9 +434,11 @@ impl FlowlistApp {
         let theme = self.theme;
         let active = self.view == View::Custom(row.id.clone());
         let id = row.id.clone();
+        let target_id = row.id.clone();
         let rename_id = row.id.clone();
         let delete_id = row.id.clone();
         let delete_view = View::Custom(row.id.clone());
+        let cursor = self.sidebar_cursor_is(&SidebarTarget::Custom(target_id.clone()));
         div()
             .id(super::sid(format!("custom:{}", row.id)))
             .flex()
@@ -245,6 +453,7 @@ impl FlowlistApp {
             } else {
                 theme.sidebar
             })
+            .when(cursor, |this| this.bg(theme.hover))
             .text_color(if active { theme.accent } else { theme.text_dim })
             .cursor_pointer()
             .hover(|style| style.bg(theme.hover))
@@ -261,9 +470,9 @@ impl FlowlistApp {
                 delete_view,
                 cx,
             ))
-            .on_click(
-                cx.listener(move |this, _, _, cx| this.open_view(View::Custom(id.clone()), cx)),
-            )
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.sidebar_activate(SidebarTarget::Custom(id.clone()), cx)
+            }))
     }
 
     fn container_rows(&self, parent: Option<FolderId>, cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -278,10 +487,12 @@ impl FlowlistApp {
                     let name = db.folder_path(&id);
                     let count = db.project_count(&id);
                     let view_id = id.clone();
+                    let target_id = id.clone();
                     let toggle_key = key.clone();
                     let rename_id = id.clone();
                     let delete_id = id.clone();
                     let delete_view = View::Folder(id.clone());
+                    let cursor = self.sidebar_cursor_is(&SidebarTarget::Folder(target_id.clone()));
                     let mut row = div()
                         .id(super::sid(format!("sidebar-folder:{id}")))
                         .flex()
@@ -295,6 +506,7 @@ impl FlowlistApp {
                         .text_color(self.theme.text_dim)
                         .cursor_pointer()
                         .hover(|style| style.bg(self.theme.hover))
+                        .when(cursor, |this| this.bg(self.theme.hover))
                         .child(
                             div()
                                 .id(super::sid(format!("folder-toggle:{id}")))
@@ -323,7 +535,7 @@ impl FlowlistApp {
                             this.child(widgets::count(self.theme, count))
                         })
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.open_view(View::Folder(view_id.clone()), cx)
+                            this.sidebar_activate(SidebarTarget::Folder(view_id.clone()), cx)
                         }));
                     if self.view == View::Folder(id.clone()) {
                         row = row.bg(self.theme.selection).text_color(self.theme.accent);
@@ -342,9 +554,11 @@ impl FlowlistApp {
                     }
                     let (done, total) = db.project_progress(&id);
                     let view_id = id.clone();
+                    let target_id = id.clone();
                     let drop_id = id.clone();
                     let rename_id = id.clone();
                     let active = self.view == View::Project(id.clone());
+                    let cursor = self.sidebar_cursor_is(&SidebarTarget::Project(target_id.clone()));
                     let mut row = div()
                         .id(super::sid(format!("sidebar-project:{id}")))
                         .flex()
@@ -360,6 +574,7 @@ impl FlowlistApp {
                         } else {
                             self.theme.sidebar
                         })
+                        .when(cursor, |this| this.bg(self.theme.hover))
                         .text_color(if active {
                             self.theme.accent
                         } else {
@@ -389,7 +604,7 @@ impl FlowlistApp {
                             this.drop_on_project(drop_id.clone(), payload, cx)
                         }))
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.open_view(View::Project(view_id.clone()), cx)
+                            this.sidebar_activate(SidebarTarget::Project(view_id.clone()), cx)
                         }));
                     if project.flagged_for_review() {
                         row = row.child(div().size(px(5.)).rounded_full().bg(self.theme.warning));
@@ -431,6 +646,7 @@ impl FlowlistApp {
             let located = entity.location.is_some();
             let status = entity.status;
             let view_id = tag.clone();
+            let target_id = tag.clone();
             let drop_id = tag.clone();
             let rename_id = tag.clone();
             let delete_id = tag.clone();
@@ -438,6 +654,7 @@ impl FlowlistApp {
             let active = self.view == View::Tag(tag.clone());
             let toggle_key = key.clone();
             let depth_pad = if parent.is_some() { 26.0 } else { 18.0 };
+            let cursor = self.sidebar_cursor_is(&SidebarTarget::Tag(target_id.clone()));
             let mut row = div()
                 .id(super::sid(format!("sidebar-tag:{tag}")))
                 .flex()
@@ -453,6 +670,7 @@ impl FlowlistApp {
                 } else {
                     self.theme.sidebar
                 })
+                .when(cursor, |this| this.bg(self.theme.hover))
                 .text_color(if active {
                     self.theme.accent
                 } else {
@@ -514,7 +732,7 @@ impl FlowlistApp {
                     this.drop_on_tag(drop_id.clone(), payload, cx)
                 }))
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.open_view(View::Tag(view_id.clone()), cx)
+                    this.sidebar_activate(SidebarTarget::Tag(view_id.clone()), cx)
                 }));
             if active {
                 row = row.bg(self.theme.selection);

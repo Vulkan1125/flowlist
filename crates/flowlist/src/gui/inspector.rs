@@ -51,6 +51,7 @@ impl FlowlistApp {
                         .cursor_pointer()
                         .text_color(theme.text_faint)
                         .hover(|style| style.text_color(theme.text))
+                        .tooltip(widgets::tip(theme, "Close inspector (i)"))
                         .child("×")
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.show_inspector = false;
@@ -196,6 +197,14 @@ impl FlowlistApp {
                             } else {
                                 theme.text_faint
                             })
+                            .tooltip(widgets::tip(
+                                theme,
+                                if flagged {
+                                    "Unflag task (!)"
+                                } else {
+                                    "Flag task (!)"
+                                },
+                            ))
                             .child("⚑")
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.toggle_flag(delete_id.clone(), cx)
@@ -463,6 +472,8 @@ impl FlowlistApp {
 
         for (index, (item_id, title, completed)) in items.iter().enumerate() {
             let is_editing = editing_item == Some(item_id);
+            let cursor = self.focus == super::FocusArea::ChecklistList
+                && self.checklist_cursor == Some(index);
             let toggle_task = task_id.clone();
             let toggle_item = item_id.clone();
             let edit_item = item_id.clone();
@@ -481,10 +492,19 @@ impl FlowlistApp {
                 .px_1()
                 .rounded_sm()
                 .hover(|style| style.bg(theme.hover))
+                .when(cursor, |this| this.bg(theme.selection))
                 .child(
                     div()
                         .id(super::sid(format!("checklist-toggle:{item_id}")))
                         .flex_shrink_0()
+                        .tooltip(widgets::tip(
+                            theme,
+                            if *completed {
+                                "Mark step incomplete"
+                            } else {
+                                "Mark step complete"
+                            },
+                        ))
                         .child(widgets::checkbox(theme, *completed, theme.accent))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
@@ -540,6 +560,7 @@ impl FlowlistApp {
                     .opacity(if index == 0 { 0.3 } else { 0.8 })
                     .cursor_pointer()
                     .hover(|style| style.text_color(theme.text).opacity(1.0))
+                    .tooltip(widgets::tip(theme, "Move step up"))
                     .child("↑")
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
@@ -563,6 +584,7 @@ impl FlowlistApp {
                     .opacity(if index + 1 >= items.len() { 0.3 } else { 0.8 })
                     .cursor_pointer()
                     .hover(|style| style.text_color(theme.text).opacity(1.0))
+                    .tooltip(widgets::tip(theme, "Move step down"))
                     .child("↓")
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
@@ -583,6 +605,7 @@ impl FlowlistApp {
                     .text_color(theme.text_faint)
                     .cursor_pointer()
                     .hover(|style| style.text_color(theme.danger))
+                    .tooltip(widgets::tip(theme, "Delete step"))
                     .child("×")
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
@@ -663,6 +686,7 @@ impl FlowlistApp {
                                     .id(super::sid(format!("remove-tag:{}", remove)))
                                     .cursor_pointer()
                                     .hover(|style| style.text_color(theme.danger))
+                                    .tooltip(widgets::tip(theme, "Remove tag"))
                                     .child("×")
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if let Some(id) = this.selected_one() {

@@ -12,6 +12,7 @@ mod session;
 mod sidebar;
 mod text;
 mod theme;
+mod vim;
 mod widgets;
 
 use std::collections::BTreeSet;
@@ -25,7 +26,8 @@ use gpui::{
 };
 
 use flowlist_core::command::{
-    Command, NewProject, Outcome, ProjectPatch, SettingsPatch, TagPatch, TaskPatch, TaskPlacement,
+    Command, NewProject, NewTask, Outcome, ProjectPatch, SettingsPatch, TagPatch, TaskPatch,
+    TaskPlacement,
 };
 use flowlist_core::db::{ContainerPosition, Db, OrderKey, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
@@ -47,11 +49,13 @@ use theme::{Mode, Theme};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FocusArea {
     Content,
+    Sidebar,
     Capture,
     Search,
     Field,
     TagInput,
     Checklist,
+    ChecklistList,
     Modal,
 }
 
@@ -122,6 +126,10 @@ pub struct FlowlistApp {
     collapsed_groups: BTreeSet<String>,
     show_inspector: bool,
     show_completed: bool,
+    vim_mode: bool,
+    vim: vim::VimState,
+    sidebar_cursor: Option<sidebar::SidebarTarget>,
+    checklist_cursor: Option<usize>,
     focus: FocusArea,
     focus_handle: FocusHandle,
     capture: text::TextBuffer,
@@ -159,6 +167,7 @@ impl FlowlistApp {
         let group = session.group.as_deref().and_then(group_from_slug);
         let show_completed = session.show_completed.unwrap_or(false);
         let show_inspector = session.inspector.unwrap_or(true);
+        let vim_mode = session.vim_mode.unwrap_or(true);
         let focus_handle = cx.focus_handle();
         let toast = store_warning(&store);
 
@@ -188,6 +197,10 @@ impl FlowlistApp {
             collapsed_groups: BTreeSet::new(),
             show_inspector,
             show_completed,
+            vim_mode,
+            vim: vim::VimState::default(),
+            sidebar_cursor: None,
+            checklist_cursor: None,
             focus: FocusArea::Content,
             focus_handle,
             capture: text::TextBuffer::empty(),
@@ -221,6 +234,7 @@ impl FlowlistApp {
             sort: self.sort.map(|sort| sort_slug(sort).to_string()),
             group: self.group.map(|group| group_slug(group).to_string()),
             show_completed: Some(self.show_completed),
+            vim_mode: Some(self.vim_mode),
         };
         let _ = self.store.write_session(&session);
     }
@@ -1355,6 +1369,7 @@ impl FlowlistApp {
                 review_days,
                 completed_days,
                 radius,
+                vim_mode,
             } => {
                 let review = review_days
                     .text()
@@ -1377,6 +1392,8 @@ impl FlowlistApp {
                     nearby_radius_km: Some(radius),
                     ..Default::default()
                 }));
+                self.vim_mode = *vim_mode;
+                self.save_session();
             }
             modals::Modal::Location { lat, lon } => {
                 let lat = lat
@@ -1554,6 +1571,11 @@ impl FlowlistApp {
             }
         }
 
+        if self.vim_mode && self.handle_vim_key(stroke, cx) {
+            window.focus(&self.focus_handle);
+            return;
+        }
+
         if mods.platform {
             match stroke.key.as_str() {
                 "z" => {
@@ -1636,6 +1658,45 @@ impl FlowlistApp {
                 _ => {}
             }
             cx.notify();
+            return;
+        }
+
+        if self.focus == FocusArea::Sidebar {
+            match stroke.key.as_str() {
+                "up" => self.sidebar_move(-1, cx),
+                "down" => self.sidebar_move(1, cx),
+                "enter" => self.sidebar_open_current(cx),
+                "escape" => {
+                    self.focus = FocusArea::Content;
+                    cx.notify();
+                }
+                _ => {}
+            }
+            window.focus(&self.focus_handle);
+            return;
+        }
+
+        if self.focus == FocusArea::ChecklistList {
+            match stroke.key.as_str() {
+                "up" => self.checklist_move_cursor(-1, cx),
+                "down" => self.checklist_move_cursor(1, cx),
+                "space" => self.checklist_toggle(cx),
+                "enter" => self.checklist_begin_edit(cx),
+                "a" => {
+                    self.checklist_editing = None;
+                    self.checklist_buffer.clear();
+                    self.focus = FocusArea::Checklist;
+                    cx.notify();
+                }
+                "backspace" | "delete" => self.checklist_delete(cx),
+                "escape" => {
+                    self.checklist_cursor = None;
+                    self.focus = FocusArea::Content;
+                    cx.notify();
+                }
+                _ => {}
+            }
+            window.focus(&self.focus_handle);
             return;
         }
 
@@ -1727,6 +1788,435 @@ impl FlowlistApp {
         cx.notify();
     }
 
+    // ----------------------------------------------------------------- vim
+
+    fn handle_vim_key(&mut self, stroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        if !self.vim_mode {
+            return false;
+        }
+        match self.vim.feed(&stroke.key, stroke.modifiers) {
+            vim::VimInput::Ignored => false,
+            vim::VimInput::Pending => {
+                cx.notify();
+                true
+            }
+            vim::VimInput::Action(action) => {
+                self.perform_vim(action, cx);
+                cx.notify();
+                true
+            }
+        }
+    }
+
+    fn perform_vim(&mut self, action: vim::VimAction, cx: &mut Context<Self>) {
+        use vim::VimAction as A;
+        match action {
+            A::Cancel => {
+                self.vim.reset();
+                self.selected.clear();
+                self.anchor = None;
+                self.search.clear();
+                self.checklist_cursor = None;
+                self.focus = FocusArea::Content;
+                self.save_session();
+            }
+            A::Help => self.open_modal(modals::Modal::Help, cx),
+            A::Search => {
+                self.focus = FocusArea::Search;
+                self.search.select_all();
+            }
+            A::NextMatch => self.search_step(true, cx),
+            A::PrevMatch => self.search_step(false, cx),
+            A::Inspector => {
+                self.show_inspector = !self.show_inspector;
+                if !self.show_inspector && self.focus == FocusArea::ChecklistList {
+                    self.focus = FocusArea::Content;
+                }
+                self.save_session();
+            }
+            A::FocusSidebar => {
+                self.sidebar_cursor = self
+                    .sidebar_cursor
+                    .clone()
+                    .or_else(|| self.target_for_view(&self.view));
+                self.focus = FocusArea::Sidebar;
+                self.save_session();
+            }
+            A::FocusContent => {
+                self.checklist_cursor = None;
+                self.focus = FocusArea::Content;
+            }
+            A::FocusChecklist => self.focus_checklist_pane(cx),
+            A::Move(delta) => match self.focus {
+                FocusArea::Sidebar => self.sidebar_move(delta, cx),
+                FocusArea::ChecklistList => self.checklist_move_cursor(delta, cx),
+                _ => {
+                    let extend = false;
+                    self.move_selection(delta, extend);
+                    cx.notify();
+                }
+            },
+            A::HalfPage(delta) => match self.focus {
+                FocusArea::Sidebar => self.sidebar_move(delta * 10, cx),
+                FocusArea::ChecklistList => self.checklist_move_cursor(delta * 10, cx),
+                _ => {
+                    self.move_selection(delta * 10, false);
+                    cx.notify();
+                }
+            },
+            A::ReorderDown => match self.focus {
+                FocusArea::ChecklistList => self.checklist_reorder(true, cx),
+                _ => self.move_selected(false, cx),
+            },
+            A::ReorderUp => match self.focus {
+                FocusArea::ChecklistList => self.checklist_reorder(false, cx),
+                _ => self.move_selected(true, cx),
+            },
+            A::Top => self.vim_jump(0, true, cx),
+            A::Bottom => self.vim_jump(usize::MAX, false, cx),
+            A::Goto(line) => self.vim_jump(line.saturating_sub(1), true, cx),
+            A::Delete => match self.focus {
+                FocusArea::ChecklistList => self.checklist_delete(cx),
+                FocusArea::Sidebar => {
+                    self.toast = Some("Use r to rename or ⌘⌫ to delete".to_string());
+                }
+                _ => self.delete_selected(cx),
+            },
+            A::Yank => self.copy_selection(cx),
+            A::Paste => self.paste_clipboard(cx),
+            A::Undo => self.undo(cx),
+            A::Redo => self.redo(cx),
+            A::Rename => match self.focus {
+                FocusArea::Sidebar => self.rename_sidebar_target(cx),
+                FocusArea::ChecklistList => self.checklist_begin_edit(cx),
+                _ => self.begin_edit(EditField::Title, cx),
+            },
+            A::Edit => self.begin_edit(EditField::Title, cx),
+            A::NewBelow => self.create_adjacent_task(false, cx),
+            A::NewAbove => self.create_adjacent_task(true, cx),
+            A::Complete => match self.focus {
+                FocusArea::ChecklistList => self.checklist_toggle(cx),
+                _ => self.complete_selected(true, cx),
+            },
+            A::Flag => self.flag_selected(cx),
+            A::Indent => match self.focus {
+                FocusArea::Sidebar => {
+                    if !self.sidebar_expand(true, cx) {
+                        self.sidebar_open_current(cx);
+                    }
+                }
+                _ => self.indent_selected(cx),
+            },
+            A::Outdent => match self.focus {
+                FocusArea::Sidebar => {
+                    if !self.sidebar_expand(false, cx) {
+                        self.sidebar_parent_move(cx);
+                    }
+                }
+                _ => self.outdent_selected(cx),
+            },
+            A::Open => match self.focus {
+                FocusArea::Sidebar => self.sidebar_open_current(cx),
+                FocusArea::ChecklistList => self.checklist_begin_edit(cx),
+                _ => self.open_selected(cx),
+            },
+        }
+    }
+
+    fn vim_jump(&mut self, index: usize, from_start: bool, cx: &mut Context<Self>) {
+        match self.focus {
+            FocusArea::Sidebar => {
+                let len = self.sidebar_targets().len();
+                if len == 0 {
+                    return;
+                }
+                let index = if index == usize::MAX {
+                    len - 1
+                } else {
+                    index.min(len - 1)
+                };
+                self.sidebar_select(index, cx);
+            }
+            FocusArea::ChecklistList => {
+                let len = self.checklist_ids().len();
+                if len == 0 {
+                    return;
+                }
+                let index = if index == usize::MAX {
+                    len - 1
+                } else {
+                    index.min(len - 1)
+                };
+                self.checklist_cursor = Some(index);
+                cx.notify();
+            }
+            _ => {
+                let ids = self.visible_ids();
+                if ids.is_empty() {
+                    return;
+                }
+                let index = if index == usize::MAX {
+                    ids.len() - 1
+                } else if from_start {
+                    index.min(ids.len() - 1)
+                } else {
+                    index.min(ids.len() - 1)
+                };
+                self.select_only(ids[index].clone());
+                self.save_session();
+                cx.notify();
+            }
+        }
+    }
+
+    fn search_step(&mut self, forward: bool, cx: &mut Context<Self>) {
+        if self.search.is_empty() {
+            self.toast = Some("Type / to search first".to_string());
+            cx.notify();
+            return;
+        }
+        if self.focus == FocusArea::Sidebar {
+            self.focus = FocusArea::Content;
+        }
+        self.move_selection(if forward { 1 } else { -1 }, false);
+        cx.notify();
+    }
+
+    fn open_selected(&mut self, cx: &mut Context<Self>) {
+        let Some(id) = self.selected_one() else {
+            return;
+        };
+        let completed = self
+            .store
+            .db()
+            .tasks
+            .get(&id)
+            .is_some_and(|task| task.completed);
+        if completed {
+            self.toggle_complete(id, cx);
+        } else {
+            self.begin_edit(EditField::Title, cx);
+        }
+    }
+
+    fn focus_checklist_pane(&mut self, cx: &mut Context<Self>) {
+        if self.selected_one().is_none() {
+            self.toast = Some("Select a task first".to_string());
+            cx.notify();
+            return;
+        }
+        self.show_inspector = true;
+        let len = self.checklist_ids().len();
+        self.checklist_cursor = if len == 0 {
+            None
+        } else {
+            Some(self.checklist_cursor.unwrap_or(0).min(len - 1))
+        };
+        self.focus = FocusArea::ChecklistList;
+        self.save_session();
+        cx.notify();
+    }
+
+    fn checklist_ids(&self) -> Vec<ChecklistId> {
+        let Some(id) = self.selected_one() else {
+            return Vec::new();
+        };
+        self.store
+            .db()
+            .tasks
+            .get(&id)
+            .map(|task| task.checklist.iter().map(|item| item.id.clone()).collect())
+            .unwrap_or_default()
+    }
+
+    fn checklist_current(&self) -> Option<(TaskId, ChecklistId, String)> {
+        let task = self.selected_one()?;
+        let index = self.checklist_cursor?;
+        let item = self
+            .store
+            .db()
+            .tasks
+            .get(&task)?
+            .checklist
+            .get(index)?
+            .clone();
+        Some((task, item.id, item.title))
+    }
+
+    fn checklist_move_cursor(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let len = self.checklist_ids().len();
+        if len == 0 {
+            self.checklist_cursor = None;
+        } else {
+            let current = self.checklist_cursor.unwrap_or(0) as isize;
+            self.checklist_cursor = Some((current + delta).clamp(0, len as isize - 1) as usize);
+        }
+        cx.notify();
+    }
+
+    fn checklist_toggle(&mut self, cx: &mut Context<Self>) {
+        let Some((task, item, _)) = self.checklist_current() else {
+            return;
+        };
+        self.toggle_checklist_item(task, item, cx);
+    }
+
+    fn checklist_begin_edit(&mut self, cx: &mut Context<Self>) {
+        let Some((_, item, title)) = self.checklist_current() else {
+            return;
+        };
+        self.begin_checklist_edit(item, title, cx);
+    }
+
+    fn checklist_delete(&mut self, cx: &mut Context<Self>) {
+        let Some((task, item, _)) = self.checklist_current() else {
+            return;
+        };
+        self.delete_checklist_item(task, item, cx);
+        let len = self.checklist_ids().len();
+        self.checklist_cursor = if len == 0 {
+            None
+        } else {
+            Some(self.checklist_cursor.unwrap_or(0).min(len - 1))
+        };
+        cx.notify();
+    }
+
+    fn checklist_reorder(&mut self, down: bool, cx: &mut Context<Self>) {
+        let Some((task, item, _)) = self.checklist_current() else {
+            return;
+        };
+        let Some(index) = self.checklist_cursor else {
+            return;
+        };
+        let target = if down {
+            index + 1
+        } else {
+            index.saturating_sub(1)
+        };
+        if target == index || target >= self.checklist_ids().len() {
+            return;
+        }
+        self.move_checklist_item(task, item, target, cx);
+        self.checklist_cursor = Some(target);
+        cx.notify();
+    }
+
+    fn apply_view_defaults(&self, new_task: &mut NewTask) {
+        match &self.view {
+            View::Project(id) => {
+                new_task.project = Some(id.clone());
+                new_task.project_path = None;
+            }
+            View::Tag(id) => {
+                if !new_task.tags.contains(id) {
+                    new_task.tags.push(id.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn create_adjacent_task(&mut self, above: bool, cx: &mut Context<Self>) {
+        let selected = self.selected_one();
+        let mut new_task = NewTask::new("New task");
+        self.apply_view_defaults(&mut new_task);
+        if let Some(id) = &selected {
+            if let Some(task) = self.store.db().tasks.get(id) {
+                new_task.parent = task.parent.clone();
+                if new_task.project.is_none() {
+                    new_task.project = task.project.clone();
+                }
+                new_task.position = if above {
+                    Position::Before(id.clone())
+                } else {
+                    Position::After(id.clone())
+                };
+            }
+        } else {
+            new_task.position = if above {
+                Position::Start
+            } else {
+                Position::End
+            };
+        }
+        if let Some(outcome) = self.execute(Command::CreateTask(new_task)) {
+            if let Some(created) = outcome.created.first() {
+                if let Ok(id) = self.store.db().resolve_task(created) {
+                    self.select_only(id);
+                    self.begin_edit(EditField::Title, cx);
+                    self.field.select_all();
+                }
+            }
+        }
+        self.save_session();
+        cx.notify();
+    }
+
+    fn paste_clipboard(&mut self, cx: &mut Context<Self>) {
+        let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+            self.toast = Some("Clipboard is empty".to_string());
+            cx.notify();
+            return;
+        };
+        let lines: Vec<String> = text
+            .lines()
+            .map(|line| line.split('\t').next().unwrap_or(line).trim().to_string())
+            .filter(|line| !line.is_empty())
+            .collect();
+        if lines.is_empty() {
+            self.toast = Some("Clipboard has no task text".to_string());
+            cx.notify();
+            return;
+        }
+        let mut created = 0;
+        let mut failed = 0;
+        for line in lines {
+            match parse_quick(&line, now()) {
+                Ok(entry) => {
+                    let mut new_task = entry.into_new_task();
+                    self.apply_view_defaults(&mut new_task);
+                    self.execute(Command::CreateTask(new_task));
+                    created += 1;
+                }
+                Err(_) => failed += 1,
+            }
+        }
+        self.toast = Some(if failed == 0 {
+            format!("Pasted {created} task(s)")
+        } else {
+            format!("Pasted {created} task(s), skipped {failed} line(s)")
+        });
+        self.save_session();
+        cx.notify();
+    }
+
+    fn rename_sidebar_target(&mut self, cx: &mut Context<Self>) {
+        let Some(target) = self.sidebar_cursor.clone() else {
+            return;
+        };
+        let entity = match target {
+            sidebar::SidebarTarget::Project(id) => modals::EntityRef::Project(id),
+            sidebar::SidebarTarget::Folder(id) => modals::EntityRef::Folder(id),
+            sidebar::SidebarTarget::Tag(id) => modals::EntityRef::Tag(id),
+            sidebar::SidebarTarget::Custom(id) => modals::EntityRef::Perspective(id),
+            sidebar::SidebarTarget::Builtin(_) => {
+                self.toast = Some("Built-in perspectives cannot be renamed".to_string());
+                cx.notify();
+                return;
+            }
+        };
+        let modal = modals::Modal::rename(self, entity);
+        self.open_modal(modal, cx);
+    }
+
+    fn sidebar_open_current(&mut self, cx: &mut Context<Self>) {
+        let Some(target) = self.sidebar_cursor.clone() else {
+            return;
+        };
+        self.sidebar_activate(target, cx);
+    }
+
     fn active_buffer_mut(&mut self) -> Option<&mut text::TextBuffer> {
         match self.focus {
             FocusArea::Capture => Some(&mut self.capture),
@@ -1739,6 +2229,7 @@ impl FlowlistApp {
                 self.modal.as_mut().and_then(|modal| modal.field_mut(index))
             }
             FocusArea::Content => None,
+            FocusArea::Sidebar | FocusArea::ChecklistList => None,
         }
     }
 
@@ -1753,7 +2244,7 @@ impl FlowlistApp {
             FocusArea::TagInput => self.add_tag_from_buffer(cx),
             FocusArea::Checklist => self.commit_checklist(cx),
             FocusArea::Modal => self.commit_modal(cx),
-            FocusArea::Content => {}
+            FocusArea::Content | FocusArea::Sidebar | FocusArea::ChecklistList => {}
         }
     }
 
@@ -1775,6 +2266,12 @@ impl FlowlistApp {
                 return;
             }
             FocusArea::Content => {}
+            FocusArea::Sidebar => {
+                self.sidebar_cursor = None;
+            }
+            FocusArea::ChecklistList => {
+                self.checklist_cursor = None;
+            }
         }
         self.focus = FocusArea::Content;
         cx.notify();
@@ -2099,6 +2596,7 @@ impl FlowlistApp {
                         div()
                             .id("undo")
                             .opacity(if self.store.can_undo() { 1.0 } else { 0.4 })
+                            .tooltip(widgets::tip(theme, "Undo (⌘Z)"))
                             .child(widgets::icon_button(theme, "↶", false))
                             .on_click(cx.listener(|this, _, _, cx| this.undo(cx))),
                     )
@@ -2106,12 +2604,14 @@ impl FlowlistApp {
                         div()
                             .id("redo")
                             .opacity(if self.store.can_redo() { 1.0 } else { 0.4 })
+                            .tooltip(widgets::tip(theme, "Redo (⇧⌘Z)"))
                             .child(widgets::icon_button(theme, "↷", false))
                             .on_click(cx.listener(|this, _, _, cx| this.redo(cx))),
                     )
                     .child(
                         div()
                             .id("help")
+                            .tooltip(widgets::tip(theme, "Keyboard and mouse help (?)"))
                             .child(widgets::icon_button(theme, "?", false))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.open_modal(modals::Modal::Help, cx)
@@ -2120,6 +2620,7 @@ impl FlowlistApp {
                     .child(
                         div()
                             .id("settings")
+                            .tooltip(widgets::tip(theme, "Settings (⌘,)"))
                             .child(widgets::icon_button(theme, "⚙", false))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.open_modal(modals::Modal::settings(this), cx)
@@ -2128,6 +2629,7 @@ impl FlowlistApp {
                     .child(
                         div()
                             .id("theme")
+                            .tooltip(widgets::tip(theme, "Switch light / dark"))
                             .child(widgets::icon_button(theme, "◐", false))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.theme = Theme::new(this.theme.mode().toggled());
@@ -2138,6 +2640,7 @@ impl FlowlistApp {
                     .child(
                         div()
                             .id("inspector")
+                            .tooltip(widgets::tip(theme, "Toggle inspector (i)"))
                             .child(widgets::icon_button(theme, "▤", self.show_inspector))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.show_inspector = !this.show_inspector;
@@ -2207,6 +2710,21 @@ impl FlowlistApp {
                     .flex()
                     .items_center()
                     .gap_3()
+                    .when(self.vim_mode, |this| {
+                        this.child(
+                            div()
+                                .text_color(if self.vim.is_pending() {
+                                    theme.accent
+                                } else {
+                                    theme.text_faint
+                                })
+                                .child(if self.vim.is_pending() {
+                                    "vim …"
+                                } else {
+                                    "vim"
+                                }),
+                        )
+                    })
                     .child(format!("rev {revision}"))
                     .child(
                         div()

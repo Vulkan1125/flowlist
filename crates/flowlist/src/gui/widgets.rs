@@ -4,7 +4,10 @@
 //! Text fields render their buffer as runs so the caret and selection land on
 //! the right characters even with multi-byte input.
 
-use gpui::{CursorStyle, FontWeight, IntoElement, div, prelude::*, px};
+use gpui::{
+    AnyView, App, CursorStyle, FontWeight, IntoElement, Render, SharedString, Window, div,
+    prelude::*, px,
+};
 
 use super::text::TextBuffer;
 use super::theme::Theme;
@@ -272,6 +275,43 @@ pub fn count(theme: Theme, value: usize) -> impl IntoElement {
 
 pub fn divider(theme: Theme) -> impl IntoElement {
     div().h(px(1.)).w_full().bg(theme.border_soft)
+}
+
+/// A tooltip shown after GPUI's built-in hover delay. Icon-only controls attach
+/// one so their meaning is discoverable without opening the help card.
+struct TipView {
+    label: SharedString,
+    theme: Theme,
+}
+
+impl Render for TipView {
+    fn render(&mut self, _window: &mut Window, _cx: &mut gpui::Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        div()
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .text_xs()
+            .text_color(theme.text)
+            .whitespace_nowrap()
+            .child(self.label.clone())
+    }
+}
+
+/// Builder for `.tooltip(...)`. GPUI waits before showing it, so passing the
+/// mouse across a row stays quiet.
+pub fn tip(
+    theme: Theme,
+    label: impl Into<SharedString>,
+) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    let label = label.into();
+    move |_window, cx| {
+        let label = label.clone();
+        cx.new(|_| TipView { label, theme }).into()
+    }
 }
 
 pub fn key_hint(theme: Theme, key: &'static str, label: &'static str) -> impl IntoElement {
