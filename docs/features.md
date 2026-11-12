@@ -106,7 +106,40 @@ working domain and GUI. This page tracks what is implemented and verified.
   merge imports.
 - The GUI, CLI and MCP server never maintain separate copies of the library.
 
+## Planned
+
+### Vim keybindings across the whole app
+
+Vim mode is a first-class input layer for the entire GUI, not a per-screen
+shortcut set.
+
+- Normal mode is the default outside text fields. Text fields keep native
+  editing; `Esc` returns to normal mode.
+- Motions work in the content list, sidebar, inspector, forecast, review,
+  nearby, completed and custom perspectives: `h`/`j`/`k`/`l`, `gg`/`G`,
+  `Ctrl-d`/`Ctrl-u`, and numeric counts such as `3j`.
+- Actions share one grammar everywhere: `x` complete, `o`/`O` new task below or
+  above, `dd` delete, `yy` yank, `p` paste, `u`/`Ctrl-r` undo/redo, `r` rename,
+  `i` inspector, `/` search with `n`/`N` match cycling, `Enter` open or edit.
+- Sidebar: `j`/`k` move between perspectives and entities, `l` expand, `h`
+  collapse, `Enter` open. Inspector and checklist panes use the same motions.
+- Existing macOS shortcuts stay available, and the help card plus README list
+  both maps. A settings toggle disables vim mode for users who prefer arrows.
+
+### Delayed tooltips for icon controls
+
+- One reusable tooltip component with a short hover delay (about 400 ms) and
+  immediate dismissal on leave, click or scroll.
+- Applied to all icon-only controls: sidebar pencil and ×, completion circles,
+  flag toggles, checklist add/toggle/reorder/delete, project status chips,
+  disclosure arrows, toolbar and modal close buttons.
+- Tooltips name the action and show its shortcut where one exists, for example
+  "Rename (⌘R)" and "Delete (⌘⌫)".
+- Keyboard focus reveals the same tooltip so the UI stays usable without a
+  mouse; tooltips never cover the row they describe.
+
 ## Next refinements
+
 
 - Further visual polish of the macOS-native theme, typography and spacing.
 - Richer custom-perspective editor in the GUI (the CLI/MCP already accept the
