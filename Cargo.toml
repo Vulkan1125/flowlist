@@ -1,0 +1,32 @@
+[workspace]
+resolver = "3"
+members = ["crates/flowlist-core", "crates/flowlist"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+authors = ["Flowlist contributors"]
+repository = "https://example.invalid/flowlist"
+
+[workspace.dependencies]
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde", "clock"] }
+clap = { version = "4.6", features = ["derive", "env"] }
+fs2 = "0.4"
+gpui = { version = "=0.2.2", features = ["runtime_shaders"] }
+owo-colors = "4.4"
+schemars = "1.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+ulid = { version = "3.0", features = ["serde"] }
+unicode-segmentation = "1.12"
+
+[profile.release]
+lto = "thin"
+strip = "symbols"
+
+[profile.dev.package."*"]
+opt-level = 1

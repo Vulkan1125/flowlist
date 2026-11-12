@@ -1,0 +1,31 @@
+[package]
+name = "flowlist"
+description = "A fast, local-first OmniFocus-style task manager with a GPUI interface, CLI and MCP server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+default-run = "flowlist"
+
+[[bin]]
+name = "flowlist"
+path = "src/main.rs"
+
+[features]
+default = ["gui"]
+gui = ["dep:gpui"]
+
+[dependencies]
+flowlist-core = { path = "../flowlist-core" }
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+owo-colors.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+unicode-segmentation.workspace = true
+gpui = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = "3"
