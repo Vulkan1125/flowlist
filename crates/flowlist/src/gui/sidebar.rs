@@ -308,9 +308,6 @@ impl FlowlistApp {
                         )
                         .child(div().w(px(14.)).child("▱"))
                         .child(div().flex_1().min_w_0().overflow_hidden().child(name))
-                        .when(count > 0, |this| {
-                            this.child(widgets::count(self.theme, count))
-                        })
                         .child(self.rename_button(
                             format!("rename-folder:{rename_id}"),
                             modals::EntityRef::Folder(rename_id),
@@ -322,6 +319,9 @@ impl FlowlistApp {
                             delete_view,
                             cx,
                         ))
+                        .when(count > 0, |this| {
+                            this.child(widgets::count(self.theme, count))
+                        })
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.open_view(View::Folder(view_id.clone()), cx)
                         }));
@@ -496,9 +496,6 @@ impl FlowlistApp {
                         )
                     },
                 )
-                .when(usage > 0, |this| {
-                    this.child(widgets::count(self.theme, usage))
-                })
                 .child(self.rename_button(
                     format!("rename-tag:{rename_id}"),
                     modals::EntityRef::Tag(rename_id),
@@ -510,6 +507,9 @@ impl FlowlistApp {
                     delete_view,
                     cx,
                 ))
+                .when(usage > 0, |this| {
+                    this.child(widgets::count(self.theme, usage))
+                })
                 .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
                     this.drop_on_tag(drop_id.clone(), payload, cx)
                 }))
