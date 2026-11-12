@@ -189,7 +189,9 @@ impl Db {
         if prefix.is_empty() {
             return Err(Error::invalid(format!("empty {kind} id")));
         }
-        let matches: Vec<&str> = ids.filter(|id| id.starts_with(prefix)).collect();
+        let matches: Vec<&str> = ids
+            .filter(|id| id.starts_with(prefix) || id.ends_with(prefix))
+            .collect();
         match matches.as_slice() {
             [] => Err(Error::not_found(kind, prefix.to_string())),
             [single] => Ok((*single).to_string()),
@@ -241,14 +243,14 @@ impl Db {
         let projects: Vec<ContainerId> = self
             .projects
             .keys()
-            .filter(|id| id.starts_with(prefix))
-            .map(|id| ContainerId::Project(id.clone()))
+            .filter(|id| id.matches_spec(prefix))
+            .map(|id| ContainerId::Project((*id).clone()))
             .collect();
         let folders: Vec<ContainerId> = self
             .folders
             .keys()
-            .filter(|id| id.starts_with(prefix))
-            .map(|id| ContainerId::Folder(id.clone()))
+            .filter(|id| id.matches_spec(prefix))
+            .map(|id| ContainerId::Folder((*id).clone()))
             .collect();
         match projects.len() + folders.len() {
             0 => Err(Error::not_found("container", prefix.to_string())),

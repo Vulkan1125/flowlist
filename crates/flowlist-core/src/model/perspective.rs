@@ -226,6 +226,11 @@ impl FilterNode {
         FilterNode::Condition(condition)
     }
 
+    /// All of these conditions must match. An empty list matches everything.
+    pub fn all_conditions(conditions: Vec<Condition>) -> Self {
+        FilterNode::All(conditions.into_iter().map(FilterNode::Condition).collect())
+    }
+
     pub fn is_empty(&self) -> bool {
         match self {
             FilterNode::All(nodes) | FilterNode::Any(nodes) => nodes.is_empty(),

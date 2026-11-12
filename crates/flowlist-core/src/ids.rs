@@ -28,15 +28,23 @@ macro_rules! id_type {
                 &self.0
             }
 
-            /// Short form shown in human-oriented output. Prefix resolution
-            /// accepts any unambiguous prefix, including this one.
+            /// Compact form shown in human-oriented output. It is the tail of
+            /// the ULID, which is random: two items created in the same
+            /// millisecond still get distinct short forms.
             pub fn short(&self) -> &str {
-                let end = self.0.len().min(8);
-                &self.0[..end]
+                let start = self.0.len().saturating_sub(8);
+                &self.0[start..]
             }
 
             pub fn starts_with(&self, prefix: &str) -> bool {
                 self.0.starts_with(prefix)
+            }
+
+            /// True when `spec` identifies this id as a prefix (what people
+            /// type from a full id) or a suffix (what `short()` prints).
+            pub fn matches_spec(&self, spec: &str) -> bool {
+                let spec = spec.trim();
+                !spec.is_empty() && (self.0.starts_with(spec) || self.0.ends_with(spec))
             }
 
             pub fn label() -> &'static str {
@@ -119,7 +127,8 @@ mod tests {
         let b = TaskId::new();
         assert_ne!(a, b);
         assert_eq!(a.short().len(), 8);
-        assert!(a.starts_with(a.short()));
+        assert!(a.matches_spec(a.short()));
+        assert!(a.matches_spec(a.as_str()));
         assert_eq!(a.to_string(), a.as_str());
     }
 
