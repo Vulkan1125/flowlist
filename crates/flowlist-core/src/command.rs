@@ -3,15 +3,14 @@
 //! moves and bulk changes.
 
 use chrono::{DateTime, NaiveDate, Utc};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use crate::db::{
-    ContainerPosition, Db, OrderKey, Position,
-};
+use crate::db::{ContainerPosition, Db, OrderKey, Position};
 use crate::error::{Error, Result};
-use crate::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
+use crate::ids::{ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use crate::model::{
-    Folder, Geo, Perspective, Project, ProjectStatus, RepeatRule, Tag, TagStatus, Task,
+    ChecklistItem, Folder, Geo, Perspective, Project, ProjectStatus, RepeatRule, Tag, TagStatus,
+    Task,
 };
 use crate::time::{Stamp, local_date, now};
 
@@ -186,21 +185,84 @@ pub enum ImportMode {
 #[derive(Clone, Debug)]
 pub enum Command {
     CreateTask(NewTask),
-    UpdateTask { id: TaskId, patch: TaskPatch },
-    CompleteTasks { ids: Vec<TaskId>, completed: bool },
-    DeleteTasks { ids: Vec<TaskId> },
-    MoveTasks { ids: Vec<TaskId>, placement: TaskPlacement },
-    SetTaskTags { ids: Vec<TaskId>, add: Vec<TagId>, remove: Vec<TagId> },
-    SetTaskFlag { ids: Vec<TaskId>, flagged: bool },
+    UpdateTask {
+        id: TaskId,
+        patch: TaskPatch,
+    },
+    CompleteTasks {
+        ids: Vec<TaskId>,
+        completed: bool,
+    },
+    DeleteTasks {
+        ids: Vec<TaskId>,
+    },
+    MoveTasks {
+        ids: Vec<TaskId>,
+        placement: TaskPlacement,
+    },
+    SetTaskTags {
+        ids: Vec<TaskId>,
+        add: Vec<TagId>,
+        remove: Vec<TagId>,
+    },
+    SetTaskFlag {
+        ids: Vec<TaskId>,
+        flagged: bool,
+    },
+    AddChecklistItem {
+        task: TaskId,
+        title: String,
+        /// Insert before this index; `None` appends.
+        position: Option<usize>,
+    },
+    UpdateChecklistItem {
+        task: TaskId,
+        item: ChecklistId,
+        title: String,
+        completed: Option<bool>,
+    },
+    MoveChecklistItem {
+        task: TaskId,
+        item: ChecklistId,
+        to: usize,
+    },
+    DeleteChecklistItem {
+        task: TaskId,
+        item: ChecklistId,
+    },
     CreateProject(NewProject),
-    UpdateProject { id: ProjectId, patch: ProjectPatch },
-    SetProjectStatus { id: ProjectId, status: ProjectStatus },
-    CompleteReview { id: ProjectId, reviewed_on: NaiveDate },
-    MoveProject { id: ProjectId, placement: ContainerPlacement },
-    CreateFolder { name: String, parent: Option<FolderId>, position: ContainerPosition },
-    RenameFolder { id: FolderId, name: String },
-    MoveFolder { id: FolderId, placement: ContainerPlacement },
-    DeleteFolder { id: FolderId },
+    UpdateProject {
+        id: ProjectId,
+        patch: ProjectPatch,
+    },
+    SetProjectStatus {
+        id: ProjectId,
+        status: ProjectStatus,
+    },
+    CompleteReview {
+        id: ProjectId,
+        reviewed_on: NaiveDate,
+    },
+    MoveProject {
+        id: ProjectId,
+        placement: ContainerPlacement,
+    },
+    CreateFolder {
+        name: String,
+        parent: Option<FolderId>,
+        position: ContainerPosition,
+    },
+    RenameFolder {
+        id: FolderId,
+        name: String,
+    },
+    MoveFolder {
+        id: FolderId,
+        placement: ContainerPlacement,
+    },
+    DeleteFolder {
+        id: FolderId,
+    },
     CreateTag {
         name: String,
         parent: Option<TagId>,
@@ -208,12 +270,24 @@ pub enum Command {
         location: Option<Geo>,
         position: Position,
     },
-    UpdateTag { id: TagId, patch: TagPatch },
-    DeleteTag { id: TagId },
-    SavePerspective { perspective: Perspective },
-    DeletePerspective { id: PerspectiveId },
+    UpdateTag {
+        id: TagId,
+        patch: TagPatch,
+    },
+    DeleteTag {
+        id: TagId,
+    },
+    SavePerspective {
+        perspective: Perspective,
+    },
+    DeletePerspective {
+        id: PerspectiveId,
+    },
     UpdateSettings(SettingsPatch),
-    Import { db: Db, mode: ImportMode },
+    Import {
+        db: Db,
+        mode: ImportMode,
+    },
 }
 
 impl Command {
@@ -233,8 +307,16 @@ impl Command {
             Command::MoveTasks { ids, .. } => format!("Move {} task(s)", ids.len()),
             Command::SetTaskTags { ids, .. } => format!("Tag {} task(s)", ids.len()),
             Command::SetTaskFlag { ids, flagged } => {
-                format!("{} {} task(s)", if *flagged { "Flag" } else { "Unflag" }, ids.len())
+                format!(
+                    "{} {} task(s)",
+                    if *flagged { "Flag" } else { "Unflag" },
+                    ids.len()
+                )
             }
+            Command::AddChecklistItem { .. } => "Add checklist item".to_string(),
+            Command::UpdateChecklistItem { .. } => "Edit checklist item".to_string(),
+            Command::MoveChecklistItem { .. } => "Reorder checklist item".to_string(),
+            Command::DeleteChecklistItem { .. } => "Delete checklist item".to_string(),
             Command::CreateProject(project) => format!("Add project “{}”", project.name),
             Command::UpdateProject { id, .. } => format!("Edit project {id}"),
             Command::SetProjectStatus { id, status } => {
@@ -282,7 +364,9 @@ impl Command {
                     }
                 }
                 if new_task.project.is_some() && new_task.parent.is_some() {
-                    return Err(Error::invalid("a task cannot have both a project and a parent"));
+                    return Err(Error::invalid(
+                        "a task cannot have both a project and a parent",
+                    ));
                 }
                 let (project, parent) = match (&new_task.parent, &new_task.project) {
                     (Some(parent), _) => {
@@ -422,6 +506,20 @@ impl Command {
                                 spawned.estimate_min = estimate;
                                 spawned.flagged = flagged;
                                 spawned.sequential = sequential;
+                                spawned.checklist = db
+                                    .tasks
+                                    .get(&id)
+                                    .map(|task| {
+                                        task.checklist
+                                            .iter()
+                                            .map(|item| {
+                                                let mut copy = item.clone();
+                                                copy.completed = false;
+                                                copy
+                                            })
+                                            .collect()
+                                    })
+                                    .unwrap_or_default();
                                 let mut next_rule = rule;
                                 next_rule.completed_count = next.completed_count;
                                 spawned.repeat = Some(next_rule);
@@ -484,6 +582,77 @@ impl Command {
                     task.modified_at = at;
                 }
                 outcome.affected.extend(ids.iter().map(|id| id.to_string()));
+                db.touch();
+            }
+            Command::AddChecklistItem {
+                task: task_id,
+                title,
+                position,
+            } => {
+                let title = title.trim();
+                if title.is_empty() {
+                    return Err(Error::invalid("checklist item cannot be empty"));
+                }
+                let task = db.task_mut(&task_id)?;
+                let item = ChecklistItem::new(title);
+                let index = position.unwrap_or(task.checklist.len());
+                let index = index.min(task.checklist.len());
+                task.checklist.insert(index, item.clone());
+                task.modified_at = at;
+                outcome.created.push(item.id.to_string());
+                outcome.affected.push(task_id.to_string());
+                db.touch();
+            }
+            Command::UpdateChecklistItem {
+                task: task_id,
+                item,
+                title,
+                completed,
+            } => {
+                let title = title.trim();
+                if title.is_empty() {
+                    return Err(Error::invalid("checklist item cannot be empty"));
+                }
+                let task = db.task_mut(&task_id)?;
+                let Some(item) = task.checklist.iter_mut().find(|entry| entry.id == item) else {
+                    return Err(Error::invalid("checklist item not found"));
+                };
+                item.title = title.to_string();
+                if let Some(completed) = completed {
+                    item.completed = completed;
+                }
+                task.modified_at = at;
+                outcome.affected.push(task_id.to_string());
+                db.touch();
+            }
+            Command::MoveChecklistItem {
+                task: task_id,
+                item,
+                to,
+            } => {
+                let task = db.task_mut(&task_id)?;
+                let Some(index) = task.checklist.iter().position(|entry| entry.id == item) else {
+                    return Err(Error::invalid("checklist item not found"));
+                };
+                let entry = task.checklist.remove(index);
+                let target = to.min(task.checklist.len());
+                task.checklist.insert(target, entry);
+                task.modified_at = at;
+                outcome.affected.push(task_id.to_string());
+                db.touch();
+            }
+            Command::DeleteChecklistItem {
+                task: task_id,
+                item,
+            } => {
+                let task = db.task_mut(&task_id)?;
+                let before = task.checklist.len();
+                task.checklist.retain(|entry| entry.id != item);
+                if task.checklist.len() == before {
+                    return Err(Error::invalid("checklist item not found"));
+                }
+                task.modified_at = at;
+                outcome.affected.push(task_id.to_string());
                 db.touch();
             }
             Command::CreateProject(new_project) => {
@@ -679,11 +848,7 @@ impl Command {
                 let parent = folder.parent.clone();
                 for child in folder.child_order.clone() {
                     db.detach_container(&child);
-                    db.insert_container(
-                        parent.clone(),
-                        child,
-                        ContainerPosition::End,
-                    );
+                    db.insert_container(parent.clone(), child, ContainerPosition::End);
                 }
                 db.detach_container(&ContainerId::Folder(id.clone()));
                 db.folders.remove(&id);
@@ -930,7 +1095,10 @@ fn move_tasks(db: &mut Db, ids: &[TaskId], placement: TaskPlacement) -> Result<(
     // Prevent parent/child pairs from being moved twice.
     for id in unique.clone() {
         let ancestors = db.task_ancestors(&id);
-        if unique.iter().any(|other| other != &id && ancestors.contains(other)) {
+        if unique
+            .iter()
+            .any(|other| other != &id && ancestors.contains(other))
+        {
             unique.retain(|candidate| candidate != &id);
         }
     }
@@ -1046,6 +1214,30 @@ fn ensure_unique_tag_name(
     }
 }
 
+fn tag_depth(tags: &BTreeMap<TagId, Tag>, id: &TagId) -> usize {
+    let mut depth = 0;
+    let mut current = tags.get(id).and_then(|tag| tag.parent.as_ref());
+    while let Some(parent) = current {
+        depth += 1;
+        current = tags.get(parent).and_then(|tag| tag.parent.as_ref());
+    }
+    depth
+}
+
+fn tag_path_slash(tags: &BTreeMap<TagId, Tag>, id: &TagId) -> String {
+    let mut parts = Vec::new();
+    let mut current = Some(id.clone());
+    while let Some(id) = current {
+        let Some(tag) = tags.get(&id) else {
+            break;
+        };
+        parts.push(tag.name.clone());
+        current = tag.parent.clone();
+    }
+    parts.reverse();
+    parts.join("/")
+}
+
 #[derive(Default, Debug)]
 struct MergeStats {
     tasks: usize,
@@ -1072,11 +1264,45 @@ fn merge_db(db: &mut Db, imported: Db) -> MergeStats {
         ordered_tasks.insert(task.clone());
     }
 
-    for (id, tag) in &imported.tags {
-        if !db.tags.contains_key(id) {
-            db.tags.insert(id.clone(), tag.clone());
-            stats.tags += 1;
+    // Reconcile tags by path: merging a library twice must not create a second
+    // "Errands" just because the ids differ. New tags inherit the mapped id of
+    // their parent so tag trees stay intact.
+    let mut tag_map: BTreeMap<TagId, TagId> = BTreeMap::new();
+    let mut imported_tags: Vec<&Tag> = imported.tags.values().collect();
+    imported_tags.sort_by_key(|tag| tag_depth(&imported.tags, &tag.id));
+    for tag in imported_tags {
+        if db.tags.contains_key(&tag.id) {
+            tag_map.insert(tag.id.clone(), tag.id.clone());
+            continue;
         }
+        let path = tag_path_slash(&imported.tags, &tag.id);
+        if let Some(existing) = db.find_tag_path(&path) {
+            tag_map.insert(tag.id.clone(), existing);
+            continue;
+        }
+        let mut copy = tag.clone();
+        copy.parent = tag
+            .parent
+            .as_ref()
+            .and_then(|parent| tag_map.get(parent).cloned());
+        let new_id = copy.id.clone();
+        match copy.parent.clone() {
+            Some(parent) => {
+                if let Some(entity) = db.tags.get_mut(&parent) {
+                    if !entity.child_order.contains(&new_id) {
+                        entity.child_order.push(new_id.clone());
+                    }
+                }
+            }
+            None => {
+                if !db.tag_roots.contains(&new_id) {
+                    db.tag_roots.push(new_id.clone());
+                }
+            }
+        }
+        db.tags.insert(new_id.clone(), copy);
+        tag_map.insert(tag.id.clone(), new_id);
+        stats.tags += 1;
     }
     for (id, folder) in &imported.folders {
         if !db.folders.contains_key(id) {
@@ -1092,7 +1318,13 @@ fn merge_db(db: &mut Db, imported: Db) -> MergeStats {
     }
     for (id, task) in &imported.tasks {
         if !db.tasks.contains_key(id) {
-            db.tasks.insert(id.clone(), task.clone());
+            let mut copy = task.clone();
+            copy.tags = copy
+                .tags
+                .iter()
+                .filter_map(|tag| tag_map.get(tag).cloned())
+                .collect();
+            db.tasks.insert(id.clone(), copy);
             stats.tasks += 1;
         }
     }
@@ -1101,11 +1333,6 @@ fn merge_db(db: &mut Db, imported: Db) -> MergeStats {
     for container in imported.root {
         if !db.root.contains(&container) {
             db.root.push(container);
-        }
-    }
-    for id in imported.tag_roots {
-        if !db.tag_roots.contains(&id) {
-            db.tag_roots.push(id);
         }
     }
     for (id, folder) in &imported.folders {
@@ -1127,10 +1354,15 @@ fn merge_db(db: &mut Db, imported: Db) -> MergeStats {
         }
     }
     for (id, tag) in &imported.tags {
-        if let Some(target) = db.tags.get_mut(id) {
+        let Some(mapped) = tag_map.get(id) else {
+            continue;
+        };
+        if let Some(target) = db.tags.get_mut(mapped) {
             for child in &tag.child_order {
-                if !target.child_order.contains(child) {
-                    target.child_order.push(child.clone());
+                if let Some(child) = tag_map.get(child) {
+                    if !target.child_order.contains(child) {
+                        target.child_order.push(child.clone());
+                    }
                 }
             }
         }

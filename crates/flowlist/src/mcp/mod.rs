@@ -14,7 +14,7 @@ use flowlist_core::command::{
     TaskPlacement,
 };
 use flowlist_core::db::{ContainerPosition, Db, Position};
-use flowlist_core::ids::{ContainerId, FolderId, ProjectId, TagId, TaskId};
+use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
     BuiltinPerspective, Condition, FilterNode, Geo, GroupBy, Perspective, ProjectStatus, SortBy,
     TagStatus, TaskStatus,
@@ -62,8 +62,7 @@ pub fn serve(paths: DataPaths) -> Result<()> {
             )),
         };
         if let Some(response) = response {
-            serde_json::to_writer(&mut stdout, &response)
-                .context("writing response")?;
+            serde_json::to_writer(&mut stdout, &response).context("writing response")?;
             stdout.write_all(b"\n").context("writing newline")?;
             stdout.flush().context("flushing stdout")?;
         }
@@ -188,6 +187,11 @@ impl Server {
             "delete_task" => self.tool_delete_task(args),
             "move_task" => self.tool_move_task(args),
             "set_task_tags" => self.tool_set_task_tags(args),
+            "list_checklist" => self.tool_list_checklist(args),
+            "add_checklist_item" => self.tool_add_checklist_item(args),
+            "update_checklist_item" => self.tool_update_checklist_item(args),
+            "delete_checklist_item" => self.tool_delete_checklist_item(args),
+            "move_checklist_item" => self.tool_move_checklist_item(args),
             "list_tasks" => self.tool_list_tasks(args),
             "search" => self.tool_search(args),
             "list_projects" => self.tool_list_projects(args),
@@ -350,8 +354,10 @@ impl Server {
         } else {
             bail!("move_task needs --project, --parent or inbox");
         };
-        self.store
-            .execute(CoreCommand::MoveTasks { ids: vec![id.clone()], placement })?;
+        self.store.execute(CoreCommand::MoveTasks {
+            ids: vec![id.clone()],
+            placement,
+        })?;
         Ok(render::task_value(self.store.db(), &id))
     }
 
@@ -359,7 +365,12 @@ impl Server {
         let specs = id_list(args, "id")?;
         let ids = specs
             .iter()
-            .map(|spec| self.store.db().resolve_task(spec).map_err(|error| anyhow!("{error}")))
+            .map(|spec| {
+                self.store
+                    .db()
+                    .resolve_task(spec)
+                    .map_err(|error| anyhow!("{error}"))
+            })
             .collect::<Result<Vec<_>>>()?;
         let add = string_array(args, "add");
         let remove = string_array(args, "remove");
@@ -379,6 +390,115 @@ impl Server {
         Ok(json!({
             "tasks": ids.iter().map(|id| render::task_value(self.store.db(), id)).collect::<Vec<_>>()
         }))
+    }
+
+    fn tool_list_checklist(&mut self, args: &Value) -> Result<Value> {
+        self.store.refresh()?;
+        let task_id = self.store.db().resolve_task(&require_string(args, "id")?)?;
+        let task = self
+            .store
+            .db()
+            .tasks
+            .get(&task_id)
+            .ok_or_else(|| anyhow!("task not found"))?;
+        Ok(json!({
+            "task_id": task_id.to_string(),
+            "task_title": task.title,
+            "items": task.checklist.iter().map(|item| json!({
+                "id": item.id.to_string(),
+                "short_id": item.id.short(),
+                "title": item.title,
+                "completed": item.completed,
+            })).collect::<Vec<_>>(),
+            "completed": task.checklist_progress().0,
+            "total": task.checklist_progress().1,
+        }))
+    }
+
+    fn resolve_checklist_item(&self, task: &TaskId, spec: &str) -> Result<ChecklistId> {
+        let task_entity = self
+            .store
+            .db()
+            .tasks
+            .get(task)
+            .ok_or_else(|| anyhow!("task not found"))?;
+        let matches: Vec<&ChecklistId> = task_entity
+            .checklist
+            .iter()
+            .filter(|item| item.id.matches_spec(spec))
+            .map(|item| &item.id)
+            .collect();
+        match matches.as_slice() {
+            [] => bail!("checklist item not found: {spec}"),
+            [item] => Ok((*item).clone()),
+            _ => bail!("checklist item id is ambiguous: {spec}"),
+        }
+    }
+
+    fn tool_add_checklist_item(&mut self, args: &Value) -> Result<Value> {
+        let task = self.store.db().resolve_task(&require_string(args, "id")?)?;
+        let title = require_string(args, "title")?;
+        let position = args
+            .get("position")
+            .and_then(Value::as_u64)
+            .map(|value| value as usize);
+        let outcome = self.store.execute(CoreCommand::AddChecklistItem {
+            task: task.clone(),
+            title,
+            position,
+        })?;
+        let created = outcome.created.first().cloned().unwrap_or_default();
+        Ok(json!({
+            "task": render::task_value(self.store.db(), &task),
+            "item_id": created,
+        }))
+    }
+
+    fn tool_update_checklist_item(&mut self, args: &Value) -> Result<Value> {
+        let task = self.store.db().resolve_task(&require_string(args, "id")?)?;
+        let item = self.resolve_checklist_item(&task, &require_string(args, "item")?)?;
+        let title = string_arg(args, "title").unwrap_or_else(|| {
+            self.store
+                .db()
+                .tasks
+                .get(&task)
+                .and_then(|task| task.checklist_item(&item))
+                .map(|item| item.title.clone())
+                .unwrap_or_default()
+        });
+        let completed = args.get("completed").and_then(Value::as_bool);
+        self.store.execute(CoreCommand::UpdateChecklistItem {
+            task: task.clone(),
+            item,
+            title,
+            completed,
+        })?;
+        Ok(render::task_value(self.store.db(), &task))
+    }
+
+    fn tool_delete_checklist_item(&mut self, args: &Value) -> Result<Value> {
+        let task = self.store.db().resolve_task(&require_string(args, "id")?)?;
+        let item = self.resolve_checklist_item(&task, &require_string(args, "item")?)?;
+        self.store.execute(CoreCommand::DeleteChecklistItem {
+            task: task.clone(),
+            item,
+        })?;
+        Ok(render::task_value(self.store.db(), &task))
+    }
+
+    fn tool_move_checklist_item(&mut self, args: &Value) -> Result<Value> {
+        let task = self.store.db().resolve_task(&require_string(args, "id")?)?;
+        let item = self.resolve_checklist_item(&task, &require_string(args, "item")?)?;
+        let to = args
+            .get("to")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| anyhow!("move_checklist_item requires `to`"))? as usize;
+        self.store.execute(CoreCommand::MoveChecklistItem {
+            task: task.clone(),
+            item,
+            to,
+        })?;
+        Ok(render::task_value(self.store.db(), &task))
     }
 
     fn tool_list_tasks(&mut self, args: &Value) -> Result<Value> {
@@ -414,14 +534,18 @@ impl Server {
                     conditions.push(Condition::Flagged { value: true });
                 }
                 if bool_arg(args, "completed").unwrap_or(false) {
-                    conditions.push(Condition::Status { value: TaskStatus::Completed });
+                    conditions.push(Condition::Status {
+                        value: TaskStatus::Completed,
+                    });
                     show_completed = true;
                 }
                 if bool_arg(args, "inbox").unwrap_or(false) {
                     conditions.push(Condition::InInbox);
                 }
                 if bool_arg(args, "available").unwrap_or(false) {
-                    conditions.push(Condition::Status { value: TaskStatus::Available });
+                    conditions.push(Condition::Status {
+                        value: TaskStatus::Available,
+                    });
                 }
                 if let Some(project) = string_arg(args, "project") {
                     let id = db
@@ -472,7 +596,9 @@ impl Server {
 
         if let Some(query_text) = string_arg(args, "search") {
             let wanted: std::collections::HashSet<TaskId> =
-                search_engine::task_ids(db, &query_text, 1000).into_iter().collect();
+                search_engine::task_ids(db, &query_text, 1000)
+                    .into_iter()
+                    .collect();
             groups = groups
                 .into_iter()
                 .map(|mut group| {
@@ -502,10 +628,7 @@ impl Server {
     fn tool_search(&mut self, args: &Value) -> Result<Value> {
         self.store.refresh()?;
         let query = require_string(args, "query")?;
-        let limit = args
-            .get("limit")
-            .and_then(Value::as_u64)
-            .unwrap_or(25) as usize;
+        let limit = args.get("limit").and_then(Value::as_u64).unwrap_or(25) as usize;
         let hits = search_engine::search(self.store.db(), &query, limit);
         Ok(render::search_value(self.store.db(), &hits))
     }
@@ -557,7 +680,10 @@ impl Server {
     }
 
     fn tool_update_project(&mut self, args: &Value) -> Result<Value> {
-        let id = self.store.db().resolve_project(&require_string(args, "id")?)?;
+        let id = self
+            .store
+            .db()
+            .resolve_project(&require_string(args, "id")?)?;
         let reference = now();
         let mut patch = ProjectPatch::default();
         if let Some(name) = string_arg(args, "name") {
@@ -583,16 +709,23 @@ impl Server {
         if let Some(sequential) = bool_arg(args, "sequential") {
             patch.sequential = Some(sequential);
         }
-        self.store
-            .execute(CoreCommand::UpdateProject { id: id.clone(), patch })?;
+        self.store.execute(CoreCommand::UpdateProject {
+            id: id.clone(),
+            patch,
+        })?;
         Ok(render::project_value(self.store.db(), &id))
     }
 
     fn tool_set_project_status(&mut self, args: &Value) -> Result<Value> {
-        let id = self.store.db().resolve_project(&require_string(args, "id")?)?;
+        let id = self
+            .store
+            .db()
+            .resolve_project(&require_string(args, "id")?)?;
         let status = parse_project_status(&require_string(args, "status")?)?;
-        self.store
-            .execute(CoreCommand::SetProjectStatus { id: id.clone(), status })?;
+        self.store.execute(CoreCommand::SetProjectStatus {
+            id: id.clone(),
+            status,
+        })?;
         Ok(render::project_value(self.store.db(), &id))
     }
 
@@ -626,8 +759,10 @@ impl Server {
             || patch.status.is_some()
             || patch.location.is_some()
         {
-            self.store
-                .execute(CoreCommand::UpdateTag { id: id.clone(), patch })?;
+            self.store.execute(CoreCommand::UpdateTag {
+                id: id.clone(),
+                patch,
+            })?;
         }
         Ok(render::tag_value(self.store.db(), &id))
     }
@@ -685,13 +820,18 @@ impl Server {
     }
 
     fn tool_complete_review(&mut self, args: &Value) -> Result<Value> {
-        let id = self.store.db().resolve_project(&require_string(args, "id")?)?;
+        let id = self
+            .store
+            .db()
+            .resolve_project(&require_string(args, "id")?)?;
         let reviewed_on = match string_arg(args, "on") {
             Some(value) => flowlist_core::parse::parse_date(&value, now())?,
             None => local_date(now()),
         };
-        self.store
-            .execute(CoreCommand::CompleteReview { id: id.clone(), reviewed_on })?;
+        self.store.execute(CoreCommand::CompleteReview {
+            id: id.clone(),
+            reviewed_on,
+        })?;
         Ok(render::project_value(self.store.db(), &id))
     }
 
@@ -795,7 +935,11 @@ impl Server {
 
     fn ensure_folder(&mut self, path: &str) -> Result<FolderId> {
         let mut parent: Option<FolderId> = None;
-        for part in path.split('/').map(str::trim).filter(|part| !part.is_empty()) {
+        for part in path
+            .split('/')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+        {
             let siblings = self.store.db().container_children(parent.clone()).to_vec();
             let existing = siblings.into_iter().find_map(|container| match container {
                 ContainerId::Folder(id) => self
@@ -829,7 +973,11 @@ impl Server {
 
     fn ensure_tag_chain(&mut self, path: &str) -> Result<TagId> {
         let mut parent: Option<TagId> = None;
-        for part in path.split('/').map(str::trim).filter(|part| !part.is_empty()) {
+        for part in path
+            .split('/')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+        {
             let siblings: Vec<TagId> = match &parent {
                 Some(id) => self.store.db().tag_children(id).to_vec(),
                 None => self.store.db().tag_roots().to_vec(),
@@ -1079,6 +1227,59 @@ fn tool_definitions() -> Vec<Value> {
             ),
         ),
         tool(
+            "list_checklist",
+            "List the checklist items of a task with their ids and completion state.",
+            schema(json!({"id": s("Task id or prefix")}), &["id"]),
+        ),
+        tool(
+            "add_checklist_item",
+            "Append a checklist item to a task. Checklist items are lightweight steps and never appear as tasks.",
+            schema(
+                json!({
+                    "id": s("Task id or prefix"),
+                    "title": s("Checklist item title"),
+                    "position": n("Insert before this zero-based index; omit to append"),
+                }),
+                &["id", "title"],
+            ),
+        ),
+        tool(
+            "update_checklist_item",
+            "Rename a checklist item or mark it complete/incomplete.",
+            schema(
+                json!({
+                    "id": s("Task id or prefix"),
+                    "item": s("Checklist item id or prefix"),
+                    "title": s("New title"),
+                    "completed": b("Completion state"),
+                }),
+                &["id", "item"],
+            ),
+        ),
+        tool(
+            "delete_checklist_item",
+            "Remove a checklist item from a task.",
+            schema(
+                json!({
+                    "id": s("Task id or prefix"),
+                    "item": s("Checklist item id or prefix"),
+                }),
+                &["id", "item"],
+            ),
+        ),
+        tool(
+            "move_checklist_item",
+            "Move a checklist item to a zero-based index.",
+            schema(
+                json!({
+                    "id": s("Task id or prefix"),
+                    "item": s("Checklist item id or prefix"),
+                    "to": n("Destination index"),
+                }),
+                &["id", "item", "to"],
+            ),
+        ),
+        tool(
             "list_tasks",
             "List tasks using a built-in view (inbox, projects, forecast, flagged, tags, completed, nearby, review) or a filter.",
             schema(
@@ -1233,10 +1434,7 @@ fn tool_definitions() -> Vec<Value> {
         tool(
             "export_library",
             "Export the whole library as JSON or TaskPaper.",
-            schema(
-                json!({"format": s("json | taskpaper")}),
-                &[],
-            ),
+            schema(json!({"format": s("json | taskpaper")}), &[]),
         ),
         tool(
             "import_library",
@@ -1409,8 +1607,7 @@ fn resolve_tag(db: &Db, spec: &str) -> Result<TagId> {
     if let Some(id) = db.find_tag_path(spec) {
         return Ok(id);
     }
-    db.resolve_tag(spec)
-        .map_err(|error| anyhow!("{error}"))
+    db.resolve_tag(spec).map_err(|error| anyhow!("{error}"))
 }
 
 fn parse_sort(value: &str) -> Result<SortBy> {
@@ -1460,7 +1657,10 @@ fn parse_tag_status(value: &str) -> Result<TagStatus> {
     }
 }
 
-fn due_window(value: &str, at: chrono::DateTime<chrono::Utc>) -> Result<flowlist_core::model::DueWindow> {
+fn due_window(
+    value: &str,
+    at: chrono::DateTime<chrono::Utc>,
+) -> Result<flowlist_core::model::DueWindow> {
     let today = local_date(at);
     if let Some(window) = query::perspective::window_from_keyword(value, today) {
         return Ok(window);

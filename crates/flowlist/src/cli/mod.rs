@@ -14,12 +14,16 @@ use flowlist_core::command::{
     TaskPlacement,
 };
 use flowlist_core::db::{ContainerPosition, Db, Position};
-use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
+use flowlist_core::ids::{
+    ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId,
+};
 use flowlist_core::model::{
     BuiltinPerspective, Condition, DueWindow, FilterNode, GroupBy, Perspective, ProjectStatus,
     RepeatRule, SortBy, TagStatus, TaskStatus,
 };
-use flowlist_core::parse::{parse_duration, parse_quick, parse_repeat, parse_stamp, with_default_time};
+use flowlist_core::parse::{
+    parse_duration, parse_quick, parse_repeat, parse_stamp, with_default_time,
+};
 use flowlist_core::paths::DataPaths;
 use flowlist_core::persist;
 use flowlist_core::query::{self, Availability, Group};
@@ -69,6 +73,9 @@ pub enum CliCommand {
     /// Move tasks between the inbox, projects and parents.
     #[command(alias = "move")]
     Mv(MvArgs),
+    /// Manage checklist items inside a task.
+    #[command(alias = "check")]
+    Checklist(ChecklistArgs),
     /// Undo the last change.
     Undo(UndoArgs),
     /// Redo an undone change.
@@ -246,6 +253,69 @@ pub struct UndoArgs {
 }
 
 #[derive(Args, Debug, Clone)]
+pub struct ChecklistArgs {
+    #[command(subcommand)]
+    pub command: ChecklistCommand,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ChecklistCommand {
+    /// List the checklist items of a task.
+    #[command(alias = "ls")]
+    List {
+        #[arg(value_name = "TASK")]
+        task: String,
+        /// Hide completed items.
+        #[arg(long)]
+        hide_done: bool,
+    },
+    /// Append a checklist item (or insert it before an index).
+    Add {
+        #[arg(value_name = "TASK")]
+        task: String,
+        #[arg(value_name = "TITLE", required = true)]
+        title: Vec<String>,
+        /// Zero-based index to insert before.
+        #[arg(long)]
+        before: Option<usize>,
+    },
+    /// Rename an item or mark it complete/incomplete.
+    #[command(alias = "edit")]
+    Set {
+        #[arg(value_name = "TASK")]
+        task: String,
+        #[arg(value_name = "ITEM")]
+        item: String,
+        #[arg(long)]
+        title: Option<String>,
+        /// Mark the item complete.
+        #[arg(long)]
+        done: bool,
+        /// Mark the item incomplete.
+        #[arg(long)]
+        undone: bool,
+    },
+    /// Move an item to a zero-based index.
+    #[command(alias = "mv")]
+    Move {
+        #[arg(value_name = "TASK")]
+        task: String,
+        #[arg(value_name = "ITEM")]
+        item: String,
+        #[arg(long)]
+        to: usize,
+    },
+    /// Remove a checklist item.
+    #[command(alias = "rm")]
+    Remove {
+        #[arg(value_name = "TASK")]
+        task: String,
+        #[arg(value_name = "ITEM")]
+        item: String,
+    },
+}
+
+#[derive(Args, Debug, Clone)]
 pub struct TagArgs {
     #[command(subcommand)]
     pub command: TagCommand,
@@ -313,7 +383,10 @@ pub enum ProjectCommand {
         closed: bool,
     },
     /// Set active | on-hold | done | dropped.
-    Status { id: String, status: String },
+    Status {
+        id: String,
+        status: String,
+    },
     /// Mark a project reviewed.
     Review {
         id: String,
@@ -373,13 +446,20 @@ pub struct FolderArgs {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum FolderCommand {
-    Add { path: String },
+    Add {
+        path: String,
+    },
     #[command(alias = "ls")]
     List,
-    Rename { id: String, name: String },
+    Rename {
+        id: String,
+        name: String,
+    },
     /// Delete a folder; its projects move up a level.
     #[command(alias = "rm")]
-    Remove { id: String },
+    Remove {
+        id: String,
+    },
 }
 
 #[derive(Args, Debug, Clone)]
@@ -394,7 +474,9 @@ pub enum PerspectiveCommand {
     #[command(alias = "ls")]
     List,
     #[command(alias = "rm")]
-    Remove { id: String },
+    Remove {
+        id: String,
+    },
 }
 
 #[derive(Args, Debug, Clone)]
@@ -492,6 +574,7 @@ fn try_run() -> Result<()> {
         CliCommand::Edit(args) => cmd_edit(&cli, args, &paint),
         CliCommand::Remove(args) => cmd_remove(&cli, args, &paint),
         CliCommand::Mv(args) => cmd_mv(&cli, args, &paint),
+        CliCommand::Checklist(args) => cmd_checklist(&cli, args, &paint),
         CliCommand::Undo(args) => cmd_undo(&cli, args, false, &paint),
         CliCommand::Redo(args) => cmd_undo(&cli, args, true, &paint),
         CliCommand::Tag(args) => cmd_tag(&cli, args, &paint),
@@ -523,7 +606,9 @@ fn start_gui(cli: &Cli) -> Result<()> {
     #[cfg(not(feature = "gui"))]
     {
         let _ = cli;
-        bail!("this build was compiled without the GUI feature; use `cargo run` without --no-default-features")
+        bail!(
+            "this build was compiled without the GUI feature; use `cargo run` without --no-default-features"
+        )
     }
 }
 
@@ -645,7 +730,13 @@ fn cmd_list(cli: &Cli, args: ListArgs, paint: &Paint) -> Result<()> {
 
     let groups: Vec<Group> = if args.forecast {
         query::view(db, BuiltinPerspective::Forecast, at)
-    } else if args.inbox && args.tag.is_empty() && args.project.is_none() && args.search.is_none() {
+    } else if args.inbox
+        && !args.include_completed
+        && !args.completed
+        && args.tag.is_empty()
+        && args.project.is_none()
+        && args.search.is_none()
+    {
         query::view(db, BuiltinPerspective::Inbox, at)
     } else if let Some(perspective) = &args.perspective {
         let id = resolve_perspective(db, perspective)?;
@@ -776,9 +867,7 @@ fn format_task_line(
     } else {
         match row.availability {
             Availability::Available => paint.green("○"),
-            Availability::Deferred(_) | Availability::ProjectDeferred(_, _) => {
-                paint.yellow("◷")
-            }
+            Availability::Deferred(_) | Availability::ProjectDeferred(_, _) => paint.yellow("◷"),
             _ => paint.dim("⊘"),
         }
     };
@@ -800,14 +889,33 @@ fn format_task_line(
         line.push_str(&format!("  {}", paint.yellow(&text)));
     }
     if let Some(defer) = task.defer {
-        line.push_str(&format!("  {}", paint.dim(&format!("defer {}", defer.label(at)))));
+        line.push_str(&format!(
+            "  {}",
+            paint.dim(&format!("defer {}", defer.label(at)))
+        ));
     }
     if let Some(estimate) = task.estimate_min {
-        line.push_str(&format!("  {}", paint.dim(&format!("{}", flowlist_core::time::format_duration(estimate)))));
+        line.push_str(&format!(
+            "  {}",
+            paint.dim(&format!(
+                "{}",
+                flowlist_core::time::format_duration(estimate)
+            ))
+        ));
+    }
+    let (checklist_done, checklist_total) = task.checklist_progress();
+    if checklist_total > 0 {
+        line.push_str(&format!(
+            "  {}",
+            paint.dim(&format!("☑ {checklist_done}/{checklist_total}"))
+        ));
     }
     for tag in &task.tags {
         if let Some(tag) = db.tags.get(tag) {
-            line.push_str(&format!("  {}", paint.cyan(&format!("#{}", db.tag_path(&tag.id)))));
+            line.push_str(&format!(
+                "  {}",
+                paint.cyan(&format!("#{}", db.tag_path(&tag.id)))
+            ));
         }
     }
     line.push_str(&format!("  {}", paint.dim(task.id.short())));
@@ -820,11 +928,14 @@ fn cmd_done(cli: &Cli, args: DoneArgs, paint: &Paint) -> Result<()> {
     let completed = !args.undo;
     let outcome = store.execute(CoreCommand::CompleteTasks { ids, completed })?;
     if cli.json {
-        println!("{}", serde_json::to_string_pretty(&json!({
-            "label": outcome.label,
-            "created": outcome.created,
-            "affected": outcome.affected,
-        }))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "label": outcome.label,
+                "created": outcome.created,
+                "affected": outcome.affected,
+            }))?
+        );
     } else {
         println!(
             "{} {}",
@@ -918,7 +1029,10 @@ fn cmd_remove(cli: &Cli, args: RemoveArgs, paint: &Paint) -> Result<()> {
     let count = ids.len();
     store.execute(CoreCommand::DeleteTasks { ids })?;
     if cli.json {
-        println!("{}", serde_json::to_string_pretty(&json!({"deleted": count}))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({"deleted": count}))?
+        );
     } else {
         println!("{} {} task(s)", paint.red("Deleted"), count);
     }
@@ -928,21 +1042,15 @@ fn cmd_remove(cli: &Cli, args: RemoveArgs, paint: &Paint) -> Result<()> {
 fn cmd_mv(cli: &Cli, args: MvArgs, paint: &Paint) -> Result<()> {
     let mut store = open_store(cli)?;
     let ids = resolve_tasks(store.db(), &args.ids)?;
-    let targets = [
-        args.project.is_some(),
-        args.parent.is_some(),
-        args.inbox,
-    ]
-    .into_iter()
-    .filter(|value| *value)
-    .count();
+    let targets = [args.project.is_some(), args.parent.is_some(), args.inbox]
+        .into_iter()
+        .filter(|value| *value)
+        .count();
     if targets != 1 {
         bail!("choose exactly one destination: --project, --parent or --inbox");
     }
     let position = match (&args.before, &args.after, args.start) {
-        (Some(before), None, false) => {
-            Position::Before(store.db().resolve_task(before)?)
-        }
+        (Some(before), None, false) => Position::Before(store.db().resolve_task(before)?),
         (None, Some(after), false) => Position::After(store.db().resolve_task(after)?),
         (None, None, true) => Position::Start,
         (None, None, false) => Position::End,
@@ -965,22 +1073,222 @@ fn cmd_mv(cli: &Cli, args: MvArgs, paint: &Paint) -> Result<()> {
     };
     store.execute(CoreCommand::MoveTasks { ids, placement })?;
     if cli.json {
-        println!("{}", serde_json::to_string_pretty(&json!({"moved": args.ids.len()}))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({"moved": args.ids.len()}))?
+        );
     } else {
         println!("{} {} task(s)", paint.green("Moved"), args.ids.len());
     }
     Ok(())
 }
 
+fn cmd_checklist(cli: &Cli, args: ChecklistArgs, paint: &Paint) -> Result<()> {
+    let mut store = open_store(cli)?;
+    match args.command {
+        ChecklistCommand::List { task, hide_done } => {
+            store.refresh()?;
+            let db = store.db();
+            let task_id = db.resolve_task(&task)?;
+            let task = db.tasks.get(&task_id).expect("resolved task");
+            if cli.json {
+                let items: Vec<serde_json::Value> = task
+                    .checklist
+                    .iter()
+                    .filter(|item| !hide_done || !item.completed)
+                    .map(|item| {
+                        json!({
+                            "id": item.id.to_string(),
+                            "short_id": item.id.short(),
+                            "title": item.title,
+                            "completed": item.completed,
+                        })
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json!({
+                        "task": render::task_value(db, &task_id),
+                        "items": items,
+                    }))?
+                );
+            } else {
+                let (done, total) = task.checklist_progress();
+                println!(
+                    "{}  {}  {}",
+                    paint.cyan(task.id.short()),
+                    paint.bold(&task.title),
+                    paint.dim(&format!("{done}/{total}"))
+                );
+                for (index, item) in task.checklist.iter().enumerate() {
+                    if hide_done && item.completed {
+                        continue;
+                    }
+                    println!(
+                        "  {} {}  {}  {}",
+                        paint.dim(&index.to_string()),
+                        if item.completed {
+                            paint.green("✓")
+                        } else {
+                            paint.dim("○")
+                        },
+                        if item.completed {
+                            paint.dim(&item.title)
+                        } else {
+                            item.title.clone()
+                        },
+                        paint.dim(item.id.short())
+                    );
+                }
+                if task.checklist.is_empty() {
+                    println!("  {}", paint.dim("No checklist items."));
+                }
+            }
+        }
+        ChecklistCommand::Add {
+            task,
+            title,
+            before,
+        } => {
+            let task_id = store.db().resolve_task(&task)?;
+            let title = title.join(" ");
+            let outcome = store.execute(CoreCommand::AddChecklistItem {
+                task: task_id.clone(),
+                title: title.trim().to_string(),
+                position: before,
+            })?;
+            let created = outcome.created.first().cloned().unwrap_or_default();
+            if cli.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&render::task_value(store.db(), &task_id))?
+                );
+            } else {
+                let short = created
+                    .get(created.len().saturating_sub(8)..)
+                    .unwrap_or(&created);
+                println!(
+                    "{} {}",
+                    paint.green("Added checklist item"),
+                    paint.cyan(short)
+                );
+            }
+        }
+        ChecklistCommand::Set {
+            task,
+            item,
+            title,
+            done,
+            undone,
+        } => {
+            if done && undone {
+                bail!("choose at most one of --done or --undone");
+            }
+            let (task_id, item_id) = resolve_checklist(store.db(), &task, &item)?;
+            let title = title
+                .map(|value| value.trim().to_string())
+                .or_else(|| {
+                    store
+                        .db()
+                        .tasks
+                        .get(&task_id)
+                        .and_then(|task| task.checklist_item(&item_id))
+                        .map(|item| item.title.clone())
+                })
+                .unwrap_or_default();
+            store.execute(CoreCommand::UpdateChecklistItem {
+                task: task_id.clone(),
+                item: item_id.clone(),
+                title,
+                completed: if done {
+                    Some(true)
+                } else if undone {
+                    Some(false)
+                } else {
+                    None
+                },
+            })?;
+            if cli.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&render::task_value(store.db(), &task_id))?
+                );
+            } else {
+                println!(
+                    "{} {}",
+                    paint.green("Updated checklist item"),
+                    paint.cyan(item_id.short())
+                );
+            }
+        }
+        ChecklistCommand::Move { task, item, to } => {
+            let (task_id, item_id) = resolve_checklist(store.db(), &task, &item)?;
+            store.execute(CoreCommand::MoveChecklistItem {
+                task: task_id.clone(),
+                item: item_id.clone(),
+                to,
+            })?;
+            if cli.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&render::task_value(store.db(), &task_id))?
+                );
+            } else {
+                println!(
+                    "{} {} → {}",
+                    paint.green("Moved checklist item"),
+                    paint.cyan(item_id.short()),
+                    to
+                );
+            }
+        }
+        ChecklistCommand::Remove { task, item } => {
+            let (task_id, item_id) = resolve_checklist(store.db(), &task, &item)?;
+            store.execute(CoreCommand::DeleteChecklistItem {
+                task: task_id.clone(),
+                item: item_id.clone(),
+            })?;
+            if cli.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&render::task_value(store.db(), &task_id))?
+                );
+            } else {
+                println!(
+                    "{} {}",
+                    paint.red("Deleted checklist item"),
+                    paint.cyan(item_id.short())
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+fn resolve_checklist(db: &Db, task_spec: &str, item_spec: &str) -> Result<(TaskId, ChecklistId)> {
+    let task_id = db.resolve_task(task_spec)?;
+    let task = db
+        .tasks
+        .get(&task_id)
+        .ok_or_else(|| anyhow!("task not found: {task_spec}"))?;
+    let matches: Vec<&ChecklistId> = task
+        .checklist
+        .iter()
+        .filter(|item| item.id.matches_spec(item_spec))
+        .map(|item| &item.id)
+        .collect();
+    match matches.as_slice() {
+        [] => bail!("checklist item not found: {item_spec}"),
+        [item] => Ok((task_id, (*item).clone())),
+        _ => bail!("checklist item id is ambiguous: {item_spec}"),
+    }
+}
+
 fn cmd_undo(cli: &Cli, args: UndoArgs, redo: bool, paint: &Paint) -> Result<()> {
     let mut store = open_store(cli)?;
     let mut labels = Vec::new();
     for _ in 0..args.steps.max(1) {
-        let outcome = if redo {
-            store.redo()?
-        } else {
-            store.undo()?
-        };
+        let outcome = if redo { store.redo()? } else { store.undo()? };
         labels.push(outcome.label);
     }
     if cli.json {
@@ -990,7 +1298,11 @@ fn cmd_undo(cli: &Cli, args: UndoArgs, redo: bool, paint: &Paint) -> Result<()> 
         );
     } else {
         for label in labels {
-            println!("{} {}", paint.green(if redo { "Redo:" } else { "Undo:" }), label);
+            println!(
+                "{} {}",
+                paint.green(if redo { "Redo:" } else { "Undo:" }),
+                label
+            );
         }
     }
     Ok(())
@@ -1000,10 +1312,7 @@ fn cmd_tag(cli: &Cli, args: TagArgs, paint: &Paint) -> Result<()> {
     let mut store = open_store(cli)?;
     match args.command {
         TagCommand::Add(args) => {
-            let (parent, name) = split_parent_path(
-                &args.path,
-                args.parent.as_deref(),
-            );
+            let (parent, name) = split_parent_path(&args.path, args.parent.as_deref());
             let parent_id = match parent {
                 Some(path) => Some(ensure_tag_chain(&mut store, &path)?),
                 None => None,
@@ -1072,7 +1381,10 @@ fn cmd_tag(cli: &Cli, args: TagArgs, paint: &Paint) -> Result<()> {
             } else if args.lat.is_some() || args.lon.is_some() {
                 bail!("--lat and --lon must be given together");
             }
-            store.execute(CoreCommand::UpdateTag { id: id.clone(), patch })?;
+            store.execute(CoreCommand::UpdateTag {
+                id: id.clone(),
+                patch,
+            })?;
             if cli.json {
                 println!(
                     "{}",
@@ -1183,10 +1495,7 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
                         "{}  {}  {}",
                         paint.cyan(project.id.short()),
                         db.project_path(id),
-                        paint.dim(&format!(
-                            "{}  {done}/{total}",
-                            project.status.label()
-                        ))
+                        paint.dim(&format!("{}  {done}/{total}", project.status.label()))
                     );
                 }
             }
@@ -1194,7 +1503,10 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
         ProjectCommand::Status { id, status } => {
             let id = resolve_project(store.db(), &id)?;
             let status = parse_project_status(&status)?;
-            store.execute(CoreCommand::SetProjectStatus { id: id.clone(), status })?;
+            store.execute(CoreCommand::SetProjectStatus {
+                id: id.clone(),
+                status,
+            })?;
             if !cli.json {
                 println!(
                     "{} {} → {}",
@@ -1210,7 +1522,10 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
                 Some(value) => flowlist_core::parse::parse_date(&value, now())?,
                 None => flowlist_core::time::local_date(now()),
             };
-            store.execute(CoreCommand::CompleteReview { id: id.clone(), reviewed_on })?;
+            store.execute(CoreCommand::CompleteReview {
+                id: id.clone(),
+                reviewed_on,
+            })?;
             if !cli.json {
                 let project = &store.db().projects[&id];
                 println!(
@@ -1249,14 +1564,21 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
             if args.sequential {
                 patch.sequential = Some(true);
             }
-            store.execute(CoreCommand::UpdateProject { id: id.clone(), patch })?;
+            store.execute(CoreCommand::UpdateProject {
+                id: id.clone(),
+                patch,
+            })?;
             if cli.json {
                 println!(
                     "{}",
                     serde_json::to_string_pretty(&render::project_value(store.db(), &id))?
                 );
             } else {
-                println!("{} {}", paint.green("Updated project"), paint.cyan(id.short()));
+                println!(
+                    "{} {}",
+                    paint.green("Updated project"),
+                    paint.cyan(id.short())
+                );
             }
         }
     }
@@ -1327,9 +1649,16 @@ fn cmd_folder(cli: &Cli, args: FolderArgs, paint: &Paint) -> Result<()> {
         }
         FolderCommand::Rename { id, name } => {
             let id = store.db().resolve_folder(&id)?;
-            store.execute(CoreCommand::RenameFolder { id: id.clone(), name })?;
+            store.execute(CoreCommand::RenameFolder {
+                id: id.clone(),
+                name,
+            })?;
             if !cli.json {
-                println!("{} {}", paint.green("Renamed folder"), paint.cyan(id.short()));
+                println!(
+                    "{} {}",
+                    paint.green("Renamed folder"),
+                    paint.cyan(id.short())
+                );
             }
         }
         FolderCommand::Remove { id } => {
@@ -1349,8 +1678,8 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
         PerspectiveCommand::Add(args) => {
             let mut perspective = Perspective::new(args.name);
             if let Some(filter) = args.filter {
-                perspective.filter = serde_json::from_str(&filter)
-                    .context("--filter must be a JSON filter tree")?;
+                perspective.filter =
+                    serde_json::from_str(&filter).context("--filter must be a JSON filter tree")?;
             }
             if let Some(group_by) = args.group_by {
                 perspective.group_by = parse_group(&group_by)?;
@@ -1390,17 +1719,19 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
             if cli.json {
                 println!(
                     "{}",
-                    serde_json::to_string_pretty(&json!(perspectives
-                        .iter()
-                        .map(|perspective| json!({
-                            "id": perspective.id.to_string(),
-                            "short_id": perspective.id.short(),
-                            "name": perspective.name,
-                            "group_by": format!("{:?}", perspective.group_by),
-                            "sort": format!("{:?}", perspective.sort),
-                            "show_completed": perspective.show_completed,
-                        }))
-                        .collect::<Vec<_>>()))?
+                    serde_json::to_string_pretty(&json!(
+                        perspectives
+                            .iter()
+                            .map(|perspective| json!({
+                                "id": perspective.id.to_string(),
+                                "short_id": perspective.id.short(),
+                                "name": perspective.name,
+                                "group_by": format!("{:?}", perspective.group_by),
+                                "sort": format!("{:?}", perspective.sort),
+                                "show_completed": perspective.show_completed,
+                            }))
+                            .collect::<Vec<_>>()
+                    ))?
                 );
             } else if perspectives.is_empty() {
                 println!("{}", paint.dim("No custom perspectives."));
@@ -1438,7 +1769,10 @@ fn cmd_review(cli: &Cli, args: ReviewArgs, paint: &Paint) -> Result<()> {
                 Some(value) => flowlist_core::parse::parse_date(&value, now())?,
                 None => flowlist_core::time::local_date(now()),
             };
-            store.execute(CoreCommand::CompleteReview { id: id.clone(), reviewed_on })?;
+            store.execute(CoreCommand::CompleteReview {
+                id: id.clone(),
+                reviewed_on,
+            })?;
             if !cli.json {
                 let project = &store.db().projects[&id];
                 println!(
@@ -1459,7 +1793,10 @@ fn cmd_review(cli: &Cli, args: ReviewArgs, paint: &Paint) -> Result<()> {
                     serde_json::to_string_pretty(&render::project_values(db, &ids))?
                 );
             } else if ids.is_empty() {
-                println!("{}", paint.dim("Nothing to review. Inbox zero for projects."));
+                println!(
+                    "{}",
+                    paint.dim("Nothing to review. Inbox zero for projects.")
+                );
             } else {
                 for id in ids {
                     let project = &db.projects[&id];
@@ -1467,10 +1804,7 @@ fn cmd_review(cli: &Cli, args: ReviewArgs, paint: &Paint) -> Result<()> {
                         "{}  {}  {}",
                         paint.cyan(project.id.short()),
                         project.name,
-                        paint.dim(&format!(
-                            "review {}",
-                            project.next_review.format("%b %-d")
-                        ))
+                        paint.dim(&format!("review {}", project.next_review.format("%b %-d")))
                     );
                 }
             }
@@ -1542,10 +1876,7 @@ fn cmd_export(cli: &Cli, args: ExportArgs) -> Result<()> {
         let dir = store.paths().ensure_backups()?;
         let stamp = now().format("%Y%m%d-%H%M%S");
         let destination = dir.join(format!("flowlist-backup-{stamp}.json"));
-        persist::atomic::atomic_write(
-            &destination,
-            &serde_json::to_vec_pretty(store.data())?,
-        )?;
+        persist::atomic::atomic_write(&destination, &serde_json::to_vec_pretty(store.data())?)?;
         println!("Backup written to {}", destination.display());
         if args.output.is_none() {
             return Ok(());
@@ -1574,8 +1905,7 @@ fn cmd_import(cli: &Cli, args: ImportArgs, paint: &Paint) -> Result<()> {
         std::io::stdin().read_to_string(&mut buffer)?;
         buffer
     } else {
-        std::fs::read_to_string(&args.file)
-            .with_context(|| format!("reading {}", args.file))?
+        std::fs::read_to_string(&args.file).with_context(|| format!("reading {}", args.file))?
     };
     let normalised = args.format.to_lowercase();
     let format = match normalised.as_str() {
@@ -1600,7 +1930,10 @@ fn cmd_import(cli: &Cli, args: ImportArgs, paint: &Paint) -> Result<()> {
     };
     let outcome = store.execute(CoreCommand::Import { db, mode })?;
     if cli.json {
-        println!("{}", serde_json::to_string_pretty(&json!({"label": outcome.label}))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({"label": outcome.label}))?
+        );
     } else {
         println!(
             "{} {}",
@@ -1673,7 +2006,11 @@ fn cmd_doctor(cli: &Cli, args: DoctorArgs, paint: &Paint) -> Result<()> {
     println!(
         "  History         {} state(s), undo {}",
         store.history().entries.len(),
-        if store.can_undo() { "available" } else { "empty" }
+        if store.can_undo() {
+            "available"
+        } else {
+            "empty"
+        }
     );
     match db.validate() {
         Ok(()) => println!("  Validation      {}", paint.green("ok")),
@@ -1849,7 +2186,11 @@ fn split_parent_path(path: &str, explicit_parent: Option<&str>) -> (Option<Strin
 
 fn ensure_folder(store: &mut Store, path: &str) -> Result<FolderId> {
     let mut parent: Option<FolderId> = None;
-    for part in path.split('/').map(str::trim).filter(|part| !part.is_empty()) {
+    for part in path
+        .split('/')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+    {
         let siblings = store.db().container_children(parent.clone()).to_vec();
         let existing = siblings.into_iter().find_map(|container| match container {
             ContainerId::Folder(id) => store
@@ -1882,7 +2223,11 @@ fn ensure_folder(store: &mut Store, path: &str) -> Result<FolderId> {
 
 fn ensure_tag_chain(store: &mut Store, path: &str) -> Result<TagId> {
     let mut parent: Option<TagId> = None;
-    for part in path.split('/').map(str::trim).filter(|part| !part.is_empty()) {
+    for part in path
+        .split('/')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+    {
         let siblings: Vec<TagId> = match &parent {
             Some(id) => store.db().tag_children(id).to_vec(),
             None => store.db().tag_roots().to_vec(),

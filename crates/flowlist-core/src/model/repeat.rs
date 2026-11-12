@@ -130,9 +130,7 @@ impl RepeatRule {
                 let new_defer =
                     base_defer.map(|value| add_interval_to_stamp(value, every, self.unit));
                 let new_due = match (new_defer, due) {
-                    (Some(nd), Some(od)) => {
-                        Some(with_time_from(shift_by_days(nd, lead_days), od))
-                    }
+                    (Some(nd), Some(od)) => Some(with_time_from(shift_by_days(nd, lead_days), od)),
                     _ => None,
                 };
                 (new_due, new_defer)
@@ -152,16 +150,17 @@ impl RepeatRule {
                 let base = defer.or(due);
                 let new_defer = base.map(|value| stamp_on(value, anchor_date));
                 let new_due = match (new_defer, due) {
-                    (Some(nd), Some(od)) => {
-                        Some(with_time_from(shift_by_days(nd, lead_days), od))
-                    }
+                    (Some(nd), Some(od)) => Some(with_time_from(shift_by_days(nd, lead_days), od)),
                     _ => None,
                 };
                 (new_due, new_defer)
             }
         };
 
-        if new_due.is_none() && new_defer.is_none() {
+        // A repeating task without any dates still recurs: completing it simply
+        // produces a fresh copy. Only a rule whose dateless copy cannot be
+        // scheduled (because the original had dates) means the rule has ended.
+        if new_due.is_none() && new_defer.is_none() && (due.is_some() || defer.is_some()) {
             return None;
         }
 
@@ -232,16 +231,17 @@ mod tests {
             end: RepeatEnd::Never,
             completed_count: 0,
         };
-        let next = rule
-            .next_occurrence(Some(due), None, Utc::now())
-            .unwrap();
+        let next = rule.next_occurrence(Some(due), None, Utc::now()).unwrap();
         assert_eq!(next.due.unwrap().local_date(), date(2026, 11, 19));
         assert_eq!(next.completed_count, 1);
     }
 
     #[test]
     fn defer_another_preserves_lead() {
-        let due = Stamp::on(date(2026, 11, 20), NaiveTime::from_hms_opt(17, 0, 0).unwrap());
+        let due = Stamp::on(
+            date(2026, 11, 20),
+            NaiveTime::from_hms_opt(17, 0, 0).unwrap(),
+        );
         let defer = Stamp::date_only(date(2026, 11, 15));
         let rule = RepeatRule {
             mode: RepeatMode::DeferAnother,
@@ -264,10 +264,7 @@ mod tests {
         let mut rule = RepeatRule::new(RepeatMode::DueAgain, 1, IntervalUnit::Months);
         rule.end = RepeatEnd::AfterCount(2);
         rule.completed_count = 1;
-        assert!(
-            rule.next_occurrence(Some(due), None, Utc::now())
-                .is_none()
-        );
+        assert!(rule.next_occurrence(Some(due), None, Utc::now()).is_none());
 
         rule.end = RepeatEnd::OnDate(date(2026, 11, 30));
         rule.completed_count = 0;

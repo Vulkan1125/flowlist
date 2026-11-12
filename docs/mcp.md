@@ -1,0 +1,149 @@
+# Flowlist MCP server
+
+`flowlist mcp` is a hand-rolled Model Context Protocol server over stdio. It
+uses the same store, validation and undo history as the GUI and CLI.
+
+```sh
+flowlist mcp
+```
+
+- stdout carries one JSON-RPC line per message; diagnostics go to stderr.
+- Modern lifecycle `2026-07-28` is supported (`server/discover`, `_meta`,
+  `resultType: "complete"`).
+- Legacy clients that send `initialize` and `tools/list` also work.
+- Tool results include both human-readable `content` and `structuredContent`.
+
+## Client configuration
+
+Use an absolute path to the binary so the client does not depend on your shell
+`PATH`.
+
+```json
+{
+  "mcpServers": {
+    "flowlist": {
+      "command": "/Users/you/bin/flowlist",
+      "args": ["mcp"],
+      "env": {
+        "FLOWLIST_HOME": "/Users/you/Library/Application Support/Flowlist"
+      }
+    }
+  }
+}
+```
+
+If `FLOWLIST_HOME` is omitted, the server uses the platform default library. The
+GUI, CLI and MCP server can run at the same time; writes are serialized with a
+file lock and readers reload when the revision changes.
+
+## Tools
+
+### Tasks
+
+| Tool | Purpose |
+| --- | --- |
+| `capture` | add a task using quick-entry text or explicit fields |
+| `add_task` | alias of `capture` |
+| `get_task` | fetch one task by id or unique prefix |
+| `update_task` | change fields; omit to keep, send `null`/`"none"` to clear |
+| `complete_task` | complete or reopen; repeating tasks spawn the next occurrence |
+| `delete_task` | delete a task and its subtasks |
+| `move_task` | move to the inbox, a project or another task |
+| `set_task_tags` | add or remove tag paths |
+| `list_tasks` | list by built-in view or filter |
+
+`list_tasks` accepts `view` (`inbox`, `projects`, `forecast`, `flagged`, `tags`,
+`completed`, `nearby`, `review`), `project`, `tag`, `folder`, `search`, `filter`,
+`sort`, `group`, `limit` and `include_completed`.
+
+### Checklist items
+
+| Tool | Purpose |
+| --- | --- |
+| `list_checklist` | list steps with ids and completion state |
+| `add_checklist_item` | append a step, or insert at `position` |
+| `update_checklist_item` | rename and/or complete a step |
+| `delete_checklist_item` | remove a step |
+| `move_checklist_item` | move a step to a zero-based index |
+
+Checklist items are not tasks. They never appear in `list_tasks` or
+perspectives, and a repeating task copies its checklist with every step
+unchecked.
+
+### Projects, tags, folders
+
+| Tool | Purpose |
+| --- | --- |
+| `list_projects` | projects in library order |
+| `create_project` | create a project, optionally under a folder path |
+| `update_project` | rename, move, date, review interval or notes |
+| `set_project_status` | `active`, `on-hold`, `done`, `dropped` |
+| `list_tags` | tags with usage counts |
+| `create_tag` | create a nested tag path |
+| `delete_tag` | delete a tag and remove it from tasks |
+| `list_folders` | folders with project counts |
+| `create_folder` | create a nested folder path |
+
+### Review, library and history
+
+| Tool | Purpose |
+| --- | --- |
+| `review_list` | projects due for review |
+| `complete_review` | mark reviewed and schedule the next review |
+| `search` | tasks, projects, folders, tags and perspectives |
+| `stats` | library counters |
+| `undo` | undo the most recent change(s) |
+| `redo` | redo undone change(s) |
+| `export_library` | export JSON or TaskPaper |
+| `import_library` | replace or merge a library |
+| `library_info` | paths, revision, undo state, counters, built-ins |
+
+## Examples
+
+Add a task and read it back:
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
+  "name":"capture",
+  "arguments":{"title":"Draft launch email","project":"Work/Launch","tags":["Work/Website"],"due":"tomorrow","estimate":"45m","flagged":true}
+}}
+```
+
+```json
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{
+  "name":"list_tasks",
+  "arguments":{"view":"forecast","limit":20}
+}}
+```
+
+Add and complete a checklist step:
+
+```json
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{
+  "name":"add_checklist_item",
+  "arguments":{"id":"01M...","title":"Proofread the copy"}
+}}
+```
+
+```json
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{
+  "name":"update_checklist_item",
+  "arguments":{"id":"01M...","item":"7F3P2K9Q","completed":true}
+}}
+```
+
+Ids may be full ULIDs, unambiguous prefixes or the short eight-character suffix
+shown in human output.
+
+## Resources
+
+`resources/list` advertises `flowlist://library/summary`, a read-only JSON
+summary of counts, review queue and library location. `resources/read` returns
+it as text.
+
+## Error handling
+
+Tool failures return a JSON-RPC error or an `isError: true` result with a
+message. Ambiguous ids, empty titles, unknown projects and invalid dates fail
+before anything is written. Successful mutations are added to the same undo
+history visible in the GUI (`⌘Z`) and CLI (`flowlist undo`).

@@ -174,11 +174,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 let ids: Vec<TaskId> = db
                     .tasks_tagged(&row.tag, true)
                     .into_iter()
-                    .filter(|id| {
-                        db.tasks
-                            .get(id)
-                            .is_some_and(|task| !task.completed)
-                    })
+                    .filter(|id| db.tasks.get(id).is_some_and(|task| !task.completed))
                     .collect();
                 if ids.is_empty() {
                     continue;
@@ -318,10 +314,7 @@ pub fn nearby(db: &Db, at: DateTime<Utc>) -> Vec<NearbyHit> {
             if distance > radius {
                 continue;
             }
-            if best
-                .as_ref()
-                .is_none_or(|hit| distance < hit.distance_km)
-            {
+            if best.as_ref().is_none_or(|hit| distance < hit.distance_km) {
                 best = Some(NearbyHit {
                     task: task.id.clone(),
                     distance_km: distance,
@@ -362,7 +355,9 @@ impl<'a> GroupContext<'a> {
                     let index = db
                         .flatten_containers()
                         .iter()
-                        .position(|candidate| candidate.container == ContainerId::Folder(id.clone()))
+                        .position(|candidate| {
+                            candidate.container == ContainerId::Folder(id.clone())
+                        })
                         .unwrap_or(0) as i64;
                     Some((id, index))
                 }
@@ -398,11 +393,7 @@ impl<'a> GroupContext<'a> {
                         .get(&ContainerId::Project(id.clone()))
                         .copied()
                         .unwrap_or(i64::MAX);
-                    (
-                        format!("project:{id}"),
-                        db.project_path(&id),
-                        position,
-                    )
+                    (format!("project:{id}"), db.project_path(&id), position)
                 }
                 None => ("inbox".to_string(), "Inbox".to_string(), -1),
             },
@@ -434,14 +425,14 @@ impl<'a> GroupContext<'a> {
                 }
                 let best = candidates
                     .into_iter()
-                    .filter_map(|id| self.tags.get(&id).map(|(position, path)| (id, *position, path.clone())))
+                    .filter_map(|id| {
+                        self.tags
+                            .get(&id)
+                            .map(|(position, path)| (id, *position, path.clone()))
+                    })
                     .min_by_key(|(_, position, _)| *position);
                 match best {
-                    Some((id, position, path)) => (
-                        format!("tag:{id}"),
-                        path,
-                        position,
-                    ),
+                    Some((id, position, path)) => (format!("tag:{id}"), path, position),
                     None => ("untagged".to_string(), "No Tag".to_string(), i64::MAX),
                 }
             }
@@ -455,11 +446,7 @@ impl<'a> GroupContext<'a> {
                         (date - today).num_days(),
                     )
                 }
-                None => (
-                    "due:none".to_string(),
-                    "No Due Date".to_string(),
-                    i64::MAX,
-                ),
+                None => ("due:none".to_string(), "No Due Date".to_string(), i64::MAX),
             },
             GroupBy::DeferDate => match task.defer {
                 Some(stamp) => {
@@ -499,12 +486,7 @@ impl<'a> GroupContext<'a> {
     }
 }
 
-fn group_rows(
-    db: &Db,
-    rows: Vec<TaskRow>,
-    group_by: GroupBy,
-    at: DateTime<Utc>,
-) -> Vec<Group> {
+fn group_rows(db: &Db, rows: Vec<TaskRow>, group_by: GroupBy, at: DateTime<Utc>) -> Vec<Group> {
     let context = GroupContext::new(db, at);
     let mut groups: Vec<Group> = Vec::new();
     let mut index: BTreeMap<String, usize> = BTreeMap::new();
@@ -528,6 +510,12 @@ fn group_rows(
             .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
     });
     groups
+}
+
+/// Re-group an explicit list of rows. Used by the GUI when the user changes
+/// the grouping of a perspective without re-running its filter.
+pub fn regroup(db: &Db, rows: Vec<TaskRow>, group_by: GroupBy, at: DateTime<Utc>) -> Vec<Group> {
+    group_rows(db, rows, group_by, at)
 }
 
 /// Convenience for CLI commands that just need the matching task ids.

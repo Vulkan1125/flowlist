@@ -16,4 +16,5 @@ pub use project::{Project, ProjectStatus};
 pub use repeat::{RepeatEnd, RepeatMode, RepeatOutcome, RepeatRule, RepeatSchedule};
 pub use settings::Settings;
 pub use tag::{Geo, Tag, TagStatus};
+pub use task::ChecklistItem;
 pub use task::Task;

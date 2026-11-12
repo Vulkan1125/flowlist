@@ -5,8 +5,32 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 use super::repeat::RepeatRule;
-use crate::ids::{ProjectId, TagId, TaskId};
+use crate::ids::{ChecklistId, ProjectId, TagId, TaskId};
 use crate::time::{Stamp, now};
+
+/// A lightweight step inside a task.
+///
+/// Checklists are deliberately not tasks: they never appear in perspectives,
+/// have no project, dates or tags, and can be ticked off independently while
+/// the parent task is still open. They exist for the small "get ready" steps
+/// that would be noise as first-class tasks.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ChecklistItem {
+    pub id: ChecklistId,
+    pub title: String,
+    #[serde(default)]
+    pub completed: bool,
+}
+
+impl ChecklistItem {
+    pub fn new(title: impl Into<String>) -> Self {
+        Self {
+            id: ChecklistId::new(),
+            title: title.into(),
+            completed: false,
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Task {
@@ -20,6 +44,9 @@ pub struct Task {
     pub parent: Option<TaskId>,
     #[serde(default)]
     pub tags: BTreeSet<TagId>,
+    /// Small steps that belong to this task and are ticked off in place.
+    #[serde(default)]
+    pub checklist: Vec<ChecklistItem>,
     #[serde(default)]
     pub due: Option<Stamp>,
     #[serde(default)]
@@ -55,6 +82,7 @@ impl Task {
             project: None,
             parent: None,
             tags: BTreeSet::new(),
+            checklist: Vec::new(),
             due: None,
             defer: None,
             estimate_min: None,
@@ -80,5 +108,22 @@ impl Task {
     /// Whether this task is deferred until later.
     pub fn is_deferred(&self, at: DateTime<Utc>) -> bool {
         self.defer.is_some_and(|stamp| stamp.at > at)
+    }
+
+    /// `(completed, total)` checklist items, for progress badges.
+    pub fn checklist_progress(&self) -> (usize, usize) {
+        let done = self.checklist.iter().filter(|item| item.completed).count();
+        (done, self.checklist.len())
+    }
+
+    pub fn checklist_item(&self, id: &ChecklistId) -> Option<&ChecklistItem> {
+        self.checklist.iter().find(|item| &item.id == id)
+    }
+
+    /// Resolve a full id, prefix or short suffix to a checklist item.
+    pub fn resolve_checklist(&self, spec: &str) -> Option<&ChecklistItem> {
+        self.checklist
+            .iter()
+            .find(|item| item.id.matches_spec(spec))
     }
 }

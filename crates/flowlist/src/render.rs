@@ -6,8 +6,8 @@ use serde_json::{Value, json};
 use flowlist_core::db::Db;
 use flowlist_core::ids::{ProjectId, TagId, TaskId};
 use flowlist_core::model::ProjectStatus;
-use flowlist_core::query::availability;
 use flowlist_core::query::Group;
+use flowlist_core::query::availability;
 use flowlist_core::stats::Stats;
 use flowlist_core::time::now;
 
@@ -19,7 +19,11 @@ pub fn task_value(db: &Db, id: &TaskId) -> Value {
     let project_path = db
         .effective_project(id)
         .map(|project| db.project_path(&project));
-    let tags: Vec<String> = task.tags.iter().filter_map(|tag| tag_path(db, tag)).collect();
+    let tags: Vec<String> = task
+        .tags
+        .iter()
+        .filter_map(|tag| tag_path(db, tag))
+        .collect();
     json!({
         "id": task.id.to_string(),
         "short_id": task.id.short(),
@@ -29,6 +33,14 @@ pub fn task_value(db: &Db, id: &TaskId) -> Value {
         "project_path": project_path,
         "parent": task.parent.as_ref().map(ToString::to_string),
         "tags": tags,
+        "checklist": task.checklist.iter().map(|item| json!({
+            "id": item.id.to_string(),
+            "short_id": item.id.short(),
+            "title": item.title,
+            "completed": item.completed,
+        })).collect::<Vec<_>>(),
+        "checklist_completed": task.checklist_progress().0,
+        "checklist_total": task.checklist_progress().1,
         "due": task.due.map(|stamp| stamp.to_input_string()),
         "due_at": task.due.map(|stamp| stamp.at.to_rfc3339()),
         "defer": task.defer.map(|stamp| stamp.to_input_string()),

@@ -1,8 +1,8 @@
 //! Fuzzy-ish search across tasks, projects, folders, tags and perspectives.
 
 use crate::db::Db;
-use crate::model::ProjectStatus;
 use crate::ids::TaskId;
+use crate::model::ProjectStatus;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SearchKind {
@@ -55,6 +55,12 @@ pub fn search(db: &Db, query: &str, limit: usize) -> Vec<SearchHit> {
     for task in db.tasks.values() {
         let title_score = score(&task.title, &needle) * 3;
         let notes_score = score(&task.notes, &needle);
+        let checklist_score = task
+            .checklist
+            .iter()
+            .map(|item| score(&item.title, &needle))
+            .max()
+            .unwrap_or(0);
         let tag_score = task
             .tags
             .iter()
@@ -62,7 +68,7 @@ pub fn search(db: &Db, query: &str, limit: usize) -> Vec<SearchHit> {
             .map(|tag| score(&tag.name, &needle))
             .max()
             .unwrap_or(0);
-        let total = title_score + notes_score + tag_score;
+        let total = title_score + notes_score + tag_score + checklist_score;
         if total == 0 {
             continue;
         }
@@ -87,8 +93,7 @@ pub fn search(db: &Db, query: &str, limit: usize) -> Vec<SearchHit> {
     }
 
     for project in db.projects.values() {
-        let total = score(&project.name, &needle) * 2
-            + score(&project.notes, &needle);
+        let total = score(&project.name, &needle) * 2 + score(&project.notes, &needle);
         if total > 0 {
             hits.push(SearchHit {
                 kind: SearchKind::Project,
@@ -153,12 +158,7 @@ pub fn task_ids(db: &Db, query: &str, limit: usize) -> Vec<TaskId> {
     search(db, query, limit)
         .into_iter()
         .filter(|hit| hit.is_task())
-        .filter_map(|hit| {
-            db.tasks
-                .keys()
-                .find(|id| id.as_str() == hit.id)
-                .cloned()
-        })
+        .filter_map(|hit| db.tasks.keys().find(|id| id.as_str() == hit.id).cloned())
         .collect()
 }
 

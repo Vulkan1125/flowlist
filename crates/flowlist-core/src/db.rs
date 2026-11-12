@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::error::{Error, Result};
-use crate::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
+use crate::ids::{ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use crate::model::{
     Folder, Geo, Perspective, Project, ProjectStatus, Settings, Tag, TagStatus, Task,
 };
@@ -203,8 +203,12 @@ impl Db {
     }
 
     pub fn resolve_task(&self, prefix: &str) -> Result<TaskId> {
-        Self::resolve_ids(prefix, TaskId::label(), self.tasks.keys().map(|id| id.as_str()))
-            .map(TaskId::from)
+        Self::resolve_ids(
+            prefix,
+            TaskId::label(),
+            self.tasks.keys().map(|id| id.as_str()),
+        )
+        .map(TaskId::from)
     }
 
     pub fn resolve_project(&self, prefix: &str) -> Result<ProjectId> {
@@ -226,8 +230,12 @@ impl Db {
     }
 
     pub fn resolve_tag(&self, prefix: &str) -> Result<TagId> {
-        Self::resolve_ids(prefix, TagId::label(), self.tags.keys().map(|id| id.as_str()))
-            .map(TagId::from)
+        Self::resolve_ids(
+            prefix,
+            TagId::label(),
+            self.tags.keys().map(|id| id.as_str()),
+        )
+        .map(TagId::from)
     }
 
     pub fn resolve_perspective(&self, prefix: &str) -> Result<PerspectiveId> {
@@ -368,7 +376,9 @@ impl Db {
                 break;
             }
         }
-        self.tasks.get(task_id).and_then(|task| task.project.clone())
+        self.tasks
+            .get(task_id)
+            .and_then(|task| task.project.clone())
     }
 
     pub fn task_depth(&self, task_id: &TaskId) -> u32 {
@@ -450,7 +460,10 @@ impl Db {
         }
     }
 
-    fn container_children_mut(&mut self, parent: Option<FolderId>) -> Option<&mut Vec<ContainerId>> {
+    fn container_children_mut(
+        &mut self,
+        parent: Option<FolderId>,
+    ) -> Option<&mut Vec<ContainerId>> {
         match parent {
             None => Some(&mut self.root),
             Some(folder) => self.folders.get_mut(&folder).map(|f| &mut f.child_order),
@@ -459,8 +472,14 @@ impl Db {
 
     pub fn detach_container(&mut self, container: &ContainerId) {
         let parent = match container {
-            ContainerId::Folder(id) => self.folders.get(id).and_then(|folder| folder.parent.clone()),
-            ContainerId::Project(id) => self.projects.get(id).and_then(|project| project.folder.clone()),
+            ContainerId::Folder(id) => self
+                .folders
+                .get(id)
+                .and_then(|folder| folder.parent.clone()),
+            ContainerId::Project(id) => self
+                .projects
+                .get(id)
+                .and_then(|project| project.folder.clone()),
         };
         if let Some(list) = self.container_children_mut(parent) {
             list.retain(|item| item != container);
@@ -732,10 +751,7 @@ impl Db {
                     parent = Some(id);
                 }
                 None => {
-                    return Err(Error::not_found(
-                        "tag",
-                        parts[..=index].join(" / "),
-                    ));
+                    return Err(Error::not_found("tag", parts[..=index].join(" / ")));
                 }
             }
         }
@@ -838,16 +854,19 @@ impl Db {
             return Err(Error::invalid("empty folder name"));
         }
         for part in parts {
-            let found = self.container_children(parent.clone()).iter().find_map(|c| {
-                if let ContainerId::Folder(id) = c {
-                    self.folders
-                        .get(id)
-                        .filter(|folder| folder.name.eq_ignore_ascii_case(part))
-                        .map(|_| id.clone())
-                } else {
-                    None
-                }
-            });
+            let found = self
+                .container_children(parent.clone())
+                .iter()
+                .find_map(|c| {
+                    if let ContainerId::Folder(id) = c {
+                        self.folders
+                            .get(id)
+                            .filter(|folder| folder.name.eq_ignore_ascii_case(part))
+                            .map(|_| id.clone())
+                    } else {
+                        None
+                    }
+                });
             match found {
                 Some(id) => parent = Some(id),
                 None => {
@@ -855,7 +874,11 @@ impl Db {
                     folder.parent = parent.clone();
                     let id = folder.id.clone();
                     self.folders.insert(id.clone(), folder);
-                    self.insert_container(parent.clone(), ContainerId::Folder(id.clone()), ContainerPosition::End);
+                    self.insert_container(
+                        parent.clone(),
+                        ContainerId::Folder(id.clone()),
+                        ContainerPosition::End,
+                    );
                     parent = Some(id);
                 }
             }
@@ -884,7 +907,11 @@ impl Db {
         project.folder = folder.clone();
         let id = project.id.clone();
         self.projects.insert(id.clone(), project);
-        self.insert_container(folder, ContainerId::Project(id.clone()), ContainerPosition::End);
+        self.insert_container(
+            folder,
+            ContainerId::Project(id.clone()),
+            ContainerPosition::End,
+        );
         Ok(id)
     }
 
@@ -914,7 +941,11 @@ impl Db {
             .collect();
         out.sort_by_key(|id| {
             let task = &self.tasks[id];
-            (task.completed, task.due.map(|s| s.at), task.title.to_lowercase())
+            (
+                task.completed,
+                task.due.map(|s| s.at),
+                task.title.to_lowercase(),
+            )
         });
         out
     }
@@ -949,11 +980,26 @@ impl Db {
             if task.completed && task.completed_at.is_none() {
                 problems.push(format!("completed task {id} has no completion date"));
             }
+            let mut checklist_ids: HashSet<ChecklistId> = HashSet::new();
+            for item in &task.checklist {
+                if item.title.trim().is_empty() {
+                    problems.push(format!("task {id} has an empty checklist item"));
+                }
+                if !checklist_ids.insert(item.id.clone()) {
+                    problems.push(format!(
+                        "task {id} has a duplicate checklist item {}",
+                        item.id
+                    ));
+                }
+            }
         }
 
         for (id, project) in &self.projects {
             if id != &project.id {
-                problems.push(format!("project map key {id} does not match id {}", project.id));
+                problems.push(format!(
+                    "project map key {id} does not match id {}",
+                    project.id
+                ));
             }
             if project.review_interval_days == 0 {
                 problems.push(format!("project {id} has a zero review interval"));
@@ -961,7 +1007,10 @@ impl Db {
         }
         for (id, folder) in &self.folders {
             if id != &folder.id {
-                problems.push(format!("folder map key {id} does not match id {}", folder.id));
+                problems.push(format!(
+                    "folder map key {id} does not match id {}",
+                    folder.id
+                ));
             }
         }
         for (id, tag) in &self.tags {
@@ -995,9 +1044,8 @@ impl Db {
                             ));
                         }
                         if child_task.project != task.project {
-                            problems.push(format!(
-                                "task {child} project differs from parent project"
-                            ));
+                            problems
+                                .push(format!("task {child} project differs from parent project"));
                         }
                     }
                 }
@@ -1014,9 +1062,8 @@ impl Db {
                     None => problems.push(format!("missing project task {task_id}")),
                     Some(task) => {
                         if task.parent.is_some() {
-                            problems.push(format!(
-                                "project task {task_id} unexpectedly has a parent"
-                            ));
+                            problems
+                                .push(format!("project task {task_id} unexpectedly has a parent"));
                         }
                         if task.project.as_ref() != Some(&project.id) {
                             problems.push(format!(
@@ -1029,15 +1076,15 @@ impl Db {
         }
         for task_id in &self.inbox_order {
             if !ordered.insert(task_id.clone()) {
-                problems.push(format!("task {task_id} appears more than once in task order"));
+                problems.push(format!(
+                    "task {task_id} appears more than once in task order"
+                ));
             }
             match self.tasks.get(task_id) {
                 None => problems.push(format!("missing inbox task {task_id}")),
                 Some(task) => {
                     if task.parent.is_some() || task.project.is_some() {
-                        problems.push(format!(
-                            "inbox task {task_id} has a parent or project"
-                        ));
+                        problems.push(format!("inbox task {task_id} has a parent or project"));
                     }
                 }
             }
@@ -1079,9 +1126,7 @@ impl Db {
                 match child {
                     ContainerId::Folder(id) => match self.folders.get(id) {
                         None => problems.push(format!("missing folder {id}")),
-                        Some(child_folder)
-                            if child_folder.parent.as_ref() != Some(&folder.id) =>
-                        {
+                        Some(child_folder) if child_folder.parent.as_ref() != Some(&folder.id) => {
                             problems.push(format!("folder {id} parent mismatch"))
                         }
                         _ => {}
@@ -1314,7 +1359,10 @@ mod tests {
         let mut db = Db::new();
         let project = db.ensure_project_path("Work/Website").unwrap();
         assert_eq!(db.project_path(&project), "Work / Website");
-        assert_eq!(db.find_project_by_path("Work/Website"), Some(project.clone()));
+        assert_eq!(
+            db.find_project_by_path("Work/Website"),
+            Some(project.clone())
+        );
         db.validate().unwrap();
     }
 

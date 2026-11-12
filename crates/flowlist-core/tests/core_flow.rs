@@ -1,14 +1,12 @@
 //! End-to-end tests for the command, history and persistence layers.
 
 use chrono::Utc;
-use flowlist_core::command::{
-    Command, ImportMode, NewProject, NewTask, TaskPatch, TaskPlacement,
-};
+use flowlist_core::command::{Command, ImportMode, NewProject, NewTask, TaskPatch, TaskPlacement};
 use flowlist_core::db::Position;
-use flowlist_core::model::{RepeatMode, RepeatRule, Task};
-use flowlist_core::time::Stamp;
+use flowlist_core::model::{RepeatMode, RepeatRule, TagStatus, Task};
 use flowlist_core::paths::DataPaths;
 use flowlist_core::store::Store;
+use flowlist_core::time::Stamp;
 use flowlist_core::time::{IntervalUnit, local_date};
 use tempfile::TempDir;
 
@@ -67,7 +65,11 @@ fn repeated_task_spawns_the_next_occurrence() {
         1,
         IntervalUnit::Weeks,
     ));
-    let id = store.execute(Command::CreateTask(new_task)).unwrap().created[0].clone();
+    let id = store
+        .execute(Command::CreateTask(new_task))
+        .unwrap()
+        .created[0]
+        .clone();
     let task_id = store.db().resolve_task(&id).unwrap();
 
     store
@@ -213,10 +215,7 @@ fn projects_tasks_moves_and_tags_validate() {
             },
         })
         .unwrap();
-    assert_eq!(
-        store.db().tasks[&child_id].title,
-        "Gather notes and links"
-    );
+    assert_eq!(store.db().tasks[&child_id].title, "Gather notes and links");
     store.db().validate().unwrap();
 }
 
@@ -245,10 +244,7 @@ fn import_replace_and_merge() {
         })
         .unwrap();
     assert_eq!(store.db().tasks.len(), 1);
-    assert_eq!(
-        store.db().tasks.values().next().unwrap().title,
-        "Imported"
-    );
+    assert_eq!(store.db().tasks.values().next().unwrap().title, "Imported");
 }
 
 #[test]
@@ -280,4 +276,170 @@ fn query_views_and_stats_agree() {
     assert_eq!(counts.open_tasks, 1);
     assert_eq!(counts.flagged, 1);
     assert_eq!(counts.inbox, 1);
+}
+
+#[test]
+fn merge_import_reuses_tags_by_path() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let errands = store
+        .execute(Command::CreateTag {
+            name: "Errands".into(),
+            parent: None,
+            status: TagStatus::Available,
+            location: None,
+            position: Position::End,
+        })
+        .unwrap()
+        .created[0]
+        .clone();
+    let errands = store.db().resolve_tag(&errands).unwrap();
+    let store_tag = store
+        .execute(Command::CreateTag {
+            name: "Store".into(),
+            parent: Some(errands),
+            status: TagStatus::Available,
+            location: None,
+            position: Position::End,
+        })
+        .unwrap()
+        .created[0]
+        .clone();
+    let existing = store.db().resolve_tag(&store_tag).unwrap();
+
+    let mut imported = flowlist_core::db::Db::new();
+    let imported_tag = imported.ensure_tag_path("Errands/Store", true).unwrap();
+    assert_ne!(existing, imported_tag);
+    let mut task = Task::new("Pick up milk");
+    task.tags.insert(imported_tag);
+    imported.add_task_to_inbox(task);
+    imported.validate().unwrap();
+
+    store
+        .execute(Command::Import {
+            db: imported,
+            mode: ImportMode::Merge,
+        })
+        .unwrap();
+
+    let db = store.db();
+    let matching: Vec<_> = db.tags.values().filter(|tag| tag.name == "Store").collect();
+    assert_eq!(matching.len(), 1, "merge must not duplicate tag paths");
+    let merged = db
+        .tasks
+        .values()
+        .find(|task| task.title == "Pick up milk")
+        .unwrap();
+    assert!(merged.tags.contains(&existing));
+}
+
+#[test]
+fn checklist_items_add_update_reorder_and_delete() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let created = add(&mut store, "Publish release");
+    let task = store.db().resolve_task(&created).unwrap();
+
+    let first = store
+        .execute(Command::AddChecklistItem {
+            task: task.clone(),
+            title: "Run tests".into(),
+            position: None,
+        })
+        .unwrap()
+        .created[0]
+        .clone();
+    let second = store
+        .execute(Command::AddChecklistItem {
+            task: task.clone(),
+            title: "Write changelog".into(),
+            position: None,
+        })
+        .unwrap()
+        .created[0]
+        .clone();
+    let first_id = flowlist_core::ids::ChecklistId::from_string(first);
+    let second_id = flowlist_core::ids::ChecklistId::from_string(second);
+
+    let entity = &store.db().tasks[&task];
+    assert_eq!(entity.checklist.len(), 2);
+    assert_eq!(entity.checklist[0].title, "Run tests");
+    assert_eq!(entity.checklist_progress(), (0, 2));
+
+    store
+        .execute(Command::UpdateChecklistItem {
+            task: task.clone(),
+            item: first_id.clone(),
+            title: "Run the full test suite".into(),
+            completed: Some(true),
+        })
+        .unwrap();
+    assert_eq!(store.db().tasks[&task].checklist_progress(), (1, 2));
+
+    store
+        .execute(Command::MoveChecklistItem {
+            task: task.clone(),
+            item: first_id.clone(),
+            to: 1,
+        })
+        .unwrap();
+    let entity = &store.db().tasks[&task];
+    assert_eq!(entity.checklist[1].id, first_id);
+
+    store
+        .execute(Command::DeleteChecklistItem {
+            task: task.clone(),
+            item: second_id,
+        })
+        .unwrap();
+    assert_eq!(store.db().tasks[&task].checklist.len(), 1);
+    store.db().validate().unwrap();
+}
+
+#[test]
+fn repeating_task_copies_checklist_unchecked() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let created = add(&mut store, "Weekly review");
+    let task = store.db().resolve_task(&created).unwrap();
+    store
+        .execute(Command::AddChecklistItem {
+            task: task.clone(),
+            title: "Clear inbox".into(),
+            position: None,
+        })
+        .unwrap();
+    let item = store.db().tasks[&task].checklist[0].id.clone();
+    store
+        .execute(Command::UpdateChecklistItem {
+            task: task.clone(),
+            item,
+            title: "Clear inbox".into(),
+            completed: Some(true),
+        })
+        .unwrap();
+    store
+        .execute(Command::UpdateTask {
+            id: task.clone(),
+            patch: TaskPatch {
+                repeat: Some(Some(RepeatRule::new(
+                    RepeatMode::DeferAnother,
+                    1,
+                    IntervalUnit::Weeks,
+                ))),
+                ..TaskPatch::default()
+            },
+        })
+        .unwrap();
+
+    let outcome = store
+        .execute(Command::CompleteTasks {
+            ids: vec![task.clone()],
+            completed: true,
+        })
+        .unwrap();
+    let spawned = flowlist_core::ids::TaskId::from_string(outcome.created[0].clone());
+    let next = &store.db().tasks[&spawned];
+    assert_eq!(next.checklist.len(), 1);
+    assert!(!next.checklist[0].completed);
 }

@@ -83,6 +83,7 @@ id_type!(ProjectId, "project");
 id_type!(FolderId, "folder");
 id_type!(TagId, "tag");
 id_type!(PerspectiveId, "perspective");
+id_type!(ChecklistId, "checklist item");
 
 /// A node that can live inside a folder or at the root of the library.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
