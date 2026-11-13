@@ -8,7 +8,7 @@ edition = "2024"
 rust-version = "1.88"
 license = "MIT"
 authors = ["Flowlist contributors"]
-repository = "https://example.invalid/flowlist"
+repository = "https://github.com/Vulkan1125/flowlist"
 
 [workspace.dependencies]
 anyhow = "1.0"
