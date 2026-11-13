@@ -34,6 +34,7 @@ pub enum VimAction {
     PrevMatch,
     Open,
     Inspector,
+    Theme,
     Help,
     FocusSidebar,
     FocusContent,
@@ -179,6 +180,10 @@ impl VimState {
             "l" if mods.shift => {
                 self.count = None;
                 VimInput::Action(VimAction::Location)
+            }
+            "t" if mods.shift => {
+                self.count = None;
+                VimInput::Action(VimAction::Theme)
             }
             "l" => {
                 self.count = None;
@@ -346,6 +351,15 @@ mod tests {
         mods.shift = true;
         assert_eq!(state.feed("l", mods), VimInput::Action(VimAction::Location));
         assert_eq!(keys(&["l"]), VimInput::Action(VimAction::Indent));
+    }
+
+    #[test]
+    fn shift_t_toggles_the_theme() {
+        let mut state = VimState::default();
+        let mut mods = plain();
+        mods.shift = true;
+        assert_eq!(state.feed("t", mods), VimInput::Action(VimAction::Theme));
+        assert_eq!(keys(&["t"]), VimInput::Ignored);
     }
 
     #[test]

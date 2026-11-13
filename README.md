@@ -113,7 +113,10 @@ Frequently used shortcuts:
 | `⌘Z` / `⇧⌘Z` | undo / redo |
 | `⌘1…⌘8` | built-in perspectives |
 | `⌘N` | quick capture |
-| `⇧⌘N` | new project |
+| `⇧⌘N` / `⌥⌘N` / `⌃⌘N` | new project / folder / tag |
+| `⇧⌘P` | new saved perspective |
+| `⌘T` | switch light / dark |
+| `⌘⌫` | delete the selection, or the sidebar entity |
 | `⌘,` | settings |
 | `⌘O` | import |
 | `?` | keyboard and mouse help |
@@ -195,6 +198,21 @@ The server exposes task, project, tag, folder, checklist, review, search,
 import/export and undo tools. See [docs/mcp.md](docs/mcp.md) for the tool list
 and examples.
 
+## Packaging
+
+Build a double-clickable app bundle:
+
+```sh
+scripts/package.sh        # dist/Flowlist.app
+open dist/Flowlist.app
+open dist/Flowlist.app --args --data-dir /path/to/library
+```
+
+The bundle contains the same binary as the CLI and MCP server, so
+`dist/Flowlist.app/Contents/MacOS/flowlist list --json` works too. The script
+ad-hoc signs the bundle; see [docs/packaging.md](docs/packaging.md) for
+Gatekeeper and notarization notes.
+
 ## Data and safety
 
 A library directory contains:
@@ -219,6 +237,10 @@ reload when another process writes. Schema migrations run on open, and
 - [Architecture](docs/architecture.md)
 - [Feature checklist](docs/features.md)
 - [Checklists](docs/checklists.md)
+- [Packaging](docs/packaging.md)
+- [Performance](docs/performance.md)
+- [Accessibility](docs/accessibility.md)
+- [GUI smoke test](docs/gui-automation.md)
 
 ## Development
 
@@ -226,4 +248,5 @@ reload when another process writes. Schema migrations run on open, and
 cargo test --workspace
 cargo check --workspace
 cargo build -p flowlist --no-default-features   # headless CLI/MCP build
+scripts/gui-smoke.sh                            # mouse-only GUI flows (macOS)
 ```

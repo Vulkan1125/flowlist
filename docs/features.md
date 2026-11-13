@@ -74,7 +74,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 
 ## GUI
 
-- [x] Frameless window with transparent titlebar and blurred background
+- [x] Native titlebar, persistent sidebar and optional inspector
 - [x] Sidebar perspectives, custom perspectives and project/folder/tag trees
 - [x] Content list with grouped rows, progress indicators and inline status
 - [x] Task capture with quick-entry syntax
@@ -85,22 +85,38 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Task progress badge for checklists
 - [x] Drag/drop tasks into projects, tags, parents and sibling positions
 - [x] Project dashboard with progress, status chips and review info
-- [x] New project/folder/tag/perspective modals
+- [x] New project/folder/tag/perspective modals (`⇧⌘N`, `⌥⌘N`,
+      `⌃⌘N`, `⇧⌘P`)
 - [x] Rich custom-perspective editor: conditions, project/tag pickers,
       status, due/defer windows, grouping and sort, preserving unknown filters
 - [x] Rename project/folder/tag/perspective (`⌘R` or hover pencil)
 - [x] Tag locations from the sidebar (`⌖`) or `⇧L`, with validation and clear
 - [x] Nearby ranks tasks by the distance between the library and tag locations
-- [x] Delete folder/tag/perspective from the sidebar
+- [x] Delete folder/tag/perspective from the sidebar (`⌘⌫` or `dd`)
 - [x] Project status management (active/on hold/done/dropped)
 - [x] Import modal (JSON or TaskPaper, merge or replace)
 - [x] TaskPaper clipboard export (`⇧⌘E`)
 - [x] Settings and tag location modals
 - [x] Session persistence: view, selection, inspector, sort, grouping, theme,
       vim mode and window size
-- [x] Light/dark theme toggle
+- [x] Light/dark theme toggle (`⌘T` or `⇧T` in vim mode)
 - [x] Keyboard help (`?`)
 - [x] Toasts retire after a few seconds and dismiss on click
+
+## Packaging and quality
+
+- [x] `scripts/package.sh` builds `dist/Flowlist.app` with an icon,
+      validated `Info.plist` and an ad-hoc signature
+- [x] `scripts/make-icon.sh` draws and packs the app icon
+- [x] `scripts/perf-check.sh` generates large libraries and times the CLI
+      query paths
+- [x] Cross-process tests spawn the real binary and verify reload in both
+      directions
+- [x] `scripts/gui-smoke.sh` drives the mouse-only New project and perspective
+      pencil flows with CoreGraphics events
+- [x] Accessibility pass: tooltips on every icon-only control, keyboard routes
+      for hover-only actions, documented GPUI limitation
+- [x] Packaging, performance, accessibility and GUI automation docs
 
 ## Deliberate design decisions
 

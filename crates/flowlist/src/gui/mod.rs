@@ -17,6 +17,7 @@ mod vim;
 mod widgets;
 
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -141,6 +142,10 @@ pub struct FlowlistApp {
     scroll: ScrollHandle,
     sidebar_scroll: ScrollHandle,
     last_sync: Instant,
+    /// Set by `FLOWLIST_TEST_STATE`; the window writes a small JSON state file
+    /// for the GUI smoke test. Off in normal use.
+    test_state_path: Option<PathBuf>,
+    test_state_last: Option<String>,
 }
 
 impl FlowlistApp {
@@ -216,6 +221,8 @@ impl FlowlistApp {
             scroll: ScrollHandle::new(),
             sidebar_scroll: ScrollHandle::new(),
             last_sync: Instant::now(),
+            test_state_path: std::env::var_os("FLOWLIST_TEST_STATE").map(PathBuf::from),
+            test_state_last: None,
         }
     }
 
@@ -588,6 +595,44 @@ impl FlowlistApp {
         self.selected.clear();
         self.anchor = None;
         self.toast = Some(format!("Deleted {count} task(s) · ⌘Z to undo"));
+        self.save_session();
+        cx.notify();
+    }
+
+    /// Delete the entity under the sidebar cursor. Project rows have no
+    /// delete affordance; they are closed from the project dashboard instead.
+    fn delete_sidebar_target(&mut self, cx: &mut Context<Self>) {
+        let Some(target) = self.sidebar_cursor.clone() else {
+            self.toast = Some("Select a perspective, folder or tag first".to_string());
+            cx.notify();
+            return;
+        };
+        let (command, view) = match target {
+            sidebar::SidebarTarget::Custom(id) => (
+                Command::DeletePerspective { id: id.clone() },
+                View::Custom(id),
+            ),
+            sidebar::SidebarTarget::Folder(id) => {
+                (Command::DeleteFolder { id: id.clone() }, View::Folder(id))
+            }
+            sidebar::SidebarTarget::Tag(id) => {
+                (Command::DeleteTag { id: id.clone() }, View::Tag(id))
+            }
+            sidebar::SidebarTarget::Project(_) => {
+                self.toast = Some("Close a project from its dashboard".to_string());
+                cx.notify();
+                return;
+            }
+            sidebar::SidebarTarget::Builtin(_) => {
+                self.toast = Some("Built-in perspectives cannot be deleted".to_string());
+                cx.notify();
+                return;
+            }
+        };
+        self.execute(command);
+        if self.view == view {
+            self.view = View::Builtin(BuiltinPerspective::Inbox);
+        }
         self.save_session();
         cx.notify();
     }
@@ -1588,6 +1633,10 @@ impl FlowlistApp {
                 "n" => {
                     if mods.shift {
                         self.open_modal(modals::Modal::new_project(self), cx);
+                    } else if mods.alt {
+                        self.open_modal(modals::Modal::new_folder(self), cx);
+                    } else if mods.control {
+                        self.open_modal(modals::Modal::new_tag(self), cx);
                     } else if self.view.shows_capture() {
                         self.focus = FocusArea::Capture;
                         self.capture.clear();
@@ -1595,6 +1644,9 @@ impl FlowlistApp {
                         self.focus = FocusArea::Search;
                         self.search.select_all();
                     }
+                }
+                "p" if mods.shift => {
+                    self.open_modal(modals::Modal::new_perspective(self), cx);
                 }
                 "f" => {
                     self.focus = FocusArea::Search;
@@ -1604,8 +1656,18 @@ impl FlowlistApp {
                     self.show_inspector = !self.show_inspector;
                     self.save_session();
                 }
+                "t" => {
+                    self.theme = theme::Theme::new(self.theme.mode().toggled());
+                    self.save_session();
+                }
                 "d" => self.flag_selected(cx),
-                "backspace" | "delete" => self.delete_selected(cx),
+                "backspace" | "delete" => {
+                    if self.focus == FocusArea::Sidebar {
+                        self.delete_sidebar_target(cx);
+                    } else {
+                        self.delete_selected(cx);
+                    }
+                }
                 "c" => self.copy_selection(cx),
                 "s" => {
                     self.save_session();
@@ -1827,6 +1889,10 @@ impl FlowlistApp {
             }
             A::NextMatch => self.search_step(true, cx),
             A::PrevMatch => self.search_step(false, cx),
+            A::Theme => {
+                self.theme = theme::Theme::new(self.theme.mode().toggled());
+                self.save_session();
+            }
             A::Inspector => {
                 self.show_inspector = !self.show_inspector;
                 if !self.show_inspector && self.focus == FocusArea::ChecklistList {
@@ -1877,9 +1943,7 @@ impl FlowlistApp {
             A::Goto(line) => self.vim_jump(line.saturating_sub(1), true, cx),
             A::Delete => match self.focus {
                 FocusArea::ChecklistList => self.checklist_delete(cx),
-                FocusArea::Sidebar => {
-                    self.toast = Some("Use r to rename or ⌘⌫ to delete".to_string());
-                }
+                FocusArea::Sidebar => self.delete_sidebar_target(cx),
                 _ => self.delete_selected(cx),
             },
             A::Yank => self.copy_selection(cx),
@@ -2582,6 +2646,30 @@ impl FlowlistApp {
         }
     }
 
+    /// Write the state the GUI smoke test waits on. The file is only touched
+    /// when `FLOWLIST_TEST_STATE` names a path, and only when something
+    /// observable changed.
+    fn sync_test_state(&mut self) {
+        let Some(path) = self.test_state_path.clone() else {
+            return;
+        };
+        let state = serde_json::json!({
+            "view": self.view.key(),
+            "modal": self.modal.as_ref().map(|modal| modal.title()),
+            "selected": self.selected.len(),
+            "window": self.window_size,
+        });
+        let text = state.to_string();
+        if self.test_state_last.as_deref() == Some(text.as_str()) {
+            return;
+        }
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&path, &text);
+        self.test_state_last = Some(text);
+    }
+
     fn maybe_sync(&mut self) {
         if self.last_sync.elapsed() < Duration::from_millis(500) {
             return;
@@ -2664,7 +2752,7 @@ impl FlowlistApp {
                     .child(
                         div()
                             .id("theme")
-                            .tooltip(widgets::tip(theme, "Switch light / dark"))
+                            .tooltip(widgets::tip(theme, "Switch light / dark (⇧T)"))
                             .child(widgets::icon_button(theme, "◐", false))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.theme = Theme::new(this.theme.mode().toggled());
@@ -2882,6 +2970,7 @@ impl Render for FlowlistApp {
             })
             .detach();
         }
+        self.sync_test_state();
         self.maybe_sync();
         if !self.focus_handle.is_focused(window) {
             window.focus(&self.focus_handle);

@@ -576,6 +576,14 @@ impl FlowlistApp {
                                 .id(super::sid(format!("folder-toggle:{id}")))
                                 .w(px(14.))
                                 .text_color(self.theme.text_faint)
+                                .tooltip(widgets::tip(
+                                    self.theme,
+                                    if open {
+                                        "Collapse folder"
+                                    } else {
+                                        "Expand folder"
+                                    },
+                                ))
                                 .child(if open { "▾" } else { "▸" })
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
@@ -747,6 +755,10 @@ impl FlowlistApp {
                         .id(super::sid(format!("tag-toggle:{tag}")))
                         .w(px(12.))
                         .text_color(self.theme.text_faint)
+                        .tooltip(widgets::tip(
+                            self.theme,
+                            if open { "Collapse tag" } else { "Expand tag" },
+                        ))
                         .child(if open { "▾" } else { "▸" })
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
