@@ -72,8 +72,8 @@ expected. An unambiguous prefix also works.
 
 ## Desktop app
 
-The window is frameless: a translucent titlebar strip and sidebar sit over a
-blurred window background, with an opaque task list and an optional inspector.
+The window uses the native macOS titlebar, a persistent sidebar and an optional
+inspector around the task list.
 
 Key behaviour:
 
@@ -86,10 +86,14 @@ Key behaviour:
   rules and checklist steps in place.
 - Checklist items have their own completion state and progress badge; they are
   not tasks and never appear in perspectives.
+- Saved perspectives open a full editor for their conditions, grouping and
+  sort; conditions the editor does not expose survive editing unchanged.
+- Tags can carry a latitude and longitude; **Nearby** ranks tasks tagged with
+  a located context by distance.
 - Import JSON or TaskPaper, export TaskPaper with `⇧⌘E`, and undo everything
   with `⌘Z`.
 - Session state (view, selection, inspector, sort, grouping, theme mode, vim
-  mode) is persisted in `session.json`.
+  mode and window size) is persisted in `session.json`.
 
 Frequently used shortcuts:
 

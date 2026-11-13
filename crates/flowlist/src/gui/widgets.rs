@@ -273,6 +273,25 @@ pub fn count(theme: Theme, value: usize) -> impl IntoElement {
         .child(value.to_string())
 }
 
+/// A compact filter/metric button: same height as the search field so sort,
+/// group and toggles line up with it.
+pub fn toggle_chip(theme: Theme, label: impl Into<String>, active: bool) -> impl IntoElement {
+    div()
+        .h(px(26.))
+        .px_2()
+        .flex()
+        .items_center()
+        .rounded_md()
+        .border_1()
+        .border_color(if active { theme.accent } else { theme.border })
+        .bg(if active { theme.selection } else { theme.bg })
+        .text_xs()
+        .text_color(if active { theme.accent } else { theme.text_dim })
+        .cursor_pointer()
+        .hover(|style| style.bg(theme.hover))
+        .child(label.into())
+}
+
 pub fn divider(theme: Theme) -> impl IntoElement {
     div().h(px(1.)).w_full().bg(theme.border_soft)
 }

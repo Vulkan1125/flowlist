@@ -130,6 +130,12 @@ pub struct FlowlistApp {
     modal: Option<modals::Modal>,
     modal_focus: usize,
     toast: Option<String>,
+    /// Last measured content size, persisted so the next launch reopens at it.
+    window_size: Option<(f32, f32)>,
+    window_dirty: bool,
+    /// The message currently on screen and when it appeared. A toast retires
+    /// itself after a few seconds so the window never keeps stale advice.
+    toast_shown: Option<(String, Instant)>,
     sort: Option<SortBy>,
     group: Option<GroupBy>,
     scroll: ScrollHandle,
@@ -155,6 +161,7 @@ impl FlowlistApp {
         let show_completed = session.show_completed.unwrap_or(false);
         let show_inspector = session.inspector.unwrap_or(true);
         let vim_mode = session.vim_mode.unwrap_or(true);
+        let window_size = session.window;
         let focus_handle = cx.focus_handle();
         let toast = store_warning(&store);
 
@@ -201,6 +208,9 @@ impl FlowlistApp {
             modal: None,
             modal_focus: 0,
             toast,
+            window_size,
+            window_dirty: false,
+            toast_shown: None,
             sort,
             group,
             scroll: ScrollHandle::new(),
@@ -217,7 +227,7 @@ impl FlowlistApp {
             selected: self.selected.iter().map(|id| id.to_string()).collect(),
             inspector: Some(self.show_inspector),
             theme: Some(self.theme.mode().slug().to_string()),
-            window: None,
+            window: self.window_size,
             sort: self.sort.map(|sort| sort_slug(sort).to_string()),
             group: self.group.map(|group| group_slug(group).to_string()),
             show_completed: Some(self.show_completed),
@@ -2761,9 +2771,36 @@ impl FlowlistApp {
             )
     }
 
-    fn render_toast(&self) -> impl IntoElement {
+    fn render_toast(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let message = self.toast.clone().unwrap_or_default();
+        let fresh = self
+            .toast_shown
+            .as_ref()
+            .is_none_or(|(shown, _)| shown != &message);
+        if fresh {
+            self.toast_shown = Some((message.clone(), Instant::now()));
+            let expected = message.clone();
+            cx.spawn(async move |this, cx| {
+                cx.background_executor()
+                    .timer(Duration::from_millis(2600))
+                    .await;
+                this.update(cx, |this, cx| {
+                    if this.toast.as_deref() == Some(expected.as_str()) {
+                        this.toast = None;
+                        this.toast_shown = None;
+                        cx.notify();
+                    }
+                })
+                .ok();
+            })
+            .detach();
+        }
+        let clear = cx.listener(|this, _, _, cx| {
+            this.toast = None;
+            this.toast_shown = None;
+            cx.notify();
+        });
         div()
             .absolute()
             .bottom(px(38.))
@@ -2772,6 +2809,7 @@ impl FlowlistApp {
             .justify_center()
             .child(
                 div()
+                    .id("toast")
                     .px_4()
                     .py_2()
                     .rounded_lg()
@@ -2781,7 +2819,9 @@ impl FlowlistApp {
                     .shadow_lg()
                     .text_sm()
                     .text_color(theme.text)
-                    .child(message),
+                    .cursor_pointer()
+                    .child(message)
+                    .on_click(clear),
             )
     }
 
@@ -2821,6 +2861,27 @@ impl Focusable for FlowlistApp {
 
 impl Render for FlowlistApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let measured = window.bounds().size;
+        let measured = (f32::from(measured.width), f32::from(measured.height));
+        let changed = self.window_size != Some(measured);
+        self.window_size = Some(measured);
+        // Coalesce resize bursts into one session write, then remember the
+        // final size for the next launch.
+        if changed && !self.window_dirty {
+            self.window_dirty = true;
+            cx.spawn(async move |this, cx| {
+                cx.background_executor()
+                    .timer(Duration::from_millis(600))
+                    .await;
+                this.update(cx, |this, cx| {
+                    this.window_dirty = false;
+                    this.save_session();
+                    cx.notify();
+                })
+                .ok();
+            })
+            .detach();
+        }
         self.maybe_sync();
         if !self.focus_handle.is_focused(window) {
             window.focus(&self.focus_handle);
@@ -2851,7 +2912,7 @@ impl Render for FlowlistApp {
         root = root.child(body);
         root = root.child(self.render_status(window, cx));
         if self.toast.is_some() {
-            root = root.child(self.render_toast());
+            root = root.child(self.render_toast(cx));
         }
         if self.modal.is_some() {
             root = root.child(self.render_modal(window, cx));
@@ -2861,9 +2922,19 @@ impl Render for FlowlistApp {
 }
 
 pub fn run(paths: DataPaths) -> Result<()> {
-    Store::open(paths.clone())?;
+    let store = Store::open(paths.clone())?;
+    let saved: Option<session::Session> = store.read_session();
+    drop(store);
+    let restored = saved
+        .and_then(|session| session.window)
+        .map(|(width, height)| {
+            size(
+                px(width.clamp(880.0, 3200.0)),
+                px(height.clamp(560.0, 2400.0)),
+            )
+        });
     Application::new().run(move |cx: &mut App| {
-        let bounds = Bounds::centered(None, size(px(1240.), px(800.)), cx);
+        let bounds = Bounds::centered(None, restored.unwrap_or(size(px(1240.), px(800.))), cx);
         let result = cx.open_window(
             WindowOptions {
                 titlebar: Some(gpui::TitlebarOptions {
@@ -2871,6 +2942,7 @@ pub fn run(paths: DataPaths) -> Result<()> {
                     ..Default::default()
                 }),
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
+                window_min_size: Some(size(px(880.), px(560.))),
                 ..Default::default()
             },
             |window, cx| {

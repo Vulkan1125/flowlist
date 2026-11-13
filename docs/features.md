@@ -86,15 +86,21 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Drag/drop tasks into projects, tags, parents and sibling positions
 - [x] Project dashboard with progress, status chips and review info
 - [x] New project/folder/tag/perspective modals
+- [x] Rich custom-perspective editor: conditions, project/tag pickers,
+      status, due/defer windows, grouping and sort, preserving unknown filters
 - [x] Rename project/folder/tag/perspective (`⌘R` or hover pencil)
+- [x] Tag locations from the sidebar (`⌖`) or `⇧L`, with validation and clear
+- [x] Nearby ranks tasks by the distance between the library and tag locations
 - [x] Delete folder/tag/perspective from the sidebar
 - [x] Project status management (active/on hold/done/dropped)
 - [x] Import modal (JSON or TaskPaper, merge or replace)
 - [x] TaskPaper clipboard export (`⇧⌘E`)
 - [x] Settings and tag location modals
-- [x] Session persistence: view, selection, inspector, sort, grouping, theme
+- [x] Session persistence: view, selection, inspector, sort, grouping, theme,
+      vim mode and window size
 - [x] Light/dark theme toggle
 - [x] Keyboard help (`?`)
+- [x] Toasts retire after a few seconds and dismiss on click
 
 ## Deliberate design decisions
 
@@ -106,7 +112,7 @@ working domain and GUI. This page tracks what is implemented and verified.
   merge imports.
 - The GUI, CLI and MCP server never maintain separate copies of the library.
 
-## Planned
+## Interaction model
 
 ### Vim keybindings across the whole app
 
@@ -122,26 +128,24 @@ shortcut set.
   above, `dd` delete, `yy` yank, `p` paste, `u`/`Ctrl-r` undo/redo, `r` rename,
   `i` inspector, `/` search with `n`/`N` match cycling, `Enter` open or edit.
 - Sidebar: `j`/`k` move between perspectives and entities, `l` expand, `h`
-  collapse, `Enter` open. Inspector and checklist panes use the same motions.
+  collapse, `Enter` open, `r` rename or edit, `⇧L` set a location. Inspector
+  and checklist panes use the same motions.
 - Existing macOS shortcuts stay available, and the help card plus README list
   both maps. A settings toggle disables vim mode for users who prefer arrows.
 
-### Delayed tooltips for icon controls
+### Delayed tooltips for icon-only controls
 
-- One reusable tooltip component with a short hover delay (about 400 ms) and
+- One reusable tooltip component with GPUI's built-in hover delay (500 ms) and
   immediate dismissal on leave, click or scroll.
 - Applied to all icon-only controls: sidebar pencil and ×, completion circles,
   flag toggles, checklist add/toggle/reorder/delete, project status chips,
   disclosure arrows, toolbar and modal close buttons.
 - Tooltips name the action and show its shortcut where one exists, for example
   "Rename (⌘R)" and "Delete (⌘⌫)".
-- Keyboard focus reveals the same tooltip so the UI stays usable without a
-  mouse; tooltips never cover the row they describe.
+- Tooltips never cover the row they describe. Mouse-only controls also have
+  keyboard routes (`r` and `⇧L` in the sidebar).
 
 ## Next refinements
 
-
 - Further visual polish of the macOS-native theme, typography and spacing.
-- Richer custom-perspective editor in the GUI (the CLI/MCP already accept the
-  full filter tree).
 - Additional automation coverage for mouse-only entity management flows.

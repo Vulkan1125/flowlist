@@ -131,66 +131,38 @@ impl FlowlistApp {
                             .child(
                                 div()
                                     .id("sort")
-                                    .h(px(26.))
-                                    .px_2()
-                                    .flex()
-                                    .items_center()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(theme.border)
-                                    .text_xs()
-                                    .text_color(theme.text_dim)
-                                    .cursor_pointer()
-                                    .hover(|style| style.bg(theme.hover))
-                                    .child(format!("Sort · {}", sort_label(self.sort)))
+                                    .tooltip(widgets::tip(theme, "Click to cycle the sort order"))
+                                    .child(widgets::toggle_chip(
+                                        theme,
+                                        format!("Sort · {}", sort_label(self.sort)),
+                                        false,
+                                    ))
                                     .on_click(cx.listener(|this, _, _, cx| this.cycle_sort(cx))),
                             )
                             .child(
                                 div()
                                     .id("group")
-                                    .h(px(26.))
-                                    .px_2()
-                                    .flex()
-                                    .items_center()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(theme.border)
-                                    .text_xs()
-                                    .text_color(theme.text_dim)
-                                    .cursor_pointer()
-                                    .hover(|style| style.bg(theme.hover))
-                                    .child(format!("Group · {}", group_label(self.group)))
+                                    .tooltip(widgets::tip(theme, "Click to cycle the grouping"))
+                                    .child(widgets::toggle_chip(
+                                        theme,
+                                        format!("Group · {}", group_label(self.group)),
+                                        false,
+                                    ))
                                     .on_click(cx.listener(|this, _, _, cx| this.cycle_group(cx))),
                             )
                             .when(shows_completed, |this| {
                                 this.child(
                                     div()
                                         .id("show-completed")
-                                        .h(px(26.))
-                                        .px_2()
-                                        .flex()
-                                        .items_center()
-                                        .rounded_md()
-                                        .border_1()
-                                        .border_color(if self.show_completed {
-                                            theme.accent
-                                        } else {
-                                            theme.border
-                                        })
-                                        .bg(if self.show_completed {
-                                            theme.selection
-                                        } else {
-                                            theme.bg
-                                        })
-                                        .text_xs()
-                                        .text_color(if self.show_completed {
-                                            theme.accent
-                                        } else {
-                                            theme.text_dim
-                                        })
-                                        .cursor_pointer()
-                                        .hover(|style| style.bg(theme.hover))
-                                        .child("Completed")
+                                        .tooltip(widgets::tip(
+                                            theme,
+                                            "Show or hide completed tasks",
+                                        ))
+                                        .child(widgets::toggle_chip(
+                                            theme,
+                                            "Completed",
+                                            self.show_completed,
+                                        ))
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.toggle_show_completed(cx)
                                         })),
