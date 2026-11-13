@@ -91,7 +91,7 @@ impl FlowlistApp {
             .gap_2()
             .p_6()
             .text_center()
-            .child(icons::icon(Icon::PanelRight, 30.0, theme.text_faint))
+            .child(icons::icon(Icon::Info, 30.0, theme.text_faint))
             .child(
                 div()
                     .text_color(theme.text_dim)

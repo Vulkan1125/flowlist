@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use chrono::Datelike;
 use gpui::{
     App, Application, Bounds, ClipboardItem, Context, CursorStyle, FocusHandle, Focusable,
     IntoElement, KeyDownEvent, Keystroke, MouseButton, Render, ScrollHandle, Window,
@@ -111,6 +112,8 @@ pub struct FlowlistApp {
     store: Store,
     theme: Theme,
     view: View,
+    /// First day of the month the Forecast calendar shows.
+    forecast_month: chrono::NaiveDate,
     selected: Vec<TaskId>,
     anchor: Option<TaskId>,
     expanded: BTreeSet<String>,
@@ -152,6 +155,8 @@ pub struct FlowlistApp {
     /// The appearance the window glass was last pinned to, if the platform had
     /// a blur view to tune.
     blur_mode: Option<theme::Appearance>,
+    /// Set once AppKit has hidden the close/miniaturize/zoom buttons.
+    traffic_lights_hidden: bool,
 }
 
 impl FlowlistApp {
@@ -193,10 +198,15 @@ impl FlowlistApp {
         })
         .detach();
 
+        let today = local_date(now());
+        let forecast_month =
+            chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
+
         Self {
             store,
             theme,
             view,
+            forecast_month,
             selected,
             anchor: None,
             expanded: BTreeSet::new(),
@@ -231,6 +241,7 @@ impl FlowlistApp {
             test_state_path: std::env::var_os("FLOWLIST_TEST_STATE").map(PathBuf::from),
             test_state_last: None,
             blur_mode: None,
+            traffic_lights_hidden: false,
         }
     }
 
@@ -2695,6 +2706,7 @@ impl FlowlistApp {
             "theme": self.theme.kind().slug(),
             "appearance": self.theme.appearance().slug(),
             "blur": self.blur_mode.map(|appearance| appearance.slug()),
+            "traffic_lights": if self.traffic_lights_hidden { "hidden" } else { "visible" },
             "modal_theme": match &self.modal {
                 Some(modals::Modal::Settings { theme, appearance, .. }) => {
                     Some(format!("{}/{}", theme.slug(), appearance.slug()))
@@ -2730,40 +2742,22 @@ impl FlowlistApp {
             .items_center()
             .justify_between()
             .h(px(46.))
-            .pl(px(92.))
+            .pl_4()
             .pr_3()
             .border_b_1()
             .border_color(theme.border)
-            .bg(theme.glass_fill(90.))
+            .bg(theme.glass)
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap_2()
                     .cursor(CursorStyle::OpenHand)
                     .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .size(px(22.))
-                            .rounded_md()
-                            .bg(theme.accent)
-                            .child(icons::icon(Icon::Check, 13.0, theme.bg)),
-                    )
                     .child(
                         div()
                             .text_sm()
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .child("Flowlist"),
-                    )
-                    .child(div().text_color(theme.text_faint).child("/"))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(theme.text_dim)
-                            .child(self.view_title()),
                     ),
             )
             .child(
@@ -2827,11 +2821,7 @@ impl FlowlistApp {
                         div()
                             .id("inspector")
                             .tooltip(widgets::tip(theme, "Toggle inspector (i)"))
-                            .child(widgets::icon_button(
-                                theme,
-                                Icon::PanelRight,
-                                self.show_inspector,
-                            ))
+                            .child(widgets::icon_button(theme, Icon::Info, self.show_inspector))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.show_inspector = !this.show_inspector;
                                 this.save_session();
@@ -2869,7 +2859,7 @@ impl FlowlistApp {
             .px_4()
             .border_t_1()
             .border_color(theme.border)
-            .bg(theme.glass_fill(90.))
+            .bg(theme.glass)
             .text_xs()
             .text_color(theme.text_faint)
             .child(
@@ -3041,7 +3031,13 @@ impl Render for FlowlistApp {
         if !self.focus_handle.is_focused(window) {
             window.focus(&self.focus_handle);
         }
-        window.set_window_title(&format!("Flowlist — {}", self.view_title()));
+        window.set_window_title("Flowlist");
+        // The custom glass header replaces the system titlebar, so the
+        // standard close/miniaturize/zoom controls are hidden rather than
+        // floating over the app name.
+        if !self.traffic_lights_hidden && blur::hide_traffic_lights(window) {
+            self.traffic_lights_hidden = true;
+        }
         // Keep the window's vibrancy in step with the palette: light glass for
         // a light theme, dark for a dark one, whatever macOS itself is set to.
         if self.blur_mode != Some(self.theme.appearance()) {

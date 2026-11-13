@@ -72,7 +72,8 @@ expected. An unambiguous prefix also works.
 
 ## Desktop app
 
-The window uses the native macOS titlebar, a persistent sidebar and an optional
+The window hides the native macOS titlebar and its traffic lights. A custom
+glass header shows only the app name, with a persistent sidebar and an optional
 inspector around the task list.
 
 Key behaviour:

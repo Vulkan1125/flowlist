@@ -75,7 +75,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 ## GUI
 
 - [x] Full-height glass window with a blended header, persistent sidebar
-      and optional inspector
+      and optional inspector. The macOS traffic lights are hidden and the
+      header shows only the app name.
+- [x] Forecast month calendar above the list: Monday-first grid, previous /
+      Today / next controls and an accent bar under dates with a task.
 - [x] Sidebar perspectives, custom perspectives and project/folder/tag trees
 - [x] Content list with grouped rows, progress indicators and inline status
 - [x] Task capture with quick-entry syntax
@@ -107,8 +110,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       surface. The window's `NSVisualEffectView` uses the
       `.underWindowBackground` material and is pinned to the palette's
       light/dark appearance, so a dark theme never inherits a light material
-      from macOS. Chrome runs a subtle wash between two tint stops instead of a
-      flat colour.
+      from macOS. The sidebar and inspector run a vertical wash between two
+      tint stops; the header and status bar use the flat glass tint so the
+      chrome does not ramp from left to right.
 - [x] Embedded SVG icon set with a shared grid, stroke and alignment
 - [x] Keyboard help (`?`)
 - [x] Toasts retire after a few seconds and dismiss on click
@@ -172,6 +176,9 @@ shortcut set.
   keyboard routes (`r` and `⇧L` in the sidebar).
 
 ## Next refinements
+
+Outstanding work lives in [backlog.md](backlog.md). It includes the Things 3
+"Pending" list so a context reset cannot lose it. The short version:
 
 - Visual QA of the glass surfaces against busy wallpapers.
 - Optional accent-colour variants on top of the ten base families.

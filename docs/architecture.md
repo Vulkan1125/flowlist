@@ -151,7 +151,8 @@ tag input or a modal. Text editing is handled directly from `on_key_down`, which
 keeps the same behaviour for hardware keyboards without relying on OS IME.
 
 The window uses GPUI's transparent titlebar and blurred background appearance.
-Session state is written to `session.json` and restored on launch.
+The native traffic lights are hidden and the header shows only the app name;
+session state is written to `session.json` and restored on launch.
 
 ## Binary front ends
 

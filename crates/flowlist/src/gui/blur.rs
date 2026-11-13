@@ -111,6 +111,46 @@ mod platform {
             Appearance::Dark => "dark",
         })
     }
+
+    /// Hide the three standard window buttons.
+    ///
+    /// The window is a custom glass surface, so the red/yellow/green controls
+    /// read as debris over the header. `NSWindowButton` is an integer enum:
+    /// close `0`, miniaturize `1`, zoom `2`. Returns `true` once every button
+    /// is hidden, so the caller can retry on a later frame if AppKit has not
+    /// created the titlebar yet.
+    pub(super) fn hide_traffic_lights(window: &gpui::Window) -> bool {
+        use raw_window_handle::RawWindowHandle;
+
+        let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(window) else {
+            return false;
+        };
+        let RawWindowHandle::AppKit(appkit) = handle.as_raw() else {
+            return false;
+        };
+        let view = appkit.ns_view.as_ptr().cast::<Object>();
+
+        // SAFETY: `window_handle` returned an AppKit handle, so `view` is a
+        // live `NSView` owned by the window. `standardWindowButton:` may
+        // return null for a window style that has no such button; that is
+        // checked before messaging. `render` runs on the main thread.
+        unsafe {
+            let ns_window: *mut Object = msg_send![view, window];
+            if ns_window.is_null() {
+                return false;
+            }
+            let mut all_hidden = true;
+            for kind in 0..3usize {
+                let button: *mut Object = msg_send![ns_window, standardWindowButton: kind];
+                if button.is_null() {
+                    all_hidden = false;
+                    continue;
+                }
+                let _: () = msg_send![button, setHidden: true];
+            }
+            all_hidden
+        }
+    }
 }
 
 /// Point the window's blur view at the right material and light/dark variant.
@@ -125,4 +165,18 @@ pub(super) fn sync(window: &gpui::Window, appearance: Appearance) -> Option<&'st
 #[cfg(not(target_os = "macos"))]
 pub(super) fn sync(_window: &gpui::Window, _appearance: Appearance) -> Option<&'static str> {
     None
+}
+
+/// Remove the standard macOS window buttons from a custom-titled window.
+///
+/// Returns `true` once they are hidden; on other platforms there is nothing to
+/// hide, so this reports success.
+#[cfg(target_os = "macos")]
+pub(super) fn hide_traffic_lights(window: &gpui::Window) -> bool {
+    platform::hide_traffic_lights(window)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(super) fn hide_traffic_lights(_window: &gpui::Window) -> bool {
+    true
 }

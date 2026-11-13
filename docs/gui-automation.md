@@ -38,12 +38,18 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "view": "custom:01M79...",
   "modal": "Perspective",
   "selected": 0,
-  "window": [1254.0, 1404.0]
+  "window": [1254.0, 1404.0],
+  "theme": "catppuccin",
+  "appearance": "light",
+  "blur": "light",
+  "traffic_lights": "hidden",
+  "modal_theme": null
 }
 ```
 
 `modal` is `null` when no sheet is open, otherwise the sheet title (`New
-project`, `Perspective`, `Settings`, …). The file is rewritten only when one of
+project`, `Perspective`, `Settings`, …). `traffic_lights` reports whether the
+AppKit window buttons were hidden. The file is rewritten only when one of
 those values changes, and the hook is inert unless the variable is set. It does
 not contain task text, notes or the library itself.
 

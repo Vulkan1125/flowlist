@@ -19,7 +19,11 @@ them, so the keyboard routes below are the primary way to reach them.
 | Question mark | Keyboard and mouse help (?) | `?` |
 | Gear | Settings (⌘,) | `⌘,` |
 | Palette | Next theme family (⇧⌘T) | `⌘T` light/dark, `⇧⌘T` / `⌥⌘T` family, `⇧T` in vim mode |
-| Right panel | Toggle inspector (i) | `i` or `⌘I` |
+| Info (i) | Toggle inspector (i) | `i` or `⌘I` |
+
+The Forecast month calendar adds three mouse controls beside the month name:
+previous month, Today and next month. They are labelled `‹`, `Today` and `›`
+with tooltips, and the list below them keeps the normal task keyboard routes.
 
 ### Sidebar
 

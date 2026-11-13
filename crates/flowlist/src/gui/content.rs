@@ -1,5 +1,8 @@
 //! The main task list, project dashboards, review queue and nearby places.
 
+use std::collections::BTreeSet;
+
+use chrono::{Datelike, Duration, NaiveDate};
 use gpui::{AnyElement, Context, IntoElement, MouseButton, Window, div, prelude::*, px};
 
 use flowlist_core::command::Command;
@@ -43,6 +46,10 @@ impl FlowlistApp {
             .child(self.render_content_header(cx))
             .child(self.render_capture_bar(cx));
 
+        if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) {
+            column = column.child(self.render_forecast_calendar(cx));
+        }
+
         if let View::Project(id) = self.view.clone() {
             column = column.child(self.render_project_banner(&id, cx));
         }
@@ -64,6 +71,194 @@ impl FlowlistApp {
         };
         list = list.child(body);
         column.child(list)
+    }
+
+    /// Dates in the library that carry a task, used for the Forecast calendar
+    /// bars. Completed tasks and tasks in closed projects are left out, so the
+    /// calendar agrees with the list below it.
+    fn forecast_marked_dates(&self) -> BTreeSet<NaiveDate> {
+        let db = self.store.db();
+        let mut marked = BTreeSet::new();
+        for task in db.tasks.values() {
+            if task.completed {
+                continue;
+            }
+            if let Some(project_id) = &task.project {
+                match db.projects.get(project_id).map(|project| project.status) {
+                    Some(ProjectStatus::Active) | None => {}
+                    _ => continue,
+                }
+            }
+            if let Some(due) = task.due {
+                marked.insert(due.local_date());
+            }
+            if let Some(defer) = task.defer {
+                marked.insert(defer.local_date());
+            }
+        }
+        marked
+    }
+
+    /// Move the Forecast calendar one month forward or back.
+    fn forecast_shift_month(&mut self, delta: i32) {
+        let mut year = self.forecast_month.year();
+        let mut month = self.forecast_month.month() as i32 + delta;
+        while month < 1 {
+            month += 12;
+            year -= 1;
+        }
+        while month > 12 {
+            month -= 12;
+            year += 1;
+        }
+        if let Some(date) = NaiveDate::from_ymd_opt(year, month as u32, 1) {
+            self.forecast_month = date;
+        }
+    }
+
+    /// The month grid above the Forecast list. Monday-first, with an accent
+    /// bar under every date that has a task; the list below stays unchanged.
+    fn render_forecast_calendar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let today = local_date(now());
+        let first = self.forecast_month;
+        let marked = self.forecast_marked_dates();
+
+        let (grid_start, _, weeks) = month_grid(first);
+
+        let mut weekdays = div().flex().w_full().gap_1();
+        for label in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] {
+            weekdays = weekdays.child(
+                div()
+                    .flex_1()
+                    .h(px(16.))
+                    .text_center()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(label),
+            );
+        }
+
+        let mut grid = div().flex().flex_col().gap_1().pt_1();
+        for week in 0..weeks {
+            let mut row = div().flex().w_full().gap_1();
+            for weekday in 0..7 {
+                let date = grid_start + Duration::days((week * 7 + weekday) as i64);
+                let in_month = date.month() == first.month() && date.year() == first.year();
+                let is_today = date == today;
+                let has_tasks = marked.contains(&date);
+                let number_color = if is_today {
+                    theme.bg
+                } else if has_tasks {
+                    theme.text
+                } else {
+                    theme.text_dim
+                };
+                row = row.child(
+                    div()
+                        .flex_1()
+                        .h(px(38.))
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .gap_1()
+                        .rounded_md()
+                        .when(!in_month, |this| this.opacity(0.35))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .size(px(24.))
+                                .rounded_full()
+                                .when(is_today, |this| this.bg(theme.accent))
+                                .text_xs()
+                                .text_color(number_color)
+                                .font_weight(if is_today {
+                                    gpui::FontWeight::SEMIBOLD
+                                } else {
+                                    gpui::FontWeight::NORMAL
+                                })
+                                .child(date.day().to_string()),
+                        )
+                        .child(
+                            div()
+                                .h(px(3.))
+                                .w(px(16.))
+                                .rounded_full()
+                                .when(has_tasks, |this| this.bg(theme.accent)),
+                        ),
+                );
+            }
+            grid = grid.child(row);
+        }
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .px_4()
+            .pt_2()
+            .pb_3()
+            .border_b_1()
+            .border_color(theme.border_soft)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .pb_1()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child(first.format("%B %Y").to_string()),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .id("forecast-prev")
+                                    .tooltip(widgets::tip(theme, "Previous month"))
+                                    .child(widgets::button(theme, "‹", false))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.forecast_shift_month(-1);
+                                        cx.notify();
+                                    })),
+                            )
+                            .child(
+                                div()
+                                    .id("forecast-today")
+                                    .tooltip(widgets::tip(theme, "Jump to this month"))
+                                    .child(widgets::button(theme, "Today", false))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        let today = local_date(now());
+                                        if let Some(first) =
+                                            NaiveDate::from_ymd_opt(today.year(), today.month(), 1)
+                                        {
+                                            this.forecast_month = first;
+                                            cx.notify();
+                                        }
+                                    })),
+                            )
+                            .child(
+                                div()
+                                    .id("forecast-next")
+                                    .tooltip(widgets::tip(theme, "Next month"))
+                                    .child(widgets::button(theme, "›", false))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.forecast_shift_month(1);
+                                        cx.notify();
+                                    })),
+                            ),
+                    ),
+            )
+            .child(weekdays)
+            .child(grid)
     }
 
     fn render_content_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -961,6 +1156,24 @@ impl FlowlistApp {
     }
 }
 
+/// The Monday-first grid for a month: the first visible date, how many days
+/// the month has, and how many week rows the grid needs.
+fn month_grid(month: NaiveDate) -> (NaiveDate, i64, usize) {
+    let first = NaiveDate::from_ymd_opt(month.year(), month.month(), 1).unwrap_or(month);
+    let offset = i64::from(first.weekday().num_days_from_monday());
+    let days_in_month = if first.month() == 12 {
+        NaiveDate::from_ymd_opt(first.year() + 1, 1, 1)
+    } else {
+        NaiveDate::from_ymd_opt(first.year(), first.month() + 1, 1)
+    }
+    .and_then(|next| next.pred_opt())
+    .map(|last| i64::from(last.day()))
+    .unwrap_or(31);
+    let grid_start = first - Duration::days(offset);
+    let weeks = ((offset + days_in_month + 6) / 7) as usize;
+    (grid_start, days_in_month, weeks)
+}
+
 fn due_color(stamp: Stamp, theme: &super::theme::Theme) -> gpui::Hsla {
     let today = local_date(now());
     let date = stamp.local_date();
@@ -981,4 +1194,53 @@ fn repeat_label(db: &flowlist_core::db::Db, id: &TaskId) -> Option<String> {
     let task = db.tasks.get(id)?;
     let rule: &RepeatRule = task.repeat.as_ref()?;
     Some(rule.description())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn month_grid_starts_on_monday_and_covers_the_month() {
+        // February 2026 begins on a Sunday, so the grid opens on 26 January.
+        let (start, days, weeks) = month_grid(NaiveDate::from_ymd_opt(2026, 2, 1).unwrap());
+        assert_eq!(start, NaiveDate::from_ymd_opt(2026, 1, 26).unwrap());
+        assert_eq!(days, 28);
+        assert_eq!(weeks, 5);
+
+        // January 2026 begins on a Thursday.
+        let (start, days, weeks) = month_grid(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
+        assert_eq!(start, NaiveDate::from_ymd_opt(2025, 12, 29).unwrap());
+        assert_eq!(days, 31);
+        assert_eq!(weeks, 5);
+
+        // August 2026 begins on a Saturday and needs six rows.
+        let (start, days, weeks) = month_grid(NaiveDate::from_ymd_opt(2026, 8, 15).unwrap());
+        assert_eq!(start, NaiveDate::from_ymd_opt(2026, 7, 27).unwrap());
+        assert_eq!(days, 31);
+        assert_eq!(weeks, 6);
+
+        // December rolls the year over for the last day and the next grid.
+        let (start, days, weeks) = month_grid(NaiveDate::from_ymd_opt(2026, 12, 1).unwrap());
+        assert_eq!(start, NaiveDate::from_ymd_opt(2026, 11, 30).unwrap());
+        assert_eq!(days, 31);
+        assert_eq!(weeks, 5);
+    }
+
+    #[test]
+    fn month_grid_never_loses_a_day() {
+        for year in 2024..=2028 {
+            for month in 1..=12 {
+                let (start, days, weeks) =
+                    month_grid(NaiveDate::from_ymd_opt(year, month, 1).expect("valid month"));
+                assert_eq!(start.weekday().num_days_from_monday(), 0);
+                assert!(weeks >= 4 && weeks <= 6);
+                let last = start + Duration::days((weeks * 7 - 1) as i64);
+                let first = NaiveDate::from_ymd_opt(year, month, 1).expect("valid month");
+                assert!(last >= first + Duration::days(days - 1));
+                assert!(start <= first);
+                assert!((first - start).num_days() < 7);
+            }
+        }
+    }
 }

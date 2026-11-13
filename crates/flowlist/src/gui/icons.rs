@@ -35,6 +35,7 @@ pub enum Icon {
     Settings,
     Palette,
     PanelRight,
+    Info,
     Plus,
     ArrowUp,
     ArrowDown,
@@ -48,7 +49,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    pub const ALL: [Icon; 34] = [
+    pub const ALL: [Icon; 35] = [
         Icon::Inbox,
         Icon::Projects,
         Icon::Forecast,
@@ -73,6 +74,7 @@ impl Icon {
         Icon::Settings,
         Icon::Palette,
         Icon::PanelRight,
+        Icon::Info,
         Icon::Plus,
         Icon::ArrowUp,
         Icon::ArrowDown,
@@ -111,6 +113,7 @@ impl Icon {
             Icon::Settings => "icons/settings.svg",
             Icon::Palette => "icons/palette.svg",
             Icon::PanelRight => "icons/panel-right.svg",
+            Icon::Info => "icons/info.svg",
             Icon::Plus => "icons/plus.svg",
             Icon::ArrowUp => "icons/arrow-up.svg",
             Icon::ArrowDown => "icons/arrow-down.svg",
@@ -190,6 +193,9 @@ impl Icon {
             Icon::PanelRight => {
                 r#"<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>"#
             }
+            Icon::Info => {
+                r#"<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>"#
+            }
             Icon::Plus => r#"<path d="M5 12h14"/><path d="M12 5v14"/>"#,
             Icon::ArrowUp => r#"<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>"#,
             Icon::ArrowDown => r#"<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>"#,
@@ -247,4 +253,32 @@ pub fn icon(icon: Icon, size: f32, color: Hsla) -> impl IntoElement {
         .size(px(size))
         .text_color(color)
         .flex_shrink_0()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn icon_set_is_complete_and_unique() {
+        assert_eq!(Icon::ALL.len(), 35);
+        let mut paths: Vec<&str> = Icon::ALL.iter().map(|icon| icon.path()).collect();
+        paths.sort_unstable();
+        paths.dedup();
+        assert_eq!(
+            paths.len(),
+            Icon::ALL.len(),
+            "every icon needs its own path"
+        );
+        assert!(
+            Icon::ALL.iter().all(|icon| !icon.body().is_empty()),
+            "every icon needs a drawing"
+        );
+    }
+
+    #[test]
+    fn info_icon_is_available_for_the_inspector() {
+        assert_eq!(Icon::Info.path(), "icons/info.svg");
+        assert!(Icon::Info.body().contains("<circle"));
+    }
 }

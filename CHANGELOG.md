@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Interface
+
+- Removed the macOS close/miniaturize/zoom buttons from the app window.
+- Reduced the title bar to the app name. The app badge and the
+  `Flowlist / view` suffix are gone.
+- Replaced the inspector toggle's sidebar glyph with an info (`i`) icon, in
+  both the header and the inspector panel.
+- Added a Monday-first month calendar to the top of Forecast, with previous /
+  Today / next controls and an accent bar under every date that has a task. The
+  existing forecast buckets below it are unchanged.
+- Header and status chrome now use a flat glass tint; only the sidebar and
+  inspector keep the vertical tint wash. This removes the unintended
+  left-to-right gradient ramp under the title bar.
+- Added `docs/backlog.md` and `AGENTS.md` so outstanding work, including the
+  Things 3 "Pending" list, survives a context reset.
+
 ## 0.1.0 — 2026-11-13
 
 First complete release of Flowlist: one Rust library and three front ends.
