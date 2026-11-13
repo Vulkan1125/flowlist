@@ -8,6 +8,7 @@ mod content;
 mod drag;
 mod inspector;
 mod modals;
+mod perspective;
 mod session;
 mod sidebar;
 mod text;
@@ -31,9 +32,7 @@ use flowlist_core::command::{
 };
 use flowlist_core::db::{ContainerPosition, Db, OrderKey, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
-use flowlist_core::model::{
-    BuiltinPerspective, Condition, FilterNode, GroupBy, Perspective, SortBy, TagStatus,
-};
+use flowlist_core::model::{BuiltinPerspective, GroupBy, SortBy, TagStatus};
 use flowlist_core::parse::{parse_duration, parse_quick, parse_repeat, parse_stamp};
 use flowlist_core::paths::DataPaths;
 use flowlist_core::query::{self, Group, TaskRow};
@@ -71,18 +70,6 @@ pub enum EditField {
 }
 
 impl EditField {
-    fn label(self) -> &'static str {
-        match self {
-            EditField::Title => "Title",
-            EditField::Notes => "Notes",
-            EditField::Project => "Project",
-            EditField::Defer => "Defer",
-            EditField::Due => "Due",
-            EditField::Estimate => "Estimate",
-            EditField::Repeat => "Repeat",
-        }
-    }
-
     fn next(self) -> Self {
         match self {
             EditField::Title => EditField::Notes,
@@ -255,11 +242,9 @@ impl FlowlistApp {
         let db = self.store.db();
         let at = now();
         let mut groups = match &self.view {
-            View::Builtin(BuiltinPerspective::Projects) => {
-                query::view(db, BuiltinPerspective::Projects, at)
-            }
+            // Review has its own dashboard; Nearby its own ranked list. The
+            // rest still need ids here so j/k, x and undo work on them.
             View::Builtin(BuiltinPerspective::Review) => Vec::new(),
-            View::Builtin(BuiltinPerspective::Nearby) => Vec::new(),
             View::Builtin(perspective) => query::view(db, *perspective, at),
             View::Project(id) => self.project_groups(id),
             View::Folder(id) => db
@@ -379,13 +364,19 @@ impl FlowlistApp {
     }
 
     fn open_view(&mut self, view: View, cx: &mut Context<Self>) {
+        self.set_view(view);
+        cx.notify();
+    }
+
+    /// Switch views without notifying. Callers that already repaint use this
+    /// from inside a command; `open_view` is the interactive entry point.
+    fn set_view(&mut self, view: View) {
         self.view = view;
         self.selected.clear();
         self.anchor = None;
         self.search.clear();
         self.focus = FocusArea::Content;
         self.save_session();
-        cx.notify();
     }
 
     fn view_title(&self) -> String {
@@ -1152,11 +1143,6 @@ impl FlowlistApp {
         }
     }
 
-    fn drag_payload(&self, id: &TaskId) -> Option<DragTask> {
-        let task = self.store.db().tasks.get(id)?;
-        Some(DragTask::task(id.clone(), task.title.clone()))
-    }
-
     // ------------------------------------------------------------ clipboard
 
     fn copy_selection(&mut self, cx: &mut Context<Self>) {
@@ -1329,24 +1315,22 @@ impl FlowlistApp {
                     position: Position::End,
                 });
             }
-            modals::Modal::NewPerspective {
-                name,
-                group,
-                sort,
-                flagged_only,
-            } => {
-                let name = name.text().trim().to_string();
-                if name.is_empty() {
+            modals::Modal::Perspective { form } => {
+                if form.name.text().trim().is_empty() {
                     return Err("A perspective needs a name".to_string());
                 }
-                let mut perspective = Perspective::new(name);
-                perspective.group_by = *group;
-                perspective.sort = *sort;
-                if *flagged_only {
-                    perspective.filter =
-                        FilterNode::all_conditions(vec![Condition::Flagged { value: true }]);
+                let perspective = form.to_perspective();
+                let id = perspective.id.clone();
+                if let Some(outcome) = self.execute(Command::SavePerspective { perspective }) {
+                    let saved = outcome
+                        .affected
+                        .first()
+                        .map(flowlist_core::ids::PerspectiveId::from_string)
+                        .unwrap_or(id);
+                    if self.store.db().perspectives.contains_key(&saved) {
+                        self.set_view(View::Custom(saved));
+                    }
                 }
-                self.execute(Command::SavePerspective { perspective });
             }
             modals::Modal::Import { text, merge } => {
                 let data = text.text().to_string();
@@ -1422,6 +1406,12 @@ impl FlowlistApp {
                     .trim()
                     .parse::<f64>()
                     .map_err(|_| "Longitude must be a number".to_string())?;
+                if !(-90.0..=90.0).contains(&lat) {
+                    return Err("Latitude must be between -90 and 90".to_string());
+                }
+                if !(-180.0..=180.0).contains(&lon) {
+                    return Err("Longitude must be between -180 and 180".to_string());
+                }
                 self.execute(Command::UpdateTag {
                     id: tag.clone(),
                     patch: TagPatch {
@@ -1892,6 +1882,7 @@ impl FlowlistApp {
                 _ => self.begin_edit(EditField::Title, cx),
             },
             A::Edit => self.begin_edit(EditField::Title, cx),
+            A::Location => self.edit_location(cx),
             A::NewBelow => self.create_adjacent_task(false, cx),
             A::NewAbove => self.create_adjacent_task(true, cx),
             A::Complete => match self.focus {
@@ -1980,6 +1971,33 @@ impl FlowlistApp {
         }
         self.move_selection(if forward { 1 } else { -1 }, false);
         cx.notify();
+    }
+
+    /// `⇧L` edits coordinates: a tag's spot in the sidebar or current view,
+    /// otherwise the library location used by Nearby.
+    fn edit_location(&mut self, cx: &mut Context<Self>) {
+        if self.focus == FocusArea::Sidebar {
+            match self.sidebar_cursor.clone() {
+                Some(sidebar::SidebarTarget::Tag(id)) => {
+                    let modal = modals::Modal::tag_location(self, id);
+                    self.open_modal(modal, cx);
+                    return;
+                }
+                Some(_) => {
+                    self.toast = Some("Locations belong to tags".to_string());
+                    cx.notify();
+                    return;
+                }
+                None => {}
+            }
+        }
+        if let View::Tag(id) = self.view.clone() {
+            let modal = modals::Modal::tag_location(self, id);
+            self.open_modal(modal, cx);
+            return;
+        }
+        let modal = modals::Modal::location(self);
+        self.open_modal(modal, cx);
     }
 
     fn open_selected(&mut self, cx: &mut Context<Self>) {
@@ -2199,7 +2217,14 @@ impl FlowlistApp {
             sidebar::SidebarTarget::Project(id) => modals::EntityRef::Project(id),
             sidebar::SidebarTarget::Folder(id) => modals::EntityRef::Folder(id),
             sidebar::SidebarTarget::Tag(id) => modals::EntityRef::Tag(id),
-            sidebar::SidebarTarget::Custom(id) => modals::EntityRef::Perspective(id),
+            // A saved perspective's pencil opens the full editor, which also
+            // carries its name. ⌘R still gives the plain rename sheet.
+            sidebar::SidebarTarget::Custom(id) => {
+                if let Some(modal) = modals::Modal::perspective(self, &id) {
+                    self.open_modal(modal, cx);
+                }
+                return;
+            }
             sidebar::SidebarTarget::Builtin(_) => {
                 self.toast = Some("Built-in perspectives cannot be renamed".to_string());
                 cx.notify();

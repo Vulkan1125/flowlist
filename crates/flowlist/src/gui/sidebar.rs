@@ -57,6 +57,70 @@ impl FlowlistApp {
             }))
     }
 
+    /// The pencil on a saved perspective opens the full editor rather than a
+    /// bare rename sheet.
+    fn edit_perspective_button(
+        &self,
+        key: String,
+        id: flowlist_core::ids::PerspectiveId,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        div()
+            .id(super::sid(key))
+            .px_1()
+            .rounded_sm()
+            .opacity(0.0)
+            .text_color(theme.text_faint)
+            .cursor_pointer()
+            .hover(|style| style.opacity(1.0).text_color(theme.text).bg(theme.hover))
+            .tooltip(widgets::tip(theme, "Edit perspective"))
+            .child("✎")
+            .on_click(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                if let Some(modal) = modals::Modal::perspective(this, &id) {
+                    this.open_modal(modal, cx);
+                }
+            }))
+    }
+
+    /// Tags can carry coordinates for the Nearby perspective.
+    fn tag_location_button(
+        &self,
+        key: String,
+        tag: flowlist_core::ids::TagId,
+        located: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        div()
+            .id(super::sid(key))
+            .px_1()
+            .rounded_sm()
+            .opacity(0.0)
+            .text_color(if located {
+                theme.success
+            } else {
+                theme.text_faint
+            })
+            .cursor_pointer()
+            .hover(|style| style.opacity(1.0).text_color(theme.text).bg(theme.hover))
+            .tooltip(widgets::tip(
+                theme,
+                if located {
+                    "Change location"
+                } else {
+                    "Set location"
+                },
+            ))
+            .child("⌖")
+            .on_click(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                let modal = modals::Modal::tag_location(this, tag.clone());
+                this.open_modal(modal, cx);
+            }))
+    }
+
     fn delete_entity_button(
         &self,
         key: String,
@@ -459,9 +523,9 @@ impl FlowlistApp {
             .hover(|style| style.bg(theme.hover))
             .child(div().w(px(16.)).text_center().child("◆"))
             .child(div().flex_1().min_w_0().child(row.name))
-            .child(self.rename_button(
-                format!("rename-perspective:{rename_id}"),
-                modals::EntityRef::Perspective(rename_id),
+            .child(self.edit_perspective_button(
+                format!("edit-perspective:{rename_id}"),
+                rename_id,
                 cx,
             ))
             .child(self.delete_entity_button(
@@ -714,6 +778,12 @@ impl FlowlistApp {
                         )
                     },
                 )
+                .child(self.tag_location_button(
+                    format!("location-tag:{tag}"),
+                    tag.clone(),
+                    located,
+                    cx,
+                ))
                 .child(self.rename_button(
                     format!("rename-tag:{rename_id}"),
                     modals::EntityRef::Tag(rename_id),

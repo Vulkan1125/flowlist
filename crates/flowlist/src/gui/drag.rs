@@ -21,14 +21,6 @@ impl DragTask {
             tag: false,
         }
     }
-
-    pub fn tag(id: TaskId, label: impl Into<String>) -> Self {
-        Self {
-            id,
-            label: label.into(),
-            tag: true,
-        }
-    }
 }
 
 pub struct DragGhost {

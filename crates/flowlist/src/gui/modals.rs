@@ -3,9 +3,9 @@
 
 use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px, rgba};
 
-use flowlist_core::model::GroupBy;
-use flowlist_core::model::SortBy;
+use flowlist_core::ids::{PerspectiveId, ProjectId, TagId};
 
+use super::perspective::PerspectiveForm;
 use super::text::TextBuffer;
 use super::{FlowlistApp, widgets};
 
@@ -34,11 +34,8 @@ pub enum Modal {
     NewTag {
         name: TextBuffer,
     },
-    NewPerspective {
-        name: TextBuffer,
-        group: GroupBy,
-        sort: SortBy,
-        flagged_only: bool,
+    Perspective {
+        form: PerspectiveForm,
     },
     Import {
         text: TextBuffer,
@@ -101,12 +98,18 @@ impl Modal {
     }
 
     pub fn new_perspective(_app: &FlowlistApp) -> Self {
-        Modal::NewPerspective {
-            name: TextBuffer::empty(),
-            group: GroupBy::Project,
-            sort: SortBy::Due,
-            flagged_only: false,
+        Modal::Perspective {
+            form: PerspectiveForm::new(),
         }
+    }
+
+    /// Open the editor on an existing perspective. The form keeps the id so
+    /// saving updates the saved query instead of creating a second one.
+    pub fn perspective(app: &FlowlistApp, id: &PerspectiveId) -> Option<Self> {
+        let perspective = app.store.db().perspectives.get(id)?;
+        Some(Modal::Perspective {
+            form: PerspectiveForm::edit(perspective),
+        })
     }
 
     pub fn settings(app: &FlowlistApp) -> Self {
@@ -142,7 +145,7 @@ impl Modal {
             Modal::NewProject { .. } => "New project",
             Modal::NewFolder { .. } => "New folder",
             Modal::NewTag { .. } => "New tag",
-            Modal::NewPerspective { .. } => "New perspective",
+            Modal::Perspective { .. } => "Perspective",
             Modal::Import { .. } => "Import library",
             Modal::Settings { .. } => "Settings",
             Modal::Location { .. } => "Set location",
@@ -159,7 +162,9 @@ impl Modal {
             }
             Modal::NewFolder { .. } => "Folders group projects. They can be nested.",
             Modal::NewTag { .. } => "Tags are contexts: places, tools or people.",
-            Modal::NewPerspective { .. } => "Saved filters with their own grouping and sort order.",
+            Modal::Perspective { .. } => {
+                "Saved filters with their own conditions, grouping and sort order."
+            }
             Modal::Import { .. } => {
                 "Paste Flowlist JSON or TaskPaper text. Merge keeps existing items."
             }
@@ -176,7 +181,8 @@ impl Modal {
         match self {
             Modal::Rename { .. } => 1,
             Modal::NewProject { .. } => 2,
-            Modal::NewFolder { .. } | Modal::NewTag { .. } | Modal::NewPerspective { .. } => 1,
+            Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
+            Modal::Perspective { .. } => 1,
             Modal::Import { .. } => 1,
             Modal::Settings { .. } => 3,
             Modal::Location { .. } | Modal::TagLocation { .. } => 2,
@@ -193,7 +199,7 @@ impl Modal {
                 _ => None,
             },
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
-            Modal::NewPerspective { name, .. } => (index == 0).then_some(name),
+            Modal::Perspective { form } => (index == 0).then_some(&form.name),
             Modal::Import { text, .. } => (index == 0).then_some(text),
             Modal::Settings {
                 review_days,
@@ -224,7 +230,7 @@ impl Modal {
                 _ => None,
             },
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
-            Modal::NewPerspective { name, .. } => (index == 0).then_some(name),
+            Modal::Perspective { form } => (index == 0).then_some(&mut form.name),
             Modal::Import { text, .. } => (index == 0).then_some(text),
             Modal::Settings {
                 review_days,
@@ -255,7 +261,7 @@ impl Modal {
                 _ => "",
             },
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
-            Modal::NewPerspective { .. } => "Name",
+            Modal::Perspective { .. } => "Name",
             Modal::Import { .. } => "Library text",
             Modal::Settings { .. } => match index {
                 0 => "Default review days",
@@ -284,60 +290,9 @@ impl Modal {
     fn width(&self) -> f32 {
         match self {
             Modal::Import { .. } | Modal::Help => 620.0,
+            Modal::Perspective { .. } => 680.0,
             _ => 460.0,
         }
-    }
-}
-
-fn next_group(group: GroupBy) -> GroupBy {
-    match group {
-        GroupBy::None => GroupBy::Project,
-        GroupBy::Project => GroupBy::Tag,
-        GroupBy::Tag => GroupBy::Folder,
-        GroupBy::Folder => GroupBy::DueDate,
-        GroupBy::DueDate => GroupBy::DeferDate,
-        GroupBy::DeferDate => GroupBy::Flagged,
-        GroupBy::Flagged => GroupBy::Estimate,
-        GroupBy::Estimate => GroupBy::None,
-    }
-}
-
-fn group_label(group: GroupBy) -> &'static str {
-    match group {
-        GroupBy::None => "None",
-        GroupBy::Project => "Project",
-        GroupBy::Tag => "Tag",
-        GroupBy::Folder => "Folder",
-        GroupBy::DueDate => "Due",
-        GroupBy::DeferDate => "Defer",
-        GroupBy::Flagged => "Flagged",
-        GroupBy::Estimate => "Estimate",
-    }
-}
-
-fn next_sort(sort: SortBy) -> SortBy {
-    match sort {
-        SortBy::Manual => SortBy::Due,
-        SortBy::Due => SortBy::Defer,
-        SortBy::Defer => SortBy::Name,
-        SortBy::Name => SortBy::Flagged,
-        SortBy::Flagged => SortBy::Estimate,
-        SortBy::Estimate => SortBy::Created,
-        SortBy::Created => SortBy::Manual,
-        SortBy::CompletedAt => SortBy::Manual,
-    }
-}
-
-fn sort_label(sort: SortBy) -> &'static str {
-    match sort {
-        SortBy::Manual => "Manual",
-        SortBy::Due => "Due",
-        SortBy::Defer => "Defer",
-        SortBy::Name => "Name",
-        SortBy::Flagged => "Flagged",
-        SortBy::Estimate => "Estimate",
-        SortBy::Created => "Created",
-        SortBy::CompletedAt => "Completed",
     }
 }
 
@@ -356,9 +311,10 @@ impl FlowlistApp {
         let width = modal.width();
         let field_count = modal.field_count();
         let is_help = matches!(modal, Modal::Help);
-        let is_perspective = matches!(modal, Modal::NewPerspective { .. });
+        let is_perspective = matches!(modal, Modal::Perspective { .. });
         let is_import = matches!(modal, Modal::Import { .. });
         let is_settings = matches!(modal, Modal::Settings { .. });
+        let is_tag_location = matches!(modal, Modal::TagLocation { .. });
         let mut card = div()
             .flex()
             .flex_col()
@@ -424,6 +380,9 @@ impl FlowlistApp {
             }
             if is_settings {
                 card = card.child(self.render_settings_controls(cx));
+            }
+            if is_tag_location {
+                card = card.child(self.render_tag_location_controls(cx));
             }
             card = card.child(
                 div()
@@ -518,71 +477,256 @@ impl FlowlistApp {
 
     fn render_perspective_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
-        let Some(Modal::NewPerspective {
-            group,
-            sort,
-            flagged_only,
-            ..
-        }) = &self.modal
-        else {
+        let Some(Modal::Perspective { form }) = &self.modal else {
             return div();
         };
-        let group = *group;
-        let sort = *sort;
-        let flagged = *flagged_only;
+        let form = form.clone();
+        let (projects, tags) = {
+            let db = self.store.db();
+            let mut projects: Vec<(ProjectId, String)> = db
+                .projects
+                .values()
+                .map(|project| (project.id.clone(), project.name.clone()))
+                .collect();
+            projects.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+            let mut tags: Vec<(TagId, String)> = db
+                .tags
+                .values()
+                .map(|tag| (tag.id.clone(), tag.name.clone()))
+                .collect();
+            tags.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+            (projects, tags)
+        };
+        let project_label = form
+            .project
+            .as_ref()
+            .and_then(|id| projects.iter().find(|(candidate, _)| candidate == id))
+            .map(|(_, name)| name.as_str())
+            .unwrap_or("Any");
+        let tag_label = form
+            .tag
+            .as_ref()
+            .and_then(|id| tags.iter().find(|(candidate, _)| candidate == id))
+            .map(|(_, name)| name.as_str())
+            .unwrap_or("Any");
+
+        let toggle = |label: String, active: bool, id: &'static str| {
+            div().id(id).child(widgets::button(theme, label, active))
+        };
+
         div()
             .flex()
+            .flex_wrap()
             .items_center()
             .gap_2()
             .child(
-                div()
-                    .id("modal-group")
-                    .child(widgets::button(
-                        theme,
-                        format!("Group · {}", group_label(group)),
-                        false,
-                    ))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(Modal::NewPerspective { group, .. }) = &mut this.modal {
-                            *group = next_group(*group);
-                        }
-                        cx.notify();
-                    })),
+                toggle(
+                    if form.inbox_only {
+                        "Inbox only ✓".to_string()
+                    } else {
+                        "Inbox only".to_string()
+                    },
+                    form.inbox_only,
+                    "modal-inbox",
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        form.toggle_inbox();
+                    }
+                    cx.notify();
+                })),
             )
             .child(
-                div()
-                    .id("modal-sort")
-                    .child(widgets::button(
-                        theme,
-                        format!("Sort · {}", sort_label(sort)),
-                        false,
-                    ))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(Modal::NewPerspective { sort, .. }) = &mut this.modal {
-                            *sort = next_sort(*sort);
-                        }
-                        cx.notify();
-                    })),
+                toggle(
+                    if form.flagged_only {
+                        "Flagged only ✓".to_string()
+                    } else {
+                        "Flagged only".to_string()
+                    },
+                    form.flagged_only,
+                    "modal-flagged",
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        form.flagged_only = !form.flagged_only;
+                    }
+                    cx.notify();
+                })),
             )
             .child(
-                div()
-                    .id("modal-flagged")
-                    .child(widgets::button(
-                        theme,
-                        if flagged {
-                            "Flagged only ✓"
+                toggle(
+                    if form.show_completed {
+                        "Completed ✓".to_string()
+                    } else {
+                        "Completed".to_string()
+                    },
+                    form.show_completed,
+                    "modal-completed",
+                )
+                .tooltip(widgets::tip(theme, "Include completed tasks"))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        form.show_completed = !form.show_completed;
+                    }
+                    cx.notify();
+                })),
+            )
+            .child(
+                toggle(
+                    format!("Project · {project_label}"),
+                    form.project.is_some(),
+                    "modal-project",
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    let projects = projects.clone();
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        let next = match &form.project {
+                            None => projects.first().map(|(id, _)| id.clone()),
+                            Some(current) => {
+                                let index = projects
+                                    .iter()
+                                    .position(|(id, _)| id == current)
+                                    .map(|index| index + 1)
+                                    .unwrap_or(0);
+                                projects.get(index).map(|(id, _)| id.clone())
+                            }
+                        };
+                        form.set_project(next);
+                    }
+                    cx.notify();
+                })),
+            )
+            .child(
+                toggle(
+                    format!("Tag · {tag_label}"),
+                    form.tag.is_some(),
+                    "modal-tag",
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    let tags = tags.clone();
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        let next = match &form.tag {
+                            None => tags.first().map(|(id, _)| id.clone()),
+                            Some(current) => {
+                                let index = tags
+                                    .iter()
+                                    .position(|(id, _)| id == current)
+                                    .map(|index| index + 1)
+                                    .unwrap_or(0);
+                                tags.get(index).map(|(id, _)| id.clone())
+                            }
+                        };
+                        form.set_tag(next);
+                    }
+                    cx.notify();
+                })),
+            )
+            .when(form.tag.is_some(), |this| {
+                this.child(
+                    toggle(
+                        if form.tag_children {
+                            "Child tags ✓".to_string()
                         } else {
-                            "Flagged only"
+                            "Child tags".to_string()
                         },
-                        flagged,
-                    ))
+                        form.tag_children,
+                        "modal-tag-children",
+                    )
+                    .tooltip(widgets::tip(theme, "Match tasks tagged with a child tag"))
                     .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(Modal::NewPerspective { flagged_only, .. }) = &mut this.modal {
-                            *flagged_only = !*flagged_only;
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.tag_children = !form.tag_children;
                         }
                         cx.notify();
                     })),
+                )
+            })
+            .child(
+                toggle(
+                    format!("Status · {}", form.status_label()),
+                    form.status != flowlist_core::model::TaskStatus::Any,
+                    "modal-status",
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        form.cycle_status();
+                    }
+                    cx.notify();
+                })),
             )
+            .child(
+                toggle(
+                    format!("Due · {}", form.due.label()),
+                    form.due.window().is_some(),
+                    "modal-due",
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        form.cycle_due();
+                    }
+                    cx.notify();
+                })),
+            )
+            .child(
+                toggle(
+                    format!("Defer · {}", form.defer.label()),
+                    form.defer.window().is_some(),
+                    "modal-defer",
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        form.cycle_defer();
+                    }
+                    cx.notify();
+                })),
+            )
+            .child(
+                toggle(
+                    format!("Group · {}", form.group_label()),
+                    form.group != flowlist_core::model::GroupBy::None,
+                    "modal-group",
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        form.cycle_group();
+                    }
+                    cx.notify();
+                })),
+            )
+            .child(
+                toggle(format!("Sort · {}", form.sort_label()), false, "modal-sort").on_click(
+                    cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.cycle_sort();
+                        }
+                        cx.notify();
+                    }),
+                ),
+            )
+    }
+
+    fn render_tag_location_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let Some(Modal::TagLocation { tag, .. }) = &self.modal else {
+            return div();
+        };
+        let tag = tag.clone();
+        div().flex().items_center().gap_2().child(
+            div()
+                .id("modal-clear-location")
+                .child(widgets::button(theme, "Clear location", false))
+                .tooltip(widgets::tip(theme, "Remove coordinates from this tag"))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.execute(flowlist_core::command::Command::UpdateTag {
+                        id: tag.clone(),
+                        patch: flowlist_core::command::TagPatch {
+                            location: Some(None),
+                            ..Default::default()
+                        },
+                    });
+                    this.close_modal(cx);
+                })),
+        )
     }
 
     fn render_settings_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -700,6 +844,7 @@ fn help_body(theme: super::theme::Theme) -> impl IntoElement {
                 ("dd / yy / p", "delete / yank / paste"),
                 ("u / Ctrl-r", "undo / redo"),
                 ("r / e", "rename / edit title"),
+                ("⇧L", "set a tag or library location"),
                 ("⇧J / ⇧K", "move task down / up among siblings"),
                 ("Ctrl-w h l j", "focus sidebar / content / checklist"),
                 ("?", "this help"),

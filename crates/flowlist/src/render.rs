@@ -59,10 +59,6 @@ pub fn task_value(db: &Db, id: &TaskId) -> Value {
     })
 }
 
-pub fn task_values(db: &Db, ids: &[TaskId]) -> Value {
-    Value::Array(ids.iter().map(|id| task_value(db, id)).collect())
-}
-
 pub fn groups_value(db: &Db, groups: &[Group]) -> Value {
     json!({
         "groups": groups.iter().map(|group| json!({

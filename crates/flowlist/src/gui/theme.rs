@@ -57,7 +57,6 @@ pub struct Theme {
     pub danger: Hsla,
     pub warning: Hsla,
     pub success: Hsla,
-    pub shadow: Hsla,
 }
 
 impl Theme {
@@ -80,7 +79,6 @@ impl Theme {
                 danger: rgb(0xB84A3F).into(),
                 warning: rgb(0xB07A1E).into(),
                 success: rgb(0x3E7D4E).into(),
-                shadow: rgb(0x0000000F).into(),
             },
             Mode::Dark => Self {
                 mode,
@@ -99,7 +97,6 @@ impl Theme {
                 danger: rgb(0xE0857A).into(),
                 warning: rgb(0xE3B563).into(),
                 success: rgb(0x8CC79A).into(),
-                shadow: rgb(0x00000033).into(),
             },
         }
     }

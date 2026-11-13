@@ -36,10 +36,6 @@ impl TextBuffer {
         self.text.is_empty()
     }
 
-    pub fn len(&self) -> usize {
-        self.cursor_chars()
-    }
-
     pub fn cursor_chars(&self) -> usize {
         self.text.chars().count()
     }
@@ -47,10 +43,6 @@ impl TextBuffer {
     /// Caret position in characters.
     pub fn cursor(&self) -> usize {
         self.cursor
-    }
-
-    pub fn is_focused_caret(&self) -> bool {
-        self.cursor == self.anchor
     }
 
     pub fn set(&mut self, text: impl Into<String>) {
@@ -90,18 +82,6 @@ impl TextBuffer {
 
     pub fn has_selection(&self) -> bool {
         self.cursor != self.anchor
-    }
-
-    /// The three render runs: before the selection, the selection, and after.
-    pub fn runs(&self) -> (String, String, String) {
-        let (start, end) = self.selection();
-        let chars: Vec<char> = self.text.chars().collect();
-        let before: String = chars[..start.min(chars.len())].iter().collect();
-        let selected: String = chars[start.min(chars.len())..end.min(chars.len())]
-            .iter()
-            .collect();
-        let after: String = chars[end.min(chars.len())..].iter().collect();
-        (before, selected, after)
     }
 
     pub fn delete_selection(&mut self) -> bool {
@@ -190,12 +170,6 @@ impl TextBuffer {
         self.cursor = self.cursor_chars();
     }
 
-    pub fn select_range(&mut self, start: usize, end: usize) {
-        let len = self.cursor_chars();
-        self.anchor = start.min(len);
-        self.cursor = end.min(len);
-    }
-
     pub fn move_word_left(&mut self, extend: bool) {
         let chars: Vec<char> = self.text.chars().collect();
         let mut index = self.cursor;
@@ -234,9 +208,5 @@ impl TextBuffer {
     /// Multi-line helper: insert a newline at the caret.
     pub fn newline(&mut self) {
         self.insert('\n');
-    }
-
-    pub fn line_count(&self) -> usize {
-        self.text.lines().count().max(1)
     }
 }

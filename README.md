@@ -132,6 +132,7 @@ sidebar and the checklist pane. It can be turned off in **Settings**
 | `dd` / `yy` / `p` | delete / yank / paste |
 | `u` / `Ctrl-r` | undo / redo |
 | `r` / `e` | rename / edit the selected title |
+| `⇧L` | set a tag or library location |
 | `⇧J` / `⇧K` | move a task down / up among its siblings |
 | `Ctrl-w h` | focus the sidebar |
 | `Ctrl-w l` | focus the task list |

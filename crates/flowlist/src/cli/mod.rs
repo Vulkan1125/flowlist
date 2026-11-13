@@ -1691,8 +1691,14 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
             let outcome = store.execute(CoreCommand::SavePerspective {
                 perspective: perspective.clone(),
             })?;
-            let created = outcome.created.first().cloned().unwrap_or_default();
-            let id = store.db().resolve_perspective(&created)?;
+            // Saving reports the id under `affected`; `created` is only used by
+            // constructors whose id the caller does not know yet.
+            let saved = outcome
+                .affected
+                .first()
+                .cloned()
+                .unwrap_or_else(|| perspective.id.to_string());
+            let id = store.db().resolve_perspective(&saved)?;
             if cli.json {
                 println!(
                     "{}",

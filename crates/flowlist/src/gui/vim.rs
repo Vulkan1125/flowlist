@@ -28,6 +28,7 @@ pub enum VimAction {
     Redo,
     Rename,
     Edit,
+    Location,
     Search,
     NextMatch,
     PrevMatch,
@@ -174,6 +175,10 @@ impl VimState {
             "h" => {
                 self.count = None;
                 VimInput::Action(VimAction::Outdent)
+            }
+            "l" if mods.shift => {
+                self.count = None;
+                VimInput::Action(VimAction::Location)
             }
             "l" => {
                 self.count = None;
@@ -332,6 +337,15 @@ mod tests {
             state.feed("h", plain()),
             VimInput::Action(VimAction::FocusSidebar)
         );
+    }
+
+    #[test]
+    fn shift_l_edits_locations() {
+        let mut state = VimState::default();
+        let mut mods = plain();
+        mods.shift = true;
+        assert_eq!(state.feed("l", mods), VimInput::Action(VimAction::Location));
+        assert_eq!(keys(&["l"]), VimInput::Action(VimAction::Indent));
     }
 
     #[test]

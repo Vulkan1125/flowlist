@@ -313,21 +313,3 @@ pub fn tip(
         cx.new(|_| TipView { label, theme }).into()
     }
 }
-
-pub fn key_hint(theme: Theme, key: &'static str, label: &'static str) -> impl IntoElement {
-    div()
-        .flex()
-        .items_center()
-        .gap_1()
-        .child(
-            div()
-                .px_1()
-                .rounded_sm()
-                .border_1()
-                .border_color(theme.border)
-                .text_xs()
-                .text_color(theme.text_dim)
-                .child(key),
-        )
-        .child(div().text_xs().text_color(theme.text_faint).child(label))
-}

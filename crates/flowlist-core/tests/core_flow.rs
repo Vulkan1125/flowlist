@@ -3,6 +3,7 @@
 use chrono::Utc;
 use flowlist_core::command::{Command, ImportMode, NewProject, NewTask, TaskPatch, TaskPlacement};
 use flowlist_core::db::Position;
+use flowlist_core::ids::TagId;
 use flowlist_core::model::{RepeatMode, RepeatRule, TagStatus, Task};
 use flowlist_core::paths::DataPaths;
 use flowlist_core::store::Store;
@@ -442,4 +443,110 @@ fn repeating_task_copies_checklist_unchecked() {
     let next = &store.db().tasks[&spawned];
     assert_eq!(next.checklist.len(), 1);
     assert!(!next.checklist[0].completed);
+}
+
+#[test]
+fn nearby_ranks_tagged_tasks_by_distance() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let here = flowlist_core::model::Geo {
+        lat: 12.9716,
+        lon: 77.5946,
+    };
+    let create_tag =
+        |store: &mut Store, name: &str, location: Option<flowlist_core::model::Geo>| {
+            let id = store
+                .execute(Command::CreateTag {
+                    name: name.into(),
+                    parent: None,
+                    status: TagStatus::Available,
+                    location,
+                    position: Position::End,
+                })
+                .unwrap()
+                .created[0]
+                .clone();
+            store.db().resolve_tag(&id).unwrap()
+        };
+    let tag_task = |store: &mut Store, title: &str, tag: TagId| {
+        let task = add(store, title);
+        let task_id = store.db().resolve_task(&task).unwrap();
+        store
+            .execute(Command::SetTaskTags {
+                ids: vec![task_id.clone()],
+                add: vec![tag.clone()],
+                remove: Vec::new(),
+            })
+            .unwrap();
+        task_id
+    };
+
+    let cafe = create_tag(&mut store, "Cafe", Some(here));
+    let far = create_tag(
+        &mut store,
+        "Far",
+        Some(flowlist_core::model::Geo {
+            lat: 13.5,
+            lon: 78.5,
+        }),
+    );
+    let coffee = tag_task(&mut store, "Coffee", cafe.clone());
+    let _away = tag_task(&mut store, "Far away", far);
+
+    // Nothing is nearby until the library has a current location.
+    assert!(flowlist_core::query::nearby(store.db(), Utc::now()).is_empty());
+
+    store
+        .execute(Command::UpdateSettings(
+            flowlist_core::command::SettingsPatch {
+                current_location: Some(Some(here)),
+                nearby_radius_km: Some(5.0),
+                ..Default::default()
+            },
+        ))
+        .unwrap();
+    let hits = flowlist_core::query::nearby(store.db(), Utc::now());
+    assert_eq!(hits.len(), 1, "the far tag is outside the radius");
+    assert_eq!(hits[0].task, coffee);
+    assert_eq!(hits[0].via_tag, cafe);
+    assert!(hits[0].distance_km < 0.01);
+}
+
+#[test]
+fn tag_location_edit_is_undoable() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let tag = store
+        .execute(Command::CreateTag {
+            name: "Errands".into(),
+            parent: None,
+            status: TagStatus::Available,
+            location: None,
+            position: Position::End,
+        })
+        .unwrap()
+        .created[0]
+        .clone();
+    let tag_id = store.db().resolve_tag(&tag).unwrap();
+    let geo = flowlist_core::model::Geo {
+        lat: 12.9716,
+        lon: 77.5946,
+    };
+    store
+        .execute(Command::UpdateTag {
+            id: tag_id.clone(),
+            patch: flowlist_core::command::TagPatch {
+                location: Some(Some(geo)),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert_eq!(store.db().tags[&tag_id].location, Some(geo));
+
+    store.undo().unwrap();
+    assert_eq!(store.db().tags[&tag_id].location, None);
+    store.redo().unwrap();
+    assert_eq!(store.db().tags[&tag_id].location, Some(geo));
 }

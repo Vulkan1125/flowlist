@@ -96,10 +96,6 @@ impl View {
         }
     }
 
-    pub fn is_inbox(&self) -> bool {
-        matches!(self, View::Builtin(BuiltinPerspective::Inbox))
-    }
-
     pub fn shows_capture(&self) -> bool {
         match self {
             View::Builtin(BuiltinPerspective::Inbox) => true,
