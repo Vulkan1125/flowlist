@@ -4,6 +4,7 @@ use gpui::{App, Context, IntoElement, Pixels, Point, Render, Window, div, prelud
 
 use flowlist_core::ids::TaskId;
 
+use super::icons::{self, Icon};
 use super::theme::Theme;
 
 #[derive(Clone, Debug)]
@@ -63,7 +64,11 @@ impl Render for DragGhost {
                     .text_color(self.theme.text)
                     .text_sm()
                     .shadow_md()
-                    .child(if self.tag { "#" } else { "≡" })
+                    .child(icons::icon(
+                        if self.tag { Icon::Tag } else { Icon::Project },
+                        13.0,
+                        self.theme.text_dim,
+                    ))
                     .child(
                         div()
                             .min_w_0()

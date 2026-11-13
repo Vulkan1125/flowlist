@@ -74,7 +74,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 
 ## GUI
 
-- [x] Native titlebar, persistent sidebar and optional inspector
+- [x] Full-height glass window with a blended header, persistent sidebar
+      and optional inspector
 - [x] Sidebar perspectives, custom perspectives and project/folder/tag trees
 - [x] Content list with grouped rows, progress indicators and inline status
 - [x] Task capture with quick-entry syntax
@@ -99,7 +100,16 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Settings and tag location modals
 - [x] Session persistence: view, selection, inspector, sort, grouping, theme,
       vim mode and window size
-- [x] Light/dark theme toggle (`⌘T` or `⇧T` in vim mode)
+- [x] Ten theme families — Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula,
+      Tokyo Night, Vesper, Graphite and Midnight — each with a light and a dark
+      palette, chosen in Settings or with `⌘T` / `⇧⌘T` / `⌥⌘T` (`⇧T` in vim mode)
+- [x] Blurred sidebar, inspector, header and status bar over an opaque reading
+      surface. The window's `NSVisualEffectView` uses the
+      `.underWindowBackground` material and is pinned to the palette's
+      light/dark appearance, so a dark theme never inherits a light material
+      from macOS. Chrome runs a subtle wash between two tint stops instead of a
+      flat colour.
+- [x] Embedded SVG icon set with a shared grid, stroke and alignment
 - [x] Keyboard help (`?`)
 - [x] Toasts retire after a few seconds and dismiss on click
 
@@ -163,5 +173,6 @@ shortcut set.
 
 ## Next refinements
 
-- Further visual polish of the macOS-native theme, typography and spacing.
+- Visual QA of the glass surfaces against busy wallpapers.
+- Optional accent-colour variants on top of the ten base families.
 - Additional automation coverage for mouse-only entity management flows.

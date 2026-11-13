@@ -92,8 +92,8 @@ Key behaviour:
   a located context by distance.
 - Import JSON or TaskPaper, export TaskPaper with `⇧⌘E`, and undo everything
   with `⌘Z`.
-- Session state (view, selection, inspector, sort, grouping, theme mode, vim
-  mode and window size) is persisted in `session.json`.
+- Session state (view, selection, inspector, sort, grouping, theme family and
+  light/dark mode, vim mode and window size) is persisted in `session.json`.
 
 Frequently used shortcuts:
 
@@ -115,7 +115,8 @@ Frequently used shortcuts:
 | `⌘N` | quick capture |
 | `⇧⌘N` / `⌥⌘N` / `⌃⌘N` | new project / folder / tag |
 | `⇧⌘P` | new saved perspective |
-| `⌘T` | switch light / dark |
+| `⌘T` | toggle light / dark |
+| `⇧⌘T` / `⌥⌘T` | next / previous theme family |
 | `⌘⌫` | delete the selection, or the sidebar entity |
 | `⌘,` | settings |
 | `⌘O` | import |

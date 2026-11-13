@@ -7,6 +7,7 @@ use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId}
 use flowlist_core::model::BuiltinPerspective;
 
 use super::drag::DragTask;
+use super::icons::{self, Icon};
 use super::modals;
 use super::{FlowlistApp, FocusArea, View, widgets};
 
@@ -19,16 +20,16 @@ pub(super) enum SidebarTarget {
     Tag(TagId),
 }
 
-fn glyph(perspective: BuiltinPerspective) -> &'static str {
+fn glyph(perspective: BuiltinPerspective) -> Icon {
     match perspective {
-        BuiltinPerspective::Inbox => "▤",
-        BuiltinPerspective::Projects => "▦",
-        BuiltinPerspective::Forecast => "◷",
-        BuiltinPerspective::Flagged => "⚑",
-        BuiltinPerspective::Review => "↻",
-        BuiltinPerspective::Tags => "◇",
-        BuiltinPerspective::Completed => "✓",
-        BuiltinPerspective::Nearby => "◎",
+        BuiltinPerspective::Inbox => Icon::Inbox,
+        BuiltinPerspective::Projects => Icon::Projects,
+        BuiltinPerspective::Forecast => Icon::Forecast,
+        BuiltinPerspective::Flagged => Icon::Flagged,
+        BuiltinPerspective::Review => Icon::Review,
+        BuiltinPerspective::Tags => Icon::Tags,
+        BuiltinPerspective::Completed => Icon::Completed,
+        BuiltinPerspective::Nearby => Icon::Nearby,
     }
 }
 
@@ -49,7 +50,7 @@ impl FlowlistApp {
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.text).bg(theme.hover))
             .tooltip(widgets::tip(theme, "Rename"))
-            .child("✎")
+            .child(icons::icon(Icon::Pencil, 12.0, theme.text_faint))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
                 let modal = modals::Modal::rename(this, entity.clone());
@@ -75,7 +76,7 @@ impl FlowlistApp {
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.text).bg(theme.hover))
             .tooltip(widgets::tip(theme, "Edit perspective"))
-            .child("✎")
+            .child(icons::icon(Icon::Pencil, 12.0, theme.text_faint))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
                 if let Some(modal) = modals::Modal::perspective(this, &id) {
@@ -113,7 +114,15 @@ impl FlowlistApp {
                     "Set location"
                 },
             ))
-            .child("⌖")
+            .child(icons::icon(
+                Icon::Crosshair,
+                12.0,
+                if located {
+                    theme.success
+                } else {
+                    theme.text_faint
+                },
+            ))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
                 let modal = modals::Modal::tag_location(this, tag.clone());
@@ -138,7 +147,7 @@ impl FlowlistApp {
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.danger).bg(theme.hover))
             .tooltip(widgets::tip(theme, "Delete"))
-            .child("×")
+            .child(icons::icon(Icon::Close, 12.0, theme.danger))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
                 this.execute(command.clone());
@@ -344,7 +353,7 @@ impl FlowlistApp {
             .w(px(240.))
             .h_full()
             .flex_shrink_0()
-            .bg(theme.sidebar)
+            .bg(theme.glass_fill(180.))
             .border_r_1()
             .border_color(theme.border)
             .text_sm()
@@ -420,7 +429,12 @@ impl FlowlistApp {
                     div()
                         .id("new-project")
                         .flex_1()
-                        .child(widgets::button(theme, "＋ Project", false))
+                        .child(widgets::button_with_icon(
+                            theme,
+                            Icon::Plus,
+                            "Project",
+                            false,
+                        ))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.open_modal(super::modals::Modal::new_project(this), cx)
                         })),
@@ -429,7 +443,12 @@ impl FlowlistApp {
                     div()
                         .id("new-folder")
                         .flex_1()
-                        .child(widgets::button(theme, "＋ Folder", false))
+                        .child(widgets::button_with_icon(
+                            theme,
+                            Icon::Plus,
+                            "Folder",
+                            false,
+                        ))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.open_modal(super::modals::Modal::new_folder(this), cx)
                         })),
@@ -438,7 +457,7 @@ impl FlowlistApp {
                     div()
                         .id("new-tag")
                         .flex_1()
-                        .child(widgets::button(theme, "＋ Tag", false))
+                        .child(widgets::button_with_icon(theme, Icon::Plus, "Tag", false))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.open_modal(super::modals::Modal::new_tag(this), cx)
                         })),
@@ -447,7 +466,12 @@ impl FlowlistApp {
                     div()
                         .id("new-perspective")
                         .flex_1()
-                        .child(widgets::button(theme, "＋ View", false))
+                        .child(widgets::button_with_icon(
+                            theme,
+                            Icon::Perspective,
+                            "View",
+                            false,
+                        ))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.open_modal(super::modals::Modal::new_perspective(this), cx)
                         })),
@@ -463,6 +487,7 @@ impl FlowlistApp {
         let theme = self.theme;
         let active = self.view == View::Builtin(perspective);
         let count = self.perspective_count(perspective);
+        let icon_color = if active { theme.accent } else { theme.text_dim };
         let cursor = self.sidebar_cursor_is(&SidebarTarget::Builtin(perspective));
         div()
             .id(super::sid(format!("perspective:{}", perspective.slug())))
@@ -473,16 +498,19 @@ impl FlowlistApp {
             .mx_2()
             .px_2()
             .rounded_md()
-            .bg(if active {
-                theme.selection
-            } else {
-                theme.sidebar
-            })
+            .bg(if active { theme.selection } else { theme.clear })
             .when(cursor, |this| this.bg(theme.hover))
             .text_color(if active { theme.accent } else { theme.text_dim })
             .cursor_pointer()
             .hover(|style| style.bg(theme.hover))
-            .child(div().w(px(16.)).text_center().child(glyph(perspective)))
+            .child(
+                div()
+                    .w(px(18.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(icons::icon(glyph(perspective), 15.0, icon_color)),
+            )
             .child(div().flex_1().min_w_0().child(perspective.label()))
             .when(count > 0, |this| this.child(widgets::count(theme, count)))
             .on_click(cx.listener(move |this, _, _, cx| {
@@ -497,6 +525,7 @@ impl FlowlistApp {
     ) -> impl IntoElement {
         let theme = self.theme;
         let active = self.view == View::Custom(row.id.clone());
+        let icon_color = if active { theme.accent } else { theme.text_dim };
         let id = row.id.clone();
         let target_id = row.id.clone();
         let rename_id = row.id.clone();
@@ -512,16 +541,19 @@ impl FlowlistApp {
             .mx_2()
             .px_2()
             .rounded_md()
-            .bg(if active {
-                theme.selection
-            } else {
-                theme.sidebar
-            })
+            .bg(if active { theme.selection } else { theme.clear })
             .when(cursor, |this| this.bg(theme.hover))
             .text_color(if active { theme.accent } else { theme.text_dim })
             .cursor_pointer()
             .hover(|style| style.bg(theme.hover))
-            .child(div().w(px(16.)).text_center().child("◆"))
+            .child(
+                div()
+                    .w(px(18.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(icons::icon(Icon::Perspective, 14.0, icon_color)),
+            )
             .child(div().flex_1().min_w_0().child(row.name))
             .child(self.edit_perspective_button(
                 format!("edit-perspective:{rename_id}"),
@@ -584,13 +616,32 @@ impl FlowlistApp {
                                         "Expand folder"
                                     },
                                 ))
-                                .child(if open { "▾" } else { "▸" })
+                                .child(icons::icon(
+                                    if open {
+                                        Icon::ChevronDown
+                                    } else {
+                                        Icon::ChevronRight
+                                    },
+                                    12.0,
+                                    self.theme.text_faint,
+                                ))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
                                     this.toggle_expanded(toggle_key.clone(), cx);
                                 })),
                         )
-                        .child(div().w(px(14.)).child("▱"))
+                        .child(
+                            div()
+                                .w(px(16.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(icons::icon(
+                                    if open { Icon::FolderOpen } else { Icon::Folder },
+                                    14.0,
+                                    self.theme.text_faint,
+                                )),
+                        )
                         .child(div().flex_1().min_w_0().overflow_hidden().child(name))
                         .child(self.rename_button(
                             format!("rename-folder:{rename_id}"),
@@ -644,7 +695,7 @@ impl FlowlistApp {
                         .bg(if active {
                             self.theme.selection
                         } else {
-                            self.theme.sidebar
+                            self.theme.clear
                         })
                         .when(cursor, |this| this.bg(self.theme.hover))
                         .text_color(if active {
@@ -654,6 +705,15 @@ impl FlowlistApp {
                         })
                         .cursor_pointer()
                         .hover(|style| style.bg(self.theme.hover))
+                        .child(icons::icon(
+                            Icon::Project,
+                            14.0,
+                            if active {
+                                self.theme.accent
+                            } else {
+                                self.theme.text_faint
+                            },
+                        ))
                         .child(
                             div()
                                 .flex_1()
@@ -740,7 +800,7 @@ impl FlowlistApp {
                 .bg(if active {
                     self.theme.selection
                 } else {
-                    self.theme.sidebar
+                    self.theme.clear
                 })
                 .when(cursor, |this| this.bg(self.theme.hover))
                 .text_color(if active {
@@ -759,7 +819,15 @@ impl FlowlistApp {
                             self.theme,
                             if open { "Collapse tag" } else { "Expand tag" },
                         ))
-                        .child(if open { "▾" } else { "▸" })
+                        .child(icons::icon(
+                            if open {
+                                Icon::ChevronDown
+                            } else {
+                                Icon::ChevronRight
+                            },
+                            12.0,
+                            self.theme.text_faint,
+                        ))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
                             this.toggle_expanded(toggle_key.clone(), cx);
@@ -770,13 +838,19 @@ impl FlowlistApp {
                 })
                 .child(
                     div()
-                        .w(px(12.))
-                        .text_color(if located {
-                            self.theme.success
-                        } else {
-                            self.theme.text_faint
-                        })
-                        .child(if located { "◉" } else { "#" }),
+                        .w(px(14.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(icons::icon(
+                            if located { Icon::Nearby } else { Icon::Tag },
+                            13.0,
+                            if located {
+                                self.theme.success
+                            } else {
+                                self.theme.text_faint
+                            },
+                        )),
                 )
                 .child(div().flex_1().min_w_0().overflow_hidden().child(name))
                 .when(

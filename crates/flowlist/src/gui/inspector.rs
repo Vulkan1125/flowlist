@@ -8,7 +8,8 @@ use flowlist_core::ids::{ChecklistId, TaskId};
 use flowlist_core::model::ProjectStatus;
 use flowlist_core::time::{format_duration, human_date, now};
 
-use super::{EditField, FlowlistApp, View, widgets};
+use super::icons::Icon;
+use super::{EditField, FlowlistApp, View, icons, widgets};
 
 impl FlowlistApp {
     pub(super) fn render_inspector(
@@ -23,7 +24,7 @@ impl FlowlistApp {
             .w(px(320.))
             .h_full()
             .flex_shrink_0()
-            .bg(theme.sidebar)
+            .bg(theme.glass_fill(180.))
             .border_l_1()
             .border_color(theme.border)
             .text_sm()
@@ -52,7 +53,7 @@ impl FlowlistApp {
                         .text_color(theme.text_faint)
                         .hover(|style| style.text_color(theme.text))
                         .tooltip(widgets::tip(theme, "Close inspector (i)"))
-                        .child("×")
+                        .child(icons::icon(Icon::Close, 14.0, theme.text_faint))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.show_inspector = false;
                             this.save_session();
@@ -90,7 +91,7 @@ impl FlowlistApp {
             .gap_2()
             .p_6()
             .text_center()
-            .child(div().text_2xl().text_color(theme.text_faint).child("▤"))
+            .child(icons::icon(Icon::PanelRight, 30.0, theme.text_faint))
             .child(
                 div()
                     .text_color(theme.text_dim)
@@ -205,7 +206,15 @@ impl FlowlistApp {
                                     "Flag task (!)"
                                 },
                             ))
-                            .child("⚑")
+                            .child(icons::icon(
+                                Icon::Flagged,
+                                12.0,
+                                if flagged {
+                                    theme.danger
+                                } else {
+                                    theme.text_faint
+                                },
+                            ))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.toggle_flag(delete_id.clone(), cx)
                             })),
@@ -561,7 +570,7 @@ impl FlowlistApp {
                     .cursor_pointer()
                     .hover(|style| style.text_color(theme.text).opacity(1.0))
                     .tooltip(widgets::tip(theme, "Move step up"))
-                    .child("↑")
+                    .child(icons::icon(Icon::ArrowUp, 12.0, theme.text_faint))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.move_checklist_item(
@@ -585,7 +594,7 @@ impl FlowlistApp {
                     .cursor_pointer()
                     .hover(|style| style.text_color(theme.text).opacity(1.0))
                     .tooltip(widgets::tip(theme, "Move step down"))
-                    .child("↓")
+                    .child(icons::icon(Icon::ArrowDown, 12.0, theme.text_faint))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.move_checklist_item(
@@ -606,7 +615,7 @@ impl FlowlistApp {
                     .cursor_pointer()
                     .hover(|style| style.text_color(theme.danger))
                     .tooltip(widgets::tip(theme, "Delete step"))
-                    .child("×")
+                    .child(icons::icon(Icon::Close, 12.0, theme.text_faint))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.delete_checklist_item(delete_task.clone(), delete_item.clone(), cx);
@@ -687,7 +696,7 @@ impl FlowlistApp {
                                     .cursor_pointer()
                                     .hover(|style| style.text_color(theme.danger))
                                     .tooltip(widgets::tip(theme, "Remove tag"))
-                                    .child("×")
+                                    .child(icons::icon(Icon::Close, 12.0, theme.text_faint))
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if let Some(id) = this.selected_one() {
                                             this.execute(Command::SetTaskTags {

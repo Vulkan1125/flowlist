@@ -7,7 +7,8 @@ use flowlist_core::ids::{PerspectiveId, ProjectId, TagId};
 
 use super::perspective::PerspectiveForm;
 use super::text::TextBuffer;
-use super::{FlowlistApp, widgets};
+use super::theme::{Appearance, Theme, ThemeKind};
+use super::{FlowlistApp, icons, widgets};
 
 /// What a rename sheet is editing. Keeping the typed id means a rename can
 /// never accidentally target the wrong entity kind.
@@ -46,6 +47,8 @@ pub enum Modal {
         completed_days: TextBuffer,
         radius: TextBuffer,
         vim_mode: bool,
+        theme: ThemeKind,
+        appearance: Appearance,
     },
     Location {
         lat: TextBuffer,
@@ -119,6 +122,8 @@ impl Modal {
             completed_days: TextBuffer::new(settings.show_completed_days.to_string()),
             radius: TextBuffer::new(settings.nearby_radius_km.to_string()),
             vim_mode: app.vim_mode,
+            theme: app.theme.kind(),
+            appearance: app.theme.appearance(),
         }
     }
 
@@ -291,6 +296,7 @@ impl Modal {
         match self {
             Modal::Import { .. } | Modal::Help => 620.0,
             Modal::Perspective { .. } => 680.0,
+            Modal::Settings { .. } => 580.0,
             _ => 460.0,
         }
     }
@@ -361,7 +367,7 @@ impl FlowlistApp {
                             .text_color(theme.text_faint)
                             .hover(|style| style.text_color(theme.text))
                             .tooltip(widgets::tip(theme, "Close (Esc)"))
-                            .child("×")
+                            .child(icons::icon(icons::Icon::Close, 14.0, theme.text_faint))
                             .on_click(cx.listener(|this, _, _, cx| this.close_modal(cx))),
                     ),
             );
@@ -731,29 +737,206 @@ impl FlowlistApp {
 
     fn render_settings_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
+        let (selected, appearance) = match &self.modal {
+            Some(Modal::Settings {
+                theme, appearance, ..
+            }) => (*theme, *appearance),
+            _ => (theme.kind(), theme.appearance()),
+        };
         let vim = matches!(&self.modal, Some(Modal::Settings { vim_mode: true, .. }));
-        div()
+
+        let mut modes = div()
             .flex()
             .items_center()
-            .gap_2()
-            .child(
+            .gap_1()
+            .p_0p5()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.field);
+        for mode in Appearance::ALL {
+            let active = appearance == mode;
+            modes = modes.child(
                 div()
-                    .id("modal-vim-mode")
-                    .child(widgets::button(
-                        theme,
-                        if vim { "Vim mode ✓" } else { "Vim mode off" },
-                        vim,
-                    ))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(Modal::Settings { vim_mode, .. }) = &mut this.modal {
-                            *vim_mode = !*vim_mode;
+                    .id(mode.slug())
+                    .h(px(24.))
+                    .px_3()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_sm()
+                    .bg(if active { theme.raised } else { theme.clear })
+                    .text_color(if active { theme.text } else { theme.text_dim })
+                    .text_xs()
+                    .when(active, |this| this.font_weight(gpui::FontWeight::SEMIBOLD))
+                    .cursor_pointer()
+                    .hover(|style| style.text_color(theme.text))
+                    .child(mode.label())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::Settings { appearance, .. }) = &mut this.modal {
+                            *appearance = mode;
                         }
                         cx.notify();
                     })),
+            );
+        }
+
+        let mut grid = div().flex().flex_col().gap_2().w_full();
+        for chunk in ThemeKind::ALL.chunks(5) {
+            let mut row = div().flex().items_start().gap_2().w_full();
+            for kind in chunk {
+                row = row.child(self.theme_swatch(*kind, selected == *kind, appearance, cx));
+            }
+            // Keep the last row aligned with full rows when it is short.
+            for _ in chunk.len()..5 {
+                row = row.child(div().flex_1());
+            }
+            grid = grid.child(row);
+        }
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(div().text_xs().text_color(theme.text_faint).child("Theme"))
+                    .child(modes),
             )
-            .child(div().text_xs().text_color(theme.text_faint).child(
-                "hjkl motions, counts, operators and pane focus. ⌘ shortcuts stay available.",
-            ))
+            .child(grid)
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(format!(
+                        "{} · {} · ⌘T light/dark · ⇧⌘T next family · Save applies",
+                        selected.hint(),
+                        appearance.label(),
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .id("modal-vim-mode")
+                            .child(widgets::button(
+                                theme,
+                                if vim { "Vim mode ✓" } else { "Vim mode off" },
+                                vim,
+                            ))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(Modal::Settings { vim_mode, .. }) = &mut this.modal {
+                                    *vim_mode = !*vim_mode;
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .child(div().text_xs().text_color(theme.text_faint).child(
+                        "hjkl motions, counts, operators and pane focus. ⌘ shortcuts stay available.",
+                    )),
+            )
+    }
+
+    fn theme_swatch(
+        &self,
+        kind: ThemeKind,
+        selected: bool,
+        appearance: Appearance,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let light = Theme::new(kind, Appearance::Light);
+        let dark = Theme::new(kind, Appearance::Dark);
+        div()
+            .id(kind.slug())
+            .flex_1()
+            .min_w_0()
+            .p_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(if selected { theme.accent } else { theme.border })
+            .bg(if selected {
+                theme.selection
+            } else {
+                theme.field
+            })
+            .cursor_pointer()
+            .hover(|style| {
+                style.bg(if selected {
+                    theme.selection
+                } else {
+                    theme.hover
+                })
+            })
+            .child(
+                div()
+                    .flex()
+                    .h(px(38.))
+                    .w_full()
+                    .rounded_md()
+                    .overflow_hidden()
+                    .border_1()
+                    .border_color(theme.border_soft)
+                    .child(self.half_preview(light, appearance == Appearance::Light))
+                    .child(self.half_preview(dark, appearance == Appearance::Dark)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_1()
+                    .pt_1()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .text_xs()
+                            .font_weight(if selected {
+                                gpui::FontWeight::SEMIBOLD
+                            } else {
+                                gpui::FontWeight::NORMAL
+                            })
+                            .text_color(if selected { theme.text } else { theme.text_dim })
+                            .child(kind.label()),
+                    )
+                    .when(selected, |this| {
+                        this.child(icons::icon(icons::Icon::Check, 11.0, theme.accent))
+                    }),
+            )
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if let Some(Modal::Settings { theme, .. }) = &mut this.modal {
+                    *theme = kind;
+                }
+                cx.notify();
+            }))
+    }
+
+    /// One half of a theme swatch: the selected appearance is drawn at full
+    /// strength, the other side recedes so the pair reads as one family.
+    fn half_preview(&self, preview: Theme, active: bool) -> impl IntoElement {
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .h_full()
+            .min_w_0()
+            .bg(preview.bg)
+            .opacity(if active { 1.0 } else { 0.42 })
+            .child(div().h(px(9.)).w_full().bg(preview.glass_fill(90.)))
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .items_center()
+                    .px_1()
+                    .child(div().h(px(4.)).w(px(16.)).rounded_full().bg(preview.accent)),
+            )
     }
 
     fn render_import_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -858,7 +1041,9 @@ fn help_body(theme: super::theme::Theme) -> impl IntoElement {
                 ("⌘Z / ⇧⌘Z", "undo / redo"),
                 ("⌘N", "quick capture"),
                 ("⇧⌘N", "new project"),
-                ("⌘T / ⇧T", "switch light / dark"),
+                ("⌘T", "toggle light / dark"),
+                ("⇧⌘T / ⌥⌘T", "next / previous theme family"),
+                ("⇧T", "toggle light / dark in vim mode"),
                 ("⌘,", "settings"),
                 ("⌘C", "copy selected tasks"),
                 ("⌘R", "rename current project/folder/tag/perspective"),
@@ -878,7 +1063,7 @@ fn help_body(theme: super::theme::Theme) -> impl IntoElement {
                 ("⇧Click", "select a range"),
                 ("Double-click", "edit the title"),
                 ("Drag", "nest under a task, or drop on a project/tag"),
-                ("Click ⚑", "toggle flag"),
+                ("Click the flag", "toggle flag"),
                 ("Click ○", "toggle complete"),
             ],
         ),

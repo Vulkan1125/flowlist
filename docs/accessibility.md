@@ -14,24 +14,24 @@ them, so the keyboard routes below are the primary way to reach them.
 
 | Control | Tooltip | Keyboard |
 | --- | --- | --- |
-| ↶ | Undo (⌘Z) | `⌘Z` or `u` |
-| ↷ | Redo (⇧⌘Z) | `⇧⌘Z` or `Ctrl-r` |
-| ? | Keyboard and mouse help (?) | `?` |
-| ⚙ | Settings (⌘,) | `⌘,` |
-| ◐ | Switch light / dark (⇧T) | `⇧T` in vim mode, `⌘T` anywhere |
-| ▤ | Toggle inspector (i) | `i` or `⌘I` |
+| Undo arrow | Undo (⌘Z) | `⌘Z` or `u` |
+| Redo arrow | Redo (⇧⌘Z) | `⇧⌘Z` or `Ctrl-r` |
+| Question mark | Keyboard and mouse help (?) | `?` |
+| Gear | Settings (⌘,) | `⌘,` |
+| Palette | Next theme family (⇧⌘T) | `⌘T` light/dark, `⇧⌘T` / `⌥⌘T` family, `⇧T` in vim mode |
+| Right panel | Toggle inspector (i) | `i` or `⌘I` |
 
 ### Sidebar
 
 | Control | Tooltip | Keyboard |
 | --- | --- | --- |
-| ✎ saved perspective | Edit perspective | `Ctrl-w h` then `r` |
-| ✎ project / folder / tag | Rename | `Ctrl-w h` then `r` |
-| × perspective / folder / tag | Delete | `Ctrl-w h` then `⌘⌫` or `dd` |
-| ▸ / ▾ folder | Expand / collapse folder | `l` / `h` |
-| ▸ / ▾ tag | Expand / collapse tag | `l` / `h` |
-| ⌖ tag | Set location / Change location | `⇧L` |
-| ＋ Project / Folder / Tag / View | labelled buttons | `⇧⌘N`, `⌥⌘N`, `⌃⌘N`, `⇧⌘P` |
+| Pencil on a saved perspective | Edit perspective | `Ctrl-w h` then `r` |
+| Pencil on a project / folder / tag | Rename | `Ctrl-w h` then `r` |
+| × on a perspective / folder / tag | Delete | `Ctrl-w h` then `⌘⌫` or `dd` |
+| Chevron on a folder | Expand / collapse folder | `l` / `h` |
+| Chevron on a tag | Expand / collapse tag | `l` / `h` |
+| Crosshair on a tag | Set location / Change location | `⇧L` |
+| Plus buttons | Project / Folder / Tag / View | `⇧⌘N`, `⌥⌘N`, `⌃⌘N`, `⇧⌘P` |
 
 `Ctrl-w h` focuses the sidebar, except inside a text field where `Ctrl-w` is
 left to the field. Arrow keys also move through the sidebar, `Enter` opens the
@@ -42,7 +42,7 @@ row, and `Esc` returns to the content list.
 | Control | Tooltip | Keyboard |
 | --- | --- | --- |
 | ○ completion circle | Complete task (x) / Reopen task (x) | `x` or `space` |
-| ⚑ flag | Flag task (!) / Unflag task (!) | `!` or `⌘D` |
+| Flag | Flag task (!) / Unflag task (!) | `!` or `⌘D` |
 | ▸ / ▾ subtasks | Expand / collapse subtasks | `l` / `h` on the parent, or `Tab` to nest |
 | ○ checklist step | Tick / untick step | `Ctrl-w j`, then `space` |
 | ↑ / ↓ checklist arrows | Move step up / down | `⇧J` / `⇧K` in the checklist pane |
@@ -78,8 +78,14 @@ not need to discover a tooltip first.
 - Selection in the content list is independent of the mouse and is announced in
   the status bar (`N selected`).
 - Every theme keeps a single accent colour for selection and focus; destructive
-  actions use one warm red and are never encoded by colour alone — the × glyph
-  and the tooltip carry the meaning.
+  actions use one warm red and are never encoded by colour alone — the close
+  icon and the tooltip carry the meaning.
+- The reading surface stays opaque in all ten theme families, in both light and
+  dark mode. Translucency is limited to the sidebar, inspector, header and
+  status bar, so wallpaper contrast never reaches task text.
+- Chrome tint is checked at both gradient stops, and against the blur over a
+  pure black (light) or white (dark) wallpaper. The wash is decorative; it can
+  never lower text below the contrast floors.
 
 ## Known limitation: the accessibility tree
 

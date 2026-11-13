@@ -21,6 +21,21 @@ First complete release of Flowlist: one Rust library and three front ends.
 - **Everything is undoable**: every GUI, CLI and MCP mutation goes through one
   command engine and one history.
 
+### Interface
+
+- **Ten theme families** — Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula,
+  Tokyo Night, Vesper, Graphite and Midnight — each with light and dark
+  palettes, chosen in Settings or with ⌘T / ⇧⌘T / ⌥⌘T.
+- **Glass chrome**: the sidebar, inspector, header and status bar use GPUI's
+  native macOS blur backdrop, while the task list keeps an opaque reading
+  surface for contrast. The blur view is pinned to the palette's light/dark
+  appearance and the `.underWindowBackground` material, and each pane runs a
+  subtle tint gradient instead of a flat fill.
+- **Full-height window**: the native titlebar is hidden, traffic lights sit in
+  the Flowlist header, and the header doubles as the drag region.
+- **One icon language**: embedded SVG icons share a 24px grid, 1.75px stroke
+  and round joins, replacing inconsistent text glyphs throughout the app.
+
 ### Packaging
 
 ```sh

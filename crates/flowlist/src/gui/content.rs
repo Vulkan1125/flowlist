@@ -9,6 +9,7 @@ use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
 
 use super::drag::{DragTask, ghost};
+use super::icons::{self, Icon};
 use super::{EditField, FlowlistApp, FocusArea, View, group_label, sort_label, widgets};
 
 impl FlowlistApp {
@@ -171,7 +172,12 @@ impl FlowlistApp {
                             .child(
                                 div()
                                     .id("add-task")
-                                    .child(widgets::button(theme, "＋ Task", true))
+                                    .child(widgets::button_with_icon(
+                                        theme,
+                                        Icon::Plus,
+                                        "Task",
+                                        true,
+                                    ))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.focus = super::FocusArea::Capture;
                                         this.capture.end(false);
@@ -207,12 +213,11 @@ impl FlowlistApp {
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(
-                    div()
-                        .text_color(theme.accent)
-                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .child("＋"),
-                )
+                .child(div().flex().items_center().child(icons::icon(
+                    Icon::Plus,
+                    15.0,
+                    theme.accent,
+                )))
                 .child(
                     div()
                         .id("capture-field")
@@ -313,8 +318,18 @@ impl FlowlistApp {
                 .child(
                     div()
                         .w(px(12.))
+                        .flex()
+                        .items_center()
                         .text_color(theme.text_faint)
-                        .child(if open { "▾" } else { "▸" }),
+                        .child(icons::icon(
+                            if open {
+                                Icon::ChevronDown
+                            } else {
+                                Icon::ChevronRight
+                            },
+                            12.0,
+                            theme.text_faint,
+                        )),
                 )
                 .child(
                     div()
@@ -504,7 +519,15 @@ impl FlowlistApp {
                             "Expand subtasks"
                         },
                     ))
-                    .child(if expanded { "▾" } else { "▸" })
+                    .child(icons::icon(
+                        if expanded {
+                            Icon::ChevronDown
+                        } else {
+                            Icon::ChevronRight
+                        },
+                        12.0,
+                        theme.text_faint,
+                    ))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.toggle_expanded(format!("task:{}", disclosure_id), cx);
@@ -533,7 +556,15 @@ impl FlowlistApp {
                             "Flag task (!)"
                         },
                     ))
-                    .child("⚑")
+                    .child(icons::icon(
+                        Icon::Flagged,
+                        12.0,
+                        if flagged {
+                            theme.danger
+                        } else {
+                            theme.text_faint
+                        },
+                    ))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.toggle_flag(flag_id.clone(), cx);

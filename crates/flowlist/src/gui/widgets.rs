@@ -9,6 +9,7 @@ use gpui::{
     prelude::*, px,
 };
 
+use super::icons::{self, Icon};
 use super::text::TextBuffer;
 use super::theme::Theme;
 
@@ -47,7 +48,7 @@ pub fn text_field(
         .rounded_md()
         .border_1()
         .border_color(if focused { theme.accent } else { theme.border })
-        .bg(if focused { theme.raised } else { theme.bg })
+        .bg(if focused { theme.raised } else { theme.field })
         .text_sm()
         .cursor(CursorStyle::IBeam)
         .overflow_hidden()
@@ -142,7 +143,7 @@ pub fn text_area(
         .rounded_md()
         .border_1()
         .border_color(if focused { theme.accent } else { theme.border })
-        .bg(if focused { theme.raised } else { theme.bg })
+        .bg(if focused { theme.raised } else { theme.field })
         .text_sm()
         .overflow_hidden()
         .cursor(CursorStyle::IBeam)
@@ -185,10 +186,12 @@ pub fn checkbox(theme: Theme, completed: bool, accent: gpui::Hsla) -> impl IntoE
         .rounded_full()
         .border_1()
         .border_color(if completed { accent } else { theme.border })
-        .bg(if completed { accent } else { theme.bg })
+        .bg(if completed { accent } else { theme.field })
         .text_color(if completed { theme.raised } else { accent })
         .text_xs()
-        .when(completed, |this| this.child("✓"))
+        .when(completed, |this| {
+            this.child(icons::icon(Icon::Check, 11.0, theme.bg))
+        })
 }
 
 pub fn progress(theme: Theme, done: usize, total: usize) -> impl IntoElement {
@@ -247,18 +250,59 @@ pub fn button(theme: Theme, label: impl Into<String>, primary: bool) -> impl Int
         .child(label)
 }
 
-pub fn icon_button(theme: Theme, glyph: impl Into<String>, active: bool) -> impl IntoElement {
+/// A button that leads with an icon, used for creation actions so the plus
+/// mark is drawn rather than typed.
+pub fn button_with_icon(
+    theme: Theme,
+    icon: Icon,
+    label: impl Into<String>,
+    primary: bool,
+) -> impl IntoElement {
+    let label = label.into();
+    div()
+        .h(px(26.))
+        .px_3()
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap_1p5()
+        .rounded_md()
+        .border_1()
+        .border_color(if primary { theme.accent } else { theme.border })
+        .bg(if primary { theme.accent } else { theme.raised })
+        .text_color(if primary { theme.raised } else { theme.text })
+        .text_sm()
+        .cursor_pointer()
+        .hover(|style| {
+            if primary {
+                style.opacity(0.9)
+            } else {
+                style.bg(theme.hover)
+            }
+        })
+        .child(icons::icon(
+            icon,
+            13.0,
+            if primary { theme.bg } else { theme.text_dim },
+        ))
+        .child(label)
+}
+
+pub fn icon_button(theme: Theme, icon: Icon, active: bool) -> impl IntoElement {
     div()
         .flex()
         .items_center()
         .justify_center()
-        .size(px(26.))
+        .size(px(28.))
         .rounded_md()
-        .bg(if active { theme.selection } else { theme.bg })
-        .text_color(if active { theme.accent } else { theme.text_dim })
+        .bg(if active { theme.selection } else { theme.clear })
         .cursor_pointer()
         .hover(|style| style.bg(theme.hover))
-        .child(glyph.into())
+        .child(icons::icon(
+            icon,
+            16.0,
+            if active { theme.accent } else { theme.text_dim },
+        ))
 }
 
 pub fn count(theme: Theme, value: usize) -> impl IntoElement {
@@ -284,7 +328,7 @@ pub fn toggle_chip(theme: Theme, label: impl Into<String>, active: bool) -> impl
         .rounded_md()
         .border_1()
         .border_color(if active { theme.accent } else { theme.border })
-        .bg(if active { theme.selection } else { theme.bg })
+        .bg(if active { theme.selection } else { theme.field })
         .text_xs()
         .text_color(if active { theme.accent } else { theme.text_dim })
         .cursor_pointer()

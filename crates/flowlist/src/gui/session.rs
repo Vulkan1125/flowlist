@@ -7,7 +7,7 @@ use flowlist_core::db::Db;
 use flowlist_core::ids::{FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use flowlist_core::model::BuiltinPerspective;
 
-use super::theme::Mode;
+use super::theme::{Appearance, ThemeKind};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum View {
@@ -117,6 +117,8 @@ pub struct Session {
     #[serde(default)]
     pub theme: Option<String>,
     #[serde(default)]
+    pub appearance: Option<String>,
+    #[serde(default)]
     pub window: Option<(f32, f32)>,
     #[serde(default)]
     pub sort: Option<String>,
@@ -136,8 +138,27 @@ impl Session {
             .unwrap_or(View::Builtin(BuiltinPerspective::Inbox))
     }
 
-    pub fn theme_mode(&self) -> Option<Mode> {
-        self.theme.as_deref().and_then(Mode::from_slug)
+    pub fn theme_kind(&self) -> Option<ThemeKind> {
+        self.theme.as_deref().and_then(ThemeKind::from_slug)
+    }
+
+    /// The saved theme family and light/dark mode.
+    ///
+    /// Sessions from before the family split stored only `"light"` or `"dark"`,
+    /// so those two values still map to Paper light and Graphite dark. All
+    /// other families fall back to their natural mode when no appearance was
+    /// written.
+    pub fn theme_choice(&self) -> (ThemeKind, Appearance) {
+        let kind = self.theme_kind().unwrap_or(ThemeKind::Paper);
+        let legacy = match self.theme.as_deref() {
+            Some("light") => Some(Appearance::Light),
+            Some("dark") => Some(Appearance::Dark),
+            _ => None,
+        };
+        let appearance = legacy
+            .or_else(|| self.appearance.as_deref().and_then(Appearance::from_slug))
+            .unwrap_or_else(|| kind.default_appearance());
+        (kind, appearance)
     }
 
     pub fn selected_tasks(&self, db: &Db) -> Vec<TaskId> {
@@ -145,5 +166,58 @@ impl Session {
             .iter()
             .filter_map(|id| db.resolve_task(id).ok())
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn session(theme: Option<&str>, appearance: Option<&str>) -> Session {
+        Session {
+            theme: theme.map(str::to_string),
+            appearance: appearance.map(str::to_string),
+            ..Session::default()
+        }
+    }
+
+    #[test]
+    fn legacy_light_and_dark_migrate_to_families() {
+        assert_eq!(
+            session(Some("light"), None).theme_choice(),
+            (ThemeKind::Paper, Appearance::Light)
+        );
+        assert_eq!(
+            session(Some("dark"), None).theme_choice(),
+            (ThemeKind::Graphite, Appearance::Dark)
+        );
+    }
+
+    #[test]
+    fn family_and_appearance_both_survive() {
+        assert_eq!(
+            session(Some("catppuccin"), Some("light")).theme_choice(),
+            (ThemeKind::Catppuccin, Appearance::Light)
+        );
+        assert_eq!(
+            session(Some("tokyo-night"), Some("dark")).theme_choice(),
+            (ThemeKind::TokyoNight, Appearance::Dark)
+        );
+    }
+
+    #[test]
+    fn missing_appearance_uses_the_family_default() {
+        assert_eq!(
+            session(Some("vesper"), None).theme_choice(),
+            (ThemeKind::Vesper, Appearance::Dark)
+        );
+        assert_eq!(
+            session(Some("mist"), None).theme_choice(),
+            (ThemeKind::Mist, Appearance::Light)
+        );
+        assert_eq!(
+            session(None, None).theme_choice(),
+            (ThemeKind::Paper, Appearance::Light)
+        );
     }
 }

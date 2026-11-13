@@ -4,8 +4,10 @@
 //! edit goes through `Store::execute`, so undo, validation and cross-process
 //! locking behave exactly the same everywhere.
 
+mod blur;
 mod content;
 mod drag;
+mod icons;
 mod inspector;
 mod modals;
 mod perspective;
@@ -22,9 +24,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use gpui::{
-    App, Application, Bounds, ClipboardItem, Context, FocusHandle, Focusable, IntoElement,
-    KeyDownEvent, Keystroke, MouseButton, Render, ScrollHandle, Window, WindowBounds,
-    WindowOptions, div, prelude::*, px, size,
+    App, Application, Bounds, ClipboardItem, Context, CursorStyle, FocusHandle, Focusable,
+    IntoElement, KeyDownEvent, Keystroke, MouseButton, Render, ScrollHandle, Window,
+    WindowBackgroundAppearance, WindowBounds, WindowOptions, div, point, prelude::*, px, size,
 };
 
 use flowlist_core::command::{
@@ -42,9 +44,10 @@ use flowlist_core::time::{format_duration, local_date, now};
 use flowlist_core::{export, taskpaper};
 
 use drag::DragTask;
+use icons::Icon;
 
 pub use session::{Session, View};
-use theme::{Mode, Theme};
+use theme::Theme;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FocusArea {
@@ -146,6 +149,9 @@ pub struct FlowlistApp {
     /// for the GUI smoke test. Off in normal use.
     test_state_path: Option<PathBuf>,
     test_state_last: Option<String>,
+    /// The appearance the window glass was last pinned to, if the platform had
+    /// a blur view to tune.
+    blur_mode: Option<theme::Appearance>,
 }
 
 impl FlowlistApp {
@@ -160,7 +166,8 @@ impl FlowlistApp {
             .into_iter()
             .filter(|id| store.db().tasks.contains_key(id))
             .collect();
-        let theme = Theme::new(session.theme_mode().unwrap_or(Mode::Light));
+        let (theme_kind, theme_appearance) = session.theme_choice();
+        let theme = Theme::new(theme_kind, theme_appearance);
         let sort = session.sort.as_deref().and_then(sort_from_slug);
         let group = session.group.as_deref().and_then(group_from_slug);
         let show_completed = session.show_completed.unwrap_or(false);
@@ -223,6 +230,7 @@ impl FlowlistApp {
             last_sync: Instant::now(),
             test_state_path: std::env::var_os("FLOWLIST_TEST_STATE").map(PathBuf::from),
             test_state_last: None,
+            blur_mode: None,
         }
     }
 
@@ -233,7 +241,8 @@ impl FlowlistApp {
             view: Some(self.view.key()),
             selected: self.selected.iter().map(|id| id.to_string()).collect(),
             inspector: Some(self.show_inspector),
-            theme: Some(self.theme.mode().slug().to_string()),
+            theme: Some(self.theme.kind().slug().to_string()),
+            appearance: Some(self.theme.appearance().slug().to_string()),
             window: self.window_size,
             sort: self.sort.map(|sort| sort_slug(sort).to_string()),
             group: self.group.map(|group| group_slug(group).to_string()),
@@ -1409,6 +1418,8 @@ impl FlowlistApp {
                 completed_days,
                 radius,
                 vim_mode,
+                theme,
+                appearance,
             } => {
                 let review = review_days
                     .text()
@@ -1432,6 +1443,7 @@ impl FlowlistApp {
                     ..Default::default()
                 }));
                 self.vim_mode = *vim_mode;
+                self.theme = Theme::new(*theme, *appearance);
                 self.save_session();
             }
             modals::Modal::Location { lat, lon } => {
@@ -1490,6 +1502,22 @@ impl FlowlistApp {
             if mods.platform {
                 if stroke.key == "w" || stroke.key == "q" {
                     self.close_modal(cx);
+                    return;
+                }
+                if stroke.key == "t" {
+                    if let Some(modals::Modal::Settings {
+                        theme, appearance, ..
+                    }) = &mut self.modal
+                    {
+                        if mods.shift {
+                            *theme = theme.next();
+                        } else if mods.alt {
+                            *theme = theme.previous();
+                        } else {
+                            *appearance = appearance.toggled();
+                        }
+                        cx.notify();
+                    }
                     return;
                 }
             }
@@ -1657,7 +1685,13 @@ impl FlowlistApp {
                     self.save_session();
                 }
                 "t" => {
-                    self.theme = theme::Theme::new(self.theme.mode().toggled());
+                    self.theme = if mods.shift {
+                        self.theme.next_theme()
+                    } else if mods.alt {
+                        self.theme.previous_theme()
+                    } else {
+                        self.theme.toggled()
+                    };
                     self.save_session();
                 }
                 "d" => self.flag_selected(cx),
@@ -1890,7 +1924,7 @@ impl FlowlistApp {
             A::NextMatch => self.search_step(true, cx),
             A::PrevMatch => self.search_step(false, cx),
             A::Theme => {
-                self.theme = theme::Theme::new(self.theme.mode().toggled());
+                self.theme = self.theme.toggled();
                 self.save_session();
             }
             A::Inspector => {
@@ -2658,6 +2692,15 @@ impl FlowlistApp {
             "modal": self.modal.as_ref().map(|modal| modal.title()),
             "selected": self.selected.len(),
             "window": self.window_size,
+            "theme": self.theme.kind().slug(),
+            "appearance": self.theme.appearance().slug(),
+            "blur": self.blur_mode.map(|appearance| appearance.slug()),
+            "modal_theme": match &self.modal {
+                Some(modals::Modal::Settings { theme, appearance, .. }) => {
+                    Some(format!("{}/{}", theme.slug(), appearance.slug()))
+                }
+                _ => None,
+            },
         });
         let text = state.to_string();
         if self.test_state_last.as_deref() == Some(text.as_str()) {
@@ -2686,29 +2729,42 @@ impl FlowlistApp {
             .flex()
             .items_center()
             .justify_between()
-            .h(px(44.))
-            .px_4()
+            .h(px(46.))
+            .pl(px(92.))
+            .pr_3()
             .border_b_1()
             .border_color(theme.border)
-            .bg(theme.sidebar)
+            .bg(theme.glass_fill(90.))
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap_2()
+                    .cursor(CursorStyle::OpenHand)
+                    .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
                     .child(
                         div()
-                            .text_color(theme.accent)
-                            .font_weight(gpui::FontWeight::BOLD)
-                            .child("◈"),
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(22.))
+                            .rounded_md()
+                            .bg(theme.accent)
+                            .child(icons::icon(Icon::Check, 13.0, theme.bg)),
                     )
                     .child(
                         div()
+                            .text_sm()
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .child("Flowlist"),
                     )
                     .child(div().text_color(theme.text_faint).child("/"))
-                    .child(div().text_color(theme.text_dim).child(self.view_title())),
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(theme.text_dim)
+                            .child(self.view_title()),
+                    ),
             )
             .child(
                 div()
@@ -2720,7 +2776,7 @@ impl FlowlistApp {
                             .id("undo")
                             .opacity(if self.store.can_undo() { 1.0 } else { 0.4 })
                             .tooltip(widgets::tip(theme, "Undo (⌘Z)"))
-                            .child(widgets::icon_button(theme, "↶", false))
+                            .child(widgets::icon_button(theme, Icon::Undo, false))
                             .on_click(cx.listener(|this, _, _, cx| this.undo(cx))),
                     )
                     .child(
@@ -2728,14 +2784,14 @@ impl FlowlistApp {
                             .id("redo")
                             .opacity(if self.store.can_redo() { 1.0 } else { 0.4 })
                             .tooltip(widgets::tip(theme, "Redo (⇧⌘Z)"))
-                            .child(widgets::icon_button(theme, "↷", false))
+                            .child(widgets::icon_button(theme, Icon::Redo, false))
                             .on_click(cx.listener(|this, _, _, cx| this.redo(cx))),
                     )
                     .child(
                         div()
                             .id("help")
                             .tooltip(widgets::tip(theme, "Keyboard and mouse help (?)"))
-                            .child(widgets::icon_button(theme, "?", false))
+                            .child(widgets::icon_button(theme, Icon::Help, false))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.open_modal(modals::Modal::Help, cx)
                             })),
@@ -2744,7 +2800,7 @@ impl FlowlistApp {
                         div()
                             .id("settings")
                             .tooltip(widgets::tip(theme, "Settings (⌘,)"))
-                            .child(widgets::icon_button(theme, "⚙", false))
+                            .child(widgets::icon_button(theme, Icon::Settings, false))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.open_modal(modals::Modal::settings(this), cx)
                             })),
@@ -2752,10 +2808,17 @@ impl FlowlistApp {
                     .child(
                         div()
                             .id("theme")
-                            .tooltip(widgets::tip(theme, "Switch light / dark (⇧T)"))
-                            .child(widgets::icon_button(theme, "◐", false))
+                            .tooltip(widgets::tip(
+                                theme,
+                                format!(
+                                    "Next theme — {} {} (⇧⌘T)",
+                                    theme.kind().label(),
+                                    theme.appearance().label()
+                                ),
+                            ))
+                            .child(widgets::icon_button(theme, Icon::Palette, false))
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.theme = Theme::new(this.theme.mode().toggled());
+                                this.theme = this.theme.next_theme();
                                 this.save_session();
                                 cx.notify();
                             })),
@@ -2764,7 +2827,11 @@ impl FlowlistApp {
                         div()
                             .id("inspector")
                             .tooltip(widgets::tip(theme, "Toggle inspector (i)"))
-                            .child(widgets::icon_button(theme, "▤", self.show_inspector))
+                            .child(widgets::icon_button(
+                                theme,
+                                Icon::PanelRight,
+                                self.show_inspector,
+                            ))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.show_inspector = !this.show_inspector;
                                 this.save_session();
@@ -2802,7 +2869,7 @@ impl FlowlistApp {
             .px_4()
             .border_t_1()
             .border_color(theme.border)
-            .bg(theme.sidebar)
+            .bg(theme.glass_fill(90.))
             .text_xs()
             .text_color(theme.text_faint)
             .child(
@@ -2923,7 +2990,7 @@ impl FlowlistApp {
             .flex_1()
             .gap_2()
             .py_12()
-            .child(div().text_color(theme.text_faint).text_2xl().child("◌"))
+            .child(icons::icon(Icon::CircleDashed, 34.0, theme.text_faint))
             .child(
                 div()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
@@ -2970,19 +3037,26 @@ impl Render for FlowlistApp {
             })
             .detach();
         }
-        self.sync_test_state();
         self.maybe_sync();
         if !self.focus_handle.is_focused(window) {
             window.focus(&self.focus_handle);
         }
         window.set_window_title(&format!("Flowlist — {}", self.view_title()));
+        // Keep the window's vibrancy in step with the palette: light glass for
+        // a light theme, dark for a dark one, whatever macOS itself is set to.
+        if self.blur_mode != Some(self.theme.appearance()) {
+            if blur::sync(window, self.theme.appearance()).is_some() {
+                self.blur_mode = Some(self.theme.appearance());
+            }
+        }
+        self.sync_test_state();
         let theme = self.theme;
 
         let mut root = div()
             .flex()
             .flex_col()
             .size_full()
-            .bg(theme.bg)
+            .bg(theme.clear)
             .text_color(theme.text)
             .font_family("SF Pro Text")
             .track_focus(&self.focus_handle)
@@ -3022,37 +3096,41 @@ pub fn run(paths: DataPaths) -> Result<()> {
                 px(height.clamp(560.0, 2400.0)),
             )
         });
-    Application::new().run(move |cx: &mut App| {
-        let bounds = Bounds::centered(None, restored.unwrap_or(size(px(1240.), px(800.))), cx);
-        let result = cx.open_window(
-            WindowOptions {
-                titlebar: Some(gpui::TitlebarOptions {
-                    title: Some("Flowlist".into()),
+    Application::new()
+        .with_assets(icons::Assets)
+        .run(move |cx: &mut App| {
+            let bounds = Bounds::centered(None, restored.unwrap_or(size(px(1240.), px(800.))), cx);
+            let result = cx.open_window(
+                WindowOptions {
+                    titlebar: Some(gpui::TitlebarOptions {
+                        title: Some("Flowlist".into()),
+                        appears_transparent: true,
+                        traffic_light_position: Some(point(px(18.), px(-2.))),
+                    }),
+                    window_background: WindowBackgroundAppearance::Blurred,
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    window_min_size: Some(size(px(880.), px(560.))),
                     ..Default::default()
-                }),
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: Some(size(px(880.), px(560.))),
-                ..Default::default()
-            },
-            |window, cx| {
-                let store = match Store::open(paths.clone()) {
-                    Ok(store) => store,
-                    Err(error) => {
-                        eprintln!("could not open the Flowlist library: {error}");
-                        std::process::exit(1);
-                    }
-                };
-                let app = cx.new(|cx| FlowlistApp::new(store, cx));
-                let handle = app.read(cx).focus_handle.clone();
-                window.focus(&handle);
-                app
-            },
-        );
-        if let Err(error) = result {
-            eprintln!("could not open the Flowlist window: {error}");
-            return;
-        }
-        cx.activate(true);
-    });
+                },
+                |window, cx| {
+                    let store = match Store::open(paths.clone()) {
+                        Ok(store) => store,
+                        Err(error) => {
+                            eprintln!("could not open the Flowlist library: {error}");
+                            std::process::exit(1);
+                        }
+                    };
+                    let app = cx.new(|cx| FlowlistApp::new(store, cx));
+                    let handle = app.read(cx).focus_handle.clone();
+                    window.focus(&handle);
+                    app
+                },
+            );
+            if let Err(error) = result {
+                eprintln!("could not open the Flowlist window: {error}");
+                return;
+            }
+            cx.activate(true);
+        });
     Ok(())
 }
