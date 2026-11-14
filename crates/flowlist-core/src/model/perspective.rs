@@ -17,12 +17,13 @@ pub enum BuiltinPerspective {
     Tags,
     Completed,
     Changed,
+    Attachments,
     Nearby,
     Trash,
 }
 
 impl BuiltinPerspective {
-    pub const ALL: [BuiltinPerspective; 10] = [
+    pub const ALL: [BuiltinPerspective; 11] = [
         BuiltinPerspective::Inbox,
         BuiltinPerspective::Projects,
         BuiltinPerspective::Forecast,
@@ -31,6 +32,7 @@ impl BuiltinPerspective {
         BuiltinPerspective::Tags,
         BuiltinPerspective::Completed,
         BuiltinPerspective::Changed,
+        BuiltinPerspective::Attachments,
         BuiltinPerspective::Nearby,
         BuiltinPerspective::Trash,
     ];
@@ -45,6 +47,7 @@ impl BuiltinPerspective {
             BuiltinPerspective::Tags => "tags",
             BuiltinPerspective::Completed => "completed",
             BuiltinPerspective::Changed => "changed",
+            BuiltinPerspective::Attachments => "attachments",
             BuiltinPerspective::Nearby => "nearby",
             BuiltinPerspective::Trash => "trash",
         }
@@ -60,6 +63,7 @@ impl BuiltinPerspective {
             BuiltinPerspective::Tags => "Tags",
             BuiltinPerspective::Completed => "Completed",
             BuiltinPerspective::Changed => "Changed",
+            BuiltinPerspective::Attachments => "Attachments",
             BuiltinPerspective::Nearby => "Nearby",
             BuiltinPerspective::Trash => "Trash",
         }

@@ -1803,6 +1803,7 @@ dependencies = [
  "chrono",
  "clap",
  "flowlist-core",
+ "futures",
  "gpui",
  "objc",
  "owo-colors",

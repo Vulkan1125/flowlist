@@ -241,6 +241,22 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 rows: rows_for(db, &ids, at),
             }]
         }
+        BuiltinPerspective::Attachments => {
+            let ids: Vec<TaskId> = manual_order(db)
+                .into_iter()
+                .filter(|id| {
+                    db.tasks.get(id).is_some_and(|task| {
+                        !task.completed && !task.is_trashed() && !task.attachments.is_empty()
+                    })
+                })
+                .collect();
+            vec![Group {
+                key: "attachments".to_string(),
+                title: "Tasks with attachments".to_string(),
+                position: 0,
+                rows: rows_for(db, &ids, at),
+            }]
+        }
         BuiltinPerspective::Trash => {
             let ids = db.trashed_roots();
             vec![Group {

@@ -167,6 +167,9 @@ pub struct ListArgs {
     /// List tasks changed recently (the Changed perspective).
     #[arg(long)]
     pub changed: bool,
+    /// List tasks that have file attachments.
+    #[arg(long)]
+    pub attachments: bool,
     /// low | medium | high.
     #[arg(long)]
     pub priority: Option<String>,
@@ -814,6 +817,8 @@ fn cmd_list(cli: &Cli, args: ListArgs, paint: &Paint) -> Result<()> {
         query::view(db, BuiltinPerspective::Trash, at)
     } else if args.changed {
         query::view(db, BuiltinPerspective::Changed, at)
+    } else if args.attachments {
+        query::view(db, BuiltinPerspective::Attachments, at)
     } else if args.forecast {
         query::view(db, BuiltinPerspective::Forecast, at)
     } else if args.inbox

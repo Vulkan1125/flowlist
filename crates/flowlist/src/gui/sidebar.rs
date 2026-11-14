@@ -31,6 +31,7 @@ fn glyph(perspective: BuiltinPerspective) -> Icon {
         BuiltinPerspective::Tags => Icon::Tags,
         BuiltinPerspective::Completed => Icon::Completed,
         BuiltinPerspective::Changed => Icon::Clock,
+        BuiltinPerspective::Attachments => Icon::Paperclip,
         BuiltinPerspective::Nearby => Icon::Nearby,
         BuiltinPerspective::Trash => Icon::Trash,
     }

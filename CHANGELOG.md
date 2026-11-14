@@ -34,7 +34,14 @@
   in one undoable step, then opens that project. Attachments move to the
   project and leftover checklist items become tasks, so nothing is lost.
 - Project icons: a fixed set of ten glyphs, chosen in New Project and the
-  project inspector, rendered in the sidebar and dashboard.
+  project inspector, rendered in the sidebar and dashboard. The grid stays
+  folded behind the current icon until it is clicked.
+- Project and tag fields complete paths as you type: prefix matches first,
+  `↑`/`↓` to highlight, `Tab` or click to accept. Spaces around `/` are
+  optional.
+- The system-wide `⌃⌥Space` shortcut opens capture while another app is in
+  front. Flowlist activates, switches to Inbox if the current view has no
+  capture bar, and selects any previous capture text so typing starts fresh.
 - Follow-system appearance keeps the chosen theme family and takes light/dark
   from macOS.
 - Changing the theme now shows a toast naming the family and appearance.
@@ -59,10 +66,13 @@
 - **Changed** is the tenth built-in perspective, reached with `0`. Introspection
   and editing times feed a configurable `changed_days` window.
 - **Attachments** store referenced file paths on tasks and projects; files are
-  never copied into the library. CLI: `--attach` and `--clear-attachments`.
+  never copied into the library. Rows show a paperclip count and the
+  **Attachments** perspective lists every open task that has one. CLI:
+  `--attach`, `--clear-attachments` and `list --attachments`.
 - CLI: new `trash` and `convert` commands, `--kind`/`--icon` on projects and
-  `--changed` on `list`. MCP: trash tools, `convert_task_to_project`, attachment
-  fields and `icon` on project tools.
+  `--changed`/`--attachments` on `list`. MCP: trash tools,
+  `convert_task_to_project`, attachment fields and `icon` on project tools,
+  and an `attachments` view for `list_tasks`.
 - Added an OmniFocus 4.3 comparison and the next adopted gaps to
   `docs/backlog.md`.
 

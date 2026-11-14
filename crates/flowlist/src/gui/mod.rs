@@ -7,6 +7,7 @@
 mod blur;
 mod content;
 mod drag;
+mod hotkey;
 mod icons;
 mod inspector;
 mod modals;
@@ -130,6 +131,10 @@ pub struct FlowlistApp {
     /// The header dropdowns, which list every option instead of cycling.
     sort_menu_open: bool,
     group_menu_open: bool,
+    /// The project inspector's icon grid, shown only on request.
+    project_icon_open: bool,
+    /// Highlighted completion in the project and tag fields.
+    suggestion_index: usize,
     selected: Vec<TaskId>,
     anchor: Option<TaskId>,
     expanded: BTreeSet<String>,
@@ -234,6 +239,8 @@ impl FlowlistApp {
             view_options,
             sort_menu_open: false,
             group_menu_open: false,
+            project_icon_open: false,
+            suggestion_index: 0,
             selected,
             anchor: None,
             expanded: BTreeSet::new(),
@@ -518,6 +525,7 @@ impl FlowlistApp {
     /// from inside a command; `open_view` is the interactive entry point.
     fn set_view(&mut self, view: View) {
         self.remember_view_options();
+        self.project_icon_open = false;
         self.view = view;
         self.restore_view_options();
         self.selected.clear();
@@ -1069,6 +1077,28 @@ impl FlowlistApp {
 
     // ------------------------------------------------------------- capture
 
+    /// The system-wide capture shortcut can fire while another app is in
+    /// front. Bring Flowlist forward, leave any perspective that has no
+    /// capture bar, and put the caret in capture with the old text selected so
+    /// typing starts a fresh task without losing what was there.
+    fn focus_capture(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.view.shows_capture() {
+            self.open_view(View::Builtin(BuiltinPerspective::Inbox), cx);
+        }
+        self.editing = None;
+        self.modal = None;
+        self.checklist_editing = None;
+        self.focus = FocusArea::Capture;
+        self.capture.end(false);
+        self.capture.select_all();
+        // A Carbon hotkey fires while another app owns the menu bar, so
+        // activate the app itself before asking the window to come forward.
+        cx.activate(true);
+        window.activate_window();
+        window.focus(&self.focus_handle);
+        cx.notify();
+    }
+
     fn commit_capture(&mut self, cx: &mut Context<Self>) {
         let text = self.capture.take();
         let trimmed = text.trim();
@@ -1184,25 +1214,83 @@ impl FlowlistApp {
         cx.notify();
     }
 
+    /// Every open project, as a `Folder / Project` path.
+    fn project_paths(&self) -> Vec<String> {
+        let db = self.store.db();
+        db.flatten_containers()
+            .into_iter()
+            .filter_map(|row| match row.container {
+                ContainerId::Project(id) => db
+                    .projects
+                    .get(&id)
+                    .filter(|project| project.status.is_open())
+                    .map(|_| db.project_path(&id)),
+                ContainerId::Folder(_) => None,
+            })
+            .collect()
+    }
+
+    fn tag_paths(&self) -> Vec<String> {
+        let db = self.store.db();
+        db.flatten_tags()
+            .into_iter()
+            .map(|row| db.tag_path(&row.tag))
+            .collect()
+    }
+
+    /// Prefix matches first, then substring matches. The query accepts either
+    /// `Work / Launch` or the faster `Work/Launch`.
+    fn suggest_paths(&self, corpus: Vec<String>, query: &str) -> Vec<String> {
+        rank_suggestions(corpus, query)
+    }
+
+    fn project_suggestions(&self) -> Vec<String> {
+        if self.editing != Some(EditField::Project) || self.focus != FocusArea::Field {
+            return Vec::new();
+        }
+        self.suggest_paths(self.project_paths(), self.field.text())
+    }
+
+    fn tag_suggestions(&self) -> Vec<String> {
+        if self.focus != FocusArea::TagInput {
+            return Vec::new();
+        }
+        self.suggest_paths(self.tag_paths(), self.tag_buffer.text())
+    }
+
+    fn choose_project_suggestion(&mut self, path: String, cx: &mut Context<Self>) {
+        self.field.set(path);
+        self.suggestion_index = 0;
+        self.commit_field(cx);
+    }
+
+    fn choose_tag_suggestion(&mut self, path: String, cx: &mut Context<Self>) {
+        self.tag_buffer.set(path);
+        self.suggestion_index = 0;
+        self.add_tag_from_buffer(cx);
+    }
+
     fn begin_edit(&mut self, field: EditField, cx: &mut Context<Self>) {
         // The project inspector has no selected task; attachments still use
         // the same field so the interaction is identical in both places.
-        if field == EditField::Attachments && self.selected_one().is_none() {
-            if let View::Project(project_id) = self.view.clone() {
-                let value = self
-                    .store
-                    .db()
-                    .projects
-                    .get(&project_id)
-                    .map(|project| project.attachments.join("\n"))
-                    .unwrap_or_default();
-                self.field.set(value);
-                self.field_error = None;
-                self.editing = Some(field);
-                self.focus = FocusArea::Field;
-                cx.notify();
-                return;
-            }
+        if field == EditField::Attachments
+            && self.selected_one().is_none()
+            && let View::Project(project_id) = self.view.clone()
+        {
+            let value = self
+                .store
+                .db()
+                .projects
+                .get(&project_id)
+                .map(|project| project.attachments.join("\n"))
+                .unwrap_or_default();
+            self.field.set(value);
+            self.field_error = None;
+            self.suggestion_index = 0;
+            self.editing = Some(field);
+            self.focus = FocusArea::Field;
+            cx.notify();
+            return;
         }
         let Some(id) = self.selected_one() else {
             self.toast = Some("Select a task first".to_string());
@@ -1242,6 +1330,7 @@ impl FlowlistApp {
         };
         self.field.set(value);
         self.field_error = None;
+        self.suggestion_index = 0;
         self.editing = Some(field);
         self.focus = FocusArea::Field;
         cx.notify();
@@ -1659,6 +1748,7 @@ impl FlowlistApp {
                 notes,
                 kind,
                 icon,
+                ..
             } => {
                 let name = name.text().trim().to_string();
                 if name.is_empty() {
@@ -1982,6 +2072,43 @@ impl FlowlistApp {
                 }
                 cx.notify();
                 return;
+            }
+            // Project and tag fields offer path completions. When a list is
+            // open, Up/Down pick a row and Tab accepts it; otherwise the keys
+            // keep their normal text-editing meaning.
+            let suggestions =
+                if self.focus == FocusArea::Field && self.editing == Some(EditField::Project) {
+                    self.project_suggestions()
+                } else if self.focus == FocusArea::TagInput {
+                    self.tag_suggestions()
+                } else {
+                    Vec::new()
+                };
+            if !suggestions.is_empty() {
+                match stroke.key.as_str() {
+                    "down" => {
+                        self.suggestion_index = (self.suggestion_index + 1) % suggestions.len();
+                        cx.notify();
+                        return;
+                    }
+                    "up" => {
+                        self.suggestion_index =
+                            (self.suggestion_index + suggestions.len() - 1) % suggestions.len();
+                        cx.notify();
+                        return;
+                    }
+                    "tab" if !mods.shift => {
+                        let pick =
+                            suggestions[self.suggestion_index.min(suggestions.len() - 1)].clone();
+                        if self.focus == FocusArea::TagInput {
+                            self.choose_tag_suggestion(pick, cx);
+                        } else {
+                            self.choose_project_suggestion(pick, cx);
+                        }
+                        return;
+                    }
+                    _ => {}
+                }
             }
             if let Some(buffer) = self.active_buffer_mut() {
                 match handle_buffer_key(buffer, stroke, paste.as_deref()) {
@@ -2976,6 +3103,32 @@ fn perspective_for_digit(key: &str) -> Option<BuiltinPerspective> {
     }
 }
 
+/// Rank completion candidates for a project or tag field: prefix matches come
+/// before substring matches, an exact path is dropped, and at most six rows are
+/// offered. Spaces around `/` are optional so `Work/Launch` finds `Work / Launch`.
+fn rank_suggestions(corpus: Vec<String>, query: &str) -> Vec<String> {
+    let query = query.trim().to_lowercase().replace(" / ", "/");
+    if query.is_empty() {
+        return Vec::new();
+    }
+    let mut prefix = Vec::new();
+    let mut contains = Vec::new();
+    for path in corpus {
+        let normalized = path.to_lowercase().replace(" / ", "/");
+        if normalized == query {
+            continue;
+        }
+        if normalized.starts_with(&query) {
+            prefix.push(path);
+        } else if normalized.contains(&query) {
+            contains.push(path);
+        }
+    }
+    prefix.extend(contains);
+    prefix.truncate(6);
+    prefix
+}
+
 fn sort_slug(sort: SortBy) -> &'static str {
     match sort {
         SortBy::Manual => "manual",
@@ -3115,6 +3268,13 @@ impl FlowlistApp {
                     .filter(|task| !task.is_trashed() && task.modified_at >= cutoff)
                     .count()
             }
+            BuiltinPerspective::Attachments => db
+                .tasks
+                .values()
+                .filter(|task| {
+                    !task.completed && !task.is_trashed() && !task.attachments.is_empty()
+                })
+                .count(),
             BuiltinPerspective::Trash => db.trash_count(),
         }
     }
@@ -3129,6 +3289,7 @@ impl FlowlistApp {
         let state = serde_json::json!({
             "view": self.view.key(),
             "modal": self.modal.as_ref().map(|modal| modal.title()),
+            "focus": format!("{:?}", self.focus),
             "selected": self.selected.len(),
             "window": self.window_size,
             "theme": self.theme.kind().slug(),
@@ -3574,7 +3735,7 @@ pub fn run(paths: DataPaths) -> Result<()> {
         .with_assets(icons::Assets)
         .run(move |cx: &mut App| {
             let bounds = Bounds::centered(None, restored.unwrap_or(size(px(1240.), px(800.))), cx);
-            let result = cx.open_window(
+            let window = match cx.open_window(
                 WindowOptions {
                     titlebar: Some(gpui::TitlebarOptions {
                         title: Some("Flowlist".into()),
@@ -3599,12 +3760,77 @@ pub fn run(paths: DataPaths) -> Result<()> {
                     window.focus(&handle);
                     app
                 },
-            );
-            if let Err(error) = result {
-                eprintln!("could not open the Flowlist window: {error}");
-                return;
+            ) {
+                Ok(window) => window,
+                Err(error) => {
+                    eprintln!("could not open the Flowlist window: {error}");
+                    return;
+                }
+            };
+            // A Carbon hotkey wakes the app even while another app is in
+            // front. The callback only signals this foreground stream.
+            if let Some(mut presses) = hotkey::register() {
+                use futures::StreamExt as _;
+                cx.spawn(async move |cx| {
+                    while presses.next().await.is_some() {
+                        let updated = window.update(cx, |app, window, cx| {
+                            app.focus_capture(window, cx);
+                        });
+                        if updated.is_err() {
+                            break;
+                        }
+                    }
+                })
+                .detach();
             }
             cx.activate(true);
         });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rank_suggestions;
+
+    fn corpus() -> Vec<String> {
+        vec![
+            "Work / Launch".to_string(),
+            "Work / Launch follow-up".to_string(),
+            "Home / Garden".to_string(),
+            "Archive / Old launch".to_string(),
+            "Errands".to_string(),
+        ]
+    }
+
+    #[test]
+    fn suggestions_prefer_prefix_then_substring() {
+        let rows = rank_suggestions(corpus(), "work");
+        assert_eq!(
+            rows,
+            vec![
+                "Work / Launch".to_string(),
+                "Work / Launch follow-up".to_string(),
+            ]
+        );
+
+        let rows = rank_suggestions(corpus(), "launch");
+        assert_eq!(rows[0], "Work / Launch");
+        assert_eq!(rows[1], "Work / Launch follow-up");
+        assert_eq!(rows[2], "Archive / Old launch");
+    }
+
+    #[test]
+    fn suggestions_accept_paths_without_spaces_and_drop_exact_matches() {
+        let rows = rank_suggestions(corpus(), "work/launch");
+        // The exact path is not offered back as a completion.
+        assert_eq!(rows, vec!["Work / Launch follow-up".to_string()]);
+        assert!(rank_suggestions(corpus(), "  ").is_empty());
+        assert_eq!(rank_suggestions(corpus(), "zzz").len(), 0);
+    }
+
+    #[test]
+    fn suggestions_are_capped_at_six() {
+        let many: Vec<String> = (0..10).map(|index| format!("Item {index}")).collect();
+        assert_eq!(rank_suggestions(many, "item").len(), 6);
+    }
 }

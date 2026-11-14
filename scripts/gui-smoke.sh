@@ -6,7 +6,9 @@
 # Builds two small Swift/CoreGraphics helpers, starts the release binary on a
 # temporary library, then uses real mouse clicks to:
 #   1. open the sidebar "New project" sheet, type a name and create it;
-#   2. open a saved perspective with its hover pencil.
+#   2. open a saved perspective with its hover pencil;
+#   3. press the system-wide capture shortcut while Finder is in front and
+#      confirm Flowlist comes back with the caret in capture.
 #
 # The app writes FLOWLIST_TEST_STATE (view, open modal, selection, window size)
 # so the test can wait for state instead of guessing from pixels. If macOS,
@@ -93,6 +95,18 @@ except (OSError, ValueError):
 PY
 }
 
+focus_area() {
+	python3 - "$state" <<'PY'
+import json
+import sys
+
+try:
+    print(json.load(open(sys.argv[1])).get("focus") or "")
+except (OSError, ValueError):
+    print("")
+PY
+}
+
 focus_app() {
 	read_window
 	"$helpers/flowctl" mouse "$((${wx%.*} + ${ww%.*} / 2))" "$((${wy%.*} + 200))"
@@ -130,12 +144,12 @@ if ! "$bin" --data-dir "$lib" project list --json | grep -q '"Smoke project"'; t
 fi
 
 # 2. Hover pencil on the only saved perspective. The row sits below the
-#    ten built-in perspectives, the PRIORITIES section and its three rows, so
-#    its centre is roughly 508px below the top of the window. The offsets cover
-#    small spacing drift.
+#    eleven built-in perspectives, the PRIORITIES section and its three rows,
+#    so its centre is roughly 558px below the top of the window. The offsets
+#    cover spacing drift.
 opened=""
-for y in 508 504 512 500 516 496 520 492 524 488 528 484 532 480 536; do
-	for x in 190 195 185; do
+for y in 556 552 560 564 568 548 572 544; do
+	for x in 186 190 182 194; do
 		focus_app
 		"$helpers/flowctl" mouse "$((${wx%.*} + x))" "$((${wy%.*} + y))"
 		sleep 0.45
@@ -153,4 +167,23 @@ if [ "$opened" != 1 ]; then
 fi
 
 "$helpers/flowctl" key 53
-echo "GUI smoke test passed: New project and perspective pencil"
+
+# 3. Control+Option+Space is the system-wide capture shortcut. Finder takes
+#    the foreground first, so this proves the hotkey works while another app
+#    owns the menu bar. A synthetic press needs the same Accessibility
+#    permission as the mouse clicks above.
+open -a Finder
+sleep 1
+"$helpers/flowctl" key 49 ctrlalt
+focus=""
+for _ in $(seq 1 40); do
+	focus=$(focus_area)
+	[ "$focus" = "Capture" ] && break
+	sleep 0.15
+done
+if [ "$focus" != "Capture" ]; then
+	echo "FAIL: the capture hotkey did not focus the capture bar" >&2
+	exit 1
+fi
+
+echo "GUI smoke test passed: New project, perspective pencil and capture hotkey"

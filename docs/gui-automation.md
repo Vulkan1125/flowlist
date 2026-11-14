@@ -26,8 +26,11 @@ failure.
 2. **Perspective pencil.** Clicks the pencil on a saved perspective and waits
    for the rich perspective editor. This is the mouse-only path that has no
    keyboard equivalent for opening the editor's conditions.
+3. **Capture hotkey.** Activates Finder, posts `⌃⌥Space` and waits for
+   `focus` to become `Capture`. Because Finder owns the menu bar first, this
+   exercises the same background path a real user takes.
 
-Both flows use a temporary library, so the test never touches the real one.
+All flows use a temporary library, so the test never touches the real one.
 
 ## The test-state hook
 
@@ -37,6 +40,7 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
 {
   "view": "custom:01M79...",
   "modal": "Perspective",
+  "focus": "Content",
   "selected": 0,
   "window": [1254.0, 1404.0],
   "theme": "catppuccin",
@@ -48,8 +52,9 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
 ```
 
 `modal` is `null` when no sheet is open, otherwise the sheet title (`New
-project`, `Perspective`, `Settings`, …). `traffic_lights` reports whether the
-AppKit window buttons were hidden. The file is rewritten only when one of
+project`, `Perspective`, `Settings`, …). `focus` names the active pane or field
+(`Content`, `Capture`, `Sidebar`, `Field`, `Modal`, …). `traffic_lights` reports
+whether the AppKit window buttons were hidden. The file is rewritten only when one of
 those values changes, and the hook is inert unless the variable is set. It does
 not contain task text, notes or the library itself.
 
@@ -66,7 +71,7 @@ The offsets are:
 | Target | Offset from the window's top-left |
 | --- | --- |
 | `＋ Project` | `(35, height − 77)` |
-| saved-perspective pencil | `(190, 384)` |
+| saved-perspective pencil | `(186, 558)` |
 
 If the sidebar layout changes, update those two rows. The script fails loudly
 rather than pretending the flow worked. When GPUI gains an accessibility API,
@@ -74,6 +79,7 @@ these clicks can be replaced by named actions without changing the assertions.
 
 ## Helpers
 
-- `scripts/gui/flowctl.swift` posts mouse moves, clicks and key events.
+- `scripts/gui/flowctl.swift` posts mouse moves, clicks and key events. Its
+  modifiers include `ctrlalt`, used for the capture hotkey.
 - `scripts/gui/window.swift` prints the live window title, origin and size.
 - Both are compiled into the temporary directory when the smoke test runs.

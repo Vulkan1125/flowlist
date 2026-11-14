@@ -726,6 +726,61 @@ impl FlowlistApp {
         section
     }
 
+    /// A compact completion list under the project and tag fields. Rows are
+    /// clickable and Tab accepts the highlighted one.
+    fn inspector_suggestions(
+        &self,
+        suggestions: Vec<String>,
+        tags: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let highlighted = self
+            .suggestion_index
+            .min(suggestions.len().saturating_sub(1));
+        let mut list = div()
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border_soft)
+            .bg(theme.raised);
+        for (index, path) in suggestions.into_iter().enumerate() {
+            let pick = path.clone();
+            list = list.child(
+                div()
+                    .id(super::sid(format!("suggestion:{index}:{path}")))
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if index == highlighted {
+                        theme.accent
+                    } else {
+                        theme.text_dim
+                    })
+                    .bg(if index == highlighted {
+                        theme.selection
+                    } else {
+                        theme.clear
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(path)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if tags {
+                            this.choose_tag_suggestion(pick.clone(), cx);
+                        } else {
+                            this.choose_project_suggestion(pick.clone(), cx);
+                        }
+                    })),
+            );
+        }
+        list
+    }
+
     fn inspector_tag_section(
         &self,
         tags: &[(flowlist_core::ids::TagId, String)],
@@ -786,10 +841,15 @@ impl FlowlistApp {
                         ))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.focus = super::FocusArea::TagInput;
+                            this.suggestion_index = 0;
                             this.tag_buffer.end(false);
                             cx.notify();
                         })),
                 );
+        let suggestions = self.tag_suggestions();
+        if !suggestions.is_empty() {
+            section = section.child(self.inspector_suggestions(suggestions, true, cx));
+        }
         if has_tag.is_none() {
             section = section.opacity(0.6);
         }
@@ -854,7 +914,8 @@ impl FlowlistApp {
                 .on_click(cx.listener(|this, _, _, cx| this.begin_edit(EditField::Project, cx)))
                 .into_any_element()
         };
-        div()
+        let suggestions = self.project_suggestions();
+        let mut section = div()
             .flex()
             .flex_col()
             .gap_1()
@@ -864,7 +925,11 @@ impl FlowlistApp {
                     .text_color(theme.text_faint)
                     .child("Project"),
             )
-            .child(field)
+            .child(field);
+        if !suggestions.is_empty() {
+            section = section.child(self.inspector_suggestions(suggestions, false, cx));
+        }
+        section
     }
 
     fn render_project_inspector(
@@ -916,11 +981,49 @@ impl FlowlistApp {
             .child(
                 div()
                     .flex()
-                    .flex_wrap()
                     .items_center()
-                    .gap_1()
+                    .gap_2()
                     .child(div().text_xs().text_color(theme.text_faint).child("Icon"))
-                    .children(ProjectIcon::ALL.into_iter().map(|candidate| {
+                    .child(
+                        div()
+                            .id("project-icon-toggle")
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .px_2()
+                            .py_1()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(if self.project_icon_open {
+                                theme.accent
+                            } else {
+                                theme.border_soft
+                            })
+                            .bg(if self.project_icon_open {
+                                theme.selection
+                            } else {
+                                theme.clear
+                            })
+                            .cursor_pointer()
+                            .tooltip(widgets::tip(theme, "Change the project icon"))
+                            .hover(|style| style.bg(theme.hover))
+                            .child(widgets::icon_for_project(icon, 14.0, theme.text_dim))
+                            .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.project_icon_open = !this.project_icon_open;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child(icon.label()),
+                    ),
+            )
+            .when(self.project_icon_open, |this| {
+                this.child(div().flex().flex_wrap().items_center().gap_1().children(
+                    ProjectIcon::ALL.into_iter().map(|candidate| {
                         let set_id = project_id.clone();
                         let active = icon == candidate;
                         div()
@@ -960,10 +1063,12 @@ impl FlowlistApp {
                                         ..Default::default()
                                     },
                                 });
+                                this.project_icon_open = false;
                                 cx.notify();
                             }))
-                    })),
-            )
+                    }),
+                ))
+            })
             .child(
                 div()
                     .flex()

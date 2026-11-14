@@ -52,10 +52,12 @@ landed and verified.
       grid, day columns or an agenda, drag-to-reschedule and keyboard
       navigation. The Forecast month calendar is a first step, not the whole
       calendar.
-- [ ] **Background capture** — a system-wide shortcut that opens a small
-      capture field without focusing the main window, plus a menu-bar route.
-      Must work with the app in the background and hand off to the same command
-      layer.
+- [x] **Background capture** — `⌃⌥Space` is registered with Carbon's
+      `RegisterEventHotKey`, so it fires while another app is in front.
+      Flowlist activates, falls back to Inbox when the current view has no
+      capture bar, and focuses capture with any previous text selected. It
+      hands off to the same quick-entry parser and command layer. A separate
+      menu-bar capture window is still open.
 
 ## Research and design
 

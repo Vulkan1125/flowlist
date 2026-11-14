@@ -101,6 +101,7 @@ Frequently used shortcuts:
 | Shortcut | Action |
 | --- | --- |
 | `n` | quick capture |
+| `⌃⌥Space` | capture from any app; brings Flowlist forward |
 | `/` or `⌘F` | search |
 | `↑` / `↓`, `⇧↑` / `⇧↓` | move / extend selection |
 | `space` | complete or reopen |

@@ -20,6 +20,7 @@ flowlist-core = { path = "../flowlist-core" }
 anyhow.workspace = true
 chrono.workspace = true
 clap.workspace = true
+futures.workspace = true
 owo-colors.workspace = true
 schemars.workspace = true
 serde.workspace = true

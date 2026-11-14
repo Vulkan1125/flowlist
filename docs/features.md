@@ -42,6 +42,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Tags
 - [x] Completed
 - [x] Changed (recently edited, configurable window)
+- [x] Attachments (open tasks with file paths)
 - [x] Nearby (location + radius)
 - [x] Trash (restore, delete forever, auto-empty)
 - [x] Priority rows and a global priority filter
@@ -58,7 +59,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] `add`, `list`, `edit`, `done`, `remove`, `mv`, `convert`
 - [x] `trash` list / `--restore` / `--delete` / `--empty`
 - [x] `--priority` on add/edit/list, `--kind`/`--icon` on projects and
-      `--attach`/`--clear-attachments` on tasks
+      `--attach`/`--clear-attachments` on tasks and projects
+- [x] `--changed` and `--attachments` on `list`
 - [x] `checklist list|add|set|move|remove`
 - [x] `tag add|remove|set`, `tags`
 - [x] `project add|list|status|review|edit`
@@ -111,10 +113,16 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Inspector with checklist add/toggle/rename/reorder/delete and progress
 - [x] Task subtitle type chips (parallel/sequential action groups)
 - [x] Attachments in the task and project inspectors: add paths, open,
-      remove
+      remove, plus a paperclip count badge on rows
 - [x] Convert a task and its subtasks into a project in one undo step
-- [x] Project icon picker in the inspector and New Project sheet, with the
-      chosen icon in the sidebar and dashboard
+- [x] Project icon picker collapsed behind the current icon button in the
+      inspector and New Project sheet, with the chosen icon in the sidebar
+      and dashboard
+- [x] Project and tag autocomplete: prefix-first `Folder / Project` and
+      `Parent / Child` paths, `↑`/`↓` to highlight, `Tab` or click to accept
+- [x] System-wide capture (`⌃⌥Space`) works while another app is in front;
+      Flowlist comes forward with capture focused and switches to Inbox from
+      perspectives that have no capture bar
 - [x] Task progress badge for checklists
 - [x] Drag/drop tasks into projects, tags, parents and sibling positions
 - [x] Project dashboard with progress, status, review info and project type

@@ -31,6 +31,8 @@ pub enum Modal {
         notes: TextBuffer,
         kind: ProjectKind,
         icon: ProjectIcon,
+        /// The icon grid stays folded away until the current icon is clicked.
+        icon_open: bool,
     },
     NewFolder {
         name: TextBuffer,
@@ -93,6 +95,7 @@ impl Modal {
             notes: TextBuffer::empty(),
             kind: ProjectKind::Parallel,
             icon: ProjectIcon::default(),
+            icon_open: false,
         }
     }
 
@@ -762,9 +765,14 @@ impl FlowlistApp {
 
     fn render_new_project_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
-        let (kind, icon) = match &self.modal {
-            Some(Modal::NewProject { kind, icon, .. }) => (*kind, *icon),
-            _ => (ProjectKind::Parallel, ProjectIcon::default()),
+        let (kind, icon, icon_open) = match &self.modal {
+            Some(Modal::NewProject {
+                kind,
+                icon,
+                icon_open,
+                ..
+            }) => (*kind, *icon, *icon_open),
+            _ => (ProjectKind::Parallel, ProjectIcon::default(), false),
         };
         let mut row = div().flex().flex_col().gap_1().child(
             div()
@@ -794,44 +802,97 @@ impl FlowlistApp {
                 .text_color(theme.text_faint)
                 .child(kind.hint()),
         );
-        let mut icons = div().flex().items_center().gap_1();
-        for candidate in ProjectIcon::ALL {
-            let active = icon == candidate;
-            icons = icons.child(
+        let icon_row = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(div().text_xs().text_color(theme.text_faint).child("Icon"))
+            .child(
                 div()
-                    .id(super::sid(format!("project-icon:{}", candidate.slug())))
-                    .size(px(26.))
                     .flex()
                     .items_center()
-                    .justify_center()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(if active {
-                        theme.accent
-                    } else {
-                        theme.border_soft
-                    })
-                    .bg(if active { theme.selection } else { theme.clear })
-                    .cursor_pointer()
-                    .tooltip(widgets::tip(theme, candidate.label()))
-                    .hover(|style| style.bg(theme.hover))
-                    .child(widgets::icon_for_project(candidate, 14.0, theme.text_dim))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(Modal::NewProject { icon, .. }) = &mut this.modal {
-                            *icon = candidate;
-                        }
-                        cx.notify();
-                    })),
-            );
-        }
-        row.child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(div().text_xs().text_color(theme.text_faint).child("Icon"))
-                .child(icons),
-        )
+                    .gap_2()
+                    .child(
+                        div()
+                            .id("new-project-icon-toggle")
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .px_2()
+                            .py_1()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(if icon_open {
+                                theme.accent
+                            } else {
+                                theme.border_soft
+                            })
+                            .bg(if icon_open {
+                                theme.selection
+                            } else {
+                                theme.clear
+                            })
+                            .cursor_pointer()
+                            .tooltip(widgets::tip(theme, format!("Icon · {}", icon.label())))
+                            .hover(|style| style.bg(theme.hover))
+                            .child(widgets::icon_for_project(icon, 14.0, theme.text_dim))
+                            .child(icons::icon(
+                                super::icons::Icon::ChevronDown,
+                                10.0,
+                                theme.text_faint,
+                            ))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(Modal::NewProject { icon_open, .. }) = &mut this.modal {
+                                    *icon_open = !*icon_open;
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child(icon.label()),
+                    ),
+            )
+            .when(icon_open, |this| {
+                let mut icons = div().flex().items_center().gap_1();
+                for candidate in ProjectIcon::ALL {
+                    let active = icon == candidate;
+                    icons = icons.child(
+                        div()
+                            .id(super::sid(format!("project-icon:{}", candidate.slug())))
+                            .size(px(26.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(if active {
+                                theme.accent
+                            } else {
+                                theme.border_soft
+                            })
+                            .bg(if active { theme.selection } else { theme.clear })
+                            .cursor_pointer()
+                            .tooltip(widgets::tip(theme, candidate.label()))
+                            .hover(|style| style.bg(theme.hover))
+                            .child(widgets::icon_for_project(candidate, 14.0, theme.text_dim))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(Modal::NewProject {
+                                    icon, icon_open, ..
+                                }) = &mut this.modal
+                                {
+                                    *icon = candidate;
+                                    *icon_open = false;
+                                }
+                                cx.notify();
+                            })),
+                    );
+                }
+                this.child(icons)
+            });
+        row.child(icon_row)
     }
 
     fn render_settings_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {

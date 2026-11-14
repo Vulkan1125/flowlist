@@ -51,6 +51,7 @@ func flags(_ name: String?) -> CGEventFlags {
     case "ctrlshift": return [.maskControl, .maskShift]
     case "altcmd": return [.maskCommand, .maskAlternate]
     case "ctrlcmd": return [.maskCommand, .maskControl]
+    case "ctrlalt": return [.maskControl, .maskAlternate]
     default: return []
     }
 }

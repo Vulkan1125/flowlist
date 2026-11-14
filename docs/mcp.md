@@ -59,8 +59,8 @@ tasks. `create_project` and `update_project` accept the same `attachments` and
 | `list_tasks` | list by built-in view or filter |
 
 `list_tasks` accepts `view` (`inbox`, `projects`, `forecast`, `flagged`, `tags`,
-`completed`, `nearby`, `review`), `project`, `tag`, `folder`, `search`, `filter`,
-`sort`, `group`, `limit` and `include_completed`.
+`completed`, `changed`, `attachments`, `nearby`, `review`), `project`, `tag`,
+`folder`, `search`, `filter`, `sort`, `group`, `limit` and `include_completed`.
 
 ### Checklist items
 

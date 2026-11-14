@@ -282,6 +282,68 @@ fn query_views_and_stats_agree() {
 }
 
 #[test]
+fn attachments_view_lists_open_tasks_with_files() {
+    use flowlist_core::model::BuiltinPerspective;
+    use flowlist_core::query;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let with_file = add(&mut store, "Send the brief");
+    let with_file_id = store.db().resolve_task(&with_file).unwrap();
+    store
+        .execute(Command::UpdateTask {
+            id: with_file_id.clone(),
+            patch: TaskPatch {
+                attachments: Some(vec![" /tmp/brief.pdf ".into()]),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    let done = add(&mut store, "Already finished");
+    let done_id = store.db().resolve_task(&done).unwrap();
+    store
+        .execute(Command::UpdateTask {
+            id: done_id.clone(),
+            patch: TaskPatch {
+                attachments: Some(vec!["/tmp/final.pdf".into()]),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![done_id.clone()],
+            completed: true,
+        })
+        .unwrap();
+    let trashed = add(&mut store, "Old attachment");
+    let trashed_id = store.db().resolve_task(&trashed).unwrap();
+    store
+        .execute(Command::UpdateTask {
+            id: trashed_id.clone(),
+            patch: TaskPatch {
+                attachments: Some(vec!["/tmp/old.pdf".into()]),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    store
+        .execute(Command::DeleteTasks {
+            ids: vec![trashed_id],
+        })
+        .unwrap();
+    add(&mut store, "No files");
+
+    let groups = query::view(store.db(), BuiltinPerspective::Attachments, Utc::now());
+    let ids: Vec<_> = groups
+        .iter()
+        .flat_map(|group| group.rows.iter().map(|row| row.id.clone()))
+        .collect();
+    assert_eq!(ids, vec![with_file_id]);
+    assert_eq!(groups[0].title, "Tasks with attachments");
+}
+
+#[test]
 fn merge_import_reuses_tags_by_path() {
     let (_dir, paths) = setup();
     let mut store = Store::open(paths).unwrap();

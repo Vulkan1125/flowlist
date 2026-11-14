@@ -863,6 +863,7 @@ impl FlowlistApp {
         let has_children = task.has_children();
         let expanded = self.is_open(&format!("task:{id}"), false);
         let estimate = task.estimate_min;
+        let attachment_count = task.attachments.len();
         let (checklist_done, checklist_total) = task.checklist_progress();
         let due = task.due;
         let defer = task.defer;
@@ -1072,6 +1073,26 @@ impl FlowlistApp {
                             format_duration(minutes),
                             theme.text_faint,
                         ))
+                    })
+                    .when(attachment_count > 0, |this| {
+                        this.child(
+                            div()
+                                .id(super::sid(format!("attachments:{}", row.id)))
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .tooltip(widgets::tip(
+                                    theme,
+                                    format!(
+                                        "{attachment_count} attachment{}",
+                                        if attachment_count == 1 { "" } else { "s" }
+                                    ),
+                                ))
+                                .child(icons::icon(Icon::Paperclip, 11.0, theme.text_faint))
+                                .child(attachment_count.to_string()),
+                        )
                     })
                     .when(checklist_total > 0, |this| {
                         this.child(widgets::chip(

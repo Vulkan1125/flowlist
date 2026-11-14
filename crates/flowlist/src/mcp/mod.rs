@@ -603,6 +603,7 @@ impl Server {
             "completed" => query::view(db, BuiltinPerspective::Completed, at),
             "nearby" => query::view(db, BuiltinPerspective::Nearby, at),
             "changed" => query::view(db, BuiltinPerspective::Changed, at),
+            "attachments" => query::view(db, BuiltinPerspective::Attachments, at),
             "trash" => query::view(db, BuiltinPerspective::Trash, at),
             "review" => Vec::new(),
             "custom" | "perspective" => {
@@ -1428,10 +1429,10 @@ fn tool_definitions() -> Vec<Value> {
         ),
         tool(
             "list_tasks",
-            "List tasks using a built-in view (inbox, projects, forecast, flagged, tags, completed, changed, nearby, review) or a filter.",
+            "List tasks using a built-in view (inbox, projects, forecast, flagged, tags, completed, changed, attachments, nearby, review) or a filter.",
             schema(
                 json!({
-                    "view": s("all | inbox | projects | forecast | flagged | tags | completed | changed | nearby | review | trash | custom"),
+                    "view": s("all | inbox | projects | forecast | flagged | tags | completed | changed | attachments | nearby | review | trash | custom"),
                     "perspective": s("Custom perspective name or id (with view=custom)"),
                     "project": s("Project path filter"),
                     "folder": s("Folder path filter (includes child folders)"),
