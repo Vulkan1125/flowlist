@@ -17,6 +17,28 @@
   left-to-right gradient ramp under the title bar.
 - Added `docs/backlog.md` and `AGENTS.md` so outstanding work, including the
   Things 3 "Pending" list, survives a context reset.
+- Deleting tasks now selects the row that took their place, so `j`/`k` keep
+  working and the list never loses the cursor.
+- Clicking a Forecast calendar date filters the list to that day. Click again
+  or press `\` to clear; `[`/`]` step a day and `{`/`}` step a month.
+- Project types: parallel, sequential and single-action projects, chosen in the
+  New Project sheet and cycled from the project banner.
+
+### Library
+
+- **Trash** is a ninth built-in perspective. Delete moves tasks and their
+  subtrees to Trash; `r` restores them, Delete forever purges them, and
+  Settings controls auto-delete after a retention period (`0` keeps forever).
+  The automatic sweep runs as a normal command and is undoable.
+- **Priorities**: optional High / Medium / Low, shown as a coloured mark on
+  rows, editable in the inspector, filterable from every view, and available
+  as sidebar rows plus CLI (`--priority`) and MCP fields.
+- **Project kinds** are persisted alongside the legacy `sequential` flag, so
+  older libraries keep their sequential behaviour.
+- CLI: new `trash` command and `--kind` on projects. MCP: new
+  `list_trash`, `restore_tasks`, `purge_tasks` and `empty_trash` tools.
+- Added an OmniFocus 4.3 comparison and the next adopted gaps to
+  `docs/backlog.md`.
 
 ## 0.1.0 — 2026-11-13
 

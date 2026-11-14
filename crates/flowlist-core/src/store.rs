@@ -75,13 +75,38 @@ impl Store {
         let history = persist::load_history(&paths, &data.db);
         persist::save_history(&paths, &history)?;
         let last_mtime = mtime(&paths.data());
-        Ok(Self {
+        let mut store = Self {
             paths,
             data,
             history,
             last_mtime,
             warning,
-        })
+        };
+        // Trash that outlived the retention setting is permanently removed on
+        // open. The purge is a normal command, so it stays in history and can
+        // be undone.
+        store.sweep_trash()?;
+        Ok(store)
+    }
+
+    /// Permanently remove Trash older than `settings.trash_retention_days`.
+    /// A retention of `0` keeps trash forever.
+    pub fn sweep_trash(&mut self) -> Result<()> {
+        let days = self.data.db.settings.trash_retention_days;
+        if days == 0 {
+            return Ok(());
+        }
+        let before = now() - chrono::Duration::days(i64::from(days));
+        let expired = self
+            .data
+            .db
+            .tasks
+            .values()
+            .any(|task| task.trashed_at.is_some_and(|at| at < before));
+        if expired {
+            self.execute(Command::PurgeExpiredTrash { before })?;
+        }
+        Ok(())
     }
 
     pub fn paths(&self) -> &DataPaths {

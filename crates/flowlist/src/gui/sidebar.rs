@@ -4,7 +4,7 @@
 use gpui::{AnyElement, Context, IntoElement, MouseButton, Window, div, prelude::*, px};
 
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId};
-use flowlist_core::model::BuiltinPerspective;
+use flowlist_core::model::{BuiltinPerspective, Priority};
 
 use super::drag::DragTask;
 use super::icons::{self, Icon};
@@ -18,6 +18,7 @@ pub(super) enum SidebarTarget {
     Folder(FolderId),
     Project(ProjectId),
     Tag(TagId),
+    Priority(Priority),
 }
 
 fn glyph(perspective: BuiltinPerspective) -> Icon {
@@ -30,6 +31,7 @@ fn glyph(perspective: BuiltinPerspective) -> Icon {
         BuiltinPerspective::Tags => Icon::Tags,
         BuiltinPerspective::Completed => Icon::Completed,
         BuiltinPerspective::Nearby => Icon::Nearby,
+        BuiltinPerspective::Trash => Icon::Trash,
     }
 }
 
@@ -164,6 +166,9 @@ impl FlowlistApp {
         for perspective in BuiltinPerspective::ALL {
             out.push(SidebarTarget::Builtin(perspective));
         }
+        for priority in Priority::ALL {
+            out.push(SidebarTarget::Priority(priority));
+        }
         for perspective in db.perspectives.values() {
             out.push(SidebarTarget::Custom(perspective.id.clone()));
         }
@@ -220,6 +225,7 @@ impl FlowlistApp {
             View::Folder(id) => Some(SidebarTarget::Folder(id.clone())),
             View::Tag(id) => Some(SidebarTarget::Tag(id.clone())),
             View::Custom(id) => Some(SidebarTarget::Custom(id.clone())),
+            View::Priority(priority) => Some(SidebarTarget::Priority(*priority)),
         }
     }
 
@@ -267,8 +273,13 @@ impl FlowlistApp {
             SidebarTarget::Folder(id) => View::Folder(id.clone()),
             SidebarTarget::Project(id) => View::Project(id.clone()),
             SidebarTarget::Tag(id) => View::Tag(id.clone()),
+            SidebarTarget::Priority(priority) => {
+                self.priority_filter = Some(*priority);
+                View::Priority(*priority)
+            }
         };
         self.open_view(view, cx);
+        self.save_session();
         self.sidebar_cursor = Some(target);
         self.focus = FocusArea::Sidebar;
         self.save_session();
@@ -372,6 +383,11 @@ impl FlowlistApp {
         rail = rail.child(widgets::section_label(theme, "PERSPECTIVES"));
         for perspective in BuiltinPerspective::ALL {
             rail = rail.child(self.perspective_row(perspective, cx));
+        }
+
+        rail = rail.child(widgets::section_label(theme, "PRIORITIES"));
+        for priority in Priority::ALL {
+            rail = rail.child(self.priority_row(priority, cx));
         }
 
         let mut lower = div()
@@ -515,6 +531,48 @@ impl FlowlistApp {
             .when(count > 0, |this| this.child(widgets::count(theme, count)))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.sidebar_activate(SidebarTarget::Builtin(perspective), cx)
+            }))
+    }
+
+    fn priority_row(&self, priority: Priority, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let active = self.view == View::Priority(priority);
+        let count = self
+            .store
+            .db()
+            .tasks
+            .values()
+            .filter(|task| !task.completed && !task.is_trashed() && task.priority == Some(priority))
+            .count();
+        let color = priority_color(theme, priority);
+        let icon_color = if active { theme.accent } else { color };
+        let cursor = self.sidebar_cursor_is(&SidebarTarget::Priority(priority));
+        div()
+            .id(super::sid(format!("priority:{}", priority.slug())))
+            .flex()
+            .items_center()
+            .gap_2()
+            .h(px(28.))
+            .mx_2()
+            .px_2()
+            .rounded_md()
+            .bg(if active { theme.selection } else { theme.clear })
+            .when(cursor, |this| this.bg(theme.hover))
+            .text_color(if active { theme.accent } else { theme.text_dim })
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.hover))
+            .child(
+                div()
+                    .w(px(18.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(icons::icon(Icon::Flagged, 14.0, icon_color)),
+            )
+            .child(div().flex_1().min_w_0().child(priority.label()))
+            .when(count > 0, |this| this.child(widgets::count(theme, count)))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.sidebar_activate(SidebarTarget::Priority(priority), cx)
             }))
     }
 
@@ -914,5 +972,13 @@ trait ReviewBadge {
 impl ReviewBadge for flowlist_core::model::Project {
     fn flagged_for_review(&self) -> bool {
         self.is_due_for_review(flowlist_core::time::local_date(flowlist_core::time::now()))
+    }
+}
+
+pub(super) fn priority_color(theme: super::theme::Theme, priority: Priority) -> gpui::Hsla {
+    match priority {
+        Priority::High => theme.danger,
+        Priority::Medium => theme.warning,
+        Priority::Low => theme.text_faint,
     }
 }

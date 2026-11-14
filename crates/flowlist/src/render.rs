@@ -47,6 +47,10 @@ pub fn task_value(db: &Db, id: &TaskId) -> Value {
         "defer_at": task.defer.map(|stamp| stamp.at.to_rfc3339()),
         "estimate_min": task.estimate_min,
         "flagged": task.flagged,
+        "priority": task.priority.map(|priority| priority.label()),
+        "priority_key": task.priority.map(|priority| priority.slug()),
+        "trashed_at": task.trashed_at.map(|at| at.to_rfc3339()),
+        "trashed": task.is_trashed(),
         "completed": task.completed,
         "completed_at": task.completed_at.map(|at| at.to_rfc3339()),
         "repeat": task.repeat.as_ref().map(|rule| rule.description()),
@@ -99,6 +103,8 @@ pub fn project_value(db: &Db, id: &ProjectId) -> Value {
         "next_review": project.next_review.format("%Y-%m-%d").to_string(),
         "review_due": project.is_due_for_review(flowlist_core::time::local_date(now())),
         "sequential": project.sequential,
+        "kind": project.effective_kind().label(),
+        "kind_key": project.effective_kind().slug(),
         "completed_tasks": completed,
         "total_tasks": total,
         "created_at": project.created_at.to_rfc3339(),
@@ -149,6 +155,7 @@ pub fn stats_value(stats: &Stats) -> Value {
         "projects_due_review": stats.projects_due_review,
         "tags": stats.tags,
         "folders": stats.folders,
+        "trashed_tasks": stats.trashed_tasks,
     })
 }
 

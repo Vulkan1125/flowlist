@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use chrono::{Datelike, Duration, NaiveDate};
 use gpui::{AnyElement, Context, IntoElement, MouseButton, Window, div, prelude::*, px};
 
-use flowlist_core::command::Command;
+use flowlist_core::command::{Command, ProjectPatch};
 use flowlist_core::ids::{ProjectId, TaskId};
 use flowlist_core::model::{BuiltinPerspective, ProjectStatus, RepeatRule};
 use flowlist_core::query::{self, Group, TaskRow};
@@ -80,7 +80,7 @@ impl FlowlistApp {
         let db = self.store.db();
         let mut marked = BTreeSet::new();
         for task in db.tasks.values() {
-            if task.completed {
+            if task.completed || task.is_trashed() {
                 continue;
             }
             if let Some(project_id) = &task.project {
@@ -99,8 +99,23 @@ impl FlowlistApp {
         marked
     }
 
+    /// Move the selected Forecast day, creating one at today when none is set.
+    pub(super) fn forecast_step_date(&mut self, delta: i64) {
+        let today = local_date(now());
+        let next = self
+            .forecast_date
+            .unwrap_or(today)
+            .checked_add_signed(Duration::days(delta))
+            .unwrap_or(today);
+        self.forecast_date = Some(next);
+        self.forecast_month = NaiveDate::from_ymd_opt(next.year(), next.month(), 1).unwrap_or(next);
+        self.selected.clear();
+        self.anchor = None;
+        self.save_session();
+    }
+
     /// Move the Forecast calendar one month forward or back.
-    fn forecast_shift_month(&mut self, delta: i32) {
+    pub(super) fn forecast_shift_month(&mut self, delta: i32) {
         let mut year = self.forecast_month.year();
         let mut month = self.forecast_month.month() as i32 + delta;
         while month < 1 {
@@ -146,6 +161,7 @@ impl FlowlistApp {
                 let date = grid_start + Duration::days((week * 7 + weekday) as i64);
                 let in_month = date.month() == first.month() && date.year() == first.year();
                 let is_today = date == today;
+                let is_selected = self.forecast_date == Some(date);
                 let has_tasks = marked.contains(&date);
                 let number_color = if is_today {
                     theme.bg
@@ -156,6 +172,7 @@ impl FlowlistApp {
                 };
                 row = row.child(
                     div()
+                        .id(super::sid(format!("forecast-date:{date}")))
                         .flex_1()
                         .h(px(38.))
                         .flex()
@@ -164,6 +181,28 @@ impl FlowlistApp {
                         .justify_center()
                         .gap_1()
                         .rounded_md()
+                        .cursor_pointer()
+                        .hover(|style| style.bg(theme.hover))
+                        .when(is_selected, |this| this.bg(theme.selection))
+                        .tooltip(widgets::tip(
+                            theme,
+                            format!("Show tasks on {}", date.format("%b %-d")),
+                        ))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if this.forecast_date == Some(date) {
+                                this.forecast_date = None;
+                            } else {
+                                this.forecast_date = Some(date);
+                                if let Some(first) =
+                                    NaiveDate::from_ymd_opt(date.year(), date.month(), 1)
+                                {
+                                    this.forecast_month = first;
+                                }
+                            }
+                            this.selected.clear();
+                            this.anchor = None;
+                            cx.notify();
+                        }))
                         .when(!in_month, |this| this.opacity(0.35))
                         .child(
                             div()
@@ -220,6 +259,23 @@ impl FlowlistApp {
                             .flex()
                             .items_center()
                             .gap_1()
+                            .when_some(self.forecast_date, |this, date| {
+                                this.child(
+                                    div()
+                                        .id("forecast-all-dates")
+                                        .child(widgets::button(
+                                            theme,
+                                            format!("All dates · {}", date.format("%b %-d")),
+                                            true,
+                                        ))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.forecast_date = None;
+                                            this.selected.clear();
+                                            this.anchor = None;
+                                            cx.notify();
+                                        })),
+                                )
+                            })
                             .child(
                                 div()
                                     .id("forecast-prev")
@@ -270,6 +326,7 @@ impl FlowlistApp {
             .sum::<usize>();
         let shows_completed =
             matches!(self.view, View::Project(_) | View::Folder(_) | View::Tag(_));
+        let is_trash = matches!(self.view, View::Builtin(BuiltinPerspective::Trash));
         div()
             .flex()
             .flex_col()
@@ -324,29 +381,59 @@ impl FlowlistApp {
                                         cx.notify();
                                     })),
                             )
-                            .child(
-                                div()
-                                    .id("sort")
-                                    .tooltip(widgets::tip(theme, "Click to cycle the sort order"))
-                                    .child(widgets::toggle_chip(
-                                        theme,
-                                        format!("Sort · {}", sort_label(self.sort)),
-                                        false,
-                                    ))
-                                    .on_click(cx.listener(|this, _, _, cx| this.cycle_sort(cx))),
-                            )
-                            .child(
-                                div()
-                                    .id("group")
-                                    .tooltip(widgets::tip(theme, "Click to cycle the grouping"))
-                                    .child(widgets::toggle_chip(
-                                        theme,
-                                        format!("Group · {}", group_label(self.group)),
-                                        false,
-                                    ))
-                                    .on_click(cx.listener(|this, _, _, cx| this.cycle_group(cx))),
-                            )
-                            .when(shows_completed, |this| {
+                            .when(!is_trash, |this| {
+                                this.child(
+                                    div()
+                                        .id("sort")
+                                        .tooltip(widgets::tip(
+                                            theme,
+                                            "Click to cycle the sort order",
+                                        ))
+                                        .child(widgets::toggle_chip(
+                                            theme,
+                                            format!("Sort · {}", sort_label(self.sort)),
+                                            false,
+                                        ))
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| this.cycle_sort(cx)),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .id("group")
+                                        .tooltip(widgets::tip(theme, "Click to cycle the grouping"))
+                                        .child(widgets::toggle_chip(
+                                            theme,
+                                            format!("Group · {}", group_label(self.group)),
+                                            false,
+                                        ))
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| this.cycle_group(cx)),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .id("priority-filter")
+                                        .tooltip(widgets::tip(
+                                            theme,
+                                            "Filter every view by priority",
+                                        ))
+                                        .child(widgets::toggle_chip(
+                                            theme,
+                                            format!(
+                                                "Priority · {}",
+                                                self.priority_filter
+                                                    .map(|priority| priority.label().to_string())
+                                                    .unwrap_or_else(|| "All".to_string())
+                                            ),
+                                            self.priority_filter.is_some(),
+                                        ))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.cycle_priority_filter(cx)
+                                        })),
+                                )
+                            })
+                            .when(shows_completed && !is_trash, |this| {
                                 this.child(
                                     div()
                                         .id("show-completed")
@@ -364,21 +451,46 @@ impl FlowlistApp {
                                         })),
                                 )
                             })
-                            .child(
-                                div()
-                                    .id("add-task")
-                                    .child(widgets::button_with_icon(
-                                        theme,
-                                        Icon::Plus,
-                                        "Task",
-                                        true,
-                                    ))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.focus = super::FocusArea::Capture;
-                                        this.capture.end(false);
-                                        cx.notify();
-                                    })),
-                            ),
+                            .when(is_trash, |this| {
+                                this.child(
+                                    div()
+                                        .id("trash-restore")
+                                        .tooltip(widgets::tip(theme, "Restore selected tasks"))
+                                        .child(widgets::button(theme, "Restore", false))
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| this.restore_selected(cx)),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .id("trash-purge")
+                                        .tooltip(widgets::tip(
+                                            theme,
+                                            "Permanently delete selected tasks",
+                                        ))
+                                        .child(widgets::button(theme, "Delete forever", false))
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| this.purge_selected(cx)),
+                                        ),
+                                )
+                            })
+                            .when(!is_trash, |this| {
+                                this.child(
+                                    div()
+                                        .id("add-task")
+                                        .child(widgets::button_with_icon(
+                                            theme,
+                                            Icon::Plus,
+                                            "Task",
+                                            true,
+                                        ))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.focus = super::FocusArea::Capture;
+                                            this.capture.end(false);
+                                            cx.notify();
+                                        })),
+                                )
+                            }),
                     ),
             )
             .child(
@@ -765,6 +877,21 @@ impl FlowlistApp {
                         this.toggle_flag(flag_id.clone(), cx);
                     })),
             )
+            .when_some(task.priority, |this, priority| {
+                this.child(
+                    div()
+                        .id(super::sid(format!("priority-mark:{}", row.id)))
+                        .flex_shrink_0()
+                        .w(px(3.))
+                        .h(px(15.))
+                        .rounded_full()
+                        .bg(super::sidebar::priority_color(theme, priority))
+                        .tooltip(widgets::tip(
+                            theme,
+                            format!("{} priority", priority.label()),
+                        )),
+                )
+            })
             .child(
                 div()
                     .flex_1()
@@ -920,6 +1047,32 @@ impl FlowlistApp {
                                     id: project_id.clone(),
                                     status: next_status,
                                 });
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id("project-kind")
+                            .cursor_pointer()
+                            .tooltip(widgets::tip(theme, "Click to change the project type"))
+                            .child(widgets::chip(
+                                theme,
+                                project.effective_kind().label(),
+                                theme.text_dim,
+                            ))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let View::Project(id) = this.view.clone() {
+                                    if let Some(project) = this.store.db().projects.get(&id) {
+                                        let kind = project.effective_kind().next();
+                                        this.execute(Command::UpdateProject {
+                                            id: id.clone(),
+                                            patch: ProjectPatch {
+                                                kind: Some(kind),
+                                                ..Default::default()
+                                            },
+                                        });
+                                    }
+                                }
                                 cx.notify();
                             })),
                     )

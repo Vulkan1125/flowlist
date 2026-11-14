@@ -9,8 +9,8 @@ use crate::db::{ContainerPosition, Db, OrderKey, Position};
 use crate::error::{Error, Result};
 use crate::ids::{ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use crate::model::{
-    ChecklistItem, Folder, Geo, Perspective, Project, ProjectStatus, RepeatRule, Tag, TagStatus,
-    Task,
+    ChecklistItem, Folder, Geo, Perspective, Priority, Project, ProjectKind, ProjectStatus,
+    RepeatRule, Tag, TagStatus, Task,
 };
 use crate::time::{Stamp, local_date, now};
 
@@ -47,6 +47,7 @@ pub struct NewTask {
     pub defer: Option<Stamp>,
     pub estimate_min: Option<u32>,
     pub flagged: bool,
+    pub priority: Option<Priority>,
     pub repeat: Option<RepeatRule>,
     pub sequential: bool,
     pub position: Position,
@@ -66,6 +67,7 @@ impl NewTask {
             defer: None,
             estimate_min: None,
             flagged: false,
+            priority: None,
             repeat: None,
             sequential: false,
             position: Position::End,
@@ -90,6 +92,7 @@ pub struct TaskPatch {
     pub defer: Option<Option<Stamp>>,
     pub estimate_min: Option<Option<u32>>,
     pub flagged: Option<bool>,
+    pub priority: Option<Option<Priority>>,
     pub repeat: Option<Option<RepeatRule>>,
     pub sequential: Option<bool>,
 }
@@ -105,6 +108,7 @@ pub struct NewProject {
     pub review_interval_days: Option<u32>,
     pub next_review: Option<NaiveDate>,
     pub sequential: bool,
+    pub kind: ProjectKind,
     pub position: ContainerPosition,
 }
 
@@ -120,6 +124,7 @@ impl NewProject {
             review_interval_days: None,
             next_review: None,
             sequential: false,
+            kind: ProjectKind::Parallel,
             position: ContainerPosition::End,
         }
     }
@@ -136,6 +141,7 @@ pub struct ProjectPatch {
     pub review_interval_days: Option<u32>,
     pub next_review: Option<NaiveDate>,
     pub sequential: Option<bool>,
+    pub kind: Option<ProjectKind>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -155,6 +161,7 @@ pub struct SettingsPatch {
     pub default_defer_time: Option<Option<chrono::NaiveTime>>,
     pub current_location: Option<Option<Geo>>,
     pub nearby_radius_km: Option<f64>,
+    pub trash_retention_days: Option<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -208,6 +215,22 @@ pub enum Command {
     SetTaskFlag {
         ids: Vec<TaskId>,
         flagged: bool,
+    },
+    SetTaskPriority {
+        ids: Vec<TaskId>,
+        priority: Option<Priority>,
+    },
+    /// Move tasks out of Trash without changing their place in the library.
+    RestoreTasks {
+        ids: Vec<TaskId>,
+    },
+    /// Permanently remove tasks, including their subtrees.
+    PurgeTasks {
+        ids: Vec<TaskId>,
+    },
+    /// Housekeeping: permanently remove trash older than `before`.
+    PurgeExpiredTrash {
+        before: DateTime<Utc>,
     },
     AddChecklistItem {
         task: TaskId,
@@ -303,7 +326,7 @@ impl Command {
                     format!("{verb} {} tasks", ids.len())
                 }
             }
-            Command::DeleteTasks { ids } => format!("Delete {} task(s)", ids.len()),
+            Command::DeleteTasks { ids } => format!("Move {} task(s) to Trash", ids.len()),
             Command::MoveTasks { ids, .. } => format!("Move {} task(s)", ids.len()),
             Command::SetTaskTags { ids, .. } => format!("Tag {} task(s)", ids.len()),
             Command::SetTaskFlag { ids, flagged } => {
@@ -313,6 +336,14 @@ impl Command {
                     ids.len()
                 )
             }
+            Command::SetTaskPriority { ids, priority } => format!(
+                "Set {} task(s) to {} priority",
+                ids.len(),
+                priority.map(|p| p.label()).unwrap_or("no")
+            ),
+            Command::RestoreTasks { ids } => format!("Restore {} task(s)", ids.len()),
+            Command::PurgeTasks { ids } => format!("Permanently delete {} task(s)", ids.len()),
+            Command::PurgeExpiredTrash { .. } => "Empty expired trash".to_string(),
             Command::AddChecklistItem { .. } => "Add checklist item".to_string(),
             Command::UpdateChecklistItem { .. } => "Edit checklist item".to_string(),
             Command::MoveChecklistItem { .. } => "Reorder checklist item".to_string(),
@@ -388,6 +419,7 @@ impl Command {
                 task.defer = new_task.defer;
                 task.estimate_min = new_task.estimate_min;
                 task.flagged = new_task.flagged;
+                task.priority = new_task.priority;
                 task.repeat = new_task.repeat;
                 task.sequential = new_task.sequential;
                 task.modified_at = at;
@@ -430,6 +462,9 @@ impl Command {
                     }
                     if let Some(flagged) = patch.flagged {
                         task.flagged = flagged;
+                    }
+                    if let Some(priority) = patch.priority {
+                        task.priority = priority;
                     }
                     if let Some(repeat) = patch.repeat {
                         task.repeat = repeat;
@@ -541,19 +576,56 @@ impl Command {
                 db.touch();
             }
             Command::DeleteTasks { ids } => {
-                let mut removed: BTreeSet<TaskId> = BTreeSet::new();
+                let mut trashed: BTreeSet<TaskId> = BTreeSet::new();
                 for id in ids {
                     if db.tasks.contains_key(&id) {
                         for descendant in db.task_subtree(&id) {
-                            removed.insert(descendant);
+                            trashed.insert(descendant);
                         }
                     }
                 }
-                for id in &removed {
-                    db.detach_task(id);
-                    db.tasks.remove(id);
+                for id in &trashed {
+                    if let Some(task) = db.tasks.get_mut(id) {
+                        task.trashed_at = Some(at);
+                        task.modified_at = at;
+                    }
                 }
-                outcome.message = Some(format!("Deleted {} task(s)", removed.len()));
+                outcome.message = Some(format!("Moved {} task(s) to Trash", trashed.len()));
+                db.touch();
+            }
+            Command::RestoreTasks { ids } => {
+                let mut restored: BTreeSet<TaskId> = BTreeSet::new();
+                for id in &ids {
+                    if db.tasks.contains_key(id) {
+                        for descendant in db.task_subtree(id) {
+                            restored.insert(descendant);
+                        }
+                    }
+                }
+                for id in &restored {
+                    if let Some(task) = db.tasks.get_mut(id) {
+                        task.trashed_at = None;
+                        task.modified_at = at;
+                    }
+                }
+                outcome.message = Some(format!("Restored {} task(s)", restored.len()));
+                outcome.affected.extend(ids.iter().map(|id| id.to_string()));
+                db.touch();
+            }
+            Command::PurgeTasks { ids } => {
+                let removed = purge_tasks(db, &ids);
+                outcome.message = Some(format!("Permanently deleted {} task(s)", removed));
+                db.touch();
+            }
+            Command::PurgeExpiredTrash { before } => {
+                let ids: Vec<TaskId> = db
+                    .tasks
+                    .values()
+                    .filter(|task| task.trashed_at.is_some_and(|at| at < before))
+                    .map(|task| task.id.clone())
+                    .collect();
+                let removed = purge_tasks(db, &ids);
+                outcome.message = Some(format!("Emptied {removed} expired task(s) from Trash"));
                 db.touch();
             }
             Command::MoveTasks { ids, placement } => {
@@ -579,6 +651,15 @@ impl Command {
                 for id in &ids {
                     let task = db.task_mut(id)?;
                     task.flagged = flagged;
+                    task.modified_at = at;
+                }
+                outcome.affected.extend(ids.iter().map(|id| id.to_string()));
+                db.touch();
+            }
+            Command::SetTaskPriority { ids, priority } => {
+                for id in &ids {
+                    let task = db.task_mut(id)?;
+                    task.priority = priority;
                     task.modified_at = at;
                 }
                 outcome.affected.extend(ids.iter().map(|id| id.to_string()));
@@ -677,7 +758,16 @@ impl Command {
                 project.next_review = new_project.next_review.unwrap_or_else(|| {
                     local_date(at) + chrono::Duration::days(project.review_interval_days as i64)
                 });
-                project.sequential = new_project.sequential;
+                // `sequential: true` is the older way to ask for a sequential
+                // project, and must keep working for callers that never set
+                // `kind`.
+                project.kind =
+                    if new_project.sequential && new_project.kind == ProjectKind::Parallel {
+                        ProjectKind::Sequential
+                    } else {
+                        new_project.kind
+                    };
+                project.sequential = project.kind == ProjectKind::Sequential;
                 project.modified_at = at;
                 let id = project.id.clone();
                 db.projects.insert(id.clone(), project);
@@ -722,8 +812,16 @@ impl Command {
                     if let Some(review) = patch.next_review {
                         project.next_review = review;
                     }
-                    if let Some(sequential) = patch.sequential {
+                    if let Some(kind) = patch.kind {
+                        project.kind = kind;
+                        project.sequential = kind == ProjectKind::Sequential;
+                    } else if let Some(sequential) = patch.sequential {
                         project.sequential = sequential;
+                        project.kind = if sequential {
+                            ProjectKind::Sequential
+                        } else {
+                            ProjectKind::Parallel
+                        };
                     }
                     project.modified_at = at;
                 }
@@ -1057,6 +1155,9 @@ impl Command {
                 }
                 if let Some(value) = patch.nearby_radius_km {
                     settings.nearby_radius_km = value.max(0.1);
+                }
+                if let Some(value) = patch.trash_retention_days {
+                    settings.trash_retention_days = value.min(3650);
                 }
                 db.touch();
             }
@@ -1393,4 +1494,21 @@ fn merge_db(db: &mut Db, imported: Db) -> MergeStats {
     }
     db.touch();
     stats
+}
+
+/// Remove tasks and their subtrees from every map and order list.
+fn purge_tasks(db: &mut Db, ids: &[TaskId]) -> usize {
+    let mut removed: BTreeSet<TaskId> = BTreeSet::new();
+    for id in ids {
+        if db.tasks.contains_key(id) {
+            for descendant in db.task_subtree(id) {
+                removed.insert(descendant);
+            }
+        }
+    }
+    for id in &removed {
+        db.detach_task(id);
+        db.tasks.remove(id);
+    }
+    removed.len()
 }

@@ -12,6 +12,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Nested projects inside folders, nested tags
 - [x] UTC storage with local-time date buckets and date-only stamps
 - [x] Sequential task children
+- [x] Project types: parallel, sequential and single actions
+- [x] Optional High / Medium / Low task priorities
+- [x] Restorable Trash with configurable auto-delete
 - [x] Repeat rules: fixed/after-completion, due-again/defer-another, end date,
       end count, completion counter
 - [x] Checklist items with add/edit/reorder/delete and progress counts
@@ -36,6 +39,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Tags
 - [x] Completed
 - [x] Nearby (location + radius)
+- [x] Trash (restore, delete forever, auto-empty)
+- [x] Priority rows and a global priority filter
 - [x] Custom saved perspectives with JSON filter trees
 - [x] Availability: available, deferred, blocked, completed
 - [x] Sorting: manual, due, defer, name, flagged, estimate, created, completed
@@ -44,6 +49,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 ## CLI
 
 - [x] `add`, `list`, `edit`, `done`, `remove`, `mv`
+- [x] `trash` list / `--restore` / `--delete` / `--empty`
+- [x] `--priority` on add/edit/list and `--kind` on projects
 - [x] `checklist list|add|set|move|remove`
 - [x] `tag add|remove|set`, `tags`
 - [x] `project add|list|status|review|edit`
@@ -62,6 +69,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Stdio JSON-RPC transport
 - [x] Modern `2026-07-28` lifecycle and legacy `initialize`
 - [x] Task tools: capture/add/get/update/complete/delete/move/tags/list
+- [x] Trash tools: list/restore/purge/empty
+- [x] Priority fields on task tools and `kind` on project tools
 - [x] Checklist tools: list/add/update/delete/move
 - [x] Project tools: list/create/update/status
 - [x] Tag tools: list/create/delete
@@ -79,16 +88,21 @@ working domain and GUI. This page tracks what is implemented and verified.
       header shows only the app name.
 - [x] Forecast month calendar above the list: Monday-first grid, previous /
       Today / next controls and an accent bar under dates with a task.
-- [x] Sidebar perspectives, custom perspectives and project/folder/tag trees
+      Clicking a date filters the list to that day; click again or press `\`
+      to clear, with `[`/`]` day steps and `{`/`}` month steps.
+- [x] Sidebar perspectives, Trash, priority rows, custom perspectives and
+      project/folder/tag trees
 - [x] Content list with grouped rows, progress indicators and inline status
 - [x] Task capture with quick-entry syntax
 - [x] Multi-select, range select, keyboard navigation
-- [x] Complete/reopen, flag/unflag, delete and undo/redo
+- [x] Complete/reopen, flag/unflag, delete, undo/redo and post-delete focus
+- [x] Trash restore / delete forever, with retention set in Settings
+- [x] Priority chips in the inspector and a priority filter in every view
 - [x] Inline title/notes/tag/project/date/estimate/repeat editing
 - [x] Inspector with checklist add/toggle/rename/reorder/delete and progress
 - [x] Task progress badge for checklists
 - [x] Drag/drop tasks into projects, tags, parents and sibling positions
-- [x] Project dashboard with progress, status chips and review info
+- [x] Project dashboard with progress, status, review info and project type
 - [x] New project/folder/tag/perspective modals (`⇧⌘N`, `⌥⌘N`,
       `⌃⌘N`, `⇧⌘P`)
 - [x] Rich custom-perspective editor: conditions, project/tag pickers,
@@ -101,8 +115,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Import modal (JSON or TaskPaper, merge or replace)
 - [x] TaskPaper clipboard export (`⇧⌘E`)
 - [x] Settings and tag location modals
-- [x] Session persistence: view, selection, inspector, sort, grouping, theme,
-      vim mode and window size
+- [x] Session persistence: view, selection, inspector, sort, grouping,
+      priority filter, theme, vim mode and window size
 - [x] Ten theme families — Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula,
       Tokyo Night, Vesper, Graphite and Midnight — each with a light and a dark
       palette, chosen in Settings or with `⌘T` / `⇧⌘T` / `⌥⌘T` (`⇧T` in vim mode)

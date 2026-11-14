@@ -4,6 +4,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{FolderId, PerspectiveId, ProjectId, TagId};
+use crate::model::Priority;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -16,10 +17,11 @@ pub enum BuiltinPerspective {
     Tags,
     Completed,
     Nearby,
+    Trash,
 }
 
 impl BuiltinPerspective {
-    pub const ALL: [BuiltinPerspective; 8] = [
+    pub const ALL: [BuiltinPerspective; 9] = [
         BuiltinPerspective::Inbox,
         BuiltinPerspective::Projects,
         BuiltinPerspective::Forecast,
@@ -28,6 +30,7 @@ impl BuiltinPerspective {
         BuiltinPerspective::Tags,
         BuiltinPerspective::Completed,
         BuiltinPerspective::Nearby,
+        BuiltinPerspective::Trash,
     ];
 
     pub fn slug(self) -> &'static str {
@@ -40,6 +43,7 @@ impl BuiltinPerspective {
             BuiltinPerspective::Tags => "tags",
             BuiltinPerspective::Completed => "completed",
             BuiltinPerspective::Nearby => "nearby",
+            BuiltinPerspective::Trash => "trash",
         }
     }
 
@@ -53,6 +57,7 @@ impl BuiltinPerspective {
             BuiltinPerspective::Tags => "Tags",
             BuiltinPerspective::Completed => "Completed",
             BuiltinPerspective::Nearby => "Nearby",
+            BuiltinPerspective::Trash => "Trash",
         }
     }
 
@@ -131,6 +136,9 @@ pub enum Condition {
     InInbox,
     Flagged {
         value: bool,
+    },
+    Priority {
+        value: Priority,
     },
     Status {
         value: TaskStatus,

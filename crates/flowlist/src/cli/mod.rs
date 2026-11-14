@@ -18,8 +18,8 @@ use flowlist_core::ids::{
     ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId,
 };
 use flowlist_core::model::{
-    BuiltinPerspective, Condition, DueWindow, FilterNode, GroupBy, Perspective, ProjectStatus,
-    RepeatRule, SortBy, TagStatus, TaskStatus,
+    BuiltinPerspective, Condition, DueWindow, FilterNode, GroupBy, Perspective, Priority,
+    ProjectKind, ProjectStatus, RepeatRule, SortBy, TagStatus, TaskStatus,
 };
 use flowlist_core::parse::{
     parse_duration, parse_quick, parse_repeat, parse_stamp, with_default_time,
@@ -67,9 +67,11 @@ pub enum CliCommand {
     Done(DoneArgs),
     /// Edit a task's fields.
     Edit(EditArgs),
-    /// Delete tasks and their subtasks.
+    /// Move tasks to Trash (or permanently delete them with `trash`).
     #[command(alias = "rm", alias = "delete")]
     Remove(RemoveArgs),
+    /// Inspect Trash, restore tasks, delete them forever, or empty it.
+    Trash(TrashArgs),
     /// Move tasks between the inbox, projects and parents.
     #[command(alias = "move")]
     Mv(MvArgs),
@@ -134,6 +136,9 @@ pub struct AddArgs {
     pub note: Option<String>,
     #[arg(long)]
     pub flag: bool,
+    /// low | medium | high.
+    #[arg(long)]
+    pub priority: Option<String>,
     /// Make this a subtask of an existing task.
     #[arg(long)]
     pub parent: Option<String>,
@@ -151,6 +156,12 @@ pub struct ListArgs {
     pub review: bool,
     #[arg(long)]
     pub completed: bool,
+    /// List tasks currently in Trash.
+    #[arg(long)]
+    pub trash: bool,
+    /// low | medium | high.
+    #[arg(long)]
+    pub priority: Option<String>,
     #[arg(long)]
     pub available: bool,
     #[arg(long = "tag", short = 't')]
@@ -218,6 +229,22 @@ pub struct EditArgs {
     pub parent: Option<String>,
     #[arg(long)]
     pub sequential: bool,
+    /// low | medium | high; `none` clears it.
+    #[arg(long)]
+    pub priority: Option<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct TrashArgs {
+    /// Restore these task ids (and their subtrees).
+    #[arg(long, value_name = "ID")]
+    pub restore: Vec<String>,
+    /// Permanently delete these task ids (and their subtrees).
+    #[arg(long, value_name = "ID")]
+    pub delete: Vec<String>,
+    /// Permanently delete every trashed task.
+    #[arg(long)]
+    pub empty: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -413,6 +440,9 @@ pub struct ProjectAddArgs {
     pub review_days: Option<u32>,
     #[arg(long)]
     pub sequential: bool,
+    /// parallel | sequential | single_actions.
+    #[arg(long)]
+    pub kind: Option<String>,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -436,6 +466,9 @@ pub struct ProjectEditArgs {
     pub next_review: Option<String>,
     #[arg(long)]
     pub sequential: bool,
+    /// parallel | sequential | single_actions.
+    #[arg(long)]
+    pub kind: Option<String>,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -573,6 +606,7 @@ fn try_run() -> Result<()> {
         CliCommand::Done(args) => cmd_done(&cli, args, &paint),
         CliCommand::Edit(args) => cmd_edit(&cli, args, &paint),
         CliCommand::Remove(args) => cmd_remove(&cli, args, &paint),
+        CliCommand::Trash(args) => cmd_trash(&cli, args, &paint),
         CliCommand::Mv(args) => cmd_mv(&cli, args, &paint),
         CliCommand::Checklist(args) => cmd_checklist(&cli, args, &paint),
         CliCommand::Undo(args) => cmd_undo(&cli, args, false, &paint),
@@ -670,6 +704,9 @@ fn cmd_add(cli: &Cli, args: AddArgs, paint: &Paint) -> Result<()> {
     }
 
     let mut task = entry.into_new_task();
+    if let Some(priority) = &args.priority {
+        task.priority = Some(parse_priority(priority)?);
+    }
     if let Some(parent) = args.parent {
         task.parent = Some(store.db().resolve_task(&parent)?);
     }
@@ -728,7 +765,9 @@ fn cmd_list(cli: &Cli, args: ListArgs, paint: &Paint) -> Result<()> {
         return Ok(());
     }
 
-    let groups: Vec<Group> = if args.forecast {
+    let groups: Vec<Group> = if args.trash {
+        query::view(db, BuiltinPerspective::Trash, at)
+    } else if args.forecast {
         query::view(db, BuiltinPerspective::Forecast, at)
     } else if args.inbox
         && !args.include_completed
@@ -787,6 +826,11 @@ fn cmd_list(cli: &Cli, args: ListArgs, paint: &Paint) -> Result<()> {
         if let Some(due) = &args.due {
             conditions.push(Condition::Due {
                 window: parse_due_window(due, at)?,
+            });
+        }
+        if let Some(priority) = &args.priority {
+            conditions.push(Condition::Priority {
+                value: parse_priority(priority)?,
             });
         }
         let filter = FilterNode::all_conditions(conditions);
@@ -884,6 +928,12 @@ fn format_task_line(
     if task.flagged {
         line.push_str(&format!(" {}", paint.yellow("!")));
     }
+    if let Some(priority) = task.priority {
+        line.push_str(&format!(
+            " {}",
+            paint.cyan(&format!("[{}]", priority.label()))
+        ));
+    }
     if let Some(due) = task.due {
         let text = format!("due {}", due.label(at));
         line.push_str(&format!("  {}", paint.yellow(&text)));
@@ -978,6 +1028,13 @@ fn cmd_edit(cli: &Cli, args: EditArgs, paint: &Paint) -> Result<()> {
     if args.unflag {
         patch.flagged = Some(false);
     }
+    if let Some(priority) = &args.priority {
+        patch.priority = if priority.eq_ignore_ascii_case("none") {
+            Some(None)
+        } else {
+            Some(Some(parse_priority(priority)?))
+        };
+    }
     if let Some(repeat) = &args.repeat {
         patch.repeat = if repeat.eq_ignore_ascii_case("none") {
             Some(None)
@@ -1034,7 +1091,84 @@ fn cmd_remove(cli: &Cli, args: RemoveArgs, paint: &Paint) -> Result<()> {
             serde_json::to_string_pretty(&json!({"deleted": count}))?
         );
     } else {
-        println!("{} {} task(s)", paint.red("Deleted"), count);
+        println!("{} {} task(s) to Trash", paint.red("Moved"), count);
+    }
+    Ok(())
+}
+
+fn cmd_trash(cli: &Cli, args: TrashArgs, paint: &Paint) -> Result<()> {
+    let mut store = open_store(cli)?;
+    let mut acted = false;
+    if !args.restore.is_empty() {
+        let ids = resolve_tasks(store.db(), &args.restore)?;
+        let outcome = store.execute(CoreCommand::RestoreTasks { ids })?;
+        if !cli.json {
+            println!(
+                "{}",
+                paint.green(&outcome.message.unwrap_or_else(|| "Restored".to_string()))
+            );
+        }
+        acted = true;
+    }
+    if !args.delete.is_empty() {
+        let ids = resolve_tasks(store.db(), &args.delete)?;
+        let outcome = store.execute(CoreCommand::PurgeTasks { ids })?;
+        if !cli.json {
+            println!(
+                "{}",
+                paint.red(&outcome.message.unwrap_or_else(|| "Deleted".to_string()))
+            );
+        }
+        acted = true;
+    }
+    if args.empty {
+        let outcome = store.execute(CoreCommand::PurgeExpiredTrash { before: now() })?;
+        if !cli.json {
+            println!(
+                "{}",
+                paint.red(
+                    &outcome
+                        .message
+                        .unwrap_or_else(|| "Emptied Trash".to_string())
+                )
+            );
+        }
+        acted = true;
+    }
+    if acted {
+        if cli.json {
+            println!("{}", serde_json::to_string_pretty(&json!({"ok": true}))?);
+        }
+        return Ok(());
+    }
+
+    store.refresh()?;
+    let db = store.db();
+    let at = now();
+    let groups = query::view(db, BuiltinPerspective::Trash, at);
+    if cli.json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&render::groups_value(db, &groups))?
+        );
+        return Ok(());
+    }
+    let mut printed = false;
+    for group in &groups {
+        for row in &group.rows {
+            if let Some(task) = db.tasks.get(&row.id) {
+                printed = true;
+                println!("{}", format_task_line(db, task, row, at, paint));
+            }
+        }
+    }
+    if !printed {
+        println!("{}", paint.dim("Trash is empty."));
+    } else {
+        println!(
+            "{}",
+            paint.dim("restore with `flowlist trash --restore ID` · empty with `--empty`")
+        );
     }
     Ok(())
 }
@@ -1447,7 +1581,13 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
             new_project.due = optional_stamp_value(&args.due, reference)?;
             new_project.defer = optional_stamp_value(&args.defer, reference)?;
             new_project.review_interval_days = args.review_days;
-            new_project.sequential = args.sequential;
+            new_project.kind = args
+                .kind
+                .as_deref()
+                .map(parse_project_kind)
+                .transpose()?
+                .unwrap_or(ProjectKind::Parallel);
+            new_project.sequential = args.sequential || new_project.kind == ProjectKind::Sequential;
             let outcome = store.execute(CoreCommand::CreateProject(new_project))?;
             let created = outcome.created.first().cloned().unwrap_or_default();
             let id = store.db().resolve_project(&created)?;
@@ -1563,6 +1703,9 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
             }
             if args.sequential {
                 patch.sequential = Some(true);
+            }
+            if let Some(kind) = &args.kind {
+                patch.kind = Some(parse_project_kind(kind)?);
             }
             store.execute(CoreCommand::UpdateProject {
                 id: id.clone(),
@@ -2138,6 +2281,21 @@ fn parse_due_window(value: &str, at: chrono::DateTime<Utc>) -> Result<DueWindow>
         return Ok(window);
     }
     Ok(DueWindow::On(parse_stamp(value, at)?.local_date()))
+}
+
+fn parse_priority(value: &str) -> Result<Priority> {
+    Priority::from_slug(&value.trim().to_lowercase())
+        .or_else(|| {
+            Priority::ALL
+                .into_iter()
+                .find(|priority| priority.label().eq_ignore_ascii_case(value.trim()))
+        })
+        .ok_or_else(|| anyhow!("priority must be low, medium or high"))
+}
+
+fn parse_project_kind(value: &str) -> Result<ProjectKind> {
+    ProjectKind::from_slug(value.trim())
+        .ok_or_else(|| anyhow!("project kind must be parallel, sequential or single_actions"))
 }
 
 fn parse_project_status(value: &str) -> Result<ProjectStatus> {

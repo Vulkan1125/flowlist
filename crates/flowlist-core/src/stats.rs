@@ -25,18 +25,23 @@ pub struct Stats {
     pub projects_due_review: usize,
     pub tags: usize,
     pub folders: usize,
+    pub trashed_tasks: usize,
 }
 
 pub fn compute(db: &Db, at: DateTime<Utc>) -> Stats {
     let today = local_date(at);
     let mut stats = Stats {
-        total_tasks: db.tasks.len(),
+        total_tasks: db.tasks.values().filter(|task| !task.is_trashed()).count(),
         tags: db.tags.len(),
         folders: db.folders.len(),
         ..Stats::default()
     };
 
     for task in db.tasks.values() {
+        if task.is_trashed() {
+            stats.trashed_tasks += 1;
+            continue;
+        }
         if task.completed {
             stats.completed_tasks += 1;
             if task

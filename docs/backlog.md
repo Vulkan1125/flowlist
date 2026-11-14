@@ -23,9 +23,9 @@ landed and verified.
       but the current grammar uses `o`/`O` to add a task below/above. Decide
       which wins, keep the other on an unused key, and update the help card,
       README and `docs/features.md` together. Do not silently keep both.
-- [ ] **Focus after delete** — deleting the selected task(s) should leave the
-      keyboard cursor on the next row (or the previous row at the end of the
-      list), keep the row visible, and leave `j`/`k` working immediately.
+- [x] **Focus after delete** — deleting selected task(s) selects the row that
+      took their place, or the previous row at the end of the list. Works in
+      Trash too, where delete is permanent.
 - [ ] **Tab cycles panes** — outside a text field, `Tab` should move Content →
       Inspector → Sidebar → Content (and `Shift-Tab` reverse), stopping on the
       inspector only when it is open. Inside a text field, `Tab` keeps moving
@@ -36,20 +36,25 @@ landed and verified.
 
 ## Data model and features
 
-- [ ] **Trash** — soft-delete tasks (and containers where it makes sense) into
-      a restorable Trash view with "put back" and "empty trash". Keep the
-      existing undo snapshots; trash is for recovery after the undo window.
-- [ ] **Priorities** — optional priority (for example High / Normal / Low) on
-      tasks, with sorting and grouping, inspector and CLI/MCP support, and a
-      compact row indicator that does not compete with the flag.
-- [ ] **OmniFocus project types** — support parallel, sequential and
-      single-action projects. Sequential projects should make only the first
-      available child actionable; single-action projects should behave like
-      task buckets without a project outcome.
+- [x] **Trash** — tasks are soft-deleted into a ninth built-in perspective,
+      restored with `r`/Restore, purged with Delete forever, and auto-emptied
+      after `trash_retention_days` (0 keeps forever). See Settings.
+- [x] **Priorities** — optional High / Medium / Low on tasks, with a coloured
+      row mark, inspector chips, a global priority filter in every view,
+      sidebar rows, and CLI/MCP support.
+- [x] **OmniFocus project types** — parallel, sequential and single-action
+      projects, chosen in the New Project sheet and cycled from the project
+      banner. Legacy `sequential` files still map to the sequential kind.
+- [ ] **Container-type polish** — OmniFocus also gives action groups their own
+      parallel/sequential type. Apply `ProjectKind` semantics to task subtrees,
+      not just projects.
+- [x] **Forecast date selection** — clicking a calendar date shows that day's
+      due/deferred tasks; click again or press `\` to clear. `[`/`]` step a day,
+      `{`/`}` step a month.
 - [ ] **Calendar view** — a dedicated Calendar perspective with a full month
       grid, day columns or an agenda, drag-to-reschedule and keyboard
-      navigation. The month overview added to Forecast is a first step, not the
-      whole calendar.
+      navigation. The Forecast month calendar is a first step, not the whole
+      calendar.
 - [ ] **Background capture** — a system-wide shortcut that opens a small
       capture field without focusing the main window, plus a menu-bar route.
       Must work with the app in the background and hand off to the same command
@@ -57,10 +62,10 @@ landed and verified.
 
 ## Research and design
 
-- [ ] **OmniFocus feature research** — compare OmniFocus 4 with Flowlist
-      (project types, forecast tags, custom perspectives, review, defer
-      semantics) and write a short notes page with adopt / skip / later
-      decisions.
+- [x] **OmniFocus feature research** — first pass completed against the
+      OmniFocus 4.3 reference manual (`support.omnigroup.com/documentation/
+      omnifocus/universal/4.3.3/en/`). Findings and adopt/later decisions are
+      below.
 - [ ] **"Absolutely stunning UI design"** — a deliberate visual pass, not a
       bug fix: hierarchy and type scale, spacing rhythm, hover and focus
       states, empty states, motion, and the glass edges against busy
@@ -78,3 +83,66 @@ landed and verified.
 - [x] Header and status chrome use the flat glass tint instead of a
       left-to-right gradient ramp; the sidebar and inspector keep their
       vertical wash.
+
+## OmniFocus gap research (first pass, November 2026)
+
+Source: the OmniFocus 4.3.3 reference manual and glossary. This is a product
+comparison, not a claim of feature parity.
+
+### Adopt next
+
+- **Changed perspective** — OmniFocus pairs Completed with a Changed view for
+  recently edited items. We have nine built-ins now, including Trash, but no
+  Changed view. Add it with a configurable window and reuse the history
+  timestamps.
+- **Action-group types** — parallel/sequential applies to task subtrees in
+  OmniFocus, not only projects. Make `ProjectKind` do double duty on parent
+  tasks and show the blocked reason per subtree.
+- **First Available view option** — OmniFocus can show only the next action in
+  a sequential project or group. Add an availability option next to the
+  existing Completed and priority filters.
+- **Per-perspective view options** — OmniFocus stores availability, structure
+  and layout per perspective. Flowlist currently keeps sort/group globally in
+  the session. Persist a view-options record on custom perspectives and a
+  built-in default for the rest.
+
+### Later / evaluate
+
+- **Forecast Tag (OmniFocus Pro)** — a designated tag marks items for Forecast
+  even without a due or defer date. This is a clean fit for our tag model; add
+  a Settings field that names the tag and include it in the Forecast query.
+- **Favorite perspectives and a perspectives bar** — OmniFocus lets users
+  reorder and hide perspectives, and assigns keyboard shortcuts per
+  perspective. Our sidebar order is fixed. Add favorites, drag reorder and a
+  per-view shortcut field.
+- **Quick Open** — one palette that finds perspectives, folders, projects,
+  tags and plug-ins from anywhere. Flowlist search covers tasks and entities;
+  a command palette would be the next step, not a second search UI.
+- **Clean up resolved items** — OmniFocus decides when completed rows leave the
+  list, and warns before deleting a container that hides completed children.
+  Add a cleanup policy setting and a pre-delete warning for hidden subtrees.
+- **Review sidebar calendar** — the Review perspective pairs a calendar of
+  upcoming review dates with the project list. Add a mini calendar to our
+  review dashboard.
+- **Latest Start Date** — derived from due date minus estimated duration.
+  Useful in Forecast and as a sort key; depends on reliable estimates.
+- **Custom layouts / compact rows** — per-perspective density, columns and row
+  fields. Keep this behind the design pass so it does not fragment the one
+  visual language.
+- **Tag status affecting availability** — an On Hold or Dropped tag can make an
+  action unavailable in OmniFocus. We model tag status but do not yet let it
+  gate availability.
+- **Convert inbox item to project** — a one-command promotion with the item's
+  notes and dates carried across, matching OmniFocus's Convert to Project.
+- **System capture surfaces** — Quick Entry, Mail Drop, clippings and
+  share-sheet capture. Background capture is already in the backlog; treat
+  Mail Drop as a separate import path.
+- **Notifications and due reminders** — OmniFocus alerts on due/defer times.
+  Flowlist is local-first and has no notification scheduler yet.
+
+### Explicitly skipped for now
+
+- OmniFocus sync, Omni Accounts, web access and Omni Automation plug-ins: they
+  conflict with the single local library and the shared Rust command layer.
+- Custom fluid/column layouts per device: Flowlist is a single desktop app and
+  should keep one adaptive layout until the visual pass is finished.

@@ -5,7 +5,7 @@ use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px};
 
 use flowlist_core::command::Command;
 use flowlist_core::ids::{ChecklistId, TaskId};
-use flowlist_core::model::ProjectStatus;
+use flowlist_core::model::{Priority, ProjectStatus};
 use flowlist_core::time::{format_duration, human_date, now};
 
 use super::icons::Icon;
@@ -117,6 +117,7 @@ impl FlowlistApp {
         let notes = task.notes.clone();
         let completed = task.completed;
         let flagged = task.flagged;
+        let priority = task.priority;
         let project = task
             .project
             .as_ref()
@@ -221,6 +222,7 @@ impl FlowlistApp {
                     ),
             )
             .child(self.inspector_text_field("Title", EditField::Title, &title, cx))
+            .child(self.inspector_priority(&id, priority, cx))
             .child(self.inspector_notes(&notes, cx))
             .child(self.inspector_checklist(&id, &checklist, checklist_progress, cx))
             .child(self.inspector_tag_section(&tags, cx))
@@ -330,6 +332,50 @@ impl FlowlistApp {
             );
         }
         body.into_any_element()
+    }
+
+    fn inspector_priority(
+        &self,
+        id: &TaskId,
+        current: Option<Priority>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let mut chips = div().flex().items_center().gap_1();
+        chips = chips.child(
+            div()
+                .id(super::sid(format!("priority-none:{id}")))
+                .cursor_pointer()
+                .child(widgets::toggle_chip(theme, "None", current.is_none()))
+                .on_click(cx.listener({
+                    let id = id.clone();
+                    move |this, _, _, cx| this.set_task_priority(id.clone(), None, cx)
+                })),
+        );
+        for priority in Priority::ALL {
+            let active = current == Some(priority);
+            chips = chips.child(
+                div()
+                    .id(super::sid(format!("priority-{priority:?}:{id}")))
+                    .cursor_pointer()
+                    .child(widgets::toggle_chip(theme, priority.label(), active))
+                    .on_click(cx.listener({
+                        let id = id.clone();
+                        move |this, _, _, cx| this.set_task_priority(id.clone(), Some(priority), cx)
+                    })),
+            );
+        }
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("Priority"),
+            )
+            .child(chips)
     }
 
     fn inspector_text_field(

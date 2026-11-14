@@ -28,6 +28,10 @@ pub struct Settings {
     pub current_location: Option<Geo>,
     #[serde(default = "default_nearby_radius")]
     pub nearby_radius_km: f64,
+    /// Days a trashed task is kept before automatic permanent deletion.
+    /// `0` keeps trash forever.
+    #[serde(default = "default_trash_days")]
+    pub trash_retention_days: u32,
 }
 
 fn default_review_days() -> u32 {
@@ -46,6 +50,10 @@ fn default_nearby_radius() -> f64 {
     10.0
 }
 
+fn default_trash_days() -> u32 {
+    30
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -56,6 +64,7 @@ impl Default for Settings {
             default_defer_time: None,
             current_location: None,
             nearby_radius_km: default_nearby_radius(),
+            trash_retention_days: default_trash_days(),
         }
     }
 }

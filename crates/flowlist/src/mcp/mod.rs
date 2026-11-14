@@ -16,8 +16,8 @@ use flowlist_core::command::{
 use flowlist_core::db::{ContainerPosition, Db, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    BuiltinPerspective, Condition, FilterNode, Geo, GroupBy, Perspective, ProjectStatus, SortBy,
-    TagStatus, TaskStatus,
+    BuiltinPerspective, Condition, FilterNode, Geo, GroupBy, Perspective, Priority, ProjectKind,
+    ProjectStatus, SortBy, TagStatus, TaskStatus,
 };
 use flowlist_core::parse::{parse_duration, parse_repeat, parse_stamp};
 use flowlist_core::paths::DataPaths;
@@ -185,6 +185,10 @@ impl Server {
             "update_task" => self.tool_update_task(args),
             "complete_task" => self.tool_complete_task(args),
             "delete_task" => self.tool_delete_task(args),
+            "list_trash" => self.tool_list_trash(args),
+            "restore_tasks" => self.tool_restore_tasks(args),
+            "purge_tasks" => self.tool_purge_tasks(args),
+            "empty_trash" => self.tool_empty_trash(args),
             "move_task" => self.tool_move_task(args),
             "set_task_tags" => self.tool_set_task_tags(args),
             "list_checklist" => self.tool_list_checklist(args),
@@ -245,6 +249,9 @@ impl Server {
         if bool_arg(args, "flagged").unwrap_or(false) {
             new_task.flagged = true;
         }
+        if let Some(priority) = string_arg(args, "priority") {
+            new_task.priority = Some(parse_priority(&priority)?);
+        }
         if let Some(repeat) = string_arg(args, "repeat") {
             new_task.repeat = Some(parse_repeat(&repeat, reference)?);
         }
@@ -286,6 +293,13 @@ impl Server {
         if let Some(flagged) = bool_arg(args, "flagged") {
             patch.flagged = Some(flagged);
         }
+        if let Some(priority) = string_arg(args, "priority") {
+            patch.priority = if priority.eq_ignore_ascii_case("none") {
+                Some(None)
+            } else {
+                Some(Some(parse_priority(&priority)?))
+            };
+        }
         if let Some(repeat) = repeat_patch(args, reference)? {
             patch.repeat = Some(repeat);
         }
@@ -325,6 +339,54 @@ impl Server {
             ids: vec![id.clone()],
         })?;
         Ok(json!({"deleted": id.to_string()}))
+    }
+
+    fn tool_list_trash(&mut self, _args: &Value) -> Result<Value> {
+        self.store.refresh()?;
+        let at = now();
+        let groups = query::view(self.store.db(), BuiltinPerspective::Trash, at);
+        Ok(render::groups_value(self.store.db(), &groups))
+    }
+
+    fn tool_restore_tasks(&mut self, args: &Value) -> Result<Value> {
+        let ids = self.resolve_id_list(args)?;
+        let outcome = self
+            .store
+            .execute(CoreCommand::RestoreTasks { ids: ids.clone() })?;
+        Ok(json!({
+            "restored": ids.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            "message": outcome.message,
+        }))
+    }
+
+    fn tool_purge_tasks(&mut self, args: &Value) -> Result<Value> {
+        let ids = self.resolve_id_list(args)?;
+        let outcome = self
+            .store
+            .execute(CoreCommand::PurgeTasks { ids: ids.clone() })?;
+        Ok(json!({
+            "purged": ids.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            "message": outcome.message,
+        }))
+    }
+
+    fn tool_empty_trash(&mut self, _args: &Value) -> Result<Value> {
+        let outcome = self
+            .store
+            .execute(CoreCommand::PurgeExpiredTrash { before: now() })?;
+        Ok(json!({"message": outcome.message}))
+    }
+
+    fn resolve_id_list(&self, args: &Value) -> Result<Vec<TaskId>> {
+        let raw = id_list(args, "ids").or_else(|_| id_list(args, "id"))?;
+        if raw.is_empty() {
+            bail!("provide `ids` (or `id`) with at least one task");
+        }
+        let mut ids = Vec::with_capacity(raw.len());
+        for spec in &raw {
+            ids.push(self.store.db().resolve_task(spec)?);
+        }
+        Ok(ids)
     }
 
     fn tool_move_task(&mut self, args: &Value) -> Result<Value> {
@@ -519,6 +581,7 @@ impl Server {
             "tags" => query::view(db, BuiltinPerspective::Tags, at),
             "completed" => query::view(db, BuiltinPerspective::Completed, at),
             "nearby" => query::view(db, BuiltinPerspective::Nearby, at),
+            "trash" => query::view(db, BuiltinPerspective::Trash, at),
             "review" => Vec::new(),
             "custom" | "perspective" => {
                 let spec = string_arg(args, "perspective")
@@ -572,6 +635,11 @@ impl Server {
                 if let Some(due) = string_arg(args, "due") {
                     conditions.push(Condition::Due {
                         window: due_window(&due, at)?,
+                    });
+                }
+                if let Some(priority) = string_arg(args, "priority") {
+                    conditions.push(Condition::Priority {
+                        value: parse_priority(&priority)?,
                     });
                 }
                 let filter = FilterNode::all_conditions(conditions);
@@ -672,7 +740,13 @@ impl Server {
             .get("review_interval_days")
             .and_then(Value::as_u64)
             .map(|value| value as u32);
-        project.sequential = bool_arg(args, "sequential").unwrap_or(false);
+        project.kind = string_arg(args, "kind")
+            .as_deref()
+            .map(parse_project_kind)
+            .transpose()?
+            .unwrap_or(ProjectKind::Parallel);
+        project.sequential = bool_arg(args, "sequential").unwrap_or(false)
+            || project.kind == ProjectKind::Sequential;
         let outcome = self.store.execute(CoreCommand::CreateProject(project))?;
         let created = outcome.created.first().cloned().unwrap_or_default();
         let id = self.store.db().resolve_project(&created)?;
@@ -706,7 +780,9 @@ impl Server {
         if let Some(next) = string_arg(args, "next_review") {
             patch.next_review = Some(flowlist_core::parse::parse_date(&next, reference)?);
         }
-        if let Some(sequential) = bool_arg(args, "sequential") {
+        if let Some(kind) = string_arg(args, "kind") {
+            patch.kind = Some(parse_project_kind(&kind)?);
+        } else if let Some(sequential) = bool_arg(args, "sequential") {
             patch.sequential = Some(sequential);
         }
         self.store.execute(CoreCommand::UpdateProject {
@@ -1132,6 +1208,7 @@ fn tool_definitions() -> Vec<Value> {
                     "defer": s("Natural-language defer date"),
                     "estimate_min": n("Estimated minutes"),
                     "flagged": b("Flag the task"),
+                    "priority": s("low | medium | high, or null to clear"),
                     "repeat": s("Repeat rule, e.g. every 2 weeks after completion"),
                     "sequential": b("Work through subtasks in order"),
                 }),
@@ -1152,6 +1229,7 @@ fn tool_definitions() -> Vec<Value> {
                     "defer": s("Defer date"),
                     "estimate_min": n("Estimated minutes"),
                     "flagged": b("Flag the task"),
+                    "priority": s("low | medium | high"),
                     "repeat": s("Repeat rule"),
                 }),
                 &["title"],
@@ -1175,6 +1253,7 @@ fn tool_definitions() -> Vec<Value> {
                     "estimate_min": n("Estimated minutes, or null to clear"),
                     "estimate": s("Duration string such as 1h30m"),
                     "flagged": b("Flag state"),
+                    "priority": s("low | medium | high, or null to clear"),
                     "repeat": s("Repeat rule, or null to clear"),
                     "project": s("Project path, or null to move to the inbox"),
                     "parent": s("Parent task id, or null to clear"),
@@ -1196,8 +1275,28 @@ fn tool_definitions() -> Vec<Value> {
         ),
         tool(
             "delete_task",
-            "Delete a task and all of its subtasks.",
+            "Move a task and all of its subtasks to Trash. Use purge_tasks to delete permanently.",
             schema(json!({"id": s("Task id or prefix")}), &["id"]),
+        ),
+        tool(
+            "list_trash",
+            "List tasks currently in Trash.",
+            schema(json!({}), &[]),
+        ),
+        tool(
+            "restore_tasks",
+            "Restore one or more tasks (and their subtrees) from Trash.",
+            schema(json!({"ids": arr("Task ids or prefixes")}), &["ids"]),
+        ),
+        tool(
+            "purge_tasks",
+            "Permanently delete one or more tasks from Trash.",
+            schema(json!({"ids": arr("Task ids or prefixes")}), &["ids"]),
+        ),
+        tool(
+            "empty_trash",
+            "Permanently delete every task currently in Trash.",
+            schema(json!({}), &[]),
         ),
         tool(
             "move_task",
@@ -1284,7 +1383,7 @@ fn tool_definitions() -> Vec<Value> {
             "List tasks using a built-in view (inbox, projects, forecast, flagged, tags, completed, nearby, review) or a filter.",
             schema(
                 json!({
-                    "view": s("all | inbox | projects | forecast | flagged | tags | completed | nearby | review | custom"),
+                    "view": s("all | inbox | projects | forecast | flagged | tags | completed | nearby | review | trash | custom"),
                     "perspective": s("Custom perspective name or id (with view=custom)"),
                     "project": s("Project path filter"),
                     "folder": s("Folder path filter (includes child folders)"),
@@ -1294,6 +1393,7 @@ fn tool_definitions() -> Vec<Value> {
                     "flagged": b("Only flagged tasks"),
                     "inbox": b("Only inbox tasks"),
                     "completed": b("Only completed tasks"),
+                    "priority": s("low | medium | high"),
                     "due": s("Due window: today, overdue, tomorrow, next7, next30, none, or a date"),
                     "sort": s("manual | due | defer | name | flagged | estimate | created | completed"),
                     "group": s("none | project | folder | tag | due | defer | flagged | estimate"),
@@ -1333,6 +1433,7 @@ fn tool_definitions() -> Vec<Value> {
                     "due": s("Due date"),
                     "defer": s("Defer date"),
                     "review_interval_days": n("Review interval in days"),
+                    "kind": s("parallel | sequential | single_actions"),
                     "sequential": b("Work through top-level tasks in order"),
                 }),
                 &["name"],
@@ -1351,6 +1452,7 @@ fn tool_definitions() -> Vec<Value> {
                     "defer": s("Defer date, or null"),
                     "review_interval_days": n("Review interval in days"),
                     "next_review": s("Next review date"),
+                    "kind": s("parallel | sequential | single_actions"),
                     "sequential": b("Sequential tasks"),
                 }),
                 &["id"],
@@ -1636,6 +1738,21 @@ fn parse_group(value: &str) -> Result<GroupBy> {
         "estimate" => Ok(GroupBy::Estimate),
         other => bail!("unknown group: {other}"),
     }
+}
+
+fn parse_priority(value: &str) -> Result<Priority> {
+    Priority::from_slug(&value.trim().to_lowercase())
+        .or_else(|| {
+            Priority::ALL
+                .into_iter()
+                .find(|priority| priority.label().eq_ignore_ascii_case(value.trim()))
+        })
+        .ok_or_else(|| anyhow!("priority must be low, medium or high"))
+}
+
+fn parse_project_kind(value: &str) -> Result<ProjectKind> {
+    ProjectKind::from_slug(value.trim())
+        .ok_or_else(|| anyhow!("project kind must be parallel, sequential or single_actions"))
 }
 
 fn parse_project_status(value: &str) -> Result<ProjectStatus> {

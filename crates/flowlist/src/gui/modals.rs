@@ -4,6 +4,7 @@
 use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px, rgba};
 
 use flowlist_core::ids::{PerspectiveId, ProjectId, TagId};
+use flowlist_core::model::ProjectKind;
 
 use super::perspective::PerspectiveForm;
 use super::text::TextBuffer;
@@ -28,6 +29,7 @@ pub enum Modal {
     NewProject {
         name: TextBuffer,
         notes: TextBuffer,
+        kind: ProjectKind,
     },
     NewFolder {
         name: TextBuffer,
@@ -46,6 +48,7 @@ pub enum Modal {
         review_days: TextBuffer,
         completed_days: TextBuffer,
         radius: TextBuffer,
+        trash_days: TextBuffer,
         vim_mode: bool,
         theme: ThemeKind,
         appearance: Appearance,
@@ -85,6 +88,7 @@ impl Modal {
         Modal::NewProject {
             name: TextBuffer::empty(),
             notes: TextBuffer::empty(),
+            kind: ProjectKind::Parallel,
         }
     }
 
@@ -121,6 +125,7 @@ impl Modal {
             review_days: TextBuffer::new(settings.default_review_days.to_string()),
             completed_days: TextBuffer::new(settings.show_completed_days.to_string()),
             radius: TextBuffer::new(settings.nearby_radius_km.to_string()),
+            trash_days: TextBuffer::new(settings.trash_retention_days.to_string()),
             vim_mode: app.vim_mode,
             theme: app.theme.kind(),
             appearance: app.theme.appearance(),
@@ -189,7 +194,7 @@ impl Modal {
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
             Modal::Perspective { .. } => 1,
             Modal::Import { .. } => 1,
-            Modal::Settings { .. } => 3,
+            Modal::Settings { .. } => 4,
             Modal::Location { .. } | Modal::TagLocation { .. } => 2,
             Modal::Help => 0,
         }
@@ -198,7 +203,7 @@ impl Modal {
     pub fn field(&self, index: usize) -> Option<&TextBuffer> {
         match self {
             Modal::Rename { name, .. } => (index == 0).then_some(name),
-            Modal::NewProject { name, notes } => match index {
+            Modal::NewProject { name, notes, .. } => match index {
                 0 => Some(name),
                 1 => Some(notes),
                 _ => None,
@@ -210,11 +215,13 @@ impl Modal {
                 review_days,
                 completed_days,
                 radius,
+                trash_days,
                 ..
             } => match index {
                 0 => Some(review_days),
                 1 => Some(completed_days),
                 2 => Some(radius),
+                3 => Some(trash_days),
                 _ => None,
             },
             Modal::Location { lat, lon } | Modal::TagLocation { lat, lon, .. } => match index {
@@ -229,7 +236,7 @@ impl Modal {
     pub fn field_mut(&mut self, index: usize) -> Option<&mut TextBuffer> {
         match self {
             Modal::Rename { name, .. } => (index == 0).then_some(name),
-            Modal::NewProject { name, notes } => match index {
+            Modal::NewProject { name, notes, .. } => match index {
                 0 => Some(name),
                 1 => Some(notes),
                 _ => None,
@@ -241,11 +248,13 @@ impl Modal {
                 review_days,
                 completed_days,
                 radius,
+                trash_days,
                 ..
             } => match index {
                 0 => Some(review_days),
                 1 => Some(completed_days),
                 2 => Some(radius),
+                3 => Some(trash_days),
                 _ => None,
             },
             Modal::Location { lat, lon } | Modal::TagLocation { lat, lon, .. } => match index {
@@ -272,6 +281,7 @@ impl Modal {
                 0 => "Default review days",
                 1 => "Completed history (days)",
                 2 => "Nearby radius (km)",
+                3 => "Trash retention (days, 0 keeps forever)",
                 _ => "",
             },
             Modal::Location { .. } => match index {
@@ -320,6 +330,7 @@ impl FlowlistApp {
         let is_perspective = matches!(modal, Modal::Perspective { .. });
         let is_import = matches!(modal, Modal::Import { .. });
         let is_settings = matches!(modal, Modal::Settings { .. });
+        let is_new_project = matches!(modal, Modal::NewProject { .. });
         let is_tag_location = matches!(modal, Modal::TagLocation { .. });
         let mut card = div()
             .flex()
@@ -377,6 +388,9 @@ impl FlowlistApp {
         } else {
             for index in 0..field_count {
                 card = card.child(self.render_modal_field(index, cx));
+            }
+            if is_new_project {
+                card = card.child(self.render_new_project_controls(cx));
             }
             if is_perspective {
                 card = card.child(self.render_perspective_controls(cx));
@@ -733,6 +747,43 @@ impl FlowlistApp {
                     this.close_modal(cx);
                 })),
         )
+    }
+
+    fn render_new_project_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let kind = match &self.modal {
+            Some(Modal::NewProject { kind, .. }) => *kind,
+            _ => ProjectKind::Parallel,
+        };
+        let mut row = div().flex().flex_col().gap_1().child(
+            div()
+                .text_xs()
+                .text_color(theme.text_faint)
+                .child("Project type"),
+        );
+        let mut chips = div().flex().items_center().gap_1();
+        for candidate in ProjectKind::ALL {
+            let active = kind == candidate;
+            chips = chips.child(
+                div()
+                    .id(super::sid(format!("project-kind:{}", candidate.slug())))
+                    .cursor_pointer()
+                    .child(widgets::toggle_chip(theme, candidate.label(), active))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::NewProject { kind, .. }) = &mut this.modal {
+                            *kind = candidate;
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        row = row.child(chips).child(
+            div()
+                .text_xs()
+                .text_color(theme.text_faint)
+                .child(kind.hint()),
+        );
+        row
     }
 
     fn render_settings_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {

@@ -92,6 +92,9 @@ pub fn run(
         let Some(task) = db.tasks.get(&id) else {
             continue;
         };
+        if task.is_trashed() {
+            continue;
+        }
         if !show_completed && task.completed {
             continue;
         }
@@ -196,6 +199,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 .values()
                 .filter(|task| {
                     task.completed
+                        && !task.is_trashed()
                         && task
                             .completed_at
                             .is_some_and(|completed| completed >= cutoff)
@@ -220,7 +224,64 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 rows: rows_for(db, &ids, at),
             }]
         }
+        BuiltinPerspective::Trash => {
+            let ids = db.trashed_roots();
+            vec![Group {
+                key: "trash".to_string(),
+                title: "Trash".to_string(),
+                position: 0,
+                rows: rows_for(db, &ids, at),
+            }]
+        }
     }
+}
+
+/// Tasks with a given priority, in manual order. Completed and trashed tasks
+/// are left out; the GUI's priority rows use this for their own view.
+pub fn priority(db: &Db, priority: crate::model::Priority, at: DateTime<Utc>) -> Vec<Group> {
+    let ids: Vec<TaskId> = manual_order(db)
+        .into_iter()
+        .filter(|id| {
+            db.tasks.get(id).is_some_and(|task| {
+                !task.completed && !task.is_trashed() && task.priority == Some(priority)
+            })
+        })
+        .collect();
+    vec![Group {
+        key: format!("priority:{}", priority.slug()),
+        title: format!("{} priority", priority.label()),
+        position: 0,
+        rows: rows_for(db, &ids, at),
+    }]
+}
+
+/// Tasks due or deferred on a specific local date. Used when a Forecast
+/// calendar date is clicked.
+pub fn tasks_on_date(db: &Db, date: chrono::NaiveDate, _at: DateTime<Utc>) -> Vec<TaskId> {
+    let mut ids: Vec<TaskId> = manual_order(db)
+        .into_iter()
+        .filter(|id| {
+            let Some(task) = db.tasks.get(id) else {
+                return false;
+            };
+            if task.completed || task.is_trashed() {
+                return false;
+            }
+            if let Some(project_id) = &task.project {
+                match db.projects.get(project_id).map(|project| project.status) {
+                    Some(ProjectStatus::Active) | None => {}
+                    _ => return false,
+                }
+            }
+            task.due.is_some_and(|stamp| stamp.local_date() == date)
+                || task.defer.is_some_and(|stamp| stamp.local_date() == date)
+        })
+        .collect();
+    ids.sort_by_key(|id| {
+        let task = &db.tasks[id];
+        (task.due.map(|stamp| stamp.at), task.title.to_lowercase())
+    });
+    ids
 }
 
 fn forecast_groups(db: &Db, at: DateTime<Utc>) -> Vec<Group> {
@@ -293,7 +354,7 @@ pub fn nearby(db: &Db, at: DateTime<Utc>) -> Vec<NearbyHit> {
     let radius = db.settings.nearby_radius_km.max(0.1);
     let mut hits: Vec<NearbyHit> = Vec::new();
     for task in db.tasks.values() {
-        if task.completed {
+        if task.completed || task.is_trashed() {
             continue;
         }
         if let Some(project_id) = &task.project {

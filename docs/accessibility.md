@@ -21,9 +21,12 @@ them, so the keyboard routes below are the primary way to reach them.
 | Palette | Next theme family (⇧⌘T) | `⌘T` light/dark, `⇧⌘T` / `⌥⌘T` family, `⇧T` in vim mode |
 | Info (i) | Toggle inspector (i) | `i` or `⌘I` |
 
-The Forecast month calendar adds three mouse controls beside the month name:
+The Forecast month calendar adds three controls beside the month name:
 previous month, Today and next month. They are labelled `‹`, `Today` and `›`
-with tooltips, and the list below them keeps the normal task keyboard routes.
+with tooltips. Every date cell is clickable and has a tooltip naming the day;
+the selected day is highlighted and an "All dates" button clears it. Keyboard
+routes: `[` / `]` step the selected day, `{` / `}` step the month, and `\`
+clears the day filter. The list below keeps the normal task keyboard routes.
 
 ### Sidebar
 
@@ -54,10 +57,15 @@ row, and `Esc` returns to the content list.
 | × tag chip | Remove tag | no direct key; remove it in the inspector Tag field |
 | × close inspector | Close inspector (i) | `i` or `⌘I` |
 
-Toolbar chips (`Sort`, `Group`, `Completed`) and project status chips are
-labelled buttons rather than icon-only controls, so they work with the mouse
-and are described by their text. Their tooltips add detail about what a click
-does.
+Toolbar chips (`Sort`, `Group`, `Completed`, `Priority`) and project status
+and type chips are labelled buttons rather than icon-only controls, so they
+work with the mouse and are described by their text. Their tooltips add detail
+about what a click does.
+
+Trash is an ordinary perspective in the same keyboard model. `Delete` moves
+selected tasks to Trash everywhere except inside Trash, where it permanently
+deletes them; `r` restores the selection, and the header exposes labelled
+Restore and Delete forever buttons. Deleting keeps the next row selected.
 
 ## Tooltip coverage
 
@@ -68,7 +76,8 @@ They are attached to every icon-only control:
 - sidebar pencils, × buttons, disclosure arrows and the `⌖` location button;
 - task completion circles, flags and subtask disclosures;
 - checklist tick boxes, reorder arrows and delete buttons;
-- inspector flag, close, tag-remove and project-status controls.
+- inspector flag, close, tag-remove and project-status controls;
+- every Forecast date cell and the priority filter chip.
 
 The help card (`?`) lists the same routes in one place, so a keyboard user does
 not need to discover a tooltip first.

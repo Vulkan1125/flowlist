@@ -36,7 +36,7 @@ use flowlist_core::command::{
 };
 use flowlist_core::db::{ContainerPosition, Db, OrderKey, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
-use flowlist_core::model::{BuiltinPerspective, GroupBy, SortBy, TagStatus};
+use flowlist_core::model::{BuiltinPerspective, GroupBy, Priority, ProjectKind, SortBy, TagStatus};
 use flowlist_core::parse::{parse_duration, parse_quick, parse_repeat, parse_stamp};
 use flowlist_core::paths::DataPaths;
 use flowlist_core::query::{self, Group, TaskRow};
@@ -114,6 +114,10 @@ pub struct FlowlistApp {
     view: View,
     /// First day of the month the Forecast calendar shows.
     forecast_month: chrono::NaiveDate,
+    /// A clicked calendar date; `None` shows the normal Forecast buckets.
+    forecast_date: Option<chrono::NaiveDate>,
+    /// Applies to every list, and is what the sidebar priority rows set.
+    priority_filter: Option<Priority>,
     selected: Vec<TaskId>,
     anchor: Option<TaskId>,
     expanded: BTreeSet<String>,
@@ -178,6 +182,7 @@ impl FlowlistApp {
         let show_completed = session.show_completed.unwrap_or(false);
         let show_inspector = session.inspector.unwrap_or(true);
         let vim_mode = session.vim_mode.unwrap_or(true);
+        let priority_filter = session.priority_filter();
         let window_size = session.window;
         let focus_handle = cx.focus_handle();
         let toast = store_warning(&store);
@@ -207,6 +212,8 @@ impl FlowlistApp {
             theme,
             view,
             forecast_month,
+            forecast_date: None,
+            priority_filter,
             selected,
             anchor: None,
             expanded: BTreeSet::new(),
@@ -259,6 +266,7 @@ impl FlowlistApp {
             group: self.group.map(|group| group_slug(group).to_string()),
             show_completed: Some(self.show_completed),
             vim_mode: Some(self.vim_mode),
+            priority_filter: self.priority_filter.map(|p| p.slug().to_string()),
         };
         let _ = self.store.write_session(&session);
     }
@@ -282,7 +290,19 @@ impl FlowlistApp {
             // Review has its own dashboard; Nearby its own ranked list. The
             // rest still need ids here so j/k, x and undo work on them.
             View::Builtin(BuiltinPerspective::Review) => Vec::new(),
+            View::Builtin(BuiltinPerspective::Forecast) if self.forecast_date.is_some() => {
+                let date = self.forecast_date.expect("guard checked");
+                let ids = query::tasks_on_date(db, date, at);
+                let title = query::forecast::day_label(date, local_date(at));
+                vec![Group {
+                    key: format!("forecast-day:{date}"),
+                    title,
+                    position: 0,
+                    rows: query::rows_for(db, &ids, at),
+                }]
+            }
             View::Builtin(perspective) => query::view(db, *perspective, at),
+            View::Priority(priority) => query::priority(db, *priority, at),
             View::Project(id) => self.project_groups(id),
             View::Folder(id) => db
                 .flatten_containers()
@@ -331,6 +351,20 @@ impl FlowlistApp {
 
         if !self.search.is_empty() {
             groups = self.filter_groups(groups);
+        }
+
+        if let Some(priority) = self.priority_filter {
+            groups = groups
+                .into_iter()
+                .filter_map(|mut group| {
+                    group.rows.retain(|row| {
+                        db.tasks
+                            .get(&row.id)
+                            .is_some_and(|task| task.priority == Some(priority))
+                    });
+                    (!group.rows.is_empty()).then_some(group)
+                })
+                .collect();
         }
         groups
     }
@@ -603,6 +637,68 @@ impl FlowlistApp {
         cx.notify();
     }
 
+    fn set_task_priority(
+        &mut self,
+        id: TaskId,
+        priority: Option<Priority>,
+        cx: &mut Context<Self>,
+    ) {
+        self.execute(Command::SetTaskPriority {
+            ids: vec![id],
+            priority,
+        });
+        cx.notify();
+    }
+
+    /// Cycle the global priority filter: all → high → medium → low → all.
+    fn cycle_priority_filter(&mut self, cx: &mut Context<Self>) {
+        let next = match self.priority_filter {
+            None => Some(Priority::High),
+            Some(Priority::High) => Some(Priority::Medium),
+            Some(Priority::Medium) => Some(Priority::Low),
+            Some(Priority::Low) => None,
+        };
+        self.priority_filter = next;
+        // A priority view only makes sense while its filter is active.
+        if let View::Priority(_) = self.view {
+            match next {
+                Some(priority) => self.set_view(View::Priority(priority)),
+                None => self.set_view(View::Builtin(BuiltinPerspective::Inbox)),
+            }
+        }
+        self.save_session();
+        cx.notify();
+    }
+
+    fn restore_selected(&mut self, cx: &mut Context<Self>) {
+        if self.selected.is_empty() {
+            self.toast = Some("Select a trashed task first".to_string());
+            cx.notify();
+            return;
+        }
+        self.execute(Command::RestoreTasks {
+            ids: self.selected.clone(),
+        });
+        self.selected.clear();
+        self.anchor = None;
+        cx.notify();
+    }
+
+    fn purge_selected(&mut self, cx: &mut Context<Self>) {
+        if self.selected.is_empty() {
+            self.toast = Some("Select a trashed task first".to_string());
+            cx.notify();
+            return;
+        }
+        self.execute(Command::PurgeTasks {
+            ids: self.selected.clone(),
+        });
+        self.selected.clear();
+        self.anchor = None;
+        self.save_session();
+        cx.notify();
+    }
+
     fn delete_selected(&mut self, cx: &mut Context<Self>) {
         if self.selected.is_empty() {
             self.toast = Some("Select a task first".to_string());
@@ -611,10 +707,37 @@ impl FlowlistApp {
         }
         let ids = self.selected.clone();
         let count = ids.len();
-        self.execute(Command::DeleteTasks { ids });
+        // Deleting from Trash is permanent; everywhere else the task moves to
+        // Trash first.
+        let in_trash = self.view == View::Builtin(BuiltinPerspective::Trash);
+        let visible_before = self.visible_ids();
+        let cursor = self
+            .selected
+            .first()
+            .and_then(|id| visible_before.iter().position(|candidate| candidate == id))
+            .unwrap_or(0);
+        self.execute(if in_trash {
+            Command::PurgeTasks { ids }
+        } else {
+            Command::DeleteTasks { ids }
+        });
         self.selected.clear();
         self.anchor = None;
-        self.toast = Some(format!("Deleted {count} task(s) · ⌘Z to undo"));
+        // Keep the user where they were: select the task that took the
+        // deleted row's place, or the last row if the tail was removed.
+        let visible_after = self.visible_ids();
+        if let Some(id) = visible_after
+            .get(cursor.min(visible_after.len().saturating_sub(1)))
+            .cloned()
+        {
+            self.select_only(id);
+        }
+        let verb = if in_trash {
+            "Permanently deleted"
+        } else {
+            "Moved to Trash"
+        };
+        self.toast = Some(format!("{verb} {count} task(s) · ⌘Z to undo"));
         self.save_session();
         cx.notify();
     }
@@ -643,8 +766,8 @@ impl FlowlistApp {
                 cx.notify();
                 return;
             }
-            sidebar::SidebarTarget::Builtin(_) => {
-                self.toast = Some("Built-in perspectives cannot be deleted".to_string());
+            sidebar::SidebarTarget::Builtin(_) | sidebar::SidebarTarget::Priority(_) => {
+                self.toast = Some("This sidebar row cannot be deleted".to_string());
                 cx.notify();
                 return;
             }
@@ -1258,7 +1381,7 @@ impl FlowlistApp {
             View::Folder(id) => Some(modals::EntityRef::Folder(id.clone())),
             View::Tag(id) => Some(modals::EntityRef::Tag(id.clone())),
             View::Custom(id) => Some(modals::EntityRef::Perspective(id.clone())),
-            View::Builtin(_) => None,
+            View::Builtin(_) | View::Priority(_) => None,
         }
     }
 
@@ -1330,7 +1453,7 @@ impl FlowlistApp {
                     }
                 }
             }
-            modals::Modal::NewProject { name, notes } => {
+            modals::Modal::NewProject { name, notes, kind } => {
                 let name = name.text().trim().to_string();
                 if name.is_empty() {
                     return Err("A project needs a name".to_string());
@@ -1346,6 +1469,8 @@ impl FlowlistApp {
                 };
                 let mut new_project = NewProject::new(name);
                 new_project.notes = notes.text().to_string();
+                new_project.kind = *kind;
+                new_project.sequential = *kind == ProjectKind::Sequential;
                 new_project.folder = folder;
                 new_project.position = ContainerPosition::End;
                 if let Some(outcome) = self.execute(Command::CreateProject(new_project)) {
@@ -1428,6 +1553,7 @@ impl FlowlistApp {
                 review_days,
                 completed_days,
                 radius,
+                trash_days,
                 vim_mode,
                 theme,
                 appearance,
@@ -1447,12 +1573,21 @@ impl FlowlistApp {
                     .trim()
                     .parse::<f64>()
                     .map_err(|_| "Radius must be a number".to_string())?;
+                let trash = trash_days
+                    .text()
+                    .trim()
+                    .parse::<u32>()
+                    .map_err(|_| "Trash retention must be a number".to_string())?;
                 self.execute(Command::UpdateSettings(SettingsPatch {
                     default_review_days: Some(review),
                     show_completed_days: Some(completed),
                     nearby_radius_km: Some(radius),
+                    trash_retention_days: Some(trash),
                     ..Default::default()
                 }));
+                if let Err(error) = self.store.sweep_trash() {
+                    self.toast = Some(format!("Could not empty expired trash: {error}"));
+                }
                 self.vim_mode = *vim_mode;
                 self.theme = Theme::new(*theme, *appearance);
                 self.save_session();
@@ -1736,7 +1871,7 @@ impl FlowlistApp {
                     }
                 }
                 "," => self.open_modal(modals::Modal::settings(self), cx),
-                key if matches!(key, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8") => {
+                key if matches!(key, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9") => {
                     if let Some(index) = key.chars().next().and_then(|ch| ch.to_digit(10)) {
                         if let Some(perspective) =
                             BuiltinPerspective::ALL.get((index as usize).saturating_sub(1))
@@ -1880,7 +2015,28 @@ impl FlowlistApp {
                 return;
             }
             "e" => self.begin_edit(EditField::Title, cx),
-            key if matches!(key, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8") => {
+            "r" if matches!(self.view, View::Builtin(BuiltinPerspective::Trash)) => {
+                self.restore_selected(cx)
+            }
+            "[" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
+                self.forecast_step_date(-1);
+            }
+            "]" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
+                self.forecast_step_date(1);
+            }
+            "{" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
+                self.forecast_shift_month(-1);
+            }
+            "}" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
+                self.forecast_shift_month(1);
+            }
+            "\\" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
+                self.forecast_date = None;
+                self.selected.clear();
+                self.anchor = None;
+                self.save_session();
+            }
+            key if matches!(key, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9") => {
                 if let Some(index) = key.chars().next().and_then(|ch| ch.to_digit(10)) {
                     if let Some(perspective) =
                         BuiltinPerspective::ALL.get((index as usize).saturating_sub(1))
@@ -2344,8 +2500,8 @@ impl FlowlistApp {
                 }
                 return;
             }
-            sidebar::SidebarTarget::Builtin(_) => {
-                self.toast = Some("Built-in perspectives cannot be renamed".to_string());
+            sidebar::SidebarTarget::Builtin(_) | sidebar::SidebarTarget::Priority(_) => {
+                self.toast = Some("This sidebar row cannot be renamed".to_string());
                 cx.notify();
                 return;
             }
@@ -2544,6 +2700,7 @@ fn view_exists(db: &Db, view: &View) -> bool {
         View::Folder(id) => db.folders.contains_key(id),
         View::Tag(id) => db.tags.contains_key(id),
         View::Custom(id) => db.perspectives.contains_key(id),
+        View::Priority(_) => true,
     }
 }
 
@@ -2688,6 +2845,7 @@ impl FlowlistApp {
                     .count()
             }
             BuiltinPerspective::Nearby => query::nearby(db, at).len(),
+            BuiltinPerspective::Trash => db.trash_count(),
         }
     }
 
@@ -2706,6 +2864,9 @@ impl FlowlistApp {
             "theme": self.theme.kind().slug(),
             "appearance": self.theme.appearance().slug(),
             "blur": self.blur_mode.map(|appearance| appearance.slug()),
+            "priority_filter": self.priority_filter.map(|priority| priority.slug()),
+            "forecast_date": self.forecast_date.map(|date| date.to_string()),
+            "trashed": self.store.db().trash_count(),
             "traffic_lights": if self.traffic_lights_hidden { "hidden" } else { "visible" },
             "modal_theme": match &self.modal {
                 Some(modals::Modal::Settings { theme, appearance, .. }) => {

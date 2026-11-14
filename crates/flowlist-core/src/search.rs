@@ -53,6 +53,9 @@ pub fn search(db: &Db, query: &str, limit: usize) -> Vec<SearchHit> {
     let mut hits: Vec<SearchHit> = Vec::new();
 
     for task in db.tasks.values() {
+        if task.is_trashed() {
+            continue;
+        }
         let title_score = score(&task.title, &needle) * 3;
         let notes_score = score(&task.notes, &needle);
         let checklist_score = task

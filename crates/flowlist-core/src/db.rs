@@ -411,6 +411,9 @@ impl Db {
         let Some(task) = self.tasks.get(task_id) else {
             return;
         };
+        if task.is_trashed() {
+            return;
+        }
         if task.completed && !include_completed {
             return;
         }
@@ -709,7 +712,9 @@ impl Db {
         }
         self.tasks
             .values()
-            .filter(|task| !task.completed && task.tags.iter().any(|t| ids.contains(t)))
+            .filter(|task| {
+                !task.completed && !task.is_trashed() && task.tags.iter().any(|t| ids.contains(t))
+            })
             .count()
     }
 
@@ -936,7 +941,7 @@ impl Db {
         let mut out: Vec<TaskId> = self
             .tasks
             .values()
-            .filter(|task| task.tags.iter().any(|t| tags.contains(t)))
+            .filter(|task| !task.is_trashed() && task.tags.iter().any(|t| tags.contains(t)))
             .map(|task| task.id.clone())
             .collect();
         out.sort_by_key(|id| {
@@ -951,7 +956,32 @@ impl Db {
     }
 
     pub fn all_open_tasks(&self) -> impl Iterator<Item = &Task> {
-        self.tasks.values().filter(|task| !task.completed)
+        self.tasks
+            .values()
+            .filter(|task| !task.completed && !task.is_trashed())
+    }
+
+    /// Root-level tasks currently in Trash, newest first. Ancestors are not
+    /// shown separately so a deleted branch stays one restorable row.
+    pub fn trashed_roots(&self) -> Vec<TaskId> {
+        let mut roots: Vec<&Task> = self
+            .tasks
+            .values()
+            .filter(|task| {
+                task.is_trashed()
+                    && task
+                        .parent
+                        .as_ref()
+                        .and_then(|parent| self.tasks.get(parent))
+                        .is_none_or(|parent| !parent.is_trashed())
+            })
+            .collect();
+        roots.sort_by_key(|task| std::cmp::Reverse(task.trashed_at));
+        roots.into_iter().map(|task| task.id.clone()).collect()
+    }
+
+    pub fn trash_count(&self) -> usize {
+        self.trashed_roots().len()
     }
 
     pub fn is_review_due(&self, project: &ProjectId, today: NaiveDate) -> bool {

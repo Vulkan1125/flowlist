@@ -36,6 +36,67 @@ impl ProjectStatus {
     }
 }
 
+/// OmniFocus-style project types. Parallel projects release every task at
+/// once, sequential projects release one at a time, and single-action lists
+/// are buckets of independent one-off tasks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectKind {
+    #[default]
+    Parallel,
+    Sequential,
+    SingleActions,
+}
+
+impl ProjectKind {
+    pub const ALL: [ProjectKind; 3] = [
+        ProjectKind::Parallel,
+        ProjectKind::Sequential,
+        ProjectKind::SingleActions,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ProjectKind::Parallel => "Parallel",
+            ProjectKind::Sequential => "Sequential",
+            ProjectKind::SingleActions => "Single actions",
+        }
+    }
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            ProjectKind::Parallel => "parallel",
+            ProjectKind::Sequential => "sequential",
+            ProjectKind::SingleActions => "single_actions",
+        }
+    }
+
+    pub fn from_slug(value: &str) -> Option<Self> {
+        match value.replace('-', "_").as_str() {
+            "parallel" => Some(ProjectKind::Parallel),
+            "sequential" => Some(ProjectKind::Sequential),
+            "single_actions" | "single" | "single_action" => Some(ProjectKind::SingleActions),
+            _ => None,
+        }
+    }
+
+    pub fn hint(self) -> &'static str {
+        match self {
+            ProjectKind::Parallel => "Every task is available at once.",
+            ProjectKind::Sequential => "Tasks unlock one after another, top to bottom.",
+            ProjectKind::SingleActions => "A bucket for one-off actions with no order.",
+        }
+    }
+
+    pub fn next(self) -> Self {
+        match self {
+            ProjectKind::Parallel => ProjectKind::Sequential,
+            ProjectKind::Sequential => ProjectKind::SingleActions,
+            ProjectKind::SingleActions => ProjectKind::Parallel,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Project {
     pub id: crate::ids::ProjectId,
@@ -56,9 +117,11 @@ pub struct Project {
     pub review_interval_days: u32,
     #[serde(default = "today")]
     pub next_review: NaiveDate,
-    /// When true, the project's top-level tasks are worked through in order.
+    /// Legacy boolean kept for older files. New writes use `kind`.
     #[serde(default)]
     pub sequential: bool,
+    #[serde(default)]
+    pub kind: ProjectKind,
     #[serde(default)]
     pub task_order: Vec<TaskId>,
     #[serde(default = "now")]
@@ -90,10 +153,25 @@ impl Project {
             review_interval_days: default_review_days(),
             next_review: local_date(at) + chrono::Duration::days(default_review_days() as i64),
             sequential: false,
+            kind: ProjectKind::Parallel,
             task_order: Vec::new(),
             created_at: at,
             modified_at: at,
         }
+    }
+
+    /// The kind to show and apply, including projects written before `kind`
+    /// existed with only the `sequential` boolean set.
+    pub fn effective_kind(&self) -> ProjectKind {
+        if self.sequential && self.kind == ProjectKind::Parallel {
+            ProjectKind::Sequential
+        } else {
+            self.kind
+        }
+    }
+
+    pub fn is_sequential(&self) -> bool {
+        self.effective_kind() == ProjectKind::Sequential
     }
 
     pub fn is_due_for_review(&self, date: NaiveDate) -> bool {

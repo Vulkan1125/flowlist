@@ -163,7 +163,10 @@ fn sequence_blocker(db: &Db, task: &Task) -> Option<TaskId> {
         (OrderKey::Parent(parent_id.clone()), parent.sequential)
     } else if let Some(project_id) = &task.project {
         let project = db.projects.get(project_id)?;
-        (OrderKey::Project(project_id.clone()), project.sequential)
+        (
+            OrderKey::Project(project_id.clone()),
+            project.is_sequential(),
+        )
     } else {
         return None;
     };

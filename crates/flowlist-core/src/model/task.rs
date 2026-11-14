@@ -32,6 +32,41 @@ impl ChecklistItem {
     }
 }
 
+/// How important a task is. `None` on the task means no priority was set.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Priority {
+    Low,
+    Medium,
+    High,
+}
+
+impl Priority {
+    pub const ALL: [Priority; 3] = [Priority::High, Priority::Medium, Priority::Low];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Priority::Low => "Low",
+            Priority::Medium => "Medium",
+            Priority::High => "High",
+        }
+    }
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            Priority::Low => "low",
+            Priority::Medium => "medium",
+            Priority::High => "high",
+        }
+    }
+
+    pub fn from_slug(value: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|priority| priority.slug() == value)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Task {
     pub id: TaskId,
@@ -55,6 +90,9 @@ pub struct Task {
     pub estimate_min: Option<u32>,
     #[serde(default)]
     pub flagged: bool,
+    /// Optional importance, independent of the flag.
+    #[serde(default)]
+    pub priority: Option<Priority>,
     #[serde(default)]
     pub completed: bool,
     #[serde(default)]
@@ -64,6 +102,10 @@ pub struct Task {
     /// When true, children are worked through in order.
     #[serde(default)]
     pub sequential: bool,
+    /// When the task was moved to Trash. Trashed tasks stay in the library so
+    /// they can be restored, but every normal perspective hides them.
+    #[serde(default)]
+    pub trashed_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub child_order: Vec<TaskId>,
     #[serde(default = "now")]
@@ -87,10 +129,12 @@ impl Task {
             defer: None,
             estimate_min: None,
             flagged: false,
+            priority: None,
             completed: false,
             completed_at: None,
             repeat: None,
             sequential: false,
+            trashed_at: None,
             child_order: Vec::new(),
             created_at: at,
             modified_at: at,
@@ -99,6 +143,10 @@ impl Task {
 
     pub fn is_inbox(&self) -> bool {
         self.project.is_none()
+    }
+
+    pub fn is_trashed(&self) -> bool {
+        self.trashed_at.is_some()
     }
 
     pub fn has_children(&self) -> bool {

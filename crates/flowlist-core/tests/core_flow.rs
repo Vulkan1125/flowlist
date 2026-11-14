@@ -1,7 +1,9 @@
 //! End-to-end tests for the command, history and persistence layers.
 
 use chrono::Utc;
-use flowlist_core::command::{Command, ImportMode, NewProject, NewTask, TaskPatch, TaskPlacement};
+use flowlist_core::command::{
+    Command, ImportMode, NewProject, NewTask, ProjectPatch, TaskPatch, TaskPlacement,
+};
 use flowlist_core::db::Position;
 use flowlist_core::ids::TagId;
 use flowlist_core::model::{RepeatMode, RepeatRule, TagStatus, Task};
@@ -549,4 +551,170 @@ fn tag_location_edit_is_undoable() {
     assert_eq!(store.db().tags[&tag_id].location, None);
     store.redo().unwrap();
     assert_eq!(store.db().tags[&tag_id].location, Some(geo));
+}
+
+#[test]
+fn deleting_moves_to_trash_and_restores_or_purges() {
+    use flowlist_core::model::BuiltinPerspective;
+    use flowlist_core::query;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let id = add(&mut store, "Buy milk");
+    let task_id = store.db().resolve_task(&id).unwrap();
+
+    store
+        .execute(Command::DeleteTasks {
+            ids: vec![task_id.clone()],
+        })
+        .unwrap();
+    assert!(store.db().tasks[&task_id].is_trashed());
+    assert!(store.db().trashed_roots().contains(&task_id));
+    let inbox = query::view(store.db(), BuiltinPerspective::Inbox, Utc::now());
+    assert!(
+        inbox
+            .iter()
+            .flat_map(|group| &group.rows)
+            .all(|row| row.id != task_id)
+    );
+
+    store
+        .execute(Command::RestoreTasks {
+            ids: vec![task_id.clone()],
+        })
+        .unwrap();
+    assert!(!store.db().tasks[&task_id].is_trashed());
+    assert!(!store.db().trashed_roots().contains(&task_id));
+
+    store
+        .execute(Command::PurgeTasks {
+            ids: vec![task_id.clone()],
+        })
+        .unwrap();
+    assert!(!store.db().tasks.contains_key(&task_id));
+
+    store.undo().unwrap();
+    assert!(store.db().tasks.contains_key(&task_id));
+    assert!(!store.db().tasks[&task_id].is_trashed());
+
+    store
+        .execute(Command::DeleteTasks {
+            ids: vec![task_id.clone()],
+        })
+        .unwrap();
+
+    // A cutoff before the delete stamp keeps the task; a cutoff after it
+    // removes the task permanently.
+    store
+        .execute(Command::PurgeExpiredTrash {
+            before: Utc::now() - chrono::Duration::days(1),
+        })
+        .unwrap();
+    assert!(store.db().tasks.contains_key(&task_id));
+    store
+        .execute(Command::PurgeExpiredTrash {
+            before: Utc::now() + chrono::Duration::days(1),
+        })
+        .unwrap();
+    assert!(!store.db().tasks.contains_key(&task_id));
+}
+
+#[test]
+fn priorities_filter_and_route_to_the_sidebar_query() {
+    use flowlist_core::model::{Condition, FilterNode, GroupBy, Priority, SortBy};
+    use flowlist_core::query;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let mut high = NewTask::new("Ship the release");
+    high.priority = Some(Priority::High);
+    let high_id = store.execute(Command::CreateTask(high)).unwrap().created[0].clone();
+    let mut low = NewTask::new("Tidy the desk");
+    low.priority = Some(Priority::Low);
+    let low_id = store.execute(Command::CreateTask(low)).unwrap().created[0].clone();
+
+    let at = Utc::now();
+    let high_groups = query::priority(store.db(), Priority::High, at);
+    let ids: Vec<String> = high_groups
+        .iter()
+        .flat_map(|group| &group.rows)
+        .map(|row| row.id.to_string())
+        .collect();
+    assert_eq!(ids, vec![high_id.clone()]);
+    assert!(!ids.contains(&low_id));
+
+    let filter = FilterNode::condition(Condition::Priority {
+        value: Priority::Low,
+    });
+    let groups = query::run(
+        store.db(),
+        &filter,
+        SortBy::Manual,
+        GroupBy::None,
+        false,
+        at,
+    );
+    let ids: Vec<String> = groups
+        .iter()
+        .flat_map(|group| &group.rows)
+        .map(|row| row.id.to_string())
+        .collect();
+    assert_eq!(ids, vec![low_id]);
+}
+
+#[test]
+fn project_kinds_round_trip_and_legacy_sequential_still_blocks() {
+    use flowlist_core::model::{ProjectKind, ProjectStatus};
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let mut new_project = NewProject::new("Launch");
+    new_project.kind = ProjectKind::Sequential;
+    let outcome = store.execute(Command::CreateProject(new_project)).unwrap();
+    let project_id = store.db().resolve_project(&outcome.created[0]).unwrap();
+    let project = &store.db().projects[&project_id];
+    assert_eq!(project.effective_kind(), ProjectKind::Sequential);
+    assert!(project.is_sequential());
+
+    store
+        .execute(Command::UpdateProject {
+            id: project_id.clone(),
+            patch: ProjectPatch {
+                kind: Some(ProjectKind::SingleActions),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert_eq!(
+        store.db().projects[&project_id].effective_kind(),
+        ProjectKind::SingleActions
+    );
+    assert!(!store.db().projects[&project_id].is_sequential());
+    assert_eq!(
+        store.db().projects[&project_id].status,
+        ProjectStatus::Active
+    );
+}
+
+#[test]
+fn tasks_on_date_uses_the_local_due_date() {
+    use chrono::Duration;
+    use flowlist_core::query;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let today = local_date(Utc::now());
+    let mut task = NewTask::new("Dentist");
+    task.due = Some(Stamp::date_only(today));
+    let due_id = store.execute(Command::CreateTask(task)).unwrap().created[0].clone();
+    let mut later = NewTask::new("Later");
+    later.defer = Some(Stamp::date_only(today + Duration::days(3)));
+    let later_id = store.execute(Command::CreateTask(later)).unwrap().created[0].clone();
+
+    let ids: Vec<String> = query::tasks_on_date(store.db(), today, Utc::now())
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect();
+    assert_eq!(ids, vec![due_id]);
+    assert!(!ids.contains(&later_id));
 }

@@ -43,6 +43,7 @@ pub fn condition_matches(db: &Db, task: &Task, condition: &Condition, at: DateTi
         }
         Condition::InInbox => db.effective_project(&task.id).is_none(),
         Condition::Flagged { value } => task.flagged == *value,
+        Condition::Priority { value } => task.priority == Some(*value),
         Condition::Status { value } => status_matches(db, task, *value, at),
         Condition::Due { window } => window_matches(task.due, *window, at),
         Condition::Deferred { window } => window_matches(task.defer, *window, at),

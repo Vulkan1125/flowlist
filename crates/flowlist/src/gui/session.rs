@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use flowlist_core::db::Db;
 use flowlist_core::ids::{FolderId, PerspectiveId, ProjectId, TagId, TaskId};
-use flowlist_core::model::BuiltinPerspective;
+use flowlist_core::model::{BuiltinPerspective, Priority};
 
 use super::theme::{Appearance, ThemeKind};
 
@@ -16,6 +16,7 @@ pub enum View {
     Folder(FolderId),
     Tag(TagId),
     Custom(PerspectiveId),
+    Priority(Priority),
 }
 
 impl View {
@@ -26,6 +27,7 @@ impl View {
             View::Folder(id) => format!("folder:{id}"),
             View::Tag(id) => format!("tag:{id}"),
             View::Custom(id) => format!("custom:{id}"),
+            View::Priority(priority) => format!("priority:{}", priority.slug()),
         }
     }
 
@@ -39,23 +41,14 @@ impl View {
             "folder" => db.resolve_folder(id).ok().map(View::Folder),
             "tag" => db.resolve_tag(id).ok().map(View::Tag),
             "custom" => db.resolve_perspective(id).ok().map(View::Custom),
+            "priority" => Priority::from_slug(id).map(View::Priority),
             _ => None,
         }
     }
 
     pub fn title(&self, db: &Db) -> String {
         match self {
-            View::Builtin(perspective) => match perspective {
-                BuiltinPerspective::Inbox => "Inbox",
-                BuiltinPerspective::Projects => "Projects",
-                BuiltinPerspective::Forecast => "Forecast",
-                BuiltinPerspective::Flagged => "Flagged",
-                BuiltinPerspective::Review => "Review",
-                BuiltinPerspective::Tags => "Tags",
-                BuiltinPerspective::Completed => "Completed",
-                BuiltinPerspective::Nearby => "Nearby",
-            }
-            .to_string(),
+            View::Builtin(perspective) => perspective.label().to_string(),
             View::Project(id) => db
                 .projects
                 .get(id)
@@ -76,6 +69,7 @@ impl View {
                 .get(id)
                 .map(|perspective| perspective.name.clone())
                 .unwrap_or_else(|| "Perspective".to_string()),
+            View::Priority(priority) => format!("{} priority", priority.label()),
         }
     }
 
@@ -89,10 +83,12 @@ impl View {
             View::Builtin(BuiltinPerspective::Tags) => "Group work by context",
             View::Builtin(BuiltinPerspective::Completed) => "Recently finished work",
             View::Builtin(BuiltinPerspective::Nearby) => "Contexts with a location",
+            View::Builtin(BuiltinPerspective::Trash) => "Deleted tasks, restorable for a while",
             View::Project(_) => "Project outline",
             View::Folder(_) => "Projects in this folder",
             View::Tag(_) => "Everything with this context",
             View::Custom(_) => "Saved perspective",
+            View::Priority(_) => "Tasks with this priority",
         }
     }
 
@@ -100,7 +96,7 @@ impl View {
         match self {
             View::Builtin(BuiltinPerspective::Inbox) => true,
             View::Project(_) => true,
-            View::Folder(_) | View::Tag(_) | View::Custom(_) => true,
+            View::Folder(_) | View::Tag(_) | View::Custom(_) | View::Priority(_) => true,
             _ => false,
         }
     }
@@ -128,6 +124,9 @@ pub struct Session {
     pub show_completed: Option<bool>,
     #[serde(default)]
     pub vim_mode: Option<bool>,
+    /// Global priority filter, `high`, `medium`, `low`, or absent for all.
+    #[serde(default)]
+    pub priority_filter: Option<String>,
 }
 
 impl Session {
@@ -159,6 +158,12 @@ impl Session {
             .or_else(|| self.appearance.as_deref().and_then(Appearance::from_slug))
             .unwrap_or_else(|| kind.default_appearance());
         (kind, appearance)
+    }
+
+    pub fn priority_filter(&self) -> Option<Priority> {
+        self.priority_filter
+            .as_deref()
+            .and_then(Priority::from_slug)
     }
 
     pub fn selected_tasks(&self, db: &Db) -> Vec<TaskId> {
@@ -203,6 +208,23 @@ mod tests {
             session(Some("tokyo-night"), Some("dark")).theme_choice(),
             (ThemeKind::TokyoNight, Appearance::Dark)
         );
+    }
+
+    #[test]
+    fn priority_view_and_filter_round_trip() {
+        let db = flowlist_core::db::Db::default();
+        let view = View::Priority(Priority::High);
+        assert_eq!(view.key(), "priority:high");
+        assert_eq!(View::from_key(&db, "priority:high"), Some(view));
+        assert_eq!(View::Priority(Priority::Low).key(), "priority:low");
+        assert_eq!(View::from_key(&db, "priority:none"), None);
+
+        let session = Session {
+            priority_filter: Some("medium".to_string()),
+            ..Session::default()
+        };
+        assert_eq!(session.priority_filter(), Some(Priority::Medium));
+        assert_eq!(Session::default().priority_filter(), None);
     }
 
     #[test]

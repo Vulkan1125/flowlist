@@ -47,7 +47,7 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
     let mut result = Forecast::default();
 
     for task in db.tasks.values() {
-        if task.completed {
+        if task.completed || task.is_trashed() {
             continue;
         }
         if let Some(project_id) = &task.project {
