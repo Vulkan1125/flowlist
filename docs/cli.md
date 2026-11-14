@@ -49,7 +49,8 @@ flowlist add [OPTIONS] [TEXT]...
 ```
 
 Useful flags: `-p/--project`, `-t/--tag` (repeatable), `--due`, `--defer`,
-`--estimate`, `--repeat`, `--note`, `--flag`, `--parent`.
+`--estimate`, `--repeat`, `--note`, `--flag`, `--parent` and `--attach`
+(repeatable; stores a reference to a local file).
 
 ### `list`
 
@@ -66,6 +67,7 @@ Choose a view or filter:
 | `--forecast` | forecast buckets |
 | `--review` | projects due for review |
 | `--completed` | completed tasks |
+| `--changed` | tasks edited within the Changed window |
 | `--available` | only available tasks |
 | `-t/--tag <PATH>` | tasks with a tag |
 | `-p/--project <PATH>` | tasks in a project |
@@ -85,7 +87,8 @@ flowlist done <ID>... [--undo]
 flowlist remove <ID>...
 flowlist edit <ID> [--title ...] [--notes ...] [--due ...] [--defer ...] \
   [--estimate ...] [--flag|--unflag] [--repeat ...] [--project ...] \
-  [--parent ...] [--sequential]
+  [--parent ...] [--sequential] [--priority ...] \
+  [--attach <PATH>]... [--clear-attachments]
 ```
 
 Use `none` to clear dates, estimates, repeat rules, projects or parents.
@@ -98,6 +101,17 @@ flowlist mv <ID>... --parent <TASK>
 flowlist mv <ID>... --inbox
 flowlist mv <ID>... --before <TASK> | --after <TASK> | --start
 ```
+
+### `convert`
+
+```sh
+flowlist convert <TASK> [--folder <PATH>]
+```
+
+Turns a task and its top-level subtasks into a project as one undoable step.
+The new project keeps the task's notes, tags, due/defer dates, attachments and
+sequential setting; leftover checklist items become tasks so nothing is lost.
+The command prints the created project.
 
 ### `undo` / `redo`
 
@@ -129,10 +143,11 @@ eight-character suffix. Human-readable `list` output shows progress as `☑ n/m`
 
 ```sh
 flowlist project add <NAME> [--folder <PATH>] [--note ...] [--due ...] \
-  [--defer ...] [--review-days N] [--sequential]
+  [--defer ...] [--review-days N] [--sequential] [--icon <ICON>]
 flowlist project list [--closed]
 flowlist project edit <ID> [--name ...] [--note ...] [--folder <PATH>|none] \
-  [--due ...] [--defer ...] [--review-days N] [--next-review DATE] [--sequential]
+  [--due ...] [--defer ...] [--review-days N] [--next-review DATE] \
+  [--sequential] [--icon <ICON>]
 flowlist project status <ID> active|on-hold|done|dropped
 flowlist project review <ID> [--on DATE]
 
@@ -141,6 +156,10 @@ flowlist folder list
 flowlist folder rename <ID> <NAME>
 flowlist folder remove <ID>      # child projects move up one level
 ```
+
+Project icons: `project`, `folder`, `star`, `briefcase`, `home`, `heart`,
+`book`, `code`, `rocket`, `coffee`. Like task attachments, project attachments
+store a path to a local file; the file is never copied into the library.
 
 ## Tags
 

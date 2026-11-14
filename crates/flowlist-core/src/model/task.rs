@@ -102,6 +102,10 @@ pub struct Task {
     /// When true, children are worked through in order.
     #[serde(default)]
     pub sequential: bool,
+    /// Local file paths for images or PDFs attached to the task. Files are
+    /// referenced, never copied, so the library stays a single JSON file.
+    #[serde(default)]
+    pub attachments: Vec<String>,
     /// When the task was moved to Trash. Trashed tasks stay in the library so
     /// they can be restored, but every normal perspective hides them.
     #[serde(default)]
@@ -134,6 +138,7 @@ impl Task {
             completed_at: None,
             repeat: None,
             sequential: false,
+            attachments: Vec::new(),
             trashed_at: None,
             child_order: Vec::new(),
             created_at: at,

@@ -97,6 +97,80 @@ impl ProjectKind {
     }
 }
 
+/// A small, fixed icon set for projects. Keeping the list fixed means the
+/// sidebar and JSON stay in sync and no asset paths leak into the library.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectIcon {
+    #[default]
+    Project,
+    Folder,
+    Star,
+    Briefcase,
+    Home,
+    Heart,
+    Book,
+    Code,
+    Rocket,
+    Coffee,
+}
+
+impl ProjectIcon {
+    pub const ALL: [ProjectIcon; 10] = [
+        ProjectIcon::Project,
+        ProjectIcon::Folder,
+        ProjectIcon::Star,
+        ProjectIcon::Briefcase,
+        ProjectIcon::Home,
+        ProjectIcon::Heart,
+        ProjectIcon::Book,
+        ProjectIcon::Code,
+        ProjectIcon::Rocket,
+        ProjectIcon::Coffee,
+    ];
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            ProjectIcon::Project => "project",
+            ProjectIcon::Folder => "folder",
+            ProjectIcon::Star => "star",
+            ProjectIcon::Briefcase => "briefcase",
+            ProjectIcon::Home => "home",
+            ProjectIcon::Heart => "heart",
+            ProjectIcon::Book => "book",
+            ProjectIcon::Code => "code",
+            ProjectIcon::Rocket => "rocket",
+            ProjectIcon::Coffee => "coffee",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ProjectIcon::Project => "Project",
+            ProjectIcon::Folder => "Folder",
+            ProjectIcon::Star => "Star",
+            ProjectIcon::Briefcase => "Briefcase",
+            ProjectIcon::Home => "Home",
+            ProjectIcon::Heart => "Heart",
+            ProjectIcon::Book => "Book",
+            ProjectIcon::Code => "Code",
+            ProjectIcon::Rocket => "Rocket",
+            ProjectIcon::Coffee => "Coffee",
+        }
+    }
+
+    pub fn from_slug(value: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|icon| icon.slug() == value.trim().to_lowercase())
+    }
+
+    pub fn next(self) -> Self {
+        let index = Self::ALL.iter().position(|icon| *icon == self).unwrap_or(0);
+        Self::ALL[(index + 1) % Self::ALL.len()]
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Project {
     pub id: crate::ids::ProjectId,
@@ -122,6 +196,13 @@ pub struct Project {
     pub sequential: bool,
     #[serde(default)]
     pub kind: ProjectKind,
+    /// Optional decorative icon shown in the sidebar and dashboards.
+    #[serde(default)]
+    pub icon: ProjectIcon,
+    /// Local file paths for briefs, images or PDFs that belong to the
+    /// project. Like task attachments these are referenced, never copied.
+    #[serde(default)]
+    pub attachments: Vec<String>,
     #[serde(default)]
     pub task_order: Vec<TaskId>,
     #[serde(default = "now")]
@@ -154,6 +235,8 @@ impl Project {
             next_review: local_date(at) + chrono::Duration::days(default_review_days() as i64),
             sequential: false,
             kind: ProjectKind::Parallel,
+            icon: ProjectIcon::default(),
+            attachments: Vec::new(),
             task_order: Vec::new(),
             created_at: at,
             modified_at: at,

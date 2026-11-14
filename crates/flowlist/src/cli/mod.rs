@@ -19,7 +19,7 @@ use flowlist_core::ids::{
 };
 use flowlist_core::model::{
     BuiltinPerspective, Condition, DueWindow, FilterNode, GroupBy, Perspective, Priority,
-    ProjectKind, ProjectStatus, RepeatRule, SortBy, TagStatus, TaskStatus,
+    ProjectIcon, ProjectKind, ProjectStatus, RepeatRule, SortBy, TagStatus, TaskStatus,
 };
 use flowlist_core::parse::{
     parse_duration, parse_quick, parse_repeat, parse_stamp, with_default_time,
@@ -75,6 +75,8 @@ pub enum CliCommand {
     /// Move tasks between the inbox, projects and parents.
     #[command(alias = "move")]
     Mv(MvArgs),
+    /// Turn a task and its subtasks into a project.
+    Convert(ConvertArgs),
     /// Manage checklist items inside a task.
     #[command(alias = "check")]
     Checklist(ChecklistArgs),
@@ -142,6 +144,9 @@ pub struct AddArgs {
     /// Make this a subtask of an existing task.
     #[arg(long)]
     pub parent: Option<String>,
+    /// Attach a file path; repeat for several attachments.
+    #[arg(long = "attach")]
+    pub attachments: Vec<String>,
 }
 
 #[derive(Args, Debug, Clone, Default)]
@@ -159,6 +164,9 @@ pub struct ListArgs {
     /// List tasks currently in Trash.
     #[arg(long)]
     pub trash: bool,
+    /// List tasks changed recently (the Changed perspective).
+    #[arg(long)]
+    pub changed: bool,
     /// low | medium | high.
     #[arg(long)]
     pub priority: Option<String>,
@@ -232,6 +240,21 @@ pub struct EditArgs {
     /// low | medium | high; `none` clears it.
     #[arg(long)]
     pub priority: Option<String>,
+    /// Attach a file path; repeat for several attachments.
+    #[arg(long = "attach")]
+    pub attachments: Vec<String>,
+    /// Remove every attachment.
+    #[arg(long)]
+    pub clear_attachments: bool,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct ConvertArgs {
+    #[arg(value_name = "ID")]
+    pub id: String,
+    /// Folder path for the new project; defaults to the task's folder.
+    #[arg(long)]
+    pub folder: Option<String>,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -443,6 +466,12 @@ pub struct ProjectAddArgs {
     /// parallel | sequential | single_actions.
     #[arg(long)]
     pub kind: Option<String>,
+    /// project | folder | star | briefcase | home | heart | book | code | rocket | coffee
+    #[arg(long)]
+    pub icon: Option<String>,
+    /// Attach a file path; repeat for several attachments.
+    #[arg(long = "attach")]
+    pub attachments: Vec<String>,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -469,6 +498,15 @@ pub struct ProjectEditArgs {
     /// parallel | sequential | single_actions.
     #[arg(long)]
     pub kind: Option<String>,
+    /// project | folder | star | briefcase | home | heart | book | code | rocket | coffee
+    #[arg(long)]
+    pub icon: Option<String>,
+    /// Attach a file path; repeat for several attachments.
+    #[arg(long = "attach")]
+    pub attachments: Vec<String>,
+    /// Remove every attachment.
+    #[arg(long)]
+    pub clear_attachments: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -608,6 +646,7 @@ fn try_run() -> Result<()> {
         CliCommand::Remove(args) => cmd_remove(&cli, args, &paint),
         CliCommand::Trash(args) => cmd_trash(&cli, args, &paint),
         CliCommand::Mv(args) => cmd_mv(&cli, args, &paint),
+        CliCommand::Convert(args) => cmd_convert(&cli, args, &paint),
         CliCommand::Checklist(args) => cmd_checklist(&cli, args, &paint),
         CliCommand::Undo(args) => cmd_undo(&cli, args, false, &paint),
         CliCommand::Redo(args) => cmd_undo(&cli, args, true, &paint),
@@ -707,6 +746,12 @@ fn cmd_add(cli: &Cli, args: AddArgs, paint: &Paint) -> Result<()> {
     if let Some(priority) = &args.priority {
         task.priority = Some(parse_priority(priority)?);
     }
+    task.attachments = args
+        .attachments
+        .iter()
+        .map(|path| path.trim().to_string())
+        .filter(|path| !path.is_empty())
+        .collect();
     if let Some(parent) = args.parent {
         task.parent = Some(store.db().resolve_task(&parent)?);
     }
@@ -767,6 +812,8 @@ fn cmd_list(cli: &Cli, args: ListArgs, paint: &Paint) -> Result<()> {
 
     let groups: Vec<Group> = if args.trash {
         query::view(db, BuiltinPerspective::Trash, at)
+    } else if args.changed {
+        query::view(db, BuiltinPerspective::Changed, at)
     } else if args.forecast {
         query::view(db, BuiltinPerspective::Forecast, at)
     } else if args.inbox
@@ -999,6 +1046,35 @@ fn cmd_done(cli: &Cli, args: DoneArgs, paint: &Paint) -> Result<()> {
     Ok(())
 }
 
+fn cmd_convert(cli: &Cli, args: ConvertArgs, paint: &Paint) -> Result<()> {
+    let mut store = open_store(cli)?;
+    let id = store.db().resolve_task(&args.id)?;
+    let folder = match &args.folder {
+        Some(path) => Some(ensure_folder(&mut store, path)?),
+        None => None,
+    };
+    let outcome = store.execute(CoreCommand::ConvertTaskToProject {
+        id: id.clone(),
+        folder,
+    })?;
+    let created = outcome.created.first().cloned().unwrap_or_default();
+    let project = store.db().resolve_project(&created)?;
+    if cli.json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&render::project_value(store.db(), &project))?
+        );
+    } else {
+        println!(
+            "{} {}  {}",
+            paint.green("Converted to project"),
+            paint.cyan(project.short()),
+            store.db().project_path(&project)
+        );
+    }
+    Ok(())
+}
+
 fn cmd_edit(cli: &Cli, args: EditArgs, paint: &Paint) -> Result<()> {
     let mut store = open_store(cli)?;
     let reference = now();
@@ -1034,6 +1110,23 @@ fn cmd_edit(cli: &Cli, args: EditArgs, paint: &Paint) -> Result<()> {
         } else {
             Some(Some(parse_priority(priority)?))
         };
+    }
+    if args.clear_attachments {
+        patch.attachments = Some(Vec::new());
+    } else if !args.attachments.is_empty() {
+        let mut attachments = store
+            .db()
+            .tasks
+            .get(&id)
+            .map(|task| task.attachments.clone())
+            .unwrap_or_default();
+        for path in &args.attachments {
+            let path = path.trim().to_string();
+            if !path.is_empty() && !attachments.contains(&path) {
+                attachments.push(path);
+            }
+        }
+        patch.attachments = Some(attachments);
     }
     if let Some(repeat) = &args.repeat {
         patch.repeat = if repeat.eq_ignore_ascii_case("none") {
@@ -1588,6 +1681,15 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
                 .transpose()?
                 .unwrap_or(ProjectKind::Parallel);
             new_project.sequential = args.sequential || new_project.kind == ProjectKind::Sequential;
+            if let Some(icon) = &args.icon {
+                new_project.icon = parse_project_icon(icon)?;
+            }
+            new_project.attachments = args
+                .attachments
+                .iter()
+                .map(|path| path.trim().to_string())
+                .filter(|path| !path.is_empty())
+                .collect();
             let outcome = store.execute(CoreCommand::CreateProject(new_project))?;
             let created = outcome.created.first().cloned().unwrap_or_default();
             let id = store.db().resolve_project(&created)?;
@@ -1706,6 +1808,26 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
             }
             if let Some(kind) = &args.kind {
                 patch.kind = Some(parse_project_kind(kind)?);
+            }
+            if let Some(icon) = &args.icon {
+                patch.icon = Some(parse_project_icon(icon)?);
+            }
+            if args.clear_attachments {
+                patch.attachments = Some(Vec::new());
+            } else if !args.attachments.is_empty() {
+                let mut attachments = store
+                    .db()
+                    .projects
+                    .get(&id)
+                    .map(|project| project.attachments.clone())
+                    .unwrap_or_default();
+                for path in &args.attachments {
+                    let path = path.trim().to_string();
+                    if !path.is_empty() && !attachments.contains(&path) {
+                        attachments.push(path);
+                    }
+                }
+                patch.attachments = Some(attachments);
             }
             store.execute(CoreCommand::UpdateProject {
                 id: id.clone(),
@@ -2281,6 +2403,11 @@ fn parse_due_window(value: &str, at: chrono::DateTime<Utc>) -> Result<DueWindow>
         return Ok(window);
     }
     Ok(DueWindow::On(parse_stamp(value, at)?.local_date()))
+}
+
+fn parse_project_icon(value: &str) -> Result<ProjectIcon> {
+    ProjectIcon::from_slug(value)
+        .ok_or_else(|| anyhow!("icon must be one of: project, folder, star, briefcase, home, heart, book, code, rocket, coffee"))
 }
 
 fn parse_priority(value: &str) -> Result<Priority> {

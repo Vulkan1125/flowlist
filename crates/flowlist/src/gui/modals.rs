@@ -4,7 +4,7 @@
 use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px, rgba};
 
 use flowlist_core::ids::{PerspectiveId, ProjectId, TagId};
-use flowlist_core::model::ProjectKind;
+use flowlist_core::model::{ProjectIcon, ProjectKind};
 
 use super::perspective::PerspectiveForm;
 use super::text::TextBuffer;
@@ -30,6 +30,7 @@ pub enum Modal {
         name: TextBuffer,
         notes: TextBuffer,
         kind: ProjectKind,
+        icon: ProjectIcon,
     },
     NewFolder {
         name: TextBuffer,
@@ -47,9 +48,11 @@ pub enum Modal {
     Settings {
         review_days: TextBuffer,
         completed_days: TextBuffer,
+        changed_days: TextBuffer,
         radius: TextBuffer,
         trash_days: TextBuffer,
         vim_mode: bool,
+        follow_system: bool,
         theme: ThemeKind,
         appearance: Appearance,
     },
@@ -89,6 +92,7 @@ impl Modal {
             name: TextBuffer::empty(),
             notes: TextBuffer::empty(),
             kind: ProjectKind::Parallel,
+            icon: ProjectIcon::default(),
         }
     }
 
@@ -124,9 +128,11 @@ impl Modal {
         Modal::Settings {
             review_days: TextBuffer::new(settings.default_review_days.to_string()),
             completed_days: TextBuffer::new(settings.show_completed_days.to_string()),
+            changed_days: TextBuffer::new(settings.changed_days.to_string()),
             radius: TextBuffer::new(settings.nearby_radius_km.to_string()),
             trash_days: TextBuffer::new(settings.trash_retention_days.to_string()),
             vim_mode: app.vim_mode,
+            follow_system: app.follow_system,
             theme: app.theme.kind(),
             appearance: app.theme.appearance(),
         }
@@ -194,7 +200,7 @@ impl Modal {
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
             Modal::Perspective { .. } => 1,
             Modal::Import { .. } => 1,
-            Modal::Settings { .. } => 4,
+            Modal::Settings { .. } => 5,
             Modal::Location { .. } | Modal::TagLocation { .. } => 2,
             Modal::Help => 0,
         }
@@ -214,14 +220,16 @@ impl Modal {
             Modal::Settings {
                 review_days,
                 completed_days,
+                changed_days,
                 radius,
                 trash_days,
                 ..
             } => match index {
                 0 => Some(review_days),
                 1 => Some(completed_days),
-                2 => Some(radius),
-                3 => Some(trash_days),
+                2 => Some(changed_days),
+                3 => Some(radius),
+                4 => Some(trash_days),
                 _ => None,
             },
             Modal::Location { lat, lon } | Modal::TagLocation { lat, lon, .. } => match index {
@@ -247,14 +255,16 @@ impl Modal {
             Modal::Settings {
                 review_days,
                 completed_days,
+                changed_days,
                 radius,
                 trash_days,
                 ..
             } => match index {
                 0 => Some(review_days),
                 1 => Some(completed_days),
-                2 => Some(radius),
-                3 => Some(trash_days),
+                2 => Some(changed_days),
+                3 => Some(radius),
+                4 => Some(trash_days),
                 _ => None,
             },
             Modal::Location { lat, lon } | Modal::TagLocation { lat, lon, .. } => match index {
@@ -280,8 +290,9 @@ impl Modal {
             Modal::Settings { .. } => match index {
                 0 => "Default review days",
                 1 => "Completed history (days)",
-                2 => "Nearby radius (km)",
-                3 => "Trash retention (days, 0 keeps forever)",
+                2 => "Changed history (days)",
+                3 => "Nearby radius (km)",
+                4 => "Trash retention (days, 0 keeps forever)",
                 _ => "",
             },
             Modal::Location { .. } => match index {
@@ -751,9 +762,9 @@ impl FlowlistApp {
 
     fn render_new_project_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
-        let kind = match &self.modal {
-            Some(Modal::NewProject { kind, .. }) => *kind,
-            _ => ProjectKind::Parallel,
+        let (kind, icon) = match &self.modal {
+            Some(Modal::NewProject { kind, icon, .. }) => (*kind, *icon),
+            _ => (ProjectKind::Parallel, ProjectIcon::default()),
         };
         let mut row = div().flex().flex_col().gap_1().child(
             div()
@@ -783,7 +794,44 @@ impl FlowlistApp {
                 .text_color(theme.text_faint)
                 .child(kind.hint()),
         );
-        row
+        let mut icons = div().flex().items_center().gap_1();
+        for candidate in ProjectIcon::ALL {
+            let active = icon == candidate;
+            icons = icons.child(
+                div()
+                    .id(super::sid(format!("project-icon:{}", candidate.slug())))
+                    .size(px(26.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(if active {
+                        theme.accent
+                    } else {
+                        theme.border_soft
+                    })
+                    .bg(if active { theme.selection } else { theme.clear })
+                    .cursor_pointer()
+                    .tooltip(widgets::tip(theme, candidate.label()))
+                    .hover(|style| style.bg(theme.hover))
+                    .child(widgets::icon_for_project(candidate, 14.0, theme.text_dim))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::NewProject { icon, .. }) = &mut this.modal {
+                            *icon = candidate;
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        row.child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(div().text_xs().text_color(theme.text_faint).child("Icon"))
+                .child(icons),
+        )
     }
 
     fn render_settings_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -795,6 +843,13 @@ impl FlowlistApp {
             _ => (theme.kind(), theme.appearance()),
         };
         let vim = matches!(&self.modal, Some(Modal::Settings { vim_mode: true, .. }));
+        let follow_system = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                follow_system: true,
+                ..
+            })
+        );
 
         let mut modes = div()
             .flex()
@@ -890,6 +945,35 @@ impl FlowlistApp {
                     )
                     .child(div().text_xs().text_color(theme.text_faint).child(
                         "hjkl motions, counts, operators and pane focus. ⌘ shortcuts stay available.",
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .id("modal-follow-system")
+                            .child(widgets::button(
+                                theme,
+                                if follow_system {
+                                    "Follow system ✓"
+                                } else {
+                                    "Fixed appearance"
+                                },
+                                follow_system,
+                            ))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(Modal::Settings { follow_system, .. }) = &mut this.modal
+                                {
+                                    *follow_system = !*follow_system;
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .child(div().text_xs().text_color(theme.text_faint).child(
+                        "Take light or dark from macOS and keep the chosen family.",
                     )),
             )
     }

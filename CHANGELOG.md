@@ -15,14 +15,35 @@
 - Header and status chrome now use a flat glass tint; only the sidebar and
   inspector keep the vertical tint wash. This removes the unintended
   left-to-right gradient ramp under the title bar.
-- Added `docs/backlog.md` and `AGENTS.md` so outstanding work, including the
-  Things 3 "Pending" list, survives a context reset.
+- Added `docs/backlog.md` and `AGENTS.md` so outstanding work survives a
+  context reset; `flowlist.md` is now the durable pending list.
 - Deleting tasks now selects the row that took their place, so `j`/`k` keep
   working and the list never loses the cursor.
 - Clicking a Forecast calendar date filters the list to that day. Click again
   or press `\` to clear; `[`/`]` step a day and `{`/`}` step a month.
 - Project types: parallel, sequential and single-action projects, chosen in the
   New Project sheet and cycled from the project banner.
+- Sort and Group header chips now open a list of every option instead of
+  cycling blindly. `Esc` closes the menu.
+- Added a **First Available** header toggle that hides blocked rows.
+- Sort, grouping, completed visibility and availability are remembered per
+  perspective.
+- Task inspector: parallel/sequential chips for action groups, and an
+  attachments section that can add file paths, open them, and remove them.
+- **Convert to project** turns a task and its top-level subtasks into a project
+  in one undoable step, then opens that project. Attachments move to the
+  project and leftover checklist items become tasks, so nothing is lost.
+- Project icons: a fixed set of ten glyphs, chosen in New Project and the
+  project inspector, rendered in the sidebar and dashboard.
+- Follow-system appearance keeps the chosen theme family and takes light/dark
+  from macOS.
+- Changing the theme now shows a toast naming the family and appearance.
+- Notes wrap in the inspector instead of clipping.
+- Review uses a coffee-cup icon, and Mark reviewed sits on the title row.
+- Dark palettes raise selection, hover and accent-soft contrast, and the glass
+  chrome is a little more opaque so text stays readable.
+- Project rows show open-task counts; folder rows count open projects.
+- Long view headings no longer wrap into the toolbar.
 
 ### Library
 
@@ -35,8 +56,13 @@
   as sidebar rows plus CLI (`--priority`) and MCP fields.
 - **Project kinds** are persisted alongside the legacy `sequential` flag, so
   older libraries keep their sequential behaviour.
-- CLI: new `trash` command and `--kind` on projects. MCP: new
-  `list_trash`, `restore_tasks`, `purge_tasks` and `empty_trash` tools.
+- **Changed** is the tenth built-in perspective, reached with `0`. Introspection
+  and editing times feed a configurable `changed_days` window.
+- **Attachments** store referenced file paths on tasks and projects; files are
+  never copied into the library. CLI: `--attach` and `--clear-attachments`.
+- CLI: new `trash` and `convert` commands, `--kind`/`--icon` on projects and
+  `--changed` on `list`. MCP: trash tools, `convert_task_to_project`, attachment
+  fields and `icon` on project tools.
 - Added an OmniFocus 4.3 comparison and the next adopted gaps to
   `docs/backlog.md`.
 

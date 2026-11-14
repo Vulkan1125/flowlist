@@ -30,6 +30,7 @@ fn glyph(perspective: BuiltinPerspective) -> Icon {
         BuiltinPerspective::Review => Icon::Review,
         BuiltinPerspective::Tags => Icon::Tags,
         BuiltinPerspective::Completed => Icon::Completed,
+        BuiltinPerspective::Changed => Icon::Clock,
         BuiltinPerspective::Nearby => Icon::Nearby,
         BuiltinPerspective::Trash => Icon::Trash,
     }
@@ -639,7 +640,7 @@ impl FlowlistApp {
                     let key = format!("folder:{id}");
                     let open = self.is_open(&key, true);
                     let name = db.folder_path(&id);
-                    let count = db.project_count(&id);
+                    let count = db.folder_open_project_count(&id);
                     let view_id = id.clone();
                     let target_id = id.clone();
                     let toggle_key = key.clone();
@@ -734,6 +735,7 @@ impl FlowlistApp {
                         continue;
                     }
                     let (done, total) = db.project_progress(&id);
+                    let open = db.project_open_count(&id);
                     let view_id = id.clone();
                     let target_id = id.clone();
                     let drop_id = id.clone();
@@ -763,8 +765,8 @@ impl FlowlistApp {
                         })
                         .cursor_pointer()
                         .hover(|style| style.bg(self.theme.hover))
-                        .child(icons::icon(
-                            Icon::Project,
+                        .child(widgets::icon_for_project(
+                            project.icon,
                             14.0,
                             if active {
                                 self.theme.accent
@@ -786,9 +788,14 @@ impl FlowlistApp {
                         ))
                         .child(
                             div()
+                                .id(super::sid(format!("project-count:{id}")))
                                 .text_xs()
                                 .text_color(self.theme.text_faint)
-                                .child(format!("{done}/{total}")),
+                                .tooltip(widgets::tip(
+                                    self.theme,
+                                    format!("{open} open · {done} of {total} done"),
+                                ))
+                                .child(open.to_string()),
                         )
                         .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
                             this.drop_on_project(drop_id.clone(), payload, cx)

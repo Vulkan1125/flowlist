@@ -9,8 +9,8 @@ use crate::db::{ContainerPosition, Db, OrderKey, Position};
 use crate::error::{Error, Result};
 use crate::ids::{ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use crate::model::{
-    ChecklistItem, Folder, Geo, Perspective, Priority, Project, ProjectKind, ProjectStatus,
-    RepeatRule, Tag, TagStatus, Task,
+    ChecklistItem, Folder, Geo, Perspective, Priority, Project, ProjectIcon, ProjectKind,
+    ProjectStatus, RepeatRule, Tag, TagStatus, Task,
 };
 use crate::time::{Stamp, local_date, now};
 
@@ -48,6 +48,7 @@ pub struct NewTask {
     pub estimate_min: Option<u32>,
     pub flagged: bool,
     pub priority: Option<Priority>,
+    pub attachments: Vec<String>,
     pub repeat: Option<RepeatRule>,
     pub sequential: bool,
     pub position: Position,
@@ -68,6 +69,7 @@ impl NewTask {
             estimate_min: None,
             flagged: false,
             priority: None,
+            attachments: Vec::new(),
             repeat: None,
             sequential: false,
             position: Position::End,
@@ -93,6 +95,7 @@ pub struct TaskPatch {
     pub estimate_min: Option<Option<u32>>,
     pub flagged: Option<bool>,
     pub priority: Option<Option<Priority>>,
+    pub attachments: Option<Vec<String>>,
     pub repeat: Option<Option<RepeatRule>>,
     pub sequential: Option<bool>,
 }
@@ -109,6 +112,8 @@ pub struct NewProject {
     pub next_review: Option<NaiveDate>,
     pub sequential: bool,
     pub kind: ProjectKind,
+    pub icon: ProjectIcon,
+    pub attachments: Vec<String>,
     pub position: ContainerPosition,
 }
 
@@ -125,6 +130,8 @@ impl NewProject {
             next_review: None,
             sequential: false,
             kind: ProjectKind::Parallel,
+            icon: ProjectIcon::default(),
+            attachments: Vec::new(),
             position: ContainerPosition::End,
         }
     }
@@ -142,6 +149,8 @@ pub struct ProjectPatch {
     pub next_review: Option<NaiveDate>,
     pub sequential: Option<bool>,
     pub kind: Option<ProjectKind>,
+    pub icon: Option<ProjectIcon>,
+    pub attachments: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -162,6 +171,7 @@ pub struct SettingsPatch {
     pub current_location: Option<Option<Geo>>,
     pub nearby_radius_km: Option<f64>,
     pub trash_retention_days: Option<u32>,
+    pub changed_days: Option<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -227,6 +237,11 @@ pub enum Command {
     /// Permanently remove tasks, including their subtrees.
     PurgeTasks {
         ids: Vec<TaskId>,
+    },
+    /// Turn a task (and its subtasks) into a project in the same folder.
+    ConvertTaskToProject {
+        id: TaskId,
+        folder: Option<FolderId>,
     },
     /// Housekeeping: permanently remove trash older than `before`.
     PurgeExpiredTrash {
@@ -343,6 +358,7 @@ impl Command {
             ),
             Command::RestoreTasks { ids } => format!("Restore {} task(s)", ids.len()),
             Command::PurgeTasks { ids } => format!("Permanently delete {} task(s)", ids.len()),
+            Command::ConvertTaskToProject { .. } => "Convert task to project".to_string(),
             Command::PurgeExpiredTrash { .. } => "Empty expired trash".to_string(),
             Command::AddChecklistItem { .. } => "Add checklist item".to_string(),
             Command::UpdateChecklistItem { .. } => "Edit checklist item".to_string(),
@@ -420,6 +436,7 @@ impl Command {
                 task.estimate_min = new_task.estimate_min;
                 task.flagged = new_task.flagged;
                 task.priority = new_task.priority;
+                task.attachments = new_task.attachments;
                 task.repeat = new_task.repeat;
                 task.sequential = new_task.sequential;
                 task.modified_at = at;
@@ -465,6 +482,13 @@ impl Command {
                     }
                     if let Some(priority) = patch.priority {
                         task.priority = priority;
+                    }
+                    if let Some(attachments) = patch.attachments {
+                        task.attachments = attachments
+                            .into_iter()
+                            .map(|path| path.trim().to_string())
+                            .filter(|path| !path.is_empty())
+                            .collect();
                     }
                     if let Some(repeat) = patch.repeat {
                         task.repeat = repeat;
@@ -628,6 +652,69 @@ impl Command {
                 outcome.message = Some(format!("Emptied {removed} expired task(s) from Trash"));
                 db.touch();
             }
+            Command::ConvertTaskToProject { id, folder } => {
+                let task = db.task(&id)?.clone();
+                let project_folder = folder.clone().or_else(|| {
+                    task.project
+                        .as_ref()
+                        .and_then(|project| db.projects.get(project))
+                        .and_then(|project| project.folder.clone())
+                });
+                if let Some(folder) = &project_folder {
+                    db.folder(folder)?;
+                }
+                ensure_unique_project_name(db, project_folder.as_ref(), &task.title, None)?;
+                let mut project = Project::new(task.title.clone());
+                project.notes = task.notes.clone();
+                project.folder = project_folder.clone();
+                project.tags = task.tags.clone();
+                project.due = task.due;
+                project.defer = task.defer;
+                project.icon = ProjectIcon::default();
+                project.attachments = clean_attachments(task.attachments.clone());
+                if task.sequential {
+                    project.kind = ProjectKind::Sequential;
+                    project.sequential = true;
+                }
+                project.modified_at = at;
+                // The task's top-level subtasks become the project's tasks.
+                project.task_order = task.child_order.clone();
+                for child in &task.child_order {
+                    if let Some(child) = db.tasks.get_mut(child) {
+                        child.parent = None;
+                        child.project = Some(project.id.clone());
+                        child.modified_at = at;
+                    }
+                }
+                let project_id = project.id.clone();
+                db.projects.insert(project_id.clone(), project);
+                db.insert_container(
+                    project_folder,
+                    ContainerId::Project(project_id.clone()),
+                    ContainerPosition::End,
+                );
+                // Projects have no checklist, so any remaining items become
+                // tasks instead of silently disappearing.
+                for item in &task.checklist {
+                    let mut step = Task::new(item.title.clone());
+                    step.project = Some(project_id.clone());
+                    step.completed = item.completed;
+                    if item.completed {
+                        step.completed_at = Some(at);
+                    }
+                    step.modified_at = at;
+                    let step_id = step.id.clone();
+                    db.tasks.insert(step_id.clone(), step);
+                    if let Some(project) = db.projects.get_mut(&project_id) {
+                        project.task_order.push(step_id);
+                    }
+                }
+                db.detach_task(&id);
+                db.tasks.remove(&id);
+                outcome.created.push(project_id.to_string());
+                outcome.message = Some(format!("Converted to project {}", project_id));
+                db.touch();
+            }
             Command::MoveTasks { ids, placement } => {
                 move_tasks(db, &ids, placement)?;
                 outcome.affected.extend(ids.iter().map(|id| id.to_string()));
@@ -768,6 +855,8 @@ impl Command {
                         new_project.kind
                     };
                 project.sequential = project.kind == ProjectKind::Sequential;
+                project.icon = new_project.icon;
+                project.attachments = clean_attachments(new_project.attachments);
                 project.modified_at = at;
                 let id = project.id.clone();
                 db.projects.insert(id.clone(), project);
@@ -811,6 +900,12 @@ impl Command {
                     }
                     if let Some(review) = patch.next_review {
                         project.next_review = review;
+                    }
+                    if let Some(icon) = patch.icon {
+                        project.icon = icon;
+                    }
+                    if let Some(attachments) = patch.attachments {
+                        project.attachments = clean_attachments(attachments);
                     }
                     if let Some(kind) = patch.kind {
                         project.kind = kind;
@@ -1159,6 +1254,9 @@ impl Command {
                 if let Some(value) = patch.trash_retention_days {
                     settings.trash_retention_days = value.min(3650);
                 }
+                if let Some(value) = patch.changed_days {
+                    settings.changed_days = value.clamp(1, 3650);
+                }
                 db.touch();
             }
             Command::Import { db: imported, mode } => {
@@ -1183,6 +1281,16 @@ impl Command {
         }
         Ok(outcome)
     }
+}
+
+/// Attachment paths are user input: trim them and drop empty lines so a blank
+/// row in the inspector never becomes an empty path in the library.
+fn clean_attachments(paths: Vec<String>) -> Vec<String> {
+    paths
+        .into_iter()
+        .map(|path| path.trim().to_string())
+        .filter(|path| !path.is_empty())
+        .collect()
 }
 
 fn move_tasks(db: &mut Db, ids: &[TaskId], placement: TaskPlacement) -> Result<()> {

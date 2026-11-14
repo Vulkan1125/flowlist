@@ -441,6 +441,32 @@ impl Db {
             .collect()
     }
 
+    /// Open (not completed) tasks in a project, including subtasks.
+    pub fn project_open_count(&self, project: &ProjectId) -> usize {
+        self.tasks_in_project(project, false).len()
+    }
+
+    /// Open projects inside a folder, matching what the sidebar shows. Closed
+    /// projects stay in the library but are hidden from the rail.
+    pub fn folder_open_project_count(&self, folder: &FolderId) -> usize {
+        let mut count = 0;
+        for child in self.container_children(Some(folder.clone())) {
+            match child {
+                ContainerId::Project(id) => {
+                    if self
+                        .projects
+                        .get(&id)
+                        .is_some_and(|project| project.status.is_open())
+                    {
+                        count += 1;
+                    }
+                }
+                ContainerId::Folder(id) => count += self.folder_open_project_count(id),
+            }
+        }
+        count
+    }
+
     pub fn project_progress(&self, project: &ProjectId) -> (usize, usize) {
         let all = self.tasks_in_project(project, true);
         let done = all

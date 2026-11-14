@@ -16,8 +16,8 @@ use flowlist_core::command::{
 use flowlist_core::db::{ContainerPosition, Db, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    BuiltinPerspective, Condition, FilterNode, Geo, GroupBy, Perspective, Priority, ProjectKind,
-    ProjectStatus, SortBy, TagStatus, TaskStatus,
+    BuiltinPerspective, Condition, FilterNode, Geo, GroupBy, Perspective, Priority, ProjectIcon,
+    ProjectKind, ProjectStatus, SortBy, TagStatus, TaskStatus,
 };
 use flowlist_core::parse::{parse_duration, parse_repeat, parse_stamp};
 use flowlist_core::paths::DataPaths;
@@ -190,6 +190,7 @@ impl Server {
             "purge_tasks" => self.tool_purge_tasks(args),
             "empty_trash" => self.tool_empty_trash(args),
             "move_task" => self.tool_move_task(args),
+            "convert_task_to_project" => self.tool_convert_task(args),
             "set_task_tags" => self.tool_set_task_tags(args),
             "list_checklist" => self.tool_list_checklist(args),
             "add_checklist_item" => self.tool_add_checklist_item(args),
@@ -258,6 +259,7 @@ impl Server {
         if bool_arg(args, "sequential").unwrap_or(false) {
             new_task.sequential = true;
         }
+        new_task.attachments = string_array(args, "attachments");
         let outcome = self.store.execute(CoreCommand::CreateTask(new_task))?;
         let created = outcome
             .created
@@ -311,6 +313,11 @@ impl Server {
         }
         if let Some(sequential) = bool_arg(args, "sequential") {
             patch.sequential = Some(sequential);
+        }
+        if bool_arg(args, "clear_attachments").unwrap_or(false) {
+            patch.attachments = Some(Vec::new());
+        } else if args.get("attachments").is_some() {
+            patch.attachments = Some(string_array(args, "attachments"));
         }
         self.store.execute(CoreCommand::UpdateTask {
             id: id.clone(),
@@ -563,6 +570,20 @@ impl Server {
         Ok(render::task_value(self.store.db(), &task))
     }
 
+    fn tool_convert_task(&mut self, args: &Value) -> Result<Value> {
+        let id = self.store.db().resolve_task(&require_string(args, "id")?)?;
+        let folder = match string_arg(args, "folder") {
+            Some(path) => Some(self.ensure_folder(&path)?),
+            None => None,
+        };
+        let outcome = self
+            .store
+            .execute(CoreCommand::ConvertTaskToProject { id, folder })?;
+        let created = outcome.created.first().cloned().unwrap_or_default();
+        let project = self.store.db().resolve_project(&created)?;
+        Ok(render::project_value(self.store.db(), &project))
+    }
+
     fn tool_list_tasks(&mut self, args: &Value) -> Result<Value> {
         self.store.refresh()?;
         let at = now();
@@ -581,6 +602,7 @@ impl Server {
             "tags" => query::view(db, BuiltinPerspective::Tags, at),
             "completed" => query::view(db, BuiltinPerspective::Completed, at),
             "nearby" => query::view(db, BuiltinPerspective::Nearby, at),
+            "changed" => query::view(db, BuiltinPerspective::Changed, at),
             "trash" => query::view(db, BuiltinPerspective::Trash, at),
             "review" => Vec::new(),
             "custom" | "perspective" => {
@@ -747,6 +769,10 @@ impl Server {
             .unwrap_or(ProjectKind::Parallel);
         project.sequential = bool_arg(args, "sequential").unwrap_or(false)
             || project.kind == ProjectKind::Sequential;
+        if let Some(icon) = string_arg(args, "icon") {
+            project.icon = parse_project_icon(&icon)?;
+        }
+        project.attachments = string_array(args, "attachments");
         let outcome = self.store.execute(CoreCommand::CreateProject(project))?;
         let created = outcome.created.first().cloned().unwrap_or_default();
         let id = self.store.db().resolve_project(&created)?;
@@ -784,6 +810,14 @@ impl Server {
             patch.kind = Some(parse_project_kind(&kind)?);
         } else if let Some(sequential) = bool_arg(args, "sequential") {
             patch.sequential = Some(sequential);
+        }
+        if let Some(icon) = string_arg(args, "icon") {
+            patch.icon = Some(parse_project_icon(&icon)?);
+        }
+        if bool_arg(args, "clear_attachments").unwrap_or(false) {
+            patch.attachments = Some(Vec::new());
+        } else if args.get("attachments").is_some() {
+            patch.attachments = Some(string_array(args, "attachments"));
         }
         self.store.execute(CoreCommand::UpdateProject {
             id: id.clone(),
@@ -1211,6 +1245,7 @@ fn tool_definitions() -> Vec<Value> {
                     "priority": s("low | medium | high, or null to clear"),
                     "repeat": s("Repeat rule, e.g. every 2 weeks after completion"),
                     "sequential": b("Work through subtasks in order"),
+                    "attachments": arr("Local file paths to reference"),
                 }),
                 &["title"],
             ),
@@ -1258,6 +1293,8 @@ fn tool_definitions() -> Vec<Value> {
                     "project": s("Project path, or null to move to the inbox"),
                     "parent": s("Parent task id, or null to clear"),
                     "sequential": b("Sequential children"),
+                    "attachments": arr("Replace the task's attachment paths"),
+                    "clear_attachments": b("Remove every attachment"),
                 }),
                 &["id"],
             ),
@@ -1309,6 +1346,17 @@ fn tool_definitions() -> Vec<Value> {
                     "inbox": b("Move to the inbox"),
                     "before": s("Place before this sibling task id"),
                     "after": s("Place after this sibling task id"),
+                }),
+                &["id"],
+            ),
+        ),
+        tool(
+            "convert_task_to_project",
+            "Turn a task and its top-level subtasks into a project, in one undoable step.",
+            schema(
+                json!({
+                    "id": s("Task id or prefix"),
+                    "folder": s("Folder path for the new project"),
                 }),
                 &["id"],
             ),
@@ -1380,10 +1428,10 @@ fn tool_definitions() -> Vec<Value> {
         ),
         tool(
             "list_tasks",
-            "List tasks using a built-in view (inbox, projects, forecast, flagged, tags, completed, nearby, review) or a filter.",
+            "List tasks using a built-in view (inbox, projects, forecast, flagged, tags, completed, changed, nearby, review) or a filter.",
             schema(
                 json!({
-                    "view": s("all | inbox | projects | forecast | flagged | tags | completed | nearby | review | trash | custom"),
+                    "view": s("all | inbox | projects | forecast | flagged | tags | completed | changed | nearby | review | trash | custom"),
                     "perspective": s("Custom perspective name or id (with view=custom)"),
                     "project": s("Project path filter"),
                     "folder": s("Folder path filter (includes child folders)"),
@@ -1435,6 +1483,8 @@ fn tool_definitions() -> Vec<Value> {
                     "review_interval_days": n("Review interval in days"),
                     "kind": s("parallel | sequential | single_actions"),
                     "sequential": b("Work through top-level tasks in order"),
+                    "icon": s("project | folder | star | briefcase | home | heart | book | code | rocket | coffee"),
+                    "attachments": arr("Local file paths to reference"),
                 }),
                 &["name"],
             ),
@@ -1454,6 +1504,9 @@ fn tool_definitions() -> Vec<Value> {
                     "next_review": s("Next review date"),
                     "kind": s("parallel | sequential | single_actions"),
                     "sequential": b("Sequential tasks"),
+                    "icon": s("project | folder | star | briefcase | home | heart | book | code | rocket | coffee"),
+                    "attachments": arr("Replace the project's attachment paths"),
+                    "clear_attachments": b("Remove every attachment"),
                 }),
                 &["id"],
             ),
@@ -1748,6 +1801,14 @@ fn parse_priority(value: &str) -> Result<Priority> {
                 .find(|priority| priority.label().eq_ignore_ascii_case(value.trim()))
         })
         .ok_or_else(|| anyhow!("priority must be low, medium or high"))
+}
+
+fn parse_project_icon(value: &str) -> Result<ProjectIcon> {
+    ProjectIcon::from_slug(value).ok_or_else(|| {
+        anyhow!(
+            "icon must be one of: project, folder, star, briefcase, home, heart, book, code, rocket, coffee"
+        )
+    })
 }
 
 fn parse_project_kind(value: &str) -> Result<ProjectKind> {

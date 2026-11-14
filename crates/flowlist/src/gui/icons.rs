@@ -46,10 +46,18 @@ pub enum Icon {
     Clock,
     Calendar,
     Repeat,
+    Star,
+    Briefcase,
+    Home,
+    Heart,
+    Book,
+    Code,
+    Rocket,
+    Coffee,
 }
 
 impl Icon {
-    pub const ALL: [Icon; 35] = [
+    pub const ALL: [Icon; 43] = [
         Icon::Inbox,
         Icon::Projects,
         Icon::Forecast,
@@ -85,6 +93,14 @@ impl Icon {
         Icon::Clock,
         Icon::Calendar,
         Icon::Repeat,
+        Icon::Star,
+        Icon::Briefcase,
+        Icon::Home,
+        Icon::Heart,
+        Icon::Book,
+        Icon::Code,
+        Icon::Rocket,
+        Icon::Coffee,
     ];
 
     pub fn path(self) -> &'static str {
@@ -124,6 +140,14 @@ impl Icon {
             Icon::Clock => "icons/clock.svg",
             Icon::Calendar => "icons/calendar.svg",
             Icon::Repeat => "icons/repeat.svg",
+            Icon::Star => "icons/star.svg",
+            Icon::Briefcase => "icons/briefcase.svg",
+            Icon::Home => "icons/home.svg",
+            Icon::Heart => "icons/heart.svg",
+            Icon::Book => "icons/book.svg",
+            Icon::Code => "icons/code.svg",
+            Icon::Rocket => "icons/rocket.svg",
+            Icon::Coffee => "icons/coffee.svg",
         }
     }
 
@@ -142,7 +166,7 @@ impl Icon {
                 r#"<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>"#
             }
             Icon::Review => {
-                r#"<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>"#
+                r#"<path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/>"#
             }
             Icon::Tags => {
                 r#"<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>"#
@@ -216,6 +240,28 @@ impl Icon {
             Icon::Repeat => {
                 r#"<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>"#
             }
+            Icon::Star => {
+                r#"<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>"#
+            }
+            Icon::Briefcase => {
+                r#"<path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/>"#
+            }
+            Icon::Home => {
+                r#"<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>"#
+            }
+            Icon::Heart => {
+                r#"<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>"#
+            }
+            Icon::Book => {
+                r#"<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/>"#
+            }
+            Icon::Code => r#"<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>"#,
+            Icon::Rocket => {
+                r#"<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>"#
+            }
+            Icon::Coffee => {
+                r#"<path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/>"#
+            }
         }
     }
 }
@@ -261,7 +307,7 @@ mod tests {
 
     #[test]
     fn icon_set_is_complete_and_unique() {
-        assert_eq!(Icon::ALL.len(), 35);
+        assert_eq!(Icon::ALL.len(), 43);
         let mut paths: Vec<&str> = Icon::ALL.iter().map(|icon| icon.path()).collect();
         paths.sort_unstable();
         paths.dedup();

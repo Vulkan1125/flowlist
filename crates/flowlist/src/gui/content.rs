@@ -7,13 +7,16 @@ use gpui::{AnyElement, Context, IntoElement, MouseButton, Window, div, prelude::
 
 use flowlist_core::command::{Command, ProjectPatch};
 use flowlist_core::ids::{ProjectId, TaskId};
-use flowlist_core::model::{BuiltinPerspective, ProjectStatus, RepeatRule};
+use flowlist_core::model::{BuiltinPerspective, GroupBy, ProjectStatus, RepeatRule, SortBy};
 use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
 
 use super::drag::{DragTask, ghost};
 use super::icons::{self, Icon};
-use super::{EditField, FlowlistApp, FocusArea, View, group_label, sort_label, widgets};
+use super::{
+    EditField, FlowlistApp, FocusArea, View, group_label, group_slug, sort_label, sort_slug,
+    widgets,
+};
 
 impl FlowlistApp {
     pub(super) fn render_content(
@@ -44,7 +47,9 @@ impl FlowlistApp {
                 }),
             )
             .child(self.render_content_header(cx))
-            .child(self.render_capture_bar(cx));
+            .when(self.view.shows_capture(), |this| {
+                this.child(self.render_capture_bar(cx))
+            });
 
         if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) {
             column = column.child(self.render_forecast_calendar(cx));
@@ -346,23 +351,29 @@ impl FlowlistApp {
                             .flex_col()
                             .gap_1()
                             .min_w_0()
+                            .flex_1()
                             .child(
                                 div()
                                     .text_2xl()
                                     .font_weight(gpui::FontWeight::BOLD)
                                     .text_color(theme.text)
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
                                     .child(self.view_title()),
                             )
                             .child(
                                 div()
                                     .text_sm()
                                     .text_color(theme.text_faint)
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
                                     .child(self.view_subtitle()),
                             ),
                     )
                     .child(
                         div()
                             .flex()
+                            .flex_shrink_0()
                             .items_center()
                             .gap_2()
                             .child(
@@ -383,33 +394,54 @@ impl FlowlistApp {
                             )
                             .when(!is_trash, |this| {
                                 this.child(
-                                    div()
-                                        .id("sort")
-                                        .tooltip(widgets::tip(
-                                            theme,
-                                            "Click to cycle the sort order",
-                                        ))
-                                        .child(widgets::toggle_chip(
-                                            theme,
-                                            format!("Sort · {}", sort_label(self.sort)),
-                                            false,
-                                        ))
-                                        .on_click(
-                                            cx.listener(|this, _, _, cx| this.cycle_sort(cx)),
-                                        ),
+                                    div().relative().child(
+                                        div()
+                                            .id("sort")
+                                            .tooltip(widgets::tip(theme, "Pick a sort order"))
+                                            .child(widgets::toggle_chip(
+                                                theme,
+                                                format!("Sort · {}", sort_label(self.sort)),
+                                                self.sort_menu_open,
+                                            ))
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.sort_menu_open = !this.sort_menu_open;
+                                                this.group_menu_open = false;
+                                                cx.notify();
+                                            })),
+                                    ),
+                                )
+                                .child(
+                                    div().relative().child(
+                                        div()
+                                            .id("group")
+                                            .tooltip(widgets::tip(theme, "Pick a grouping"))
+                                            .child(widgets::toggle_chip(
+                                                theme,
+                                                format!("Group · {}", group_label(self.group)),
+                                                self.group_menu_open,
+                                            ))
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.group_menu_open = !this.group_menu_open;
+                                                this.sort_menu_open = false;
+                                                cx.notify();
+                                            })),
+                                    ),
                                 )
                                 .child(
                                     div()
-                                        .id("group")
-                                        .tooltip(widgets::tip(theme, "Click to cycle the grouping"))
+                                        .id("only-available")
+                                        .tooltip(widgets::tip(
+                                            theme,
+                                            "Show only the next available task (First Available)",
+                                        ))
                                         .child(widgets::toggle_chip(
                                             theme,
-                                            format!("Group · {}", group_label(self.group)),
-                                            false,
+                                            "Available",
+                                            self.only_available,
                                         ))
-                                        .on_click(
-                                            cx.listener(|this, _, _, cx| this.cycle_group(cx)),
-                                        ),
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.toggle_only_available(cx)
+                                        })),
                                 )
                                 .child(
                                     div()
@@ -511,6 +543,128 @@ impl FlowlistApp {
                         )
                     }),
             )
+    }
+
+    /// A real list of sort choices: the chip opens a menu instead of
+    /// silently cycling, so the user can jump straight to the order they want.
+    pub(super) fn render_sort_menu(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let theme = self.theme;
+        let mut menu = div()
+            .min_w(px(150.))
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg();
+        let options: [Option<SortBy>; 9] = [
+            None,
+            Some(SortBy::Manual),
+            Some(SortBy::Due),
+            Some(SortBy::Defer),
+            Some(SortBy::Name),
+            Some(SortBy::Flagged),
+            Some(SortBy::Estimate),
+            Some(SortBy::Created),
+            Some(SortBy::CompletedAt),
+        ];
+        for option in options {
+            let selected = self.sort == option;
+            let slug = option.map(sort_slug).unwrap_or("default");
+            menu = menu.child(
+                div()
+                    .id(super::sid(format!("sort-option:{slug}")))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if selected {
+                        theme.accent
+                    } else {
+                        theme.text_dim
+                    })
+                    .bg(if selected {
+                        theme.selection
+                    } else {
+                        theme.clear
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(sort_label(option))
+                    .when(selected, |this| {
+                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| this.choose_sort(option, cx))),
+            );
+        }
+        menu
+    }
+
+    pub(super) fn render_group_menu(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let theme = self.theme;
+        let mut menu = div()
+            .min_w(px(150.))
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg();
+        let options: [Option<GroupBy>; 9] = [
+            None,
+            Some(GroupBy::Project),
+            Some(GroupBy::Folder),
+            Some(GroupBy::Tag),
+            Some(GroupBy::DueDate),
+            Some(GroupBy::DeferDate),
+            Some(GroupBy::Flagged),
+            Some(GroupBy::Estimate),
+            Some(GroupBy::None),
+        ];
+        for option in options {
+            let selected = self.group == option;
+            let slug = option.map(group_slug).unwrap_or("default");
+            menu = menu.child(
+                div()
+                    .id(super::sid(format!("group-option:{slug}")))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if selected {
+                        theme.accent
+                    } else {
+                        theme.text_dim
+                    })
+                    .bg(if selected {
+                        theme.selection
+                    } else {
+                        theme.clear
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(group_label(option))
+                    .when(selected, |this| {
+                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| this.choose_group(option, cx))),
+            );
+        }
+        menu
     }
 
     fn render_capture_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1010,6 +1164,11 @@ impl FlowlistApp {
                             .flex()
                             .items_center()
                             .gap_2()
+                            .child(widgets::icon_for_project(
+                                project.icon,
+                                15.0,
+                                theme.text_dim,
+                            ))
                             .child(widgets::progress(theme, done, total))
                             .child(
                                 div()
@@ -1164,7 +1323,29 @@ impl FlowlistApp {
                                     format!("Review {}", project.next_review.format("%b %-d"))
                                 },
                                 if due { theme.warning } else { theme.text_faint },
-                            )),
+                            ))
+                            .child(
+                                div()
+                                    .id("review-now")
+                                    .px_2()
+                                    .py_1()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(theme.accent)
+                                    .text_xs()
+                                    .text_color(theme.accent)
+                                    .cursor_pointer()
+                                    .hover(|style| style.bg(theme.selection))
+                                    .child("Mark reviewed")
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        this.execute(Command::CompleteReview {
+                                            id: review_id.clone(),
+                                            reviewed_on: local_date(now()),
+                                        });
+                                        cx.notify();
+                                    })),
+                            ),
                     )
                     .child(
                         div()
@@ -1187,29 +1368,6 @@ impl FlowlistApp {
                                     .text_xs()
                                     .text_color(theme.success)
                                     .child(project.status.label()),
-                            )
-                            .child(
-                                div()
-                                    .id("review-now")
-                                    .ml_auto()
-                                    .px_2()
-                                    .py_1()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(theme.accent)
-                                    .text_xs()
-                                    .text_color(theme.accent)
-                                    .cursor_pointer()
-                                    .hover(|style| style.bg(theme.selection))
-                                    .child("Mark reviewed")
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        cx.stop_propagation();
-                                        this.execute(Command::CompleteReview {
-                                            id: review_id.clone(),
-                                            reviewed_on: local_date(now()),
-                                        });
-                                        cx.notify();
-                                    })),
                             ),
                     ),
             );

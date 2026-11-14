@@ -718,3 +718,142 @@ fn tasks_on_date_uses_the_local_due_date() {
     assert_eq!(ids, vec![due_id]);
     assert!(!ids.contains(&later_id));
 }
+
+#[test]
+fn attachments_and_project_icons_round_trip() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let id = add(&mut store, "Read the brief");
+    let task_id = store.db().resolve_task(&id).unwrap();
+    store
+        .execute(Command::UpdateTask {
+            id: task_id.clone(),
+            patch: TaskPatch {
+                attachments: Some(vec![
+                    "/tmp/brief.pdf".to_string(),
+                    "/tmp/sketch.png".to_string(),
+                ]),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert_eq!(store.db().tasks[&task_id].attachments.len(), 2);
+
+    let mut project = NewProject::new("Launch");
+    project.icon = flowlist_core::model::ProjectIcon::Rocket;
+    project.attachments = vec!["/tmp/spec.pdf".to_string()];
+    let created = store
+        .execute(Command::CreateProject(project))
+        .unwrap()
+        .created[0]
+        .clone();
+    let project_id = store.db().resolve_project(&created).unwrap();
+    assert_eq!(
+        store.db().projects[&project_id].icon,
+        flowlist_core::model::ProjectIcon::Rocket
+    );
+    assert_eq!(
+        store.db().projects[&project_id].attachments,
+        vec!["/tmp/spec.pdf".to_string()]
+    );
+
+    store
+        .execute(Command::UpdateProject {
+            id: project_id.clone(),
+            patch: ProjectPatch {
+                icon: Some(flowlist_core::model::ProjectIcon::Star),
+                attachments: Some(vec![
+                    " /tmp/spec.pdf ".to_string(),
+                    String::new(),
+                    "/tmp/mock.png".to_string(),
+                ]),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert_eq!(
+        store.db().projects[&project_id].icon,
+        flowlist_core::model::ProjectIcon::Star
+    );
+    assert_eq!(
+        store.db().projects[&project_id].attachments,
+        vec!["/tmp/spec.pdf".to_string(), "/tmp/mock.png".to_string()]
+    );
+}
+
+#[test]
+fn convert_task_to_project_is_one_undo_step() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let mut new_parent = NewTask::new("Launch the site");
+    new_parent.attachments = vec!["/tmp/brief.pdf".to_string()];
+    let parent = store
+        .execute(Command::CreateTask(new_parent))
+        .unwrap()
+        .created[0]
+        .clone();
+    let parent_id = store.db().resolve_task(&parent).unwrap();
+    for title in ["Write copy", "Design hero"] {
+        let mut child = NewTask::new(title);
+        child.parent = Some(parent_id.clone());
+        store.execute(Command::CreateTask(child)).unwrap();
+    }
+    store
+        .execute(Command::AddChecklistItem {
+            task: parent_id.clone(),
+            title: "Book the launch slot".to_string(),
+            position: None,
+        })
+        .unwrap();
+    let children = store.db().tasks[&parent_id].child_order.clone();
+    assert_eq!(children.len(), 2);
+
+    let outcome = store
+        .execute(Command::ConvertTaskToProject {
+            id: parent_id.clone(),
+            folder: None,
+        })
+        .unwrap();
+    let project_id = store.db().resolve_project(&outcome.created[0]).unwrap();
+    assert!(!store.db().tasks.contains_key(&parent_id));
+    // Two subtasks plus the checklist item, which became a task.
+    assert_eq!(store.db().projects[&project_id].task_order.len(), 3);
+    assert_eq!(
+        store.db().projects[&project_id].attachments,
+        vec!["/tmp/brief.pdf".to_string()]
+    );
+    for child in &children {
+        assert_eq!(store.db().tasks[child].project, Some(project_id.clone()));
+        assert_eq!(store.db().tasks[child].parent, None);
+    }
+    let checklist_task = store.db().projects[&project_id].task_order[2].clone();
+    assert_eq!(
+        store.db().tasks[&checklist_task].title,
+        "Book the launch slot"
+    );
+
+    store.undo().unwrap();
+    assert!(store.db().tasks.contains_key(&parent_id));
+    assert!(!store.db().projects.contains_key(&project_id));
+    for child in &children {
+        assert_eq!(store.db().tasks[child].parent, Some(parent_id.clone()));
+    }
+}
+
+#[test]
+fn changed_perspective_lists_recent_edits() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let id = add(&mut store, "Fresh task");
+    let task_id = store.db().resolve_task(&id).unwrap();
+    let groups = flowlist_core::query::view(
+        store.db(),
+        flowlist_core::model::BuiltinPerspective::Changed,
+        Utc::now(),
+    );
+    let rows: Vec<_> = groups.iter().flat_map(|group| &group.rows).collect();
+    assert!(rows.iter().any(|row| row.id == task_id));
+}

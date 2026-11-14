@@ -224,6 +224,23 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 rows: rows_for(db, &ids, at),
             }]
         }
+        BuiltinPerspective::Changed => {
+            let days = db.settings.changed_days.max(1) as i64;
+            let cutoff = at - chrono::Duration::days(days);
+            let mut ids: Vec<TaskId> = db
+                .tasks
+                .values()
+                .filter(|task| !task.is_trashed() && task.modified_at >= cutoff)
+                .map(|task| task.id.clone())
+                .collect();
+            ids.sort_by_key(|id| std::cmp::Reverse(db.tasks[id].modified_at));
+            vec![Group {
+                key: "changed".to_string(),
+                title: format!("Changed in the last {days} day(s)"),
+                position: 0,
+                rows: rows_for(db, &ids, at),
+            }]
+        }
         BuiltinPerspective::Trash => {
             let ids = db.trashed_roots();
             vec![Group {

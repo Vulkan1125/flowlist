@@ -72,6 +72,7 @@ pub enum EditField {
     Due,
     Estimate,
     Repeat,
+    Attachments,
 }
 
 impl EditField {
@@ -83,19 +84,21 @@ impl EditField {
             EditField::Defer => EditField::Due,
             EditField::Due => EditField::Estimate,
             EditField::Estimate => EditField::Repeat,
-            EditField::Repeat => EditField::Title,
+            EditField::Repeat => EditField::Attachments,
+            EditField::Attachments => EditField::Title,
         }
     }
 
     fn previous(self) -> Self {
         match self {
-            EditField::Title => EditField::Repeat,
+            EditField::Title => EditField::Attachments,
             EditField::Notes => EditField::Title,
             EditField::Project => EditField::Notes,
             EditField::Defer => EditField::Project,
             EditField::Due => EditField::Defer,
             EditField::Estimate => EditField::Due,
             EditField::Repeat => EditField::Estimate,
+            EditField::Attachments => EditField::Repeat,
         }
     }
 }
@@ -118,6 +121,15 @@ pub struct FlowlistApp {
     forecast_date: Option<chrono::NaiveDate>,
     /// Applies to every list, and is what the sidebar priority rows set.
     priority_filter: Option<Priority>,
+    /// Hide everything blocked behind another task (First Available).
+    only_available: bool,
+    /// Keep the theme family, but let the OS pick light or dark.
+    follow_system: bool,
+    /// Per-perspective sort/group/filter memory.
+    view_options: std::collections::BTreeMap<String, session::ViewOptions>,
+    /// The header dropdowns, which list every option instead of cycling.
+    sort_menu_open: bool,
+    group_menu_open: bool,
     selected: Vec<TaskId>,
     anchor: Option<TaskId>,
     expanded: BTreeSet<String>,
@@ -183,6 +195,9 @@ impl FlowlistApp {
         let show_inspector = session.inspector.unwrap_or(true);
         let vim_mode = session.vim_mode.unwrap_or(true);
         let priority_filter = session.priority_filter();
+        let only_available = session.only_available.unwrap_or(false);
+        let follow_system = session.follow_system.unwrap_or(false);
+        let view_options = session.view_options.clone();
         let window_size = session.window;
         let focus_handle = cx.focus_handle();
         let toast = store_warning(&store);
@@ -207,13 +222,18 @@ impl FlowlistApp {
         let forecast_month =
             chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
 
-        Self {
+        let mut app = Self {
             store,
             theme,
             view,
             forecast_month,
             forecast_date: None,
             priority_filter,
+            only_available,
+            follow_system,
+            view_options,
+            sort_menu_open: false,
+            group_menu_open: false,
             selected,
             anchor: None,
             expanded: BTreeSet::new(),
@@ -249,7 +269,9 @@ impl FlowlistApp {
             test_state_last: None,
             blur_mode: None,
             traffic_lights_hidden: false,
-        }
+        };
+        app.restore_view_options();
+        app
     }
 
     // ------------------------------------------------------------- session
@@ -267,8 +289,50 @@ impl FlowlistApp {
             show_completed: Some(self.show_completed),
             vim_mode: Some(self.vim_mode),
             priority_filter: self.priority_filter.map(|p| p.slug().to_string()),
+            only_available: Some(self.only_available),
+            follow_system: Some(self.follow_system),
+            view_options: {
+                let mut map = self.view_options.clone();
+                map.insert(
+                    self.view.key(),
+                    session::ViewOptions {
+                        sort: self.sort.map(|sort| sort_slug(sort).to_string()),
+                        group: self.group.map(|group| group_slug(group).to_string()),
+                        show_completed: Some(self.show_completed),
+                        only_available: Some(self.only_available),
+                    },
+                );
+                map
+            },
         };
         let _ = self.store.write_session(&session);
+    }
+
+    /// Remember the current view's layout before switching away.
+    fn remember_view_options(&mut self) {
+        self.view_options.insert(
+            self.view.key(),
+            session::ViewOptions {
+                sort: self.sort.map(|sort| sort_slug(sort).to_string()),
+                group: self.group.map(|group| group_slug(group).to_string()),
+                show_completed: Some(self.show_completed),
+                only_available: Some(self.only_available),
+            },
+        );
+    }
+
+    /// Restore layout for the view that is now active. Views without a saved
+    /// record start clean rather than inheriting the previous view's filters.
+    fn restore_view_options(&mut self) {
+        let options = self
+            .view_options
+            .get(&self.view.key())
+            .cloned()
+            .unwrap_or_default();
+        self.sort = options.sort.as_deref().and_then(sort_from_slug);
+        self.group = options.group.as_deref().and_then(group_from_slug);
+        self.show_completed = options.show_completed.unwrap_or(false);
+        self.only_available = options.only_available.unwrap_or(false);
     }
 
     fn prune_selection(&mut self) {
@@ -366,6 +430,17 @@ impl FlowlistApp {
                 })
                 .collect();
         }
+
+        // First Available: keep only rows the user can start right now.
+        if self.only_available {
+            groups = groups
+                .into_iter()
+                .filter_map(|mut group| {
+                    group.rows.retain(|row| row.availability.is_available());
+                    (!group.rows.is_empty()).then_some(group)
+                })
+                .collect();
+        }
         groups
     }
 
@@ -442,7 +517,9 @@ impl FlowlistApp {
     /// Switch views without notifying. Callers that already repaint use this
     /// from inside a command; `open_view` is the interactive entry point.
     fn set_view(&mut self, view: View) {
+        self.remember_view_options();
         self.view = view;
+        self.restore_view_options();
         self.selected.clear();
         self.anchor = None;
         self.search.clear();
@@ -634,6 +711,103 @@ impl FlowlistApp {
             ids: vec![id],
             flagged,
         });
+        cx.notify();
+    }
+
+    fn set_task_sequential(&mut self, sequential: bool, cx: &mut Context<Self>) {
+        let Some(id) = self.selected_one() else {
+            return;
+        };
+        self.execute(Command::UpdateTask {
+            id,
+            patch: TaskPatch {
+                sequential: Some(sequential),
+                ..Default::default()
+            },
+        });
+        cx.notify();
+    }
+
+    fn remove_attachment(&mut self, path: String, cx: &mut Context<Self>) {
+        if let Some(id) = self.selected_one() {
+            let attachments = self
+                .store
+                .db()
+                .tasks
+                .get(&id)
+                .map(|task| task.attachments.clone())
+                .unwrap_or_default();
+            let attachments: Vec<String> = attachments
+                .into_iter()
+                .filter(|candidate| candidate != &path)
+                .collect();
+            self.execute(Command::UpdateTask {
+                id,
+                patch: TaskPatch {
+                    attachments: Some(attachments),
+                    ..Default::default()
+                },
+            });
+        } else if let View::Project(id) = self.view.clone() {
+            let attachments = self
+                .store
+                .db()
+                .projects
+                .get(&id)
+                .map(|project| project.attachments.clone())
+                .unwrap_or_default();
+            let attachments: Vec<String> = attachments
+                .into_iter()
+                .filter(|candidate| candidate != &path)
+                .collect();
+            self.execute(Command::UpdateProject {
+                id,
+                patch: ProjectPatch {
+                    attachments: Some(attachments),
+                    ..Default::default()
+                },
+            });
+        }
+        cx.notify();
+    }
+
+    fn open_attachment(&mut self, path: String) {
+        let opener = if cfg!(target_os = "macos") {
+            "open"
+        } else {
+            "xdg-open"
+        };
+        match std::process::Command::new(opener).arg(&path).spawn() {
+            Ok(_) => self.toast = Some(format!("Opening {path}")),
+            Err(error) => self.toast = Some(format!("Could not open {path}: {error}")),
+        }
+    }
+
+    /// One undoable step: the task disappears and a project with its
+    /// subtasks appears in the same folder.
+    fn convert_selected_to_project(&mut self, cx: &mut Context<Self>) {
+        let Some(id) = self.selected_one() else {
+            self.toast = Some("Select a task first".to_string());
+            cx.notify();
+            return;
+        };
+        let folder = match &self.view {
+            View::Folder(id) => Some(id.clone()),
+            View::Project(project) => self
+                .store
+                .db()
+                .projects
+                .get(project)
+                .and_then(|project| project.folder.clone()),
+            _ => None,
+        };
+        if let Some(outcome) = self.execute(Command::ConvertTaskToProject { id, folder }) {
+            if let Some(created) = outcome.created.first() {
+                if let Ok(project) = self.store.db().resolve_project(created) {
+                    self.set_view(View::Project(project));
+                }
+            }
+        }
         cx.notify();
     }
 
@@ -907,18 +1081,7 @@ impl FlowlistApp {
         match parse_quick(trimmed, at) {
             Ok(entry) => {
                 let mut new_task = entry.into_new_task();
-                match &self.view {
-                    View::Project(id) => {
-                        new_task.project = Some(id.clone());
-                        new_task.project_path = None;
-                    }
-                    View::Tag(id) => {
-                        if !new_task.tags.contains(id) {
-                            new_task.tags.push(id.clone());
-                        }
-                    }
-                    _ => {}
-                }
+                self.apply_view_defaults(&mut new_task);
                 self.execute(Command::CreateTask(new_task));
             }
             Err(error) => {
@@ -1022,6 +1185,25 @@ impl FlowlistApp {
     }
 
     fn begin_edit(&mut self, field: EditField, cx: &mut Context<Self>) {
+        // The project inspector has no selected task; attachments still use
+        // the same field so the interaction is identical in both places.
+        if field == EditField::Attachments && self.selected_one().is_none() {
+            if let View::Project(project_id) = self.view.clone() {
+                let value = self
+                    .store
+                    .db()
+                    .projects
+                    .get(&project_id)
+                    .map(|project| project.attachments.join("\n"))
+                    .unwrap_or_default();
+                self.field.set(value);
+                self.field_error = None;
+                self.editing = Some(field);
+                self.focus = FocusArea::Field;
+                cx.notify();
+                return;
+            }
+        }
         let Some(id) = self.selected_one() else {
             self.toast = Some("Select a task first".to_string());
             cx.notify();
@@ -1056,6 +1238,7 @@ impl FlowlistApp {
                 .as_ref()
                 .map(|rule| rule.description())
                 .unwrap_or_default(),
+            EditField::Attachments => task.attachments.join("\n"),
         };
         self.field.set(value);
         self.field_error = None;
@@ -1070,6 +1253,30 @@ impl FlowlistApp {
             cx.notify();
             return;
         };
+        // Project attachments are edited from the project inspector, where
+        // nothing is selected in the list.
+        if field == EditField::Attachments && self.selected_one().is_none() {
+            if let View::Project(project_id) = self.view.clone() {
+                let raw = self.field.text().to_string();
+                let attachments = raw
+                    .lines()
+                    .map(|line| line.trim().to_string())
+                    .filter(|line| !line.is_empty())
+                    .collect();
+                self.execute(Command::UpdateProject {
+                    id: project_id,
+                    patch: ProjectPatch {
+                        attachments: Some(attachments),
+                        ..Default::default()
+                    },
+                });
+                self.editing = None;
+                self.field_error = None;
+                self.focus = FocusArea::Content;
+                cx.notify();
+                return;
+            }
+        }
         let Some(id) = self.selected_one() else {
             self.editing = None;
             self.focus = FocusArea::Content;
@@ -1158,6 +1365,14 @@ impl FlowlistApp {
                 };
                 patch.repeat = Some(repeat);
             }
+            EditField::Attachments => {
+                patch.attachments = Some(
+                    raw.lines()
+                        .map(|line| line.trim().to_string())
+                        .filter(|line| !line.is_empty())
+                        .collect(),
+                );
+            }
         }
         self.execute(Command::UpdateTask { id, patch });
         self.editing = None;
@@ -1213,46 +1428,32 @@ impl FlowlistApp {
 
     fn toggle_show_completed(&mut self, cx: &mut Context<Self>) {
         self.show_completed = !self.show_completed;
+        self.remember_view_options();
         self.save_session();
         cx.notify();
     }
 
-    fn cycle_sort(&mut self, cx: &mut Context<Self>) {
-        let order = [
-            None,
-            Some(SortBy::Due),
-            Some(SortBy::Defer),
-            Some(SortBy::Name),
-            Some(SortBy::Flagged),
-            Some(SortBy::Estimate),
-            Some(SortBy::Created),
-            Some(SortBy::Manual),
-        ];
-        let index = order
-            .iter()
-            .position(|candidate| *candidate == self.sort)
-            .unwrap_or(0);
-        self.sort = order[(index + 1) % order.len()];
+    fn choose_sort(&mut self, sort: Option<SortBy>, cx: &mut Context<Self>) {
+        self.sort = sort;
+        self.sort_menu_open = false;
+        self.group_menu_open = false;
+        self.remember_view_options();
         self.save_session();
         cx.notify();
     }
 
-    fn cycle_group(&mut self, cx: &mut Context<Self>) {
-        let order = [
-            None,
-            Some(GroupBy::Project),
-            Some(GroupBy::Tag),
-            Some(GroupBy::Folder),
-            Some(GroupBy::DueDate),
-            Some(GroupBy::DeferDate),
-            Some(GroupBy::Flagged),
-            Some(GroupBy::Estimate),
-        ];
-        let index = order
-            .iter()
-            .position(|candidate| *candidate == self.group)
-            .unwrap_or(0);
-        self.group = order[(index + 1) % order.len()];
+    fn choose_group(&mut self, group: Option<GroupBy>, cx: &mut Context<Self>) {
+        self.group = group;
+        self.group_menu_open = false;
+        self.sort_menu_open = false;
+        self.remember_view_options();
+        self.save_session();
+        cx.notify();
+    }
+
+    fn toggle_only_available(&mut self, cx: &mut Context<Self>) {
+        self.only_available = !self.only_available;
+        self.remember_view_options();
         self.save_session();
         cx.notify();
     }
@@ -1453,7 +1654,12 @@ impl FlowlistApp {
                     }
                 }
             }
-            modals::Modal::NewProject { name, notes, kind } => {
+            modals::Modal::NewProject {
+                name,
+                notes,
+                kind,
+                icon,
+            } => {
                 let name = name.text().trim().to_string();
                 if name.is_empty() {
                     return Err("A project needs a name".to_string());
@@ -1470,6 +1676,7 @@ impl FlowlistApp {
                 let mut new_project = NewProject::new(name);
                 new_project.notes = notes.text().to_string();
                 new_project.kind = *kind;
+                new_project.icon = *icon;
                 new_project.sequential = *kind == ProjectKind::Sequential;
                 new_project.folder = folder;
                 new_project.position = ContainerPosition::End;
@@ -1552,9 +1759,11 @@ impl FlowlistApp {
             modals::Modal::Settings {
                 review_days,
                 completed_days,
+                changed_days,
                 radius,
                 trash_days,
                 vim_mode,
+                follow_system,
                 theme,
                 appearance,
             } => {
@@ -1568,6 +1777,11 @@ impl FlowlistApp {
                     .trim()
                     .parse::<u32>()
                     .map_err(|_| "Completed days must be a number".to_string())?;
+                let changed = changed_days
+                    .text()
+                    .trim()
+                    .parse::<u32>()
+                    .map_err(|_| "Changed days must be a number".to_string())?;
                 let radius = radius
                     .text()
                     .trim()
@@ -1581,6 +1795,7 @@ impl FlowlistApp {
                 self.execute(Command::UpdateSettings(SettingsPatch {
                     default_review_days: Some(review),
                     show_completed_days: Some(completed),
+                    changed_days: Some(changed),
                     nearby_radius_km: Some(radius),
                     trash_retention_days: Some(trash),
                     ..Default::default()
@@ -1589,6 +1804,7 @@ impl FlowlistApp {
                     self.toast = Some(format!("Could not empty expired trash: {error}"));
                 }
                 self.vim_mode = *vim_mode;
+                self.follow_system = *follow_system;
                 self.theme = Theme::new(*theme, *appearance);
                 self.save_session();
             }
@@ -1838,6 +2054,11 @@ impl FlowlistApp {
                     } else {
                         self.theme.toggled()
                     };
+                    self.toast = Some(format!(
+                        "{} · {}",
+                        self.theme.kind().label(),
+                        self.theme.appearance().label()
+                    ));
                     self.save_session();
                 }
                 "d" => self.flag_selected(cx),
@@ -1871,13 +2092,13 @@ impl FlowlistApp {
                     }
                 }
                 "," => self.open_modal(modals::Modal::settings(self), cx),
-                key if matches!(key, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9") => {
-                    if let Some(index) = key.chars().next().and_then(|ch| ch.to_digit(10)) {
-                        if let Some(perspective) =
-                            BuiltinPerspective::ALL.get((index as usize).saturating_sub(1))
-                        {
-                            self.open_view(View::Builtin(*perspective), cx);
-                        }
+                key if matches!(
+                    key,
+                    "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+                ) =>
+                {
+                    if let Some(perspective) = perspective_for_digit(key) {
+                        self.open_view(View::Builtin(perspective), cx);
                     }
                 }
                 "o" => self.open_modal(
@@ -1964,6 +2185,12 @@ impl FlowlistApp {
                 }
             }
             "escape" => {
+                if self.sort_menu_open || self.group_menu_open {
+                    self.sort_menu_open = false;
+                    self.group_menu_open = false;
+                    cx.notify();
+                    return;
+                }
                 self.selected.clear();
                 self.anchor = None;
                 self.search.clear();
@@ -2036,13 +2263,13 @@ impl FlowlistApp {
                 self.anchor = None;
                 self.save_session();
             }
-            key if matches!(key, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9") => {
-                if let Some(index) = key.chars().next().and_then(|ch| ch.to_digit(10)) {
-                    if let Some(perspective) =
-                        BuiltinPerspective::ALL.get((index as usize).saturating_sub(1))
-                    {
-                        self.open_view(View::Builtin(*perspective), cx);
-                    }
+            key if matches!(
+                key,
+                "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+            ) =>
+            {
+                if let Some(perspective) = perspective_for_digit(key) {
+                    self.open_view(View::Builtin(perspective), cx);
                 }
             }
             _ => {}
@@ -2395,6 +2622,10 @@ impl FlowlistApp {
         cx.notify();
     }
 
+    /// Make a new task belong to the view it was created from: a project view
+    /// files into that project, a tag view adds the tag, the Flagged view
+    /// flags it, a priority view sets that priority, and Forecast gives it
+    /// today's due date.
     fn apply_view_defaults(&self, new_task: &mut NewTask) {
         match &self.view {
             View::Project(id) => {
@@ -2404,6 +2635,19 @@ impl FlowlistApp {
             View::Tag(id) => {
                 if !new_task.tags.contains(id) {
                     new_task.tags.push(id.clone());
+                }
+            }
+            View::Priority(priority) => {
+                if new_task.priority.is_none() {
+                    new_task.priority = Some(*priority);
+                }
+            }
+            View::Builtin(BuiltinPerspective::Flagged) => {
+                new_task.flagged = true;
+            }
+            View::Builtin(BuiltinPerspective::Forecast) => {
+                if new_task.due.is_none() {
+                    new_task.due = Some(flowlist_core::time::Stamp::date_only(local_date(now())));
                 }
             }
             _ => {}
@@ -2714,6 +2958,24 @@ fn project_in_folder(db: &Db, project: &ProjectId, folder: &FolderId) -> bool {
         == Some(folder)
 }
 
+/// Digits are stable shortcuts, independent of the sidebar's display order:
+/// 1–9 walk the original perspectives and 0 is the newer Changed list.
+fn perspective_for_digit(key: &str) -> Option<BuiltinPerspective> {
+    match key {
+        "1" => Some(BuiltinPerspective::Inbox),
+        "2" => Some(BuiltinPerspective::Projects),
+        "3" => Some(BuiltinPerspective::Forecast),
+        "4" => Some(BuiltinPerspective::Flagged),
+        "5" => Some(BuiltinPerspective::Review),
+        "6" => Some(BuiltinPerspective::Tags),
+        "7" => Some(BuiltinPerspective::Completed),
+        "8" => Some(BuiltinPerspective::Nearby),
+        "9" => Some(BuiltinPerspective::Trash),
+        "0" => Some(BuiltinPerspective::Changed),
+        _ => None,
+    }
+}
+
 fn sort_slug(sort: SortBy) -> &'static str {
     match sort {
         SortBy::Manual => "manual",
@@ -2845,6 +3107,14 @@ impl FlowlistApp {
                     .count()
             }
             BuiltinPerspective::Nearby => query::nearby(db, at).len(),
+            BuiltinPerspective::Changed => {
+                let days = db.settings.changed_days.max(1) as i64;
+                let cutoff = at - chrono::Duration::days(days);
+                db.tasks
+                    .values()
+                    .filter(|task| !task.is_trashed() && task.modified_at >= cutoff)
+                    .count()
+            }
             BuiltinPerspective::Trash => db.trash_count(),
         }
     }
@@ -2865,6 +3135,12 @@ impl FlowlistApp {
             "appearance": self.theme.appearance().slug(),
             "blur": self.blur_mode.map(|appearance| appearance.slug()),
             "priority_filter": self.priority_filter.map(|priority| priority.slug()),
+            "only_available": self.only_available,
+            "follow_system": self.follow_system,
+            "sort": self.sort.map(sort_slug),
+            "group": self.group.map(group_slug),
+            "sort_menu": self.sort_menu_open,
+            "group_menu": self.group_menu_open,
             "forecast_date": self.forecast_date.map(|date| date.to_string()),
             "trashed": self.store.db().trash_count(),
             "traffic_lights": if self.traffic_lights_hidden { "hidden" } else { "visible" },
@@ -2884,6 +3160,23 @@ impl FlowlistApp {
         }
         let _ = std::fs::write(&path, &text);
         self.test_state_last = Some(text);
+    }
+
+    /// When the user asked Flowlist to follow macOS, the palette family stays
+    /// put and only light/dark is taken from the window each frame.
+    fn sync_system_appearance(&mut self, window: &Window) {
+        if !self.follow_system {
+            return;
+        }
+        let appearance = match window.appearance() {
+            gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => {
+                theme::Appearance::Dark
+            }
+            _ => theme::Appearance::Light,
+        };
+        if self.theme.appearance() != appearance {
+            self.theme = Theme::new(self.theme.kind(), appearance);
+        }
     }
 
     fn maybe_sync(&mut self) {
@@ -2974,6 +3267,11 @@ impl FlowlistApp {
                             .child(widgets::icon_button(theme, Icon::Palette, false))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.theme = this.theme.next_theme();
+                                this.toast = Some(format!(
+                                    "{} · {}",
+                                    this.theme.kind().label(),
+                                    this.theme.appearance().label()
+                                ));
                                 this.save_session();
                                 cx.notify();
                             })),
@@ -3189,6 +3487,7 @@ impl Render for FlowlistApp {
             .detach();
         }
         self.maybe_sync();
+        self.sync_system_appearance(window);
         if !self.focus_handle.is_focused(window) {
             window.focus(&self.focus_handle);
         }
@@ -3231,6 +3530,24 @@ impl Render for FlowlistApp {
         }
         root = root.child(body);
         root = root.child(self.render_status(window, cx));
+        // The header dropdowns are drawn at the root so the task list cannot
+        // paint over them; the chips only toggle this state.
+        if self.sort_menu_open {
+            root = root.child(
+                self.render_sort_menu(cx)
+                    .absolute()
+                    .top(px(112.))
+                    .right(px(500.)),
+            );
+        }
+        if self.group_menu_open {
+            root = root.child(
+                self.render_group_menu(cx)
+                    .absolute()
+                    .top(px(112.))
+                    .right(px(360.)),
+            );
+        }
         if self.toast.is_some() {
             root = root.child(self.render_toast(cx));
         }

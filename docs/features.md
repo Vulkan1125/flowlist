@@ -14,6 +14,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Sequential task children
 - [x] Project types: parallel, sequential and single actions
 - [x] Optional High / Medium / Low task priorities
+- [x] Task and project attachments stored as referenced file paths
+- [x] Fixed project icon set (project, folder, star, briefcase, home, heart,
+      book, code, rocket, coffee)
 - [x] Restorable Trash with configurable auto-delete
 - [x] Repeat rules: fixed/after-completion, due-again/defer-another, end date,
       end count, completion counter
@@ -38,6 +41,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Review
 - [x] Tags
 - [x] Completed
+- [x] Changed (recently edited, configurable window)
 - [x] Nearby (location + radius)
 - [x] Trash (restore, delete forever, auto-empty)
 - [x] Priority rows and a global priority filter
@@ -45,12 +49,16 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Availability: available, deferred, blocked, completed
 - [x] Sorting: manual, due, defer, name, flagged, estimate, created, completed
 - [x] Grouping: project, folder, tag, due, defer, flagged, estimate
+- [x] Sort and Group menus that list every option instead of cycling
+- [x] First Available filter (only the next actionable row)
+- [x] Per-perspective sort, grouping, completed and availability memory
 
 ## CLI
 
-- [x] `add`, `list`, `edit`, `done`, `remove`, `mv`
+- [x] `add`, `list`, `edit`, `done`, `remove`, `mv`, `convert`
 - [x] `trash` list / `--restore` / `--delete` / `--empty`
-- [x] `--priority` on add/edit/list and `--kind` on projects
+- [x] `--priority` on add/edit/list, `--kind`/`--icon` on projects and
+      `--attach`/`--clear-attachments` on tasks
 - [x] `checklist list|add|set|move|remove`
 - [x] `tag add|remove|set`, `tags`
 - [x] `project add|list|status|review|edit`
@@ -68,9 +76,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 
 - [x] Stdio JSON-RPC transport
 - [x] Modern `2026-07-28` lifecycle and legacy `initialize`
-- [x] Task tools: capture/add/get/update/complete/delete/move/tags/list
+- [x] Task tools: capture/add/get/update/complete/delete/move/convert/tags/list
 - [x] Trash tools: list/restore/purge/empty
-- [x] Priority fields on task tools and `kind` on project tools
+- [x] Priority and attachment fields on task tools; `kind` and `icon` on
+      project tools
 - [x] Checklist tools: list/add/update/delete/move
 - [x] Project tools: list/create/update/status
 - [x] Tag tools: list/create/delete
@@ -100,6 +109,12 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Priority chips in the inspector and a priority filter in every view
 - [x] Inline title/notes/tag/project/date/estimate/repeat editing
 - [x] Inspector with checklist add/toggle/rename/reorder/delete and progress
+- [x] Task subtitle type chips (parallel/sequential action groups)
+- [x] Attachments in the task and project inspectors: add paths, open,
+      remove
+- [x] Convert a task and its subtasks into a project in one undo step
+- [x] Project icon picker in the inspector and New Project sheet, with the
+      chosen icon in the sidebar and dashboard
 - [x] Task progress badge for checklists
 - [x] Drag/drop tasks into projects, tags, parents and sibling positions
 - [x] Project dashboard with progress, status, review info and project type
@@ -116,10 +131,13 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] TaskPaper clipboard export (`⇧⌘E`)
 - [x] Settings and tag location modals
 - [x] Session persistence: view, selection, inspector, sort, grouping,
-      priority filter, theme, vim mode and window size
+      priority filter, per-view options, First Available, theme, follow-system,
+      vim mode and window size
 - [x] Ten theme families — Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula,
       Tokyo Night, Vesper, Graphite and Midnight — each with a light and a dark
       palette, chosen in Settings or with `⌘T` / `⇧⌘T` / `⌥⌘T` (`⇧T` in vim mode)
+- [x] Follow-system appearance: keep the theme family, take light/dark from
+      the macOS window appearance.
 - [x] Blurred sidebar, inspector, header and status bar over an opaque reading
       surface. The window's `NSVisualEffectView` uses the
       `.underWindowBackground` material and is pinned to the palette's
@@ -191,8 +209,8 @@ shortcut set.
 
 ## Next refinements
 
-Outstanding work lives in [backlog.md](backlog.md). It includes the Things 3
-"Pending" list so a context reset cannot lose it. The short version:
+Outstanding work lives in [backlog.md](backlog.md) and the durable
+`flowlist.md` list in the project root. The short version:
 
 - Visual QA of the glass surfaces against busy wallpapers.
 - Optional accent-colour variants on top of the ten base families.

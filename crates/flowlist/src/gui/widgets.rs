@@ -11,6 +11,8 @@ use gpui::{
 
 use super::icons::{self, Icon};
 use super::text::TextBuffer;
+use flowlist_core::model::ProjectIcon;
+
 use super::theme::Theme;
 
 pub fn caret(theme: Theme) -> impl IntoElement {
@@ -19,6 +21,7 @@ pub fn caret(theme: Theme) -> impl IntoElement {
 
 fn run(text: String, selected: bool, theme: Theme) -> impl IntoElement {
     div()
+        .whitespace_normal()
         .when(selected, |this| this.bg(theme.selection))
         .child(text)
 }
@@ -127,9 +130,9 @@ pub fn text_area(
         lines.push(
             div()
                 .flex()
+                .flex_wrap()
                 .items_center()
-                .h(px(17.))
-                .whitespace_nowrap()
+                .min_h(px(17.))
                 .children(children)
                 .into_any_element(),
         );
@@ -375,4 +378,21 @@ pub fn tip(
         let label = label.clone();
         cx.new(|_| TipView { label, theme }).into()
     }
+}
+
+/// The small icon that stands in for a project in the rail and dashboards.
+pub fn icon_for_project(icon: ProjectIcon, size: f32, color: gpui::Hsla) -> impl IntoElement {
+    let glyph = match icon {
+        ProjectIcon::Project => Icon::Project,
+        ProjectIcon::Folder => Icon::Folder,
+        ProjectIcon::Star => Icon::Star,
+        ProjectIcon::Briefcase => Icon::Briefcase,
+        ProjectIcon::Home => Icon::Home,
+        ProjectIcon::Heart => Icon::Heart,
+        ProjectIcon::Book => Icon::Book,
+        ProjectIcon::Code => Icon::Code,
+        ProjectIcon::Rocket => Icon::Rocket,
+        ProjectIcon::Coffee => Icon::Coffee,
+    };
+    icons::icon(glyph, size, color)
 }

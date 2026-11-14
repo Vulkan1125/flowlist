@@ -14,6 +14,9 @@ pub struct Settings {
     /// Completed tasks older than this are hidden from the Completed view.
     #[serde(default = "default_completed_days")]
     pub show_completed_days: u32,
+    /// How far back the Changed perspective looks, in days.
+    #[serde(default = "default_changed_days")]
+    pub changed_days: u32,
     /// 0 = Monday ... 6 = Sunday, used by calendar views.
     #[serde(default)]
     pub week_starts_on: u8,
@@ -42,6 +45,10 @@ fn default_completed_days() -> u32 {
     30
 }
 
+fn default_changed_days() -> u32 {
+    7
+}
+
 fn default_due_time() -> Option<NaiveTime> {
     NaiveTime::from_hms_opt(17, 0, 0)
 }
@@ -59,6 +66,7 @@ impl Default for Settings {
         Self {
             default_review_days: default_review_days(),
             show_completed_days: default_completed_days(),
+            changed_days: default_changed_days(),
             week_starts_on: 0,
             default_due_time: default_due_time(),
             default_defer_time: None,

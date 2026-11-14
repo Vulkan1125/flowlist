@@ -3,9 +3,9 @@
 
 use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px};
 
-use flowlist_core::command::Command;
+use flowlist_core::command::{Command, ProjectPatch};
 use flowlist_core::ids::{ChecklistId, TaskId};
-use flowlist_core::model::{Priority, ProjectStatus};
+use flowlist_core::model::{Priority, ProjectIcon, ProjectStatus};
 use flowlist_core::time::{format_duration, human_date, now};
 
 use super::icons::Icon;
@@ -142,6 +142,8 @@ impl FlowlistApp {
             .map(|item| (item.id.clone(), item.title.clone(), item.completed))
             .collect();
         let checklist_progress = task.checklist_progress();
+        let attachments = task.attachments.clone();
+        let sequential = task.sequential;
         let availability = flowlist_core::query::availability::availability(db, &id, now());
         let created = task
             .created_at
@@ -153,7 +155,6 @@ impl FlowlistApp {
             .with_timezone(&chrono::Local)
             .format("%b %-d, %Y %H:%M")
             .to_string();
-        let short = id.short().to_string();
         let actions_id = id.clone();
         let delete_id = id.clone();
         let tag_open_id = project_id.clone();
@@ -225,6 +226,8 @@ impl FlowlistApp {
             .child(self.inspector_priority(&id, priority, cx))
             .child(self.inspector_notes(&notes, cx))
             .child(self.inspector_checklist(&id, &checklist, checklist_progress, cx))
+            .child(self.inspector_task_type(sequential, cx))
+            .child(self.inspector_attachments(&attachments, cx))
             .child(self.inspector_tag_section(&tags, cx))
             .child(self.inspector_project_row(project, project_id, cx))
             .child(self.inspector_text_field(
@@ -252,17 +255,31 @@ impl FlowlistApp {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child(format!("#{short}")),
-                    )
+                    .child(div())
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap_1()
+                            .child(
+                                div()
+                                    .id("convert-task")
+                                    .px_2()
+                                    .py_1()
+                                    .rounded_md()
+                                    .text_xs()
+                                    .text_color(theme.text_dim)
+                                    .cursor_pointer()
+                                    .hover(|style| style.bg(theme.hover))
+                                    .tooltip(widgets::tip(
+                                        theme,
+                                        "Turn this task and its subtasks into a project",
+                                    ))
+                                    .child("To project")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.convert_selected_to_project(cx)
+                                    })),
+                            )
                             .child(
                                 div()
                                     .id("delete-task")
@@ -395,6 +412,7 @@ impl FlowlistApp {
             EditField::Repeat => "Does not repeat (e.g. every week)",
             EditField::Project => "Inbox",
             EditField::Notes => "Notes",
+            EditField::Attachments => "File paths",
         };
         let mut row = div()
             .flex()
@@ -865,8 +883,9 @@ impl FlowlistApp {
             .iter()
             .filter_map(|tag| db.tags.get(tag).map(|tag| db.tag_path(&tag.id)))
             .collect();
-        let notes = project.notes.clone();
         let status = project.status;
+        let icon = project.icon;
+        let attachments = project.attachments.clone();
         let project_id = id.clone();
         let rename_id = id.clone();
         let due = project.due.map(|stamp| human_date(&stamp, now()));
@@ -893,6 +912,57 @@ impl FlowlistApp {
                         super::modals::EntityRef::Project(rename_id),
                         cx,
                     )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_1()
+                    .child(div().text_xs().text_color(theme.text_faint).child("Icon"))
+                    .children(ProjectIcon::ALL.into_iter().map(|candidate| {
+                        let set_id = project_id.clone();
+                        let active = icon == candidate;
+                        div()
+                            .id(super::sid(format!(
+                                "project-inspector-icon:{}",
+                                candidate.slug()
+                            )))
+                            .size(px(24.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(if active {
+                                theme.accent
+                            } else {
+                                theme.border_soft
+                            })
+                            .bg(if active { theme.selection } else { theme.clear })
+                            .cursor_pointer()
+                            .tooltip(widgets::tip(theme, candidate.label()))
+                            .hover(|style| style.bg(theme.hover))
+                            .child(widgets::icon_for_project(
+                                candidate,
+                                13.0,
+                                if active {
+                                    theme.accent
+                                } else {
+                                    theme.text_faint
+                                },
+                            ))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.execute(Command::UpdateProject {
+                                    id: set_id.clone(),
+                                    patch: ProjectPatch {
+                                        icon: Some(candidate),
+                                        ..Default::default()
+                                    },
+                                });
+                                cx.notify();
+                            }))
+                    })),
             )
             .child(
                 div()
@@ -958,15 +1028,160 @@ impl FlowlistApp {
             .when(!tags.is_empty(), |this| {
                 this.child(self.inspector_readonly("Tags", &tags.join(", ")))
             })
-            .child(self.inspector_readonly(
-                "Notes",
-                if notes.is_empty() {
-                    "No notes"
-                } else {
-                    notes.as_str()
-                },
-            ))
+            .child(self.inspector_attachments(&attachments, cx))
             .into_any_element()
+    }
+
+    /// Parallel/Sequential for a task's own subtasks. Same language as the
+    /// project type chips so an action group reads the same everywhere.
+    fn inspector_task_type(&self, sequential: bool, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("Subtasks"),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .id("task-kind-parallel")
+                            .cursor_pointer()
+                            .child(widgets::toggle_chip(theme, "Parallel", !sequential))
+                            .on_click(
+                                cx.listener(|this, _, _, cx| this.set_task_sequential(false, cx)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id("task-kind-sequential")
+                            .cursor_pointer()
+                            .child(widgets::toggle_chip(theme, "Sequential", sequential))
+                            .on_click(
+                                cx.listener(|this, _, _, cx| this.set_task_sequential(true, cx)),
+                            ),
+                    ),
+            )
+    }
+
+    fn inspector_attachments(
+        &self,
+        attachments: &[String],
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let editing =
+            self.editing == Some(EditField::Attachments) && self.focus == super::FocusArea::Field;
+        let mut rows = div().flex().flex_col().gap_1();
+        for (index, path) in attachments.iter().enumerate() {
+            let name = std::path::Path::new(path)
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.clone());
+            let open_path = path.clone();
+            let remove_path = path.clone();
+            rows = rows.child(
+                div()
+                    .id(super::sid(format!("attachment:{index}")))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .h(px(24.))
+                    .px_2()
+                    .rounded_md()
+                    .bg(theme.raised)
+                    .child(icons::icon(Icon::Book, 12.0, theme.text_faint))
+                    .child(
+                        div()
+                            .id(super::sid(format!("attachment-name:{index}")))
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .text_xs()
+                            .text_color(theme.text)
+                            .tooltip(widgets::tip(theme, path.clone()))
+                            .child(name),
+                    )
+                    .child(
+                        div()
+                            .id(super::sid(format!("attachment-open:{index}")))
+                            .text_xs()
+                            .text_color(theme.accent)
+                            .cursor_pointer()
+                            .tooltip(widgets::tip(theme, "Open this file"))
+                            .child("open")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.open_attachment(open_path.clone());
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id(super::sid(format!("attachment-remove:{index}")))
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .cursor_pointer()
+                            .hover(|style| style.text_color(theme.danger))
+                            .tooltip(widgets::tip(theme, "Remove this attachment"))
+                            .child("×")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.remove_attachment(remove_path.clone(), cx)
+                            })),
+                    ),
+            );
+        }
+        let field = if editing {
+            div()
+                .child(widgets::text_area(
+                    theme,
+                    &self.field,
+                    "/Users/you/Desktop/spec.pdf",
+                    true,
+                    92.0,
+                ))
+                .into_any_element()
+        } else {
+            div()
+                .id("field:attachments")
+                .h(px(26.))
+                .px_2()
+                .flex()
+                .items_center()
+                .rounded_md()
+                .border_1()
+                .border_color(theme.border_soft)
+                .text_xs()
+                .text_color(theme.text_faint)
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover))
+                .child(if attachments.is_empty() {
+                    "Add file paths — one per line"
+                } else {
+                    "Edit attachments"
+                })
+                .on_click(cx.listener(|this, _, _, cx| this.begin_edit(EditField::Attachments, cx)))
+                .into_any_element()
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("Attachments"),
+            )
+            .when(!attachments.is_empty(), |this| this.child(rows))
+            .child(field)
     }
 
     fn inspector_readonly(&self, label: &'static str, value: &str) -> impl IntoElement {

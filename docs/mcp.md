@@ -40,6 +40,12 @@ file lock and readers reload when the revision changes.
 
 ### Tasks
 
+Attachment fields are file paths on the task; `convert_task_to_project` turns a
+task and its top-level subtasks into a project in one undoable step, moving the
+task's attachments to the project and turning leftover checklist items into
+tasks. `create_project` and `update_project` accept the same `attachments` and
+`clear_attachments` fields.
+
 | Tool | Purpose |
 | --- | --- |
 | `capture` | add a task using quick-entry text or explicit fields |

@@ -12,7 +12,7 @@ pub use folder::Folder;
 pub use perspective::{
     BuiltinPerspective, Condition, DueWindow, FilterNode, GroupBy, Perspective, SortBy, TaskStatus,
 };
-pub use project::{Project, ProjectKind, ProjectStatus};
+pub use project::{Project, ProjectIcon, ProjectKind, ProjectStatus};
 pub use repeat::{RepeatEnd, RepeatMode, RepeatOutcome, RepeatRule, RepeatSchedule};
 pub use settings::Settings;
 pub use tag::{Geo, Tag, TagStatus};

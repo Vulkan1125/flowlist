@@ -130,11 +130,11 @@ if ! "$bin" --data-dir "$lib" project list --json | grep -q '"Smoke project"'; t
 fi
 
 # 2. Hover pencil on the only saved perspective. The row sits below the
-#    nine built-in perspectives, the PRIORITIES section and its three rows, so
-#    its centre is roughly 482px below the top of the window. The offsets cover
+#    ten built-in perspectives, the PRIORITIES section and its three rows, so
+#    its centre is roughly 508px below the top of the window. The offsets cover
 #    small spacing drift.
 opened=""
-for y in 482 478 486 474 490 470 494 466 498 462 502 458 506 454 510; do
+for y in 508 504 512 500 516 496 520 492 524 488 528 484 532 480 536; do
 	for x in 190 195 185; do
 		focus_app
 		"$helpers/flowctl" mouse "$((${wx%.*} + x))" "$((${wy%.*} + y))"

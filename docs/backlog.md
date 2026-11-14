@@ -1,17 +1,15 @@
 # Backlog
 
-This file is the durable source of truth for outstanding work. It exists because
-the original list lived in a Things 3 project, and a context reset lost it more
-than once. If a conversation mentions "the pending things", it means the open
-items here.
+This file is the durable source of truth for outstanding work. The user-facing
+pending list now lives in `flowlist.md`; this file records the engineering
+detail behind it. If a conversation mentions "the pending things", it means the
+open items here and in `flowlist.md`.
 
 Status legend: `[ ]` open, `[~]` in progress, `[?]` needs a decision, `[x]`
 landed and verified.
 
-> The Things 3 database on this Mac is not readable (`things` reports "Things
-> database not found" and the container has no database file), so this list was
-> reconstructed from the previous working notes. Reconcile it with Things when
-> the database is available again; do not treat silence as "done".
+> `flowlist.md` supersedes the unreadable Things 3 database. Keep both files in
+> sync when work lands; do not treat silence as "done".
 
 ## Interaction polish
 
@@ -45,9 +43,8 @@ landed and verified.
 - [x] **OmniFocus project types** — parallel, sequential and single-action
       projects, chosen in the New Project sheet and cycled from the project
       banner. Legacy `sequential` files still map to the sequential kind.
-- [ ] **Container-type polish** — OmniFocus also gives action groups their own
-      parallel/sequential type. Apply `ProjectKind` semantics to task subtrees,
-      not just projects.
+- [x] **Container-type polish** — task subtrees now carry a
+      parallel/sequential type, exposed as chips in the inspector.
 - [x] **Forecast date selection** — clicking a calendar date shows that day's
       due/deferred tasks; click again or press `\` to clear. `[`/`]` step a day,
       `{`/`}` step a month.
@@ -91,20 +88,14 @@ comparison, not a claim of feature parity.
 
 ### Adopt next
 
-- **Changed perspective** — OmniFocus pairs Completed with a Changed view for
-  recently edited items. We have nine built-ins now, including Trash, but no
-  Changed view. Add it with a configurable window and reuse the history
-  timestamps.
-- **Action-group types** — parallel/sequential applies to task subtrees in
-  OmniFocus, not only projects. Make `ProjectKind` do double duty on parent
-  tasks and show the blocked reason per subtree.
-- **First Available view option** — OmniFocus can show only the next action in
-  a sequential project or group. Add an availability option next to the
-  existing Completed and priority filters.
-- **Per-perspective view options** — OmniFocus stores availability, structure
-  and layout per perspective. Flowlist currently keeps sort/group globally in
-  the session. Persist a view-options record on custom perspectives and a
-  built-in default for the rest.
+- [x] **Changed perspective** — tenth built-in, `0` shortcut, configurable
+  `changed_days` window, newest edits first.
+- [x] **Action-group types** — parallel/sequential applies to task subtrees,
+  shown as chips in the inspector.
+- [x] **First Available view option** — header toggle that keeps only
+  currently available rows.
+- [x] **Per-perspective view options** — `Session.view_options` stores sort,
+  grouping, completed and availability per view.
 
 ### Later / evaluate
 

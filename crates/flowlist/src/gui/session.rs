@@ -1,6 +1,8 @@
 //! Which list the window is showing, and the small amount of state that
 //! survives a quit (view, selection, theme, inspector, window size).
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use flowlist_core::db::Db;
@@ -82,6 +84,7 @@ impl View {
             View::Builtin(BuiltinPerspective::Review) => "Keep projects honest",
             View::Builtin(BuiltinPerspective::Tags) => "Group work by context",
             View::Builtin(BuiltinPerspective::Completed) => "Recently finished work",
+            View::Builtin(BuiltinPerspective::Changed) => "Recently edited work",
             View::Builtin(BuiltinPerspective::Nearby) => "Contexts with a location",
             View::Builtin(BuiltinPerspective::Trash) => "Deleted tasks, restorable for a while",
             View::Project(_) => "Project outline",
@@ -100,6 +103,21 @@ impl View {
             _ => false,
         }
     }
+}
+
+/// Sorting, grouping and filters remembered per perspective. OmniFocus keeps
+/// these with the perspective; Flowlist keeps the same idea in the session so
+/// built-in and saved views behave alike.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ViewOptions {
+    #[serde(default)]
+    pub sort: Option<String>,
+    #[serde(default)]
+    pub group: Option<String>,
+    #[serde(default)]
+    pub show_completed: Option<bool>,
+    #[serde(default)]
+    pub only_available: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -127,6 +145,15 @@ pub struct Session {
     /// Global priority filter, `high`, `medium`, `low`, or absent for all.
     #[serde(default)]
     pub priority_filter: Option<String>,
+    /// Show only the next available task instead of everything that is blocked.
+    #[serde(default)]
+    pub only_available: Option<bool>,
+    /// Keep the theme family but take light/dark from the OS.
+    #[serde(default)]
+    pub follow_system: Option<bool>,
+    /// Per-perspective sort, grouping and filters.
+    #[serde(default)]
+    pub view_options: BTreeMap<String, ViewOptions>,
 }
 
 impl Session {
@@ -225,6 +252,38 @@ mod tests {
         };
         assert_eq!(session.priority_filter(), Some(Priority::Medium));
         assert_eq!(Session::default().priority_filter(), None);
+    }
+
+    #[test]
+    fn changed_view_and_per_view_options_round_trip() {
+        let db = flowlist_core::db::Db::default();
+        let view = View::Builtin(BuiltinPerspective::Changed);
+        assert_eq!(view.key(), "changed");
+        assert_eq!(View::from_key(&db, "changed"), Some(view));
+
+        let session = Session {
+            only_available: Some(true),
+            follow_system: Some(true),
+            view_options: BTreeMap::from([(
+                "flagged".to_string(),
+                ViewOptions {
+                    sort: Some("due".to_string()),
+                    group: Some("project".to_string()),
+                    show_completed: Some(false),
+                    only_available: Some(true),
+                },
+            )]),
+            ..Session::default()
+        };
+        let text = serde_json::to_string(&session).unwrap();
+        let restored: Session = serde_json::from_str(&text).unwrap();
+        assert_eq!(restored.only_available, Some(true));
+        assert_eq!(restored.follow_system, Some(true));
+        assert_eq!(
+            restored.view_options["flagged"].sort.as_deref(),
+            Some("due")
+        );
+        assert_eq!(restored.view_options["flagged"].only_available, Some(true));
     }
 
     #[test]
