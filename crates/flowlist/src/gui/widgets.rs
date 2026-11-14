@@ -5,8 +5,8 @@
 //! the right characters even with multi-byte input.
 
 use gpui::{
-    AnyView, App, CursorStyle, FontWeight, IntoElement, Render, SharedString, Window, div,
-    prelude::*, px,
+    AnyView, App, CursorStyle, FontWeight, HighlightStyle, IntoElement, Render, SharedString,
+    StyledText, TextStyle, Window, div, prelude::*, px,
 };
 
 use super::icons::{self, Icon};
@@ -89,80 +89,85 @@ pub fn text_area(
     let (sel_start, sel_end) = buffer.selection();
     let cursor = buffer.cursor();
     let text = buffer.text().to_string();
-    let mut offset = 0usize;
-    let mut lines: Vec<gpui::AnyElement> = Vec::new();
+    let chars: Vec<char> = text.chars().collect();
+    let has_selection = sel_start != sel_end;
 
-    for raw in text.split('\n') {
-        let line_len = raw.chars().count();
-        let line_start = offset;
-        let line_end = offset + line_len;
-        let line_chars: Vec<char> = raw.chars().collect();
+    // Build the visible string with a caret glyph at the cursor. StyledText
+    // lays the whole run out with normal wrapping, so long notes wrap inside
+    // the inspector instead of running past its edge.
+    let mut display = String::with_capacity(text.len() + 1);
+    let mut highlights: Vec<(std::ops::Range<usize>, HighlightStyle)> = Vec::new();
+    let mut selection: Option<(usize, usize)> = None;
 
-        let caret_here = focused
-            && cursor >= line_start
-            && (cursor < line_end || (cursor == line_end && line_end == text.chars().count()));
+    let push_caret = |display: &mut String, highlights: &mut Vec<_>| {
+        let start = display.len();
+        display.push('▏');
+        highlights.push((
+            start..display.len(),
+            HighlightStyle {
+                color: Some(theme.accent),
+                ..Default::default()
+            },
+        ));
+    };
 
-        let mut children: Vec<gpui::AnyElement> = Vec::new();
-        if sel_start != sel_end && sel_start < line_end && sel_end > line_start {
-            let local_start = sel_start.saturating_sub(line_start).min(line_chars.len());
-            let local_end = (sel_end - line_start).min(line_chars.len());
-            let before: String = line_chars[..local_start].iter().collect();
-            let selected: String = line_chars[local_start..local_end].iter().collect();
-            let after: String = line_chars[local_end..].iter().collect();
-            children.push(run(before, false, theme).into_any_element());
-            children.push(run(selected, true, theme).into_any_element());
-            children.push(run(after, false, theme).into_any_element());
-        } else {
-            let col = if caret_here {
-                cursor.saturating_sub(line_start).min(line_chars.len())
-            } else {
-                line_chars.len()
-            };
-            let before: String = line_chars[..col].iter().collect();
-            let after: String = line_chars[col..].iter().collect();
-            children.push(run(before, false, theme).into_any_element());
-            if caret_here {
-                children.push(caret(theme).into_any_element());
-            }
-            children.push(run(after, false, theme).into_any_element());
+    for (index, ch) in chars.iter().enumerate() {
+        if focused && !has_selection && index == cursor {
+            push_caret(&mut display, &mut highlights);
         }
-
-        lines.push(
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .min_h(px(17.))
-                .children(children)
-                .into_any_element(),
-        );
-        offset = line_end + 1;
+        let start = display.len();
+        display.push(*ch);
+        if has_selection && index >= sel_start && index < sel_end {
+            selection = Some(match selection {
+                Some((first, _)) => (first, display.len()),
+                None => (start, display.len()),
+            });
+        }
+    }
+    if focused && !has_selection && cursor >= chars.len() {
+        push_caret(&mut display, &mut highlights);
+    }
+    if let Some((start, end)) = selection {
+        highlights.push((
+            start..end,
+            HighlightStyle {
+                background_color: Some(theme.selection),
+                ..Default::default()
+            },
+        ));
     }
 
+    let text_style = TextStyle {
+        color: theme.text,
+        font_family: "SF Pro Text".into(),
+        font_size: px(13.).into(),
+        line_height: px(18.).into(),
+        ..Default::default()
+    };
+
+    let content = if buffer.is_empty() && !focused {
+        div()
+            .text_color(theme.text_faint)
+            .child(placeholder.to_string())
+            .into_any_element()
+    } else {
+        StyledText::new(display)
+            .with_default_highlights(&text_style, highlights)
+            .into_any_element()
+    };
+
     div()
-        .h(px(height))
+        .min_h(px(height))
         .w_full()
+        .min_w_0()
         .p_2()
         .rounded_md()
         .border_1()
         .border_color(if focused { theme.accent } else { theme.border })
         .bg(if focused { theme.raised } else { theme.field })
         .text_sm()
-        .overflow_hidden()
         .cursor(CursorStyle::IBeam)
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .when(buffer.is_empty() && !focused, |this| {
-                    this.child(
-                        div()
-                            .text_color(theme.text_faint)
-                            .child(placeholder.to_string()),
-                    )
-                })
-                .children(lines),
-        )
+        .child(content)
 }
 
 pub fn chip(_theme: Theme, text: impl Into<String>, color: gpui::Hsla) -> impl IntoElement {

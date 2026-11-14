@@ -346,6 +346,82 @@ impl FlowlistApp {
         let is_settings = matches!(modal, Modal::Settings { .. });
         let is_new_project = matches!(modal, Modal::NewProject { .. });
         let is_tag_location = matches!(modal, Modal::TagLocation { .. });
+        let header = div()
+            .flex()
+            .items_start()
+            .justify_between()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_lg()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child(title),
+                    )
+                    .when(!subtitle.is_empty(), |this| {
+                        this.child(
+                            div()
+                                .max_w(px(480.))
+                                .text_sm()
+                                .text_color(theme.text_faint)
+                                .child(subtitle),
+                        )
+                    }),
+            )
+            .child(
+                div()
+                    .id("modal-close")
+                    .cursor_pointer()
+                    .text_color(theme.text_faint)
+                    .hover(|style| style.text_color(theme.text))
+                    .tooltip(widgets::tip(theme, "Close (Esc)"))
+                    .child(icons::icon(icons::Icon::Close, 14.0, theme.text_faint))
+                    .on_click(cx.listener(|this, _, _, cx| this.close_modal(cx))),
+            );
+
+        // The settings sheet is taller than the window on short displays. A
+        // scroll region keeps every control, especially the full theme grid,
+        // reachable instead of clipped by the card's rounded corners.
+        let mut body = div()
+            .id("modal-body")
+            .flex()
+            .flex_col()
+            .gap_3()
+            .flex_1()
+            .min_h_0()
+            .pr_1()
+            .overflow_y_scroll()
+            .track_scroll(&self.modal_scroll);
+
+        if is_help {
+            body = body.child(help_body(theme));
+        } else {
+            // Theme and appearance are the first thing people open Settings
+            // for; keep them above the numeric fields so they are visible
+            // without scrolling on a normal window.
+            if is_settings {
+                body = body.child(self.render_settings_controls(cx));
+            }
+            for index in 0..field_count {
+                body = body.child(self.render_modal_field(index, cx));
+            }
+            if is_new_project {
+                body = body.child(self.render_new_project_controls(cx));
+            }
+            if is_perspective {
+                body = body.child(self.render_perspective_controls(cx));
+            }
+            if is_import {
+                body = body.child(self.render_import_controls(cx));
+            }
+            if is_tag_location {
+                body = body.child(self.render_tag_location_controls(cx));
+            }
+        }
+
         let mut card = div()
             .flex()
             .flex_col()
@@ -359,65 +435,10 @@ impl FlowlistApp {
             .bg(theme.raised)
             .shadow_2xl()
             .overflow_hidden()
-            .child(
-                div()
-                    .flex()
-                    .items_start()
-                    .justify_between()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_lg()
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .child(title),
-                            )
-                            .when(!subtitle.is_empty(), |this| {
-                                this.child(
-                                    div()
-                                        .max_w(px(480.))
-                                        .text_sm()
-                                        .text_color(theme.text_faint)
-                                        .child(subtitle),
-                                )
-                            }),
-                    )
-                    .child(
-                        div()
-                            .id("modal-close")
-                            .cursor_pointer()
-                            .text_color(theme.text_faint)
-                            .hover(|style| style.text_color(theme.text))
-                            .tooltip(widgets::tip(theme, "Close (Esc)"))
-                            .child(icons::icon(icons::Icon::Close, 14.0, theme.text_faint))
-                            .on_click(cx.listener(|this, _, _, cx| this.close_modal(cx))),
-                    ),
-            );
+            .child(header)
+            .child(body);
 
-        if is_help {
-            card = card.child(help_body(theme));
-        } else {
-            for index in 0..field_count {
-                card = card.child(self.render_modal_field(index, cx));
-            }
-            if is_new_project {
-                card = card.child(self.render_new_project_controls(cx));
-            }
-            if is_perspective {
-                card = card.child(self.render_perspective_controls(cx));
-            }
-            if is_import {
-                card = card.child(self.render_import_controls(cx));
-            }
-            if is_settings {
-                card = card.child(self.render_settings_controls(cx));
-            }
-            if is_tag_location {
-                card = card.child(self.render_tag_location_controls(cx));
-            }
+        if !is_help {
             card = card.child(
                 div()
                     .flex()

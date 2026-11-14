@@ -113,6 +113,7 @@ impl FlowlistApp {
             return self.render_empty_inspector().into_any_element();
         };
         let id = id.clone();
+        let draft = self.draft_task.as_ref() == Some(&id);
         let title = task.title.clone();
         let notes = task.notes.clone();
         let completed = task.completed;
@@ -250,72 +251,74 @@ impl FlowlistApp {
                 cx,
             ))
             .child(widgets::divider(theme))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(div())
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .id("convert-task")
-                                    .px_2()
-                                    .py_1()
-                                    .rounded_md()
-                                    .text_xs()
-                                    .text_color(theme.text_dim)
-                                    .cursor_pointer()
-                                    .hover(|style| style.bg(theme.hover))
-                                    .tooltip(widgets::tip(
-                                        theme,
-                                        "Turn this task and its subtasks into a project",
-                                    ))
-                                    .child("To project")
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.convert_selected_to_project(cx)
-                                    })),
-                            )
-                            .child(
-                                div()
-                                    .id("delete-task")
-                                    .px_2()
-                                    .py_1()
-                                    .rounded_md()
-                                    .text_xs()
-                                    .text_color(theme.danger)
-                                    .cursor_pointer()
-                                    .hover(|style| style.bg(theme.hover))
-                                    .child("Delete")
-                                    .on_click(
-                                        cx.listener(|this, _, _, cx| this.delete_selected(cx)),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .id("complete-task")
-                                    .px_2()
-                                    .py_1()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(theme.accent)
-                                    .text_xs()
-                                    .text_color(theme.accent)
-                                    .cursor_pointer()
-                                    .hover(|style| style.bg(theme.selection))
-                                    .child(if completed { "Reopen" } else { "Complete" })
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(id) = this.selected_one() {
-                                            this.toggle_complete(id, cx)
-                                        }
-                                    })),
-                            ),
-                    ),
-            )
+            .when(!draft, |this| {
+                this.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(div())
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .id("convert-task")
+                                        .px_2()
+                                        .py_1()
+                                        .rounded_md()
+                                        .text_xs()
+                                        .text_color(theme.text_dim)
+                                        .cursor_pointer()
+                                        .hover(|style| style.bg(theme.hover))
+                                        .tooltip(widgets::tip(
+                                            theme,
+                                            "Turn this task and its subtasks into a project",
+                                        ))
+                                        .child("To project")
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.convert_selected_to_project(cx)
+                                        })),
+                                )
+                                .child(
+                                    div()
+                                        .id("delete-task")
+                                        .px_2()
+                                        .py_1()
+                                        .rounded_md()
+                                        .text_xs()
+                                        .text_color(theme.danger)
+                                        .cursor_pointer()
+                                        .hover(|style| style.bg(theme.hover))
+                                        .child("Delete")
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| this.delete_selected(cx)),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .id("complete-task")
+                                        .px_2()
+                                        .py_1()
+                                        .rounded_md()
+                                        .border_1()
+                                        .border_color(theme.accent)
+                                        .text_xs()
+                                        .text_color(theme.accent)
+                                        .cursor_pointer()
+                                        .hover(|style| style.bg(theme.selection))
+                                        .child(if completed { "Reopen" } else { "Complete" })
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            if let Some(id) = this.selected_one() {
+                                                this.toggle_complete(id, cx)
+                                            }
+                                        })),
+                                ),
+                        ),
+                )
+            })
             .when_some(tag_open_id, |this, project| {
                 this.child(
                     div()
@@ -412,7 +415,6 @@ impl FlowlistApp {
             EditField::Repeat => "Does not repeat (e.g. every week)",
             EditField::Project => "Inbox",
             EditField::Notes => "Notes",
-            EditField::Attachments => "File paths",
         };
         let mut row = div()
             .flex()
@@ -478,12 +480,15 @@ impl FlowlistApp {
                 &self.field,
                 "Add notes",
                 true,
-                96.0,
+                140.0,
             ));
         } else {
             row = row.child(
                 div()
                     .id("field:notes")
+                    .w_full()
+                    .min_w_0()
+                    .whitespace_normal()
                     .min_h(px(52.))
                     .p_2()
                     .rounded_md()
@@ -735,9 +740,10 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
-        let highlighted = self
-            .suggestion_index
-            .min(suggestions.len().saturating_sub(1));
+        let highlighted = (tags || self.suggestion_engaged).then(|| {
+            self.suggestion_index
+                .min(suggestions.len().saturating_sub(1))
+        });
         let mut list = div()
             .flex()
             .flex_col()
@@ -756,12 +762,12 @@ impl FlowlistApp {
                     .py_1()
                     .rounded_sm()
                     .text_xs()
-                    .text_color(if index == highlighted {
+                    .text_color(if highlighted == Some(index) {
                         theme.accent
                     } else {
                         theme.text_dim
                     })
-                    .bg(if index == highlighted {
+                    .bg(if highlighted == Some(index) {
                         theme.selection
                     } else {
                         theme.clear
@@ -1183,8 +1189,6 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
-        let editing =
-            self.editing == Some(EditField::Attachments) && self.focus == super::FocusArea::Field;
         let mut rows = div().flex().flex_col().gap_1();
         for (index, path) in attachments.iter().enumerate() {
             let name = std::path::Path::new(path)
@@ -1243,38 +1247,32 @@ impl FlowlistApp {
                     ),
             );
         }
-        let field = if editing {
-            div()
-                .child(widgets::text_area(
-                    theme,
-                    &self.field,
-                    "/Users/you/Desktop/spec.pdf",
-                    true,
-                    92.0,
-                ))
-                .into_any_element()
-        } else {
-            div()
-                .id("field:attachments")
-                .h(px(26.))
-                .px_2()
-                .flex()
-                .items_center()
-                .rounded_md()
-                .border_1()
-                .border_color(theme.border_soft)
-                .text_xs()
-                .text_color(theme.text_faint)
-                .cursor_pointer()
-                .hover(|style| style.bg(theme.hover))
-                .child(if attachments.is_empty() {
-                    "Add file paths — one per line"
-                } else {
-                    "Edit attachments"
-                })
-                .on_click(cx.listener(|this, _, _, cx| this.begin_edit(EditField::Attachments, cx)))
-                .into_any_element()
-        };
+        let field = div()
+            .id("field:attachments")
+            .h(px(26.))
+            .px_2()
+            .flex()
+            .items_center()
+            .gap_1()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border_soft)
+            .text_xs()
+            .text_color(theme.text_dim)
+            .cursor_pointer()
+            .tooltip(widgets::tip(
+                theme,
+                "Choose files with the macOS file picker",
+            ))
+            .hover(|style| style.bg(theme.hover))
+            .child(icons::icon(Icon::Paperclip, 12.0, theme.text_faint))
+            .child(if attachments.is_empty() {
+                "Attach file…"
+            } else {
+                "Attach another file…"
+            })
+            .on_click(cx.listener(|this, _, _, cx| this.pick_attachments(cx)))
+            .into_any_element();
         div()
             .flex()
             .flex_col()

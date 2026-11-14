@@ -919,3 +919,74 @@ fn changed_perspective_lists_recent_edits() {
     let rows: Vec<_> = groups.iter().flat_map(|group| &group.rows).collect();
     assert!(rows.iter().any(|row| row.id == task_id));
 }
+
+#[test]
+fn history_labels_use_entity_names() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let id = add(&mut store, "Plan the launch");
+    let task_id = store.db().resolve_task(&id).unwrap();
+    store
+        .execute(Command::UpdateTask {
+            id: task_id.clone(),
+            patch: TaskPatch {
+                notes: Some("Bring the deck".into()),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+
+    assert_eq!(
+        store.undo_label().as_deref(),
+        Some("Undo Edit task “Plan the launch”")
+    );
+    assert_eq!(store.redo_label(), None);
+
+    store.undo().unwrap();
+    assert_eq!(
+        store.redo_label().as_deref(),
+        Some("Redo Edit task “Plan the launch”")
+    );
+
+    // The no-database form used by other callers never leaks an id either.
+    let label = Command::UpdateTask {
+        id: task_id,
+        patch: TaskPatch::default(),
+    }
+    .label();
+    assert_eq!(label, "Edit task");
+}
+
+#[test]
+fn assigning_an_unknown_project_path_creates_the_project() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let id = add(&mut store, "Draft the brief");
+    let task_id = store.db().resolve_task(&id).unwrap();
+    store
+        .execute(Command::UpdateTask {
+            id: task_id.clone(),
+            patch: TaskPatch {
+                project_path: Some(Some("Work / Client launch".into())),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+
+    let project = store
+        .db()
+        .find_project_by_path("Work / Client launch")
+        .expect("typing a new path creates the project");
+    assert_eq!(store.db().tasks[&task_id].project, Some(project.clone()));
+    assert_eq!(
+        store.undo_label().as_deref(),
+        Some("Undo Edit task “Draft the brief”")
+    );
+
+    // One undo removes the assignment and the project it created together.
+    store.undo().unwrap();
+    assert_eq!(store.db().tasks[&task_id].project, None);
+    assert!(!store.db().projects.contains_key(&project));
+}

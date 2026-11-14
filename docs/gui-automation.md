@@ -41,7 +41,10 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "view": "custom:01M79...",
   "modal": "Perspective",
   "focus": "Content",
+  "field": null,
   "selected": 0,
+  "draft": false,
+  "suggestions": 0,
   "window": [1254.0, 1404.0],
   "theme": "catppuccin",
   "appearance": "light",
@@ -53,7 +56,11 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
 
 `modal` is `null` when no sheet is open, otherwise the sheet title (`New
 project`, `Perspective`, `Settings`, …). `focus` names the active pane or field
-(`Content`, `Capture`, `Sidebar`, `Field`, `Modal`, …). `traffic_lights` reports
+(`Content`, `Capture`, `Sidebar`, `Field`, `Modal`, …). `field` names the
+inspector field being edited (`Title`, `Notes`, `Project`, …) and is null
+otherwise. `draft` is true while a
+task created with `o`/`O` is still being titled, and `suggestions` counts the
+rows in the open project picker. `traffic_lights` reports
 whether the AppKit window buttons were hidden. The file is rewritten only when one of
 those values changes, and the hook is inert unless the variable is set. It does
 not contain task text, notes or the library itself.

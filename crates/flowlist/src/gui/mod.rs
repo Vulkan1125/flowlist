@@ -73,7 +73,6 @@ pub enum EditField {
     Due,
     Estimate,
     Repeat,
-    Attachments,
 }
 
 impl EditField {
@@ -85,21 +84,19 @@ impl EditField {
             EditField::Defer => EditField::Due,
             EditField::Due => EditField::Estimate,
             EditField::Estimate => EditField::Repeat,
-            EditField::Repeat => EditField::Attachments,
-            EditField::Attachments => EditField::Title,
+            EditField::Repeat => EditField::Title,
         }
     }
 
     fn previous(self) -> Self {
         match self {
-            EditField::Title => EditField::Attachments,
+            EditField::Title => EditField::Repeat,
             EditField::Notes => EditField::Title,
             EditField::Project => EditField::Notes,
             EditField::Defer => EditField::Project,
             EditField::Due => EditField::Defer,
             EditField::Estimate => EditField::Due,
             EditField::Repeat => EditField::Estimate,
-            EditField::Attachments => EditField::Repeat,
         }
     }
 }
@@ -135,6 +132,10 @@ pub struct FlowlistApp {
     project_icon_open: bool,
     /// Highlighted completion in the project and tag fields.
     suggestion_index: usize,
+    /// True once the user moved through the project dropdown with the arrow
+    /// keys. Until then Tab still advances to the next field instead of
+    /// assigning the first suggestion.
+    suggestion_engaged: bool,
     selected: Vec<TaskId>,
     anchor: Option<TaskId>,
     expanded: BTreeSet<String>,
@@ -155,8 +156,12 @@ pub struct FlowlistApp {
     checklist_editing: Option<ChecklistId>,
     editing: Option<EditField>,
     field_error: Option<String>,
+    /// The task created by `o`/`O` while its title is still being typed.
+    /// Inspector actions stay out of the way until the title is committed.
+    draft_task: Option<TaskId>,
     modal: Option<modals::Modal>,
     modal_focus: usize,
+    modal_scroll: ScrollHandle,
     toast: Option<String>,
     /// Last measured content size, persisted so the next launch reopens at it.
     window_size: Option<(f32, f32)>,
@@ -241,6 +246,7 @@ impl FlowlistApp {
             group_menu_open: false,
             project_icon_open: false,
             suggestion_index: 0,
+            suggestion_engaged: false,
             selected,
             anchor: None,
             expanded: BTreeSet::new(),
@@ -261,8 +267,10 @@ impl FlowlistApp {
             checklist_editing: None,
             editing: None,
             field_error: None,
+            draft_task: None,
             modal: None,
             modal_focus: 0,
+            modal_scroll: ScrollHandle::new(),
             toast,
             window_size,
             window_dirty: false,
@@ -550,6 +558,9 @@ impl FlowlistApp {
     }
 
     fn select_only(&mut self, id: TaskId) {
+        if self.draft_task.as_ref() != Some(&id) {
+            self.draft_task = None;
+        }
         self.selected = vec![id.clone()];
         self.anchor = Some(id);
     }
@@ -789,6 +800,100 @@ impl FlowlistApp {
             Ok(_) => self.toast = Some(format!("Opening {path}")),
             Err(error) => self.toast = Some(format!("Could not open {path}: {error}")),
         }
+    }
+
+    /// Ask macOS for real files (multi-select) and attach them to the selected
+    /// task, or to the project when the project inspector is showing.
+    fn pick_attachments(&mut self, cx: &mut Context<Self>) {
+        let task = self.selected_one();
+        let project = if task.is_none() {
+            match &self.view {
+                View::Project(id) => Some(id.clone()),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if task.is_none() && project.is_none() {
+            self.toast = Some("Select a task or project first".to_string());
+            cx.notify();
+            return;
+        }
+
+        let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: Some("Attach".into()),
+        });
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(paths))) = picked.await else {
+                return;
+            };
+            let paths: Vec<String> = paths
+                .into_iter()
+                .map(|path| path.to_string_lossy().to_string())
+                .collect();
+            if paths.is_empty() {
+                return;
+            }
+            this.update(cx, |this, cx| {
+                this.add_attachments(task, project, paths, cx);
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn add_attachments(
+        &mut self,
+        task: Option<TaskId>,
+        project: Option<ProjectId>,
+        paths: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(task) = task {
+            let mut attachments = self
+                .store
+                .db()
+                .tasks
+                .get(&task)
+                .map(|task| task.attachments.clone())
+                .unwrap_or_default();
+            for path in paths {
+                if !attachments.contains(&path) {
+                    attachments.push(path);
+                }
+            }
+            self.execute(Command::UpdateTask {
+                id: task,
+                patch: TaskPatch {
+                    attachments: Some(attachments),
+                    ..Default::default()
+                },
+            });
+        } else if let Some(project) = project {
+            let mut attachments = self
+                .store
+                .db()
+                .projects
+                .get(&project)
+                .map(|project| project.attachments.clone())
+                .unwrap_or_default();
+            for path in paths {
+                if !attachments.contains(&path) {
+                    attachments.push(path);
+                }
+            }
+            self.execute(Command::UpdateProject {
+                id: project,
+                patch: ProjectPatch {
+                    attachments: Some(attachments),
+                    ..Default::default()
+                },
+            });
+        }
+        cx.notify();
     }
 
     /// One undoable step: the task disappears and a project with its
@@ -1248,7 +1353,19 @@ impl FlowlistApp {
         if self.editing != Some(EditField::Project) || self.focus != FocusArea::Field {
             return Vec::new();
         }
-        self.suggest_paths(self.project_paths(), self.field.text())
+        let query = self.field.text().trim().to_string();
+        let current = self
+            .selected_one()
+            .and_then(|id| self.store.db().tasks.get(&id))
+            .and_then(|task| task.project.as_ref())
+            .map(|project| self.store.db().project_path(project))
+            .unwrap_or_default();
+        // Opening the field is a dropdown: show every project. Once the user
+        // types, narrow the list; an unknown typed path becomes a new project.
+        if query.is_empty() || query == current {
+            return self.project_paths();
+        }
+        self.suggest_paths(self.project_paths(), &query)
     }
 
     fn tag_suggestions(&self) -> Vec<String> {
@@ -1261,36 +1378,22 @@ impl FlowlistApp {
     fn choose_project_suggestion(&mut self, path: String, cx: &mut Context<Self>) {
         self.field.set(path);
         self.suggestion_index = 0;
+        self.suggestion_engaged = false;
         self.commit_field(cx);
     }
 
     fn choose_tag_suggestion(&mut self, path: String, cx: &mut Context<Self>) {
         self.tag_buffer.set(path);
         self.suggestion_index = 0;
+        self.suggestion_engaged = false;
         self.add_tag_from_buffer(cx);
     }
 
     fn begin_edit(&mut self, field: EditField, cx: &mut Context<Self>) {
-        // The project inspector has no selected task; attachments still use
-        // the same field so the interaction is identical in both places.
-        if field == EditField::Attachments
-            && self.selected_one().is_none()
-            && let View::Project(project_id) = self.view.clone()
-        {
-            let value = self
-                .store
-                .db()
-                .projects
-                .get(&project_id)
-                .map(|project| project.attachments.join("\n"))
-                .unwrap_or_default();
-            self.field.set(value);
-            self.field_error = None;
-            self.suggestion_index = 0;
-            self.editing = Some(field);
-            self.focus = FocusArea::Field;
-            cx.notify();
-            return;
+        // Leaving the title editor ends the new-task draft even if the user
+        // clicked straight into another field instead of pressing Return.
+        if self.editing == Some(EditField::Title) && field != EditField::Title {
+            self.draft_task = None;
         }
         let Some(id) = self.selected_one() else {
             self.toast = Some("Select a task first".to_string());
@@ -1326,11 +1429,16 @@ impl FlowlistApp {
                 .as_ref()
                 .map(|rule| rule.description())
                 .unwrap_or_default(),
-            EditField::Attachments => task.attachments.join("\n"),
         };
         self.field.set(value);
+        if field == EditField::Project {
+            // Opening the project picker selects the current path so typing
+            // replaces it and immediately filters the dropdown.
+            self.field.select_all();
+        }
         self.field_error = None;
         self.suggestion_index = 0;
+        self.suggestion_engaged = false;
         self.editing = Some(field);
         self.focus = FocusArea::Field;
         cx.notify();
@@ -1342,30 +1450,6 @@ impl FlowlistApp {
             cx.notify();
             return;
         };
-        // Project attachments are edited from the project inspector, where
-        // nothing is selected in the list.
-        if field == EditField::Attachments && self.selected_one().is_none() {
-            if let View::Project(project_id) = self.view.clone() {
-                let raw = self.field.text().to_string();
-                let attachments = raw
-                    .lines()
-                    .map(|line| line.trim().to_string())
-                    .filter(|line| !line.is_empty())
-                    .collect();
-                self.execute(Command::UpdateProject {
-                    id: project_id,
-                    patch: ProjectPatch {
-                        attachments: Some(attachments),
-                        ..Default::default()
-                    },
-                });
-                self.editing = None;
-                self.field_error = None;
-                self.focus = FocusArea::Content;
-                cx.notify();
-                return;
-            }
-        }
         let Some(id) = self.selected_one() else {
             self.editing = None;
             self.focus = FocusArea::Content;
@@ -1388,22 +1472,7 @@ impl FlowlistApp {
                 patch.notes = Some(raw);
             }
             EditField::Project => {
-                if value.is_empty() {
-                    patch.project = Some(None);
-                } else {
-                    let db = self.store.db();
-                    let project = db
-                        .find_project_by_path(&value)
-                        .or_else(|| db.find_project_by_name(&value));
-                    match project {
-                        Some(project) => patch.project = Some(Some(project)),
-                        None => {
-                            self.field_error = Some(format!("No project named “{value}”"));
-                            cx.notify();
-                            return;
-                        }
-                    }
-                }
+                patch.project_path = Some(if value.is_empty() { None } else { Some(value) });
             }
             EditField::Defer | EditField::Due => {
                 let stamp = if value.is_empty() {
@@ -1454,18 +1523,11 @@ impl FlowlistApp {
                 };
                 patch.repeat = Some(repeat);
             }
-            EditField::Attachments => {
-                patch.attachments = Some(
-                    raw.lines()
-                        .map(|line| line.trim().to_string())
-                        .filter(|line| !line.is_empty())
-                        .collect(),
-                );
-            }
         }
         self.execute(Command::UpdateTask { id, patch });
         self.editing = None;
         self.field_error = None;
+        self.draft_task = None;
         self.focus = FocusArea::Content;
         cx.notify();
     }
@@ -1661,6 +1723,7 @@ impl FlowlistApp {
     fn open_modal(&mut self, modal: modals::Modal, cx: &mut Context<Self>) {
         self.modal = Some(modal);
         self.modal_focus = 0;
+        self.modal_scroll.set_offset(point(px(0.), px(0.)));
         self.focus = FocusArea::Modal;
         cx.notify();
     }
@@ -1678,6 +1741,7 @@ impl FlowlistApp {
     fn close_modal(&mut self, cx: &mut Context<Self>) {
         self.modal = None;
         self.modal_focus = 0;
+        self.modal_scroll.set_offset(point(px(0.), px(0.)));
         self.focus = FocusArea::Content;
         cx.notify();
     }
@@ -2087,17 +2151,29 @@ impl FlowlistApp {
             if !suggestions.is_empty() {
                 match stroke.key.as_str() {
                     "down" => {
-                        self.suggestion_index = (self.suggestion_index + 1) % suggestions.len();
+                        self.suggestion_index = if self.suggestion_engaged {
+                            (self.suggestion_index + 1) % suggestions.len()
+                        } else {
+                            0
+                        };
+                        self.suggestion_engaged = true;
                         cx.notify();
                         return;
                     }
                     "up" => {
-                        self.suggestion_index =
-                            (self.suggestion_index + suggestions.len() - 1) % suggestions.len();
+                        self.suggestion_index = if self.suggestion_engaged {
+                            (self.suggestion_index + suggestions.len() - 1) % suggestions.len()
+                        } else {
+                            suggestions.len() - 1
+                        };
+                        self.suggestion_engaged = true;
                         cx.notify();
                         return;
                     }
-                    "tab" if !mods.shift => {
+                    "tab"
+                        if !mods.shift
+                            && (self.focus == FocusArea::TagInput || self.suggestion_engaged) =>
+                    {
                         let pick =
                             suggestions[self.suggestion_index.min(suggestions.len() - 1)].clone();
                         if self.focus == FocusArea::TagInput {
@@ -2107,12 +2183,27 @@ impl FlowlistApp {
                         }
                         return;
                     }
+                    "enter" | "return"
+                        if self.focus == FocusArea::Field && self.suggestion_engaged =>
+                    {
+                        let pick =
+                            suggestions[self.suggestion_index.min(suggestions.len() - 1)].clone();
+                        self.choose_project_suggestion(pick, cx);
+                        return;
+                    }
                     _ => {}
                 }
             }
             if let Some(buffer) = self.active_buffer_mut() {
                 match handle_buffer_key(buffer, stroke, paste.as_deref()) {
                     BufferKey::Changed => {
+                        // Typing filters the project list again; Tab returns
+                        // to moving between fields until an arrow is pressed.
+                        if self.focus == FocusArea::Field
+                            && self.editing == Some(EditField::Project)
+                        {
+                            self.suggestion_engaged = false;
+                        }
                         cx.notify();
                         return;
                     }
@@ -2807,7 +2898,8 @@ impl FlowlistApp {
         if let Some(outcome) = self.execute(Command::CreateTask(new_task)) {
             if let Some(created) = outcome.created.first() {
                 if let Ok(id) = self.store.db().resolve_task(created) {
-                    self.select_only(id);
+                    self.select_only(id.clone());
+                    self.draft_task = Some(id);
                     self.begin_edit(EditField::Title, cx);
                     self.field.select_all();
                 }
@@ -2926,6 +3018,7 @@ impl FlowlistApp {
             FocusArea::Field => {
                 self.editing = None;
                 self.field_error = None;
+                self.draft_task = None;
             }
             FocusArea::TagInput => self.tag_buffer.clear(),
             FocusArea::Checklist => {
@@ -3290,7 +3383,10 @@ impl FlowlistApp {
             "view": self.view.key(),
             "modal": self.modal.as_ref().map(|modal| modal.title()),
             "focus": format!("{:?}", self.focus),
+            "field": self.editing.map(|field| format!("{field:?}")),
             "selected": self.selected.len(),
+            "draft": self.draft_task.is_some(),
+            "suggestions": self.project_suggestions().len(),
             "window": self.window_size,
             "theme": self.theme.kind().slug(),
             "appearance": self.theme.appearance().slug(),

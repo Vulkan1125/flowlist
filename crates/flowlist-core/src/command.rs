@@ -89,6 +89,9 @@ pub struct TaskPatch {
     pub title: Option<String>,
     pub notes: Option<String>,
     pub project: Option<Option<ProjectId>>,
+    /// A `Folder / Project` path. Missing projects (and their folders) are
+    /// created in the same undoable step.
+    pub project_path: Option<Option<String>>,
     pub parent: Option<Option<TaskId>>,
     pub due: Option<Option<Stamp>>,
     pub defer: Option<Option<Stamp>>,
@@ -330,13 +333,47 @@ pub enum Command {
 
 impl Command {
     pub fn label(&self) -> String {
+        self.label_with(None)
+    }
+
+    /// A history label that prefers human names over opaque ids. Callers pass
+    /// the database state from *before* the command, which is also the state
+    /// an Undo restores, so deleted entities still have a readable name.
+    pub fn label_with(&self, db: Option<&Db>) -> String {
+        let task_name = |id: &TaskId| {
+            db.and_then(|db| db.tasks.get(id))
+                .map(|task| task.title.clone())
+        };
+        let project_name = |id: &ProjectId| {
+            db.and_then(|db| db.projects.get(id))
+                .map(|project| project.name.clone())
+        };
+        let folder_name = |id: &FolderId| {
+            db.and_then(|db| db.folders.get(id))
+                .map(|folder| folder.name.clone())
+        };
+        let tag_name = |id: &TagId| {
+            db.and_then(|db| db.tags.get(id))
+                .map(|tag| tag.name.clone())
+        };
+        let perspective_name = |id: &PerspectiveId| {
+            db.and_then(|db| db.perspectives.get(id))
+                .map(|perspective| perspective.name.clone())
+        };
+
         match self {
             Command::CreateTask(task) => format!("Add task “{}”", task.title),
-            Command::UpdateTask { id, .. } => format!("Edit task {id}"),
+            Command::UpdateTask { id, .. } => match task_name(id) {
+                Some(name) => format!("Edit task “{name}”"),
+                None => "Edit task".to_string(),
+            },
             Command::CompleteTasks { ids, completed } => {
                 let verb = if *completed { "Complete" } else { "Uncomplete" };
                 if ids.len() == 1 {
-                    format!("{verb} task")
+                    match task_name(&ids[0]) {
+                        Some(name) => format!("{verb} task “{name}”"),
+                        None => format!("{verb} task"),
+                    }
                 } else {
                     format!("{verb} {} tasks", ids.len())
                 }
@@ -365,23 +402,51 @@ impl Command {
             Command::MoveChecklistItem { .. } => "Reorder checklist item".to_string(),
             Command::DeleteChecklistItem { .. } => "Delete checklist item".to_string(),
             Command::CreateProject(project) => format!("Add project “{}”", project.name),
-            Command::UpdateProject { id, .. } => format!("Edit project {id}"),
-            Command::SetProjectStatus { id, status } => {
-                format!("Set project {id} to {}", status.label())
-            }
-            Command::CompleteReview { id, .. } => format!("Review project {id}"),
-            Command::MoveProject { id, .. } => format!("Move project {id}"),
+            Command::UpdateProject { id, .. } => match project_name(id) {
+                Some(name) => format!("Edit project “{name}”"),
+                None => "Edit project".to_string(),
+            },
+            Command::SetProjectStatus { id, status } => match project_name(id) {
+                Some(name) => format!("Set project “{name}” to {}", status.label()),
+                None => format!("Set project status to {}", status.label()),
+            },
+            Command::CompleteReview { id, .. } => match project_name(id) {
+                Some(name) => format!("Review project “{name}”"),
+                None => "Review project".to_string(),
+            },
+            Command::MoveProject { id, .. } => match project_name(id) {
+                Some(name) => format!("Move project “{name}”"),
+                None => "Move project".to_string(),
+            },
             Command::CreateFolder { name, .. } => format!("Add folder “{name}”"),
-            Command::RenameFolder { id, .. } => format!("Rename folder {id}"),
-            Command::MoveFolder { id, .. } => format!("Move folder {id}"),
-            Command::DeleteFolder { id } => format!("Delete folder {id}"),
+            Command::RenameFolder { id, .. } => match folder_name(id) {
+                Some(name) => format!("Rename folder “{name}”"),
+                None => "Rename folder".to_string(),
+            },
+            Command::MoveFolder { id, .. } => match folder_name(id) {
+                Some(name) => format!("Move folder “{name}”"),
+                None => "Move folder".to_string(),
+            },
+            Command::DeleteFolder { id } => match folder_name(id) {
+                Some(name) => format!("Delete folder “{name}”"),
+                None => "Delete folder".to_string(),
+            },
             Command::CreateTag { name, .. } => format!("Add tag “{name}”"),
-            Command::UpdateTag { id, .. } => format!("Edit tag {id}"),
-            Command::DeleteTag { id } => format!("Delete tag {id}"),
+            Command::UpdateTag { id, .. } => match tag_name(id) {
+                Some(name) => format!("Edit tag “{name}”"),
+                None => "Edit tag".to_string(),
+            },
+            Command::DeleteTag { id } => match tag_name(id) {
+                Some(name) => format!("Delete tag “{name}”"),
+                None => "Delete tag".to_string(),
+            },
             Command::SavePerspective { perspective } => {
                 format!("Save perspective “{}”", perspective.name)
             }
-            Command::DeletePerspective { id } => format!("Delete perspective {id}"),
+            Command::DeletePerspective { id } => match perspective_name(id) {
+                Some(name) => format!("Delete perspective “{name}”"),
+                None => "Delete perspective".to_string(),
+            },
             Command::UpdateSettings(_) => "Update settings".to_string(),
             Command::Import { mode, .. } => match mode {
                 ImportMode::Replace => "Import library".to_string(),
@@ -391,7 +456,7 @@ impl Command {
     }
 
     pub fn apply(self, db: &mut Db, at: DateTime<Utc>) -> Result<Outcome> {
-        let label = self.label();
+        let label = self.label_with(Some(&*db));
         let mut outcome = Outcome::new(label);
         match self {
             Command::CreateTask(mut new_task) => {
@@ -455,6 +520,15 @@ impl Command {
                 outcome.message = Some(format!("Added “{title}”"));
             }
             Command::UpdateTask { id, patch } => {
+                // Resolve or create a project path before borrowing the task so
+                // a brand-new project and the assignment share one history step.
+                let path_project = match &patch.project_path {
+                    Some(Some(path)) if !path.trim().is_empty() => {
+                        Some(Some(db.ensure_project_path(path)?))
+                    }
+                    Some(_) => Some(None),
+                    None => None,
+                };
                 let mut moved: Option<(Option<ProjectId>, Option<TaskId>)> = None;
                 {
                     let task = db.task_mut(&id)?;
@@ -496,7 +570,9 @@ impl Command {
                     if let Some(sequential) = patch.sequential {
                         task.sequential = sequential;
                     }
-                    if let Some(project) = patch.project {
+                    if let Some(project) = path_project {
+                        moved = Some((project, None));
+                    } else if let Some(project) = patch.project {
                         moved = Some((project, None));
                     }
                     if let Some(parent) = patch.parent {

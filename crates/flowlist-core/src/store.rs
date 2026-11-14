@@ -148,13 +148,61 @@ impl Store {
     pub fn undo_label(&self) -> Option<String> {
         self.history
             .label_for_undo()
-            .map(|label| format!("Undo {label}"))
+            .map(|label| format!("Undo {}", self.humanize_history_label(label)))
     }
 
     pub fn redo_label(&self) -> Option<String> {
         self.history
             .label_for_redo()
-            .map(|label| format!("Redo {label}"))
+            .map(|label| format!("Redo {}", self.humanize_history_label(label)))
+    }
+
+    /// Older history entries were written with raw ULIDs. Resolve what we can
+    /// against the current and neighbouring snapshots so the undo menu keeps
+    /// showing names even for work done before the labels changed.
+    fn humanize_history_label(&self, label: &str) -> String {
+        let mut candidates: Vec<(String, String)> = Vec::new();
+        let mut collect = |db: &Db| {
+            for (id, task) in &db.tasks {
+                candidates.push((id.to_string(), task.title.clone()));
+            }
+            for (id, project) in &db.projects {
+                candidates.push((id.to_string(), project.name.clone()));
+            }
+            for (id, folder) in &db.folders {
+                candidates.push((id.to_string(), folder.name.clone()));
+            }
+            for (id, tag) in &db.tags {
+                candidates.push((id.to_string(), tag.name.clone()));
+            }
+            for (id, perspective) in &db.perspectives {
+                candidates.push((id.to_string(), perspective.name.clone()));
+            }
+        };
+        collect(&self.data.db);
+        if let Some(entry) = self
+            .history
+            .cursor
+            .checked_sub(1)
+            .and_then(|index| self.history.entries.get(index))
+        {
+            collect(&entry.state);
+        }
+        if let Some(entry) = self.history.entries.get(self.history.cursor + 1) {
+            collect(&entry.state);
+        }
+
+        let mut text = label.to_string();
+        for (id, name) in candidates {
+            if text.contains(&id) {
+                text = text.replace(&id, &format!("“{name}”"));
+            }
+        }
+        // Drop any id that no snapshot can name, rather than showing a ULID.
+        text.split_whitespace()
+            .filter(|token| !is_ulid_token(token))
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     /// Reload from disk when another process has written. Returns whether the
@@ -331,4 +379,14 @@ fn mtime(path: &std::path::Path) -> Option<SystemTime> {
     std::fs::metadata(path)
         .and_then(|meta| meta.modified())
         .ok()
+}
+
+/// ULIDs are 26 Crockford-base32 characters. History labels used to embed
+/// them directly; this recognizes the token so it can be hidden when no
+/// snapshot can supply a name.
+fn is_ulid_token(token: &str) -> bool {
+    token.len() == 26
+        && token
+            .chars()
+            .all(|ch| ch.is_ascii_digit() || ('A'..='Z').contains(&ch))
 }
