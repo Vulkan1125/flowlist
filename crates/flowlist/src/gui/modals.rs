@@ -9,6 +9,7 @@ use flowlist_core::model::{ProjectIcon, ProjectKind};
 use super::perspective::PerspectiveForm;
 use super::text::TextBuffer;
 use super::theme::{Appearance, Theme, ThemeKind};
+use super::widgets::TipExt;
 use super::{FlowlistApp, icons, widgets};
 
 /// What a rename sheet is editing. Keeping the typed id means a rename can
@@ -206,6 +207,12 @@ impl Modal {
         }
     }
 
+    /// Project creation sheets carry their own Cancel button in the footer,
+    /// so they do not need a second close control in the top corner.
+    pub fn shows_close(&self) -> bool {
+        !matches!(self, Modal::NewProject { .. } | Modal::CreateProject { .. })
+    }
+
     pub fn confirm_label(&self) -> &'static str {
         match self {
             Modal::CreateProject { .. } => "Create",
@@ -367,42 +374,43 @@ impl FlowlistApp {
         let is_import = matches!(modal, Modal::Import { .. });
         let is_settings = matches!(modal, Modal::Settings { .. });
         let is_new_project = matches!(modal, Modal::NewProject { .. });
+        // Project creation already has Cancel and Create at the bottom, so a
+        // second close control in the corner is redundant.
+        let shows_close = modal.shows_close();
         let is_tag_location = matches!(modal, Modal::TagLocation { .. });
-        let header = div()
-            .flex()
-            .items_start()
-            .justify_between()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
+        let mut header = div().flex().items_start().justify_between().child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .text_lg()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .child(title),
+                )
+                .when(!subtitle.is_empty(), |this| {
+                    this.child(
                         div()
-                            .text_lg()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child(title),
+                            .max_w(px(480.))
+                            .text_sm()
+                            .text_color(theme.text_faint)
+                            .child(subtitle),
                     )
-                    .when(!subtitle.is_empty(), |this| {
-                        this.child(
-                            div()
-                                .max_w(px(480.))
-                                .text_sm()
-                                .text_color(theme.text_faint)
-                                .child(subtitle),
-                        )
-                    }),
-            )
-            .child(
+                }),
+        );
+        if shows_close {
+            header = header.child(
                 div()
                     .id("modal-close")
                     .cursor_pointer()
                     .text_color(theme.text_faint)
                     .hover(|style| style.text_color(theme.text))
-                    .tooltip(widgets::tip(theme, "Close (Esc)"))
+                    .flow_tip(self, cx, theme, "Close (Esc)")
                     .child(icons::icon(icons::Icon::Close, 14.0, theme.text_faint))
                     .on_click(cx.listener(|this, _, _, cx| this.close_modal(cx))),
             );
+        }
 
         // The settings sheet is taller than the window on short displays. A
         // scroll region keeps every control, especially the full theme grid,
@@ -653,7 +661,7 @@ impl FlowlistApp {
                     form.show_completed,
                     "modal-completed",
                 )
-                .tooltip(widgets::tip(theme, "Include completed tasks"))
+                .flow_tip(self, cx, theme, "Include completed tasks")
                 .on_click(cx.listener(|this, _, _, cx| {
                     if let Some(Modal::Perspective { form }) = &mut this.modal {
                         form.show_completed = !form.show_completed;
@@ -722,7 +730,7 @@ impl FlowlistApp {
                         form.tag_children,
                         "modal-tag-children",
                     )
-                    .tooltip(widgets::tip(theme, "Match tasks tagged with a child tag"))
+                    .flow_tip(self, cx, theme, "Match tasks tagged with a child tag")
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(Modal::Perspective { form }) = &mut this.modal {
                             form.tag_children = !form.tag_children;
@@ -805,7 +813,7 @@ impl FlowlistApp {
             div()
                 .id("modal-clear-location")
                 .child(widgets::button(theme, "Clear location", false))
-                .tooltip(widgets::tip(theme, "Remove coordinates from this tag"))
+                .flow_tip(self, cx, theme, "Remove coordinates from this tag")
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.execute(flowlist_core::command::Command::UpdateTag {
                         id: tag.clone(),
@@ -889,7 +897,7 @@ impl FlowlistApp {
                                 theme.clear
                             })
                             .cursor_pointer()
-                            .tooltip(widgets::tip(theme, format!("Icon · {}", icon.label())))
+                            .flow_tip(self, cx, theme, format!("Icon · {}", icon.label()))
                             .hover(|style| style.bg(theme.hover))
                             .child(widgets::icon_for_project(icon, 14.0, theme.text_dim))
                             .child(icons::icon(
@@ -931,7 +939,7 @@ impl FlowlistApp {
                             })
                             .bg(if active { theme.selection } else { theme.clear })
                             .cursor_pointer()
-                            .tooltip(widgets::tip(theme, candidate.label()))
+                            .flow_tip(self, cx, theme, candidate.label())
                             .hover(|style| style.bg(theme.hover))
                             .child(widgets::icon_for_project(candidate, 14.0, theme.text_dim))
                             .on_click(cx.listener(move |this, _, _, cx| {

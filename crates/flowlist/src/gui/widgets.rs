@@ -4,11 +4,14 @@
 //! Text fields render their buffer as runs so the caret and selection land on
 //! the right characters even with multi-byte input.
 
+use std::time::Duration;
+
 use gpui::{
-    AnyView, App, CursorStyle, FontWeight, HighlightStyle, IntoElement, Render, SharedString,
-    StyledText, TextStyle, Window, div, prelude::*, px,
+    AnyView, App, Context, CursorStyle, Div, FontWeight, HighlightStyle, IntoElement, Render,
+    SharedString, Stateful, StyledText, TextStyle, Window, div, prelude::*, px,
 };
 
+use super::FlowlistApp;
 use super::icons::{self, Icon};
 use super::text::TextBuffer;
 use flowlist_core::model::ProjectIcon;
@@ -353,10 +356,42 @@ pub fn divider(theme: Theme) -> impl IntoElement {
 struct TipView {
     label: SharedString,
     theme: Theme,
+    shown: bool,
+}
+
+/// A tooltip waits before appearing, and a click keeps it quiet until the
+/// pointer leaves the button. GPUI's built-in delay is half a second, which
+/// reads as "immediately" in a dense toolbar, so the view itself stays empty
+/// for the first stretch and only then draws its label.
+const TIP_DELAY: Duration = Duration::from_millis(4_500);
+
+impl TipView {
+    fn new(label: SharedString, theme: Theme, window: &Window, cx: &mut Context<Self>) -> Self {
+        cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor().timer(TIP_DELAY).await;
+            this.update(cx, |view, cx| {
+                view.shown = true;
+                cx.notify();
+            })
+            .ok();
+            // The tooltip is prepared outside the normal view tree, so ask
+            // the window to redraw once the label is ready.
+            cx.update(|window, _| window.refresh()).ok();
+        })
+        .detach();
+        Self {
+            label,
+            theme,
+            shown: false,
+        }
+    }
 }
 
 impl Render for TipView {
-    fn render(&mut self, _window: &mut Window, _cx: &mut gpui::Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.shown {
+            return div().w(px(0.)).h(px(0.)).into_any_element();
+        }
         let theme = self.theme;
         div()
             .px_2()
@@ -369,8 +404,50 @@ impl Render for TipView {
             .text_color(theme.text)
             .whitespace_nowrap()
             .child(self.label.clone())
+            .into_any_element()
     }
 }
+
+/// Attach a delayed, click-aware tooltip. A click on the element mutes its
+/// tooltip until the pointer leaves; the next hover starts fresh.
+pub(super) trait TipExt: Sized {
+    fn flow_tip(
+        self,
+        app: &FlowlistApp,
+        cx: &mut Context<FlowlistApp>,
+        theme: Theme,
+        label: impl Into<SharedString>,
+    ) -> Self;
+}
+
+macro_rules! impl_tip_ext {
+    ($($ty:ty),*) => {
+        $(
+            impl TipExt for $ty {
+                fn flow_tip(
+                    self,
+                    app: &FlowlistApp,
+                    cx: &mut Context<FlowlistApp>,
+                    theme: Theme,
+                    label: impl Into<SharedString>,
+                ) -> Self {
+                    let label = label.into();
+                    let muted = app.tip_suppressed(&label);
+                    let el = if muted {
+                        self
+                    } else {
+                        self.tooltip(tip(theme, label.clone()))
+                    };
+                    el.on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                        this.note_tip_hover(label.clone(), *hovered, cx);
+                    }))
+                }
+            }
+        )*
+    };
+}
+
+impl_tip_ext!(Stateful<Div>);
 
 /// Builder for `.tooltip(...)`. GPUI waits before showing it, so passing the
 /// mouse across a row stays quiet.
@@ -379,9 +456,9 @@ pub fn tip(
     label: impl Into<SharedString>,
 ) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
     let label = label.into();
-    move |_window, cx| {
+    move |window, cx| {
         let label = label.clone();
-        cx.new(|_| TipView { label, theme }).into()
+        cx.new(|cx| TipView::new(label, theme, window, cx)).into()
     }
 }
 

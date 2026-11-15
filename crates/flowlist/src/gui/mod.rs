@@ -29,7 +29,7 @@ use anyhow::Result;
 use chrono::Datelike;
 use gpui::{
     App, Application, Bounds, ClipboardItem, Context, CursorStyle, FocusHandle, Focusable,
-    IntoElement, KeyDownEvent, Keystroke, MouseButton, Render, ScrollHandle, Window,
+    IntoElement, KeyDownEvent, Keystroke, MouseButton, Render, ScrollHandle, SharedString, Window,
     WindowBackgroundAppearance, WindowBounds, WindowOptions, div, point, prelude::*, px, size,
 };
 
@@ -52,6 +52,7 @@ use icons::Icon;
 
 pub use session::{Session, View};
 use theme::Theme;
+use widgets::TipExt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FocusArea {
@@ -146,18 +147,21 @@ pub struct FlowlistApp {
     /// The header dropdowns, which list every option instead of cycling.
     sort_menu_open: bool,
     group_menu_open: bool,
+    priority_menu_open: bool,
     /// Where the header chips painted on the last frame. The menus are root
     /// overlays positioned from these bounds, so their hitboxes line up with
     /// what is on screen (anchored/deferred paint offsets do not move
     /// hitboxes in GPUI 0.2).
     sort_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     group_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    priority_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// The right-click menu on a sidebar row, opened at the mouse position.
     sidebar_menu: Option<sidebar::SidebarMenu>,
     /// A click's mouse-up closed the sort or group menu. The chip under the
     /// same click must not immediately reopen it.
     sort_closed_on_up: bool,
     group_closed_on_up: bool,
+    priority_closed_on_up: bool,
     /// The project inspector's icon grid, shown only on request.
     project_icon_open: bool,
     /// Highlighted completion in the project and tag fields.
@@ -199,6 +203,11 @@ pub struct FlowlistApp {
     /// The message currently on screen and when it appeared. A toast retires
     /// itself after a few seconds so the window never keeps stale advice.
     toast_shown: Option<(String, Instant)>,
+    /// The tooltip whose element the pointer is over, and the label a click
+    /// muted. A click quiets the tooltip until the pointer leaves the button,
+    /// so a resting pointer does not bring it straight back.
+    hovered_tip: Option<SharedString>,
+    suppressed_tip: Option<SharedString>,
     sort: Option<SortBy>,
     group: Option<GroupBy>,
     scroll: ScrollHandle,
@@ -274,11 +283,14 @@ impl FlowlistApp {
             view_options,
             sort_menu_open: false,
             group_menu_open: false,
+            priority_menu_open: false,
             sort_anchor: Rc::new(Cell::new(None)),
             group_anchor: Rc::new(Cell::new(None)),
+            priority_anchor: Rc::new(Cell::new(None)),
             sidebar_menu: None,
             sort_closed_on_up: false,
             group_closed_on_up: false,
+            priority_closed_on_up: false,
             project_icon_open: false,
             suggestion_index: 0,
             suggestion_engaged: false,
@@ -310,6 +322,8 @@ impl FlowlistApp {
             window_size,
             window_dirty: false,
             toast_shown: None,
+            hovered_tip: None,
+            suppressed_tip: None,
             sort,
             group,
             scroll: ScrollHandle::new(),
@@ -972,22 +986,16 @@ impl FlowlistApp {
         cx.notify();
     }
 
-    /// Cycle the global priority filter: all → high → medium → low → all.
-    fn cycle_priority_filter(&mut self, cx: &mut Context<Self>) {
-        let next = match self.priority_filter {
-            None => Some(Priority::High),
-            Some(Priority::High) => Some(Priority::Medium),
-            Some(Priority::Medium) => Some(Priority::Low),
-            Some(Priority::Low) => None,
-        };
-        self.priority_filter = next;
-        // A priority view only makes sense while its filter is active.
-        if let View::Priority(_) = self.view {
-            match next {
-                Some(priority) => self.set_view(View::Priority(priority)),
-                None => self.set_view(View::Builtin(BuiltinPerspective::Inbox)),
-            }
+    fn select_all_trash(&mut self, cx: &mut Context<Self>) {
+        let ids = self.store.db().trashed_roots();
+        if ids.is_empty() {
+            self.toast = Some("Trash is already empty".to_string());
+            cx.notify();
+            return;
         }
+        self.selected = ids;
+        self.anchor = self.selected.first().cloned();
+        self.focus = FocusArea::Content;
         self.save_session();
         cx.notify();
     }
@@ -1656,6 +1664,7 @@ impl FlowlistApp {
         self.sort = sort;
         self.sort_menu_open = false;
         self.group_menu_open = false;
+        self.priority_menu_open = false;
         self.remember_view_options();
         self.save_session();
         cx.notify();
@@ -1665,7 +1674,25 @@ impl FlowlistApp {
         self.group = group;
         self.group_menu_open = false;
         self.sort_menu_open = false;
+        self.priority_menu_open = false;
         self.remember_view_options();
+        self.save_session();
+        cx.notify();
+    }
+
+    /// Set the global priority filter from the header menu. A priority view
+    /// only makes sense while its filter is active, so it follows the choice.
+    fn choose_priority_filter(&mut self, priority: Option<Priority>, cx: &mut Context<Self>) {
+        self.priority_filter = priority;
+        self.priority_menu_open = false;
+        self.sort_menu_open = false;
+        self.group_menu_open = false;
+        if let View::Priority(_) = self.view {
+            match priority {
+                Some(priority) => self.set_view(View::Priority(priority)),
+                None => self.set_view(View::Builtin(BuiltinPerspective::Inbox)),
+            }
+        }
         self.save_session();
         cx.notify();
     }
@@ -1794,6 +1821,7 @@ impl FlowlistApp {
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
         self.sort_menu_open = false;
         self.group_menu_open = false;
+        self.priority_menu_open = false;
         self.sidebar_menu = None;
         self.focus = FocusArea::Modal;
         cx.notify();
@@ -2369,6 +2397,9 @@ impl FlowlistApp {
                     self.save_session();
                 }
                 "d" => self.flag_selected(cx),
+                "a" if matches!(self.view, View::Builtin(BuiltinPerspective::Trash)) => {
+                    self.select_all_trash(cx)
+                }
                 "backspace" | "delete" => {
                     if self.focus == FocusArea::Sidebar {
                         self.delete_sidebar_target(cx);
@@ -2492,9 +2523,14 @@ impl FlowlistApp {
                 }
             }
             "escape" => {
-                if self.sort_menu_open || self.group_menu_open || self.sidebar_menu.is_some() {
+                if self.sort_menu_open
+                    || self.group_menu_open
+                    || self.priority_menu_open
+                    || self.sidebar_menu.is_some()
+                {
                     self.sort_menu_open = false;
                     self.group_menu_open = false;
+                    self.priority_menu_open = false;
                     self.sidebar_menu = None;
                     cx.notify();
                     return;
@@ -2614,9 +2650,14 @@ impl FlowlistApp {
                 // before the plain key map, so without this the menus would
                 // stay open while the selection cleared underneath them.
                 self.vim.reset();
-                if self.sort_menu_open || self.group_menu_open || self.sidebar_menu.is_some() {
+                if self.sort_menu_open
+                    || self.group_menu_open
+                    || self.priority_menu_open
+                    || self.sidebar_menu.is_some()
+                {
                     self.sort_menu_open = false;
                     self.group_menu_open = false;
+                    self.priority_menu_open = false;
                     self.sidebar_menu = None;
                     return;
                 }
@@ -3481,6 +3522,9 @@ impl FlowlistApp {
         let state = serde_json::json!({
             "view": self.view.key(),
             "modal": self.modal.as_ref().map(|modal| modal.title()),
+            "modal_close": self.modal.as_ref().is_some_and(|modal| modal.shows_close()),
+            "tip": self.hovered_tip.as_ref().map(|tip| tip.to_string()),
+            "tip_muted": self.suppressed_tip.as_ref().map(|tip| tip.to_string()),
             "focus": format!("{:?}", self.focus),
             "field": self.editing.map(|field| format!("{field:?}")),
             "selected": self.selected.len(),
@@ -3497,8 +3541,10 @@ impl FlowlistApp {
             "group": self.group.map(group_slug),
             "sort_menu": self.sort_menu_open,
             "group_menu": self.group_menu_open,
+            "priority_menu": self.priority_menu_open,
             "sort_anchor": self.sort_anchor.get().is_some(),
             "group_anchor": self.group_anchor.get().is_some(),
+            "priority_anchor": self.priority_anchor.get().is_some(),
             "sidebar_menu": self.sidebar_menu.as_ref().map(|menu| menu.key()),
             "forecast_date": self.forecast_date.map(|date| date.to_string()),
             "trashed": self.store.db().trash_count(),
@@ -3580,9 +3626,24 @@ impl FlowlistApp {
                     .gap_1()
                     .child(
                         div()
+                            .id("add-task")
+                            .mr_1()
+                            .flow_tip(self, cx, theme, "Add a task (⌃⌥Space)")
+                            .child(widgets::button_with_icon(
+                                theme,
+                                Icon::Plus,
+                                "Add task",
+                                true,
+                            ))
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.focus_capture(window, cx)),
+                            ),
+                    )
+                    .child(
+                        div()
                             .id("undo")
                             .opacity(if self.store.can_undo() { 1.0 } else { 0.4 })
-                            .tooltip(widgets::tip(theme, "Undo (⌘Z)"))
+                            .flow_tip(self, cx, theme, "Undo (⌘Z)")
                             .child(widgets::icon_button(theme, Icon::Undo, false))
                             .on_click(cx.listener(|this, _, _, cx| this.undo(cx))),
                     )
@@ -3590,14 +3651,14 @@ impl FlowlistApp {
                         div()
                             .id("redo")
                             .opacity(if self.store.can_redo() { 1.0 } else { 0.4 })
-                            .tooltip(widgets::tip(theme, "Redo (⇧⌘Z)"))
+                            .flow_tip(self, cx, theme, "Redo (⇧⌘Z)")
                             .child(widgets::icon_button(theme, Icon::Redo, false))
                             .on_click(cx.listener(|this, _, _, cx| this.redo(cx))),
                     )
                     .child(
                         div()
                             .id("help")
-                            .tooltip(widgets::tip(theme, "Keyboard and mouse help (?)"))
+                            .flow_tip(self, cx, theme, "Keyboard and mouse help (?)")
                             .child(widgets::icon_button(theme, Icon::Help, false))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.open_modal(modals::Modal::Help, cx)
@@ -3606,7 +3667,7 @@ impl FlowlistApp {
                     .child(
                         div()
                             .id("settings")
-                            .tooltip(widgets::tip(theme, "Settings (⌘,)"))
+                            .flow_tip(self, cx, theme, "Settings (⌘,)")
                             .child(widgets::icon_button(theme, Icon::Settings, false))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.open_modal(modals::Modal::settings(this), cx)
@@ -3615,14 +3676,16 @@ impl FlowlistApp {
                     .child(
                         div()
                             .id("theme")
-                            .tooltip(widgets::tip(
+                            .flow_tip(
+                                self,
+                                cx,
                                 theme,
                                 format!(
                                     "Next theme — {} {} (⇧⌘T)",
                                     theme.kind().label(),
                                     theme.appearance().label()
                                 ),
-                            ))
+                            )
                             .child(widgets::icon_button(theme, Icon::Palette, false))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.theme = this.theme.next_theme();
@@ -3638,7 +3701,7 @@ impl FlowlistApp {
                     .child(
                         div()
                             .id("inspector")
-                            .tooltip(widgets::tip(theme, "Toggle inspector (i)"))
+                            .flow_tip(self, cx, theme, "Toggle inspector (i)")
                             .child(widgets::icon_button(theme, Icon::Info, self.show_inspector))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.show_inspector = !this.show_inspector;
@@ -3732,6 +3795,43 @@ impl FlowlistApp {
                             .child(root),
                     ),
             )
+    }
+
+    /// Whether a click muted this tooltip until the pointer leaves its button.
+    pub(super) fn tip_suppressed(&self, label: &SharedString) -> bool {
+        self.suppressed_tip.as_ref() == Some(label)
+    }
+
+    /// Track which button owns the pointer so a click can mute just that
+    /// tooltip, and clear the mute when the pointer moves off the button.
+    pub(super) fn note_tip_hover(
+        &mut self,
+        label: SharedString,
+        hovered: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if hovered {
+            if self.suppressed_tip.as_ref() != Some(&label) {
+                self.suppressed_tip = None;
+            }
+            self.hovered_tip = Some(label);
+        } else {
+            if self.hovered_tip.as_ref() == Some(&label) {
+                self.hovered_tip = None;
+            }
+            if self.suppressed_tip.as_ref() == Some(&label) {
+                self.suppressed_tip = None;
+                cx.notify();
+            }
+        }
+    }
+
+    /// A click quiets any tooltip on the button under the pointer. The mute
+    /// lasts until the pointer leaves, so it resets naturally for next time.
+    fn suppress_hover_tip(&mut self) {
+        if let Some(label) = self.hovered_tip.clone() {
+            self.suppressed_tip = Some(label);
+        }
     }
 
     fn render_toast(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -3878,11 +3978,14 @@ impl Render for FlowlistApp {
             .on_key_down(cx.listener(Self::on_key_down))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, _, window, _| {
+                cx.listener(|this, _, window, cx| {
                     // A new click starts a new mouse-up lifecycle.
                     this.sort_closed_on_up = false;
                     this.group_closed_on_up = false;
+                    this.priority_closed_on_up = false;
+                    this.suppress_hover_tip();
                     window.focus(&this.focus_handle);
+                    cx.notify();
                 }),
             );
         root = root.child(self.render_header(window, cx));
@@ -3896,7 +3999,11 @@ impl Render for FlowlistApp {
         root = root.child(self.render_status(window, cx));
         // Any open dropdown gets a full-window scrim, so a click anywhere
         // closes it instead of leaving an orphan menu behind.
-        if self.sort_menu_open || self.group_menu_open || self.sidebar_menu.is_some() {
+        if self.sort_menu_open
+            || self.group_menu_open
+            || self.priority_menu_open
+            || self.sidebar_menu.is_some()
+        {
             root = root.child(
                 div()
                     .id("menu-scrim")
@@ -3909,8 +4016,10 @@ impl Render for FlowlistApp {
                         cx.listener(|this, _, _, cx| {
                             this.sort_closed_on_up = this.sort_menu_open;
                             this.group_closed_on_up = this.group_menu_open;
+                            this.priority_closed_on_up = this.priority_menu_open;
                             this.sort_menu_open = false;
                             this.group_menu_open = false;
+                            this.priority_menu_open = false;
                             this.sidebar_menu = None;
                             cx.notify();
                         }),
@@ -3920,6 +4029,7 @@ impl Render for FlowlistApp {
                         cx.listener(|this, _, _, cx| {
                             this.sort_menu_open = false;
                             this.group_menu_open = false;
+                            this.priority_menu_open = false;
                             this.sidebar_menu = None;
                             cx.notify();
                         }),
@@ -3933,31 +4043,44 @@ impl Render for FlowlistApp {
         // measured on the previous frame, so their hitboxes are exactly where
         // they paint.
         let viewport = self.window_size.unwrap_or((1254.0, 1404.0));
-        if self.sort_menu_open {
-            if let Some(anchor) = self.sort_anchor.get() {
-                let (x, y) = menu_position(anchor, viewport, 160.0, 250.0);
-                root = root.child(
-                    div()
-                        .id("sort-menu-layer")
-                        .absolute()
-                        .left(px(x))
-                        .top(px(y))
-                        .child(self.render_sort_menu(cx)),
-                );
-            }
+        if self.sort_menu_open
+            && let Some(anchor) = self.sort_anchor.get()
+        {
+            let (x, y) = menu_position(anchor, viewport, 160.0, 250.0);
+            root = root.child(
+                div()
+                    .id("sort-menu-layer")
+                    .absolute()
+                    .left(px(x))
+                    .top(px(y))
+                    .child(self.render_sort_menu(cx)),
+            );
         }
-        if self.group_menu_open {
-            if let Some(anchor) = self.group_anchor.get() {
-                let (x, y) = menu_position(anchor, viewport, 160.0, 250.0);
-                root = root.child(
-                    div()
-                        .id("group-menu-layer")
-                        .absolute()
-                        .left(px(x))
-                        .top(px(y))
-                        .child(self.render_group_menu(cx)),
-                );
-            }
+        if self.group_menu_open
+            && let Some(anchor) = self.group_anchor.get()
+        {
+            let (x, y) = menu_position(anchor, viewport, 160.0, 250.0);
+            root = root.child(
+                div()
+                    .id("group-menu-layer")
+                    .absolute()
+                    .left(px(x))
+                    .top(px(y))
+                    .child(self.render_group_menu(cx)),
+            );
+        }
+        if self.priority_menu_open
+            && let Some(anchor) = self.priority_anchor.get()
+        {
+            let (x, y) = menu_position(anchor, viewport, 150.0, 160.0);
+            root = root.child(
+                div()
+                    .id("priority-menu-layer")
+                    .absolute()
+                    .left(px(x))
+                    .top(px(y))
+                    .child(self.render_priority_menu(cx)),
+            );
         }
         if self.toast.is_some() {
             root = root.child(self.render_toast(cx));

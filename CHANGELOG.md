@@ -25,6 +25,17 @@
   New Project sheet and cycled from the project banner.
 - Sort and Group header chips now open a list of every option instead of
   cycling blindly. `Esc` closes the menu.
+- The Priority header chip now opens the same kind of menu (All priorities,
+  High, Medium, Low) instead of cycling through the filter.
+- Project creation sheets no longer show a second close control in the top
+  corner; their footer already has Cancel.
+- Tooltips wait about five seconds before appearing, and clicking a button
+  keeps its tooltip quiet until the pointer leaves the button. Hovering again
+  later restores the normal behaviour.
+- The **Add task** action moved to the title bar as a labelled plus button,
+  so it is available in every view. The content header no longer carries it,
+  and the search field narrows when long Sort/Group labels would otherwise
+  push the rightmost chip under the inspector.
 - Sort and Group menus open directly under their chip, stay above the task
   list, and close on any click outside. The outside-click scrim now closes on
   mouse-up, so the menu item under the pointer still receives its click.
@@ -74,7 +85,9 @@
 - **Trash** is a ninth built-in perspective. Delete moves tasks and their
   subtrees to Trash; `r` restores them, Delete forever purges them, and
   Settings controls auto-delete after a retention period (`0` keeps forever).
-  The automatic sweep runs as a normal command and is undoable.
+  The automatic sweep runs as a normal command and is undoable. The Trash
+  header has a **Select all** button, and `⌘A` selects every trashed task, so
+  the whole bin can be restored or purged in one action.
 - **Priorities**: optional High / Medium / Low, shown as a coloured mark on
   rows, editable in the inspector, filterable from every view, and available
   as sidebar rows plus CLI (`--priority`) and MCP fields.

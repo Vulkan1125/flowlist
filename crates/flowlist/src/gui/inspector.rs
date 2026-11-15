@@ -9,6 +9,7 @@ use flowlist_core::model::{Priority, ProjectIcon, ProjectStatus};
 use flowlist_core::time::{format_duration, human_date, now};
 
 use super::icons::Icon;
+use super::widgets::TipExt;
 use super::{EditField, FlowlistApp, View, icons, widgets};
 
 impl FlowlistApp {
@@ -52,7 +53,7 @@ impl FlowlistApp {
                         .cursor_pointer()
                         .text_color(theme.text_faint)
                         .hover(|style| style.text_color(theme.text))
-                        .tooltip(widgets::tip(theme, "Close inspector (i)"))
+                        .flow_tip(self, cx, theme, "Close inspector (i)")
                         .child(icons::icon(Icon::Close, 14.0, theme.text_faint))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.show_inspector = false;
@@ -201,14 +202,16 @@ impl FlowlistApp {
                             } else {
                                 theme.text_faint
                             })
-                            .tooltip(widgets::tip(
+                            .flow_tip(
+                                self,
+                                cx,
                                 theme,
                                 if flagged {
                                     "Unflag task (!)"
                                 } else {
                                     "Flag task (!)"
                                 },
-                            ))
+                            )
                             .child(icons::icon(
                                 Icon::Flagged,
                                 12.0,
@@ -273,10 +276,12 @@ impl FlowlistApp {
                                         .text_color(theme.text_dim)
                                         .cursor_pointer()
                                         .hover(|style| style.bg(theme.hover))
-                                        .tooltip(widgets::tip(
+                                        .flow_tip(
+                                            self,
+                                            cx,
                                             theme,
                                             "Turn this task and its subtasks into a project",
-                                        ))
+                                        )
                                         .child("To project")
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.convert_selected_to_project(cx)
@@ -575,14 +580,16 @@ impl FlowlistApp {
                     div()
                         .id(super::sid(format!("checklist-toggle:{item_id}")))
                         .flex_shrink_0()
-                        .tooltip(widgets::tip(
+                        .flow_tip(
+                            self,
+                            cx,
                             theme,
                             if *completed {
                                 "Mark step incomplete"
                             } else {
                                 "Mark step complete"
                             },
-                        ))
+                        )
                         .child(widgets::checkbox(theme, *completed, theme.accent))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
@@ -638,7 +645,7 @@ impl FlowlistApp {
                     .opacity(if index == 0 { 0.3 } else { 0.8 })
                     .cursor_pointer()
                     .hover(|style| style.text_color(theme.text).opacity(1.0))
-                    .tooltip(widgets::tip(theme, "Move step up"))
+                    .flow_tip(self, cx, theme, "Move step up")
                     .child(icons::icon(Icon::ArrowUp, 12.0, theme.text_faint))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
@@ -662,7 +669,7 @@ impl FlowlistApp {
                     .opacity(if index + 1 >= items.len() { 0.3 } else { 0.8 })
                     .cursor_pointer()
                     .hover(|style| style.text_color(theme.text).opacity(1.0))
-                    .tooltip(widgets::tip(theme, "Move step down"))
+                    .flow_tip(self, cx, theme, "Move step down")
                     .child(icons::icon(Icon::ArrowDown, 12.0, theme.text_faint))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
@@ -683,7 +690,7 @@ impl FlowlistApp {
                     .text_color(theme.text_faint)
                     .cursor_pointer()
                     .hover(|style| style.text_color(theme.danger))
-                    .tooltip(widgets::tip(theme, "Delete step"))
+                    .flow_tip(self, cx, theme, "Delete step")
                     .child(icons::icon(Icon::Close, 12.0, theme.text_faint))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
@@ -820,7 +827,7 @@ impl FlowlistApp {
                                     .id(super::sid(format!("remove-tag:{}", remove)))
                                     .cursor_pointer()
                                     .hover(|style| style.text_color(theme.danger))
-                                    .tooltip(widgets::tip(theme, "Remove tag"))
+                                    .flow_tip(self, cx, theme, "Remove tag")
                                     .child(icons::icon(Icon::Close, 12.0, theme.text_faint))
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if let Some(id) = this.selected_one() {
@@ -1013,7 +1020,7 @@ impl FlowlistApp {
                                 theme.clear
                             })
                             .cursor_pointer()
-                            .tooltip(widgets::tip(theme, "Change the project icon"))
+                            .flow_tip(self, cx, theme, "Change the project icon")
                             .hover(|style| style.bg(theme.hover))
                             .child(widgets::icon_for_project(icon, 14.0, theme.text_dim))
                             .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
@@ -1052,7 +1059,7 @@ impl FlowlistApp {
                             })
                             .bg(if active { theme.selection } else { theme.clear })
                             .cursor_pointer()
-                            .tooltip(widgets::tip(theme, candidate.label()))
+                            .flow_tip(self, cx, theme, candidate.label())
                             .hover(|style| style.bg(theme.hover))
                             .child(widgets::icon_for_project(
                                 candidate,
@@ -1218,7 +1225,7 @@ impl FlowlistApp {
                             .overflow_hidden()
                             .text_xs()
                             .text_color(theme.text)
-                            .tooltip(widgets::tip(theme, path.clone()))
+                            .flow_tip(self, cx, theme, path.clone())
                             .child(name),
                     )
                     .child(
@@ -1227,7 +1234,7 @@ impl FlowlistApp {
                             .text_xs()
                             .text_color(theme.accent)
                             .cursor_pointer()
-                            .tooltip(widgets::tip(theme, "Open this file"))
+                            .flow_tip(self, cx, theme, "Open this file")
                             .child("open")
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.open_attachment(open_path.clone());
@@ -1241,7 +1248,7 @@ impl FlowlistApp {
                             .text_color(theme.text_faint)
                             .cursor_pointer()
                             .hover(|style| style.text_color(theme.danger))
-                            .tooltip(widgets::tip(theme, "Remove this attachment"))
+                            .flow_tip(self, cx, theme, "Remove this attachment")
                             .child("×")
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.remove_attachment(remove_path.clone(), cx)
@@ -1262,10 +1269,7 @@ impl FlowlistApp {
             .text_xs()
             .text_color(theme.text_dim)
             .cursor_pointer()
-            .tooltip(widgets::tip(
-                theme,
-                "Choose files with the macOS file picker",
-            ))
+            .flow_tip(self, cx, theme, "Choose files with the macOS file picker")
             .hover(|style| style.bg(theme.hover))
             .child(icons::icon(Icon::Paperclip, 12.0, theme.text_faint))
             .child(if attachments.is_empty() {

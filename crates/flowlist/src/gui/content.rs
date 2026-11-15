@@ -7,12 +7,15 @@ use gpui::{AnyElement, Context, IntoElement, MouseButton, Window, div, prelude::
 
 use flowlist_core::command::{Command, ProjectPatch};
 use flowlist_core::ids::{ProjectId, TaskId};
-use flowlist_core::model::{BuiltinPerspective, GroupBy, ProjectStatus, RepeatRule, SortBy};
+use flowlist_core::model::{
+    BuiltinPerspective, GroupBy, Priority, ProjectStatus, RepeatRule, SortBy,
+};
 use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
 
 use super::drag::{DragTask, ghost};
 use super::icons::{self, Icon};
+use super::widgets::TipExt;
 use super::{
     EditField, FlowlistApp, FocusArea, View, group_label, group_slug, sort_label, sort_slug,
     widgets,
@@ -189,10 +192,12 @@ impl FlowlistApp {
                         .cursor_pointer()
                         .hover(|style| style.bg(theme.hover))
                         .when(is_selected, |this| this.bg(theme.selection))
-                        .tooltip(widgets::tip(
+                        .flow_tip(
+                            self,
+                            cx,
                             theme,
                             format!("Show tasks on {}", date.format("%b %-d")),
-                        ))
+                        )
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if this.forecast_date == Some(date) {
                                 this.forecast_date = None;
@@ -284,7 +289,7 @@ impl FlowlistApp {
                             .child(
                                 div()
                                     .id("forecast-prev")
-                                    .tooltip(widgets::tip(theme, "Previous month"))
+                                    .flow_tip(self, cx, theme, "Previous month")
                                     .child(widgets::button(theme, "‹", false))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.forecast_shift_month(-1);
@@ -294,7 +299,7 @@ impl FlowlistApp {
                             .child(
                                 div()
                                     .id("forecast-today")
-                                    .tooltip(widgets::tip(theme, "Jump to this month"))
+                                    .flow_tip(self, cx, theme, "Jump to this month")
                                     .child(widgets::button(theme, "Today", false))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         let today = local_date(now());
@@ -309,7 +314,7 @@ impl FlowlistApp {
                             .child(
                                 div()
                                     .id("forecast-next")
-                                    .tooltip(widgets::tip(theme, "Next month"))
+                                    .flow_tip(self, cx, theme, "Next month")
                                     .child(widgets::button(theme, "›", false))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.forecast_shift_month(1);
@@ -373,13 +378,14 @@ impl FlowlistApp {
                     .child(
                         div()
                             .flex()
-                            .flex_shrink_0()
+                            .min_w_0()
                             .items_center()
                             .gap_2()
                             .child(
                                 div()
                                     .id("search")
                                     .w(px(210.))
+                                    .min_w(px(120.))
                                     .child(widgets::text_field(
                                         theme,
                                         &self.search,
@@ -396,10 +402,11 @@ impl FlowlistApp {
                                 this.child({
                                     let anchor = self.sort_anchor.clone();
                                     div()
+                                        .flex_shrink_0()
                                         .child(
                                             div()
                                                 .id("sort")
-                                                .tooltip(widgets::tip(theme, "Pick a sort order"))
+                                                .flow_tip(self, cx, theme, "Pick a sort order")
                                                 .child(widgets::toggle_chip(
                                                     theme,
                                                     format!("Sort · {}", sort_label(self.sort)),
@@ -411,6 +418,7 @@ impl FlowlistApp {
                                                     this.sort_menu_open =
                                                         !this.sort_menu_open && !suppress;
                                                     this.group_menu_open = false;
+                                                    this.priority_menu_open = false;
                                                     this.sidebar_menu = None;
                                                     cx.notify();
                                                 })),
@@ -424,10 +432,11 @@ impl FlowlistApp {
                                 .child({
                                     let anchor = self.group_anchor.clone();
                                     div()
+                                        .flex_shrink_0()
                                         .child(
                                             div()
                                                 .id("group")
-                                                .tooltip(widgets::tip(theme, "Pick a grouping"))
+                                                .flow_tip(self, cx, theme, "Pick a grouping")
                                                 .child(widgets::toggle_chip(
                                                     theme,
                                                     format!("Group · {}", group_label(self.group)),
@@ -440,6 +449,7 @@ impl FlowlistApp {
                                                     this.group_menu_open =
                                                         !this.group_menu_open && !suppress;
                                                     this.sort_menu_open = false;
+                                                    this.priority_menu_open = false;
                                                     this.sidebar_menu = None;
                                                     cx.notify();
                                                 })),
@@ -453,10 +463,13 @@ impl FlowlistApp {
                                 .child(
                                     div()
                                         .id("only-available")
-                                        .tooltip(widgets::tip(
+                                        .flex_shrink_0()
+                                        .flow_tip(
+                                            self,
+                                            cx,
                                             theme,
                                             "Show only the next available task (First Available)",
-                                        ))
+                                        )
                                         .child(widgets::toggle_chip(
                                             theme,
                                             "Available",
@@ -466,36 +479,56 @@ impl FlowlistApp {
                                             this.toggle_only_available(cx)
                                         })),
                                 )
-                                .child(
+                                .child({
+                                    let anchor = self.priority_anchor.clone();
                                     div()
-                                        .id("priority-filter")
-                                        .tooltip(widgets::tip(
-                                            theme,
-                                            "Filter every view by priority",
-                                        ))
-                                        .child(widgets::toggle_chip(
-                                            theme,
-                                            format!(
-                                                "Priority · {}",
-                                                self.priority_filter
-                                                    .map(|priority| priority.label().to_string())
-                                                    .unwrap_or_else(|| "All".to_string())
-                                            ),
-                                            self.priority_filter.is_some(),
-                                        ))
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.cycle_priority_filter(cx)
-                                        })),
-                                )
+                                        .flex_shrink_0()
+                                        .child(
+                                            div()
+                                                .id("priority-filter")
+                                                .flow_tip(
+                                                    self,
+                                                    cx,
+                                                    theme,
+                                                    "Filter every view by priority",
+                                                )
+                                                .child(widgets::toggle_chip(
+                                                    theme,
+                                                    format!(
+                                                        "Priority · {}",
+                                                        self.priority_filter
+                                                            .map(|priority| priority
+                                                                .label()
+                                                                .to_string())
+                                                            .unwrap_or_else(|| "All".to_string())
+                                                    ),
+                                                    self.priority_filter.is_some(),
+                                                ))
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    let suppress = std::mem::take(
+                                                        &mut this.priority_closed_on_up,
+                                                    );
+                                                    this.priority_menu_open =
+                                                        !this.priority_menu_open && !suppress;
+                                                    this.sort_menu_open = false;
+                                                    this.group_menu_open = false;
+                                                    this.sidebar_menu = None;
+                                                    cx.notify();
+                                                })),
+                                        )
+                                        .on_children_prepainted(move |bounds, _, _| {
+                                            if let Some(bounds) = bounds.first() {
+                                                anchor.set(Some(*bounds));
+                                            }
+                                        })
+                                })
                             })
                             .when(shows_completed && !is_trash, |this| {
                                 this.child(
                                     div()
                                         .id("show-completed")
-                                        .tooltip(widgets::tip(
-                                            theme,
-                                            "Show or hide completed tasks",
-                                        ))
+                                        .flex_shrink_0()
+                                        .flow_tip(self, cx, theme, "Show or hide completed tasks")
                                         .child(widgets::toggle_chip(
                                             theme,
                                             "Completed",
@@ -509,8 +542,19 @@ impl FlowlistApp {
                             .when(is_trash, |this| {
                                 this.child(
                                     div()
+                                        .id("trash-select-all")
+                                        .flex_shrink_0()
+                                        .flow_tip(self, cx, theme, "Select every task in Trash")
+                                        .child(widgets::button(theme, "Select all", false))
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| this.select_all_trash(cx)),
+                                        ),
+                                )
+                                .child(
+                                    div()
                                         .id("trash-restore")
-                                        .tooltip(widgets::tip(theme, "Restore selected tasks"))
+                                        .flex_shrink_0()
+                                        .flow_tip(self, cx, theme, "Restore selected tasks")
                                         .child(widgets::button(theme, "Restore", false))
                                         .on_click(
                                             cx.listener(|this, _, _, cx| this.restore_selected(cx)),
@@ -519,31 +563,17 @@ impl FlowlistApp {
                                 .child(
                                     div()
                                         .id("trash-purge")
-                                        .tooltip(widgets::tip(
+                                        .flex_shrink_0()
+                                        .flow_tip(
+                                            self,
+                                            cx,
                                             theme,
                                             "Permanently delete selected tasks",
-                                        ))
+                                        )
                                         .child(widgets::button(theme, "Delete forever", false))
                                         .on_click(
                                             cx.listener(|this, _, _, cx| this.purge_selected(cx)),
                                         ),
-                                )
-                            })
-                            .when(!is_trash, |this| {
-                                this.child(
-                                    div()
-                                        .id("add-task")
-                                        .child(widgets::button_with_icon(
-                                            theme,
-                                            Icon::Plus,
-                                            "Task",
-                                            true,
-                                        ))
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.focus = super::FocusArea::Capture;
-                                            this.capture.end(false);
-                                            cx.notify();
-                                        })),
                                 )
                             }),
                     ),
@@ -685,6 +715,66 @@ impl FlowlistApp {
                         this.child(icons::icon(Icon::Check, 11.0, theme.accent))
                     })
                     .on_click(cx.listener(move |this, _, _, cx| this.choose_group(option, cx))),
+            );
+        }
+        menu
+    }
+
+    pub(super) fn render_priority_menu(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let theme = self.theme;
+        let mut menu = div()
+            .min_w(px(140.))
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg();
+        let options: [Option<Priority>; 4] = [
+            None,
+            Some(Priority::High),
+            Some(Priority::Medium),
+            Some(Priority::Low),
+        ];
+        for option in options {
+            let selected = self.priority_filter == option;
+            let (slug, label) = match option {
+                None => ("all", "All priorities".to_string()),
+                Some(priority) => (priority.slug(), priority.label().to_string()),
+            };
+            menu = menu.child(
+                div()
+                    .id(super::sid(format!("priority-option:{slug}")))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if selected {
+                        theme.accent
+                    } else {
+                        theme.text_dim
+                    })
+                    .bg(if selected {
+                        theme.selection
+                    } else {
+                        theme.clear
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(label)
+                    .when(selected, |this| {
+                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+                    })
+                    .on_click(
+                        cx.listener(move |this, _, _, cx| this.choose_priority_filter(option, cx)),
+                    ),
             );
         }
         menu
@@ -973,14 +1063,16 @@ impl FlowlistApp {
             .child(
                 div()
                     .id(super::sid(format!("check:{}", checkbox_id)))
-                    .tooltip(widgets::tip(
+                    .flow_tip(
+                        self,
+                        cx,
                         theme,
                         if completed {
                             "Reopen task (x)"
                         } else {
                             "Complete task (x)"
                         },
-                    ))
+                    )
                     .child(widgets::checkbox(
                         theme,
                         completed,
@@ -996,14 +1088,16 @@ impl FlowlistApp {
                     .id(super::sid(format!("disclosure:{}", disclosure_id)))
                     .w(px(12.))
                     .text_color(theme.text_faint)
-                    .tooltip(widgets::tip(
+                    .flow_tip(
+                        self,
+                        cx,
                         theme,
                         if expanded {
                             "Collapse subtasks"
                         } else {
                             "Expand subtasks"
                         },
-                    ))
+                    )
                     .child(icons::icon(
                         if expanded {
                             Icon::ChevronDown
@@ -1033,14 +1127,16 @@ impl FlowlistApp {
                     .opacity(if flagged { 1.0 } else { 0.35 })
                     .cursor_pointer()
                     .hover(|style| style.opacity(1.0))
-                    .tooltip(widgets::tip(
+                    .flow_tip(
+                        self,
+                        cx,
                         theme,
                         if flagged {
                             "Unflag task (!)"
                         } else {
                             "Flag task (!)"
                         },
-                    ))
+                    )
                     .child(icons::icon(
                         Icon::Flagged,
                         12.0,
@@ -1064,10 +1160,7 @@ impl FlowlistApp {
                         .h(px(15.))
                         .rounded_full()
                         .bg(super::sidebar::priority_color(theme, priority))
-                        .tooltip(widgets::tip(
-                            theme,
-                            format!("{} priority", priority.label()),
-                        )),
+                        .flow_tip(self, cx, theme, format!("{} priority", priority.label())),
                 )
             })
             .child(
@@ -1106,13 +1199,15 @@ impl FlowlistApp {
                                 .gap_1()
                                 .text_xs()
                                 .text_color(theme.text_faint)
-                                .tooltip(widgets::tip(
+                                .flow_tip(
+                                    self,
+                                    cx,
                                     theme,
                                     format!(
                                         "{attachment_count} attachment{}",
                                         if attachment_count == 1 { "" } else { "s" }
                                     ),
-                                ))
+                                )
                                 .child(icons::icon(Icon::Paperclip, 11.0, theme.text_faint))
                                 .child(attachment_count.to_string()),
                         )
@@ -1257,7 +1352,7 @@ impl FlowlistApp {
                         div()
                             .id("project-kind")
                             .cursor_pointer()
-                            .tooltip(widgets::tip(theme, "Click to change the project type"))
+                            .flow_tip(self, cx, theme, "Click to change the project type")
                             .child(widgets::chip(
                                 theme,
                                 project.effective_kind().label(),

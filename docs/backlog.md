@@ -93,6 +93,20 @@ landed and verified.
 - [x] Typing an unknown project path asks before creating the project, and the
       project picker stays closed until the user types.
 - [x] New projects use the folder icon by default.
+- [x] Sort, Group and Priority chips all open anchored option menus; Escape,
+      an outside click or the same chip closes them, and only one is open at a
+      time.
+- [x] Project creation sheets omit the corner close control because the footer
+      already offers Cancel.
+- [x] Tooltips stay hidden for about five seconds, and a click mutes the
+      button's tooltip until the pointer leaves. Hovering again later restores
+      the normal behaviour.
+- [x] Trash has a **Select all** button and `⌘A`, so the whole bin can be
+      restored or purged in one action.
+- [x] The **Add task** action moved to the title bar as a labelled plus button
+      that works from any view. Removing it from the content header lets the
+      search field shrink so long Sort/Group labels no longer clip the right
+      chip under the inspector.
 
 ## OmniFocus gap research (first pass, November 2026)
 

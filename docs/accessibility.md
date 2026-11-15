@@ -14,6 +14,7 @@ them, so the keyboard routes below are the primary way to reach them.
 
 | Control | Tooltip | Keyboard |
 | --- | --- | --- |
+| Add task | Add a task (⌃⌥Space) | `⌃⌥Space` from anywhere; `n` or `⌘N` in a capture view |
 | Undo arrow | Undo (⌘Z) | `⌘Z` or `u` |
 | Redo arrow | Redo (⇧⌘Z) | `⇧⌘Z` or `Ctrl-r` |
 | Question mark | Keyboard and mouse help (?) | `?` |
@@ -83,10 +84,11 @@ Restore and Delete forever buttons. Deleting keeps the next row selected.
 
 ## Tooltip coverage
 
-Tooltips use GPUI's built-in `.tooltip()` with its hover delay (about 500 ms).
-They are attached to every icon-only control:
+Tooltips stay hidden for roughly five seconds after hover begins, and clicking
+a button mutes its tooltip until the pointer leaves the button. They are
+attached to every icon-only control:
 
-- the six header buttons;
+- the labelled Add task button and the six header icon buttons;
 - sidebar pencils, × buttons, disclosure arrows and the `⌖` location button;
 - task completion circles, flags and subtask disclosures;
 - checklist tick boxes, reorder arrows and delete buttons;

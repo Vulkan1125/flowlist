@@ -51,11 +51,16 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "blur": "light",
   "traffic_lights": "hidden",
   "modal_theme": null,
+  "modal_close": true,
   "sort_menu": false,
   "group_menu": false,
+  "priority_menu": false,
   "sidebar_menu": "project:01M79...",
   "sort_anchor": true,
-  "group_anchor": true
+  "group_anchor": true,
+  "priority_anchor": true,
+  "tip": "Show only the next available task (First Available)",
+  "tip_muted": null
 }
 ```
 
@@ -66,13 +71,16 @@ inspector field being edited (`Title`, `Notes`, `Project`, …) and is null
 otherwise. `draft` is true while a
 task created with `o`/`O` is still being titled, and `suggestions` counts the
 rows in the open project picker. `traffic_lights` reports
-whether the AppKit window buttons were hidden. `sort_menu` and `group_menu`
-say whether the header menus are open; `sidebar_menu` names the row a
-right-click menu belongs to (`builtin:inbox`, `project:<id>`, `tag:<id>`, …)
-or is null. `sort_anchor` and `group_anchor` confirm the chip bounds needed to
-position those menus were measured. The file is rewritten only when one of
-those values changes, and the hook is inert unless the variable is set. It does
-not contain task text, notes or the library itself.
+whether the AppKit window buttons were hidden. `sort_menu`, `group_menu` and
+`priority_menu` say whether the header menus are open; `sidebar_menu` names the
+row a right-click menu belongs to (`builtin:inbox`, `project:<id>`, `tag:<id>`,
+…) or is null. `sort_anchor`, `group_anchor` and `priority_anchor` confirm the
+chip bounds needed to position those menus were measured. `modal_close` is
+false for sheets that deliberately omit the corner close control, such as
+project creation. `tip` names the tooltip under the pointer and `tip_muted` the
+one a click silenced until the pointer leaves. The file is rewritten only when
+one of those values changes, and the hook is inert unless the variable is set.
+It does not contain task text, notes or the library itself.
 
 ## Why coordinates
 

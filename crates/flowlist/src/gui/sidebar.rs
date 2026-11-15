@@ -9,6 +9,7 @@ use flowlist_core::model::{BuiltinPerspective, Priority, ProjectStatus};
 use super::drag::DragTask;
 use super::icons::{self, Icon};
 use super::modals;
+use super::widgets::TipExt;
 use super::{FlowlistApp, FocusArea, View, widgets};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,7 +83,7 @@ impl FlowlistApp {
             .text_color(theme.text_faint)
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.text).bg(theme.hover))
-            .tooltip(widgets::tip(theme, "Rename"))
+            .flow_tip(self, cx, theme, "Rename")
             .child(icons::icon(Icon::Pencil, 12.0, theme.text_faint))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
@@ -114,7 +115,7 @@ impl FlowlistApp {
             .text_color(theme.text_faint)
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.text).bg(theme.hover))
-            .tooltip(widgets::tip(theme, "Edit perspective"))
+            .flow_tip(self, cx, theme, "Edit perspective")
             .child(icons::icon(Icon::Pencil, 12.0, theme.text_faint))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
@@ -151,14 +152,16 @@ impl FlowlistApp {
             })
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.text).bg(theme.hover))
-            .tooltip(widgets::tip(
+            .flow_tip(
+                self,
+                cx,
                 theme,
                 if located {
                     "Change location"
                 } else {
                     "Set location"
                 },
-            ))
+            )
             .child(icons::icon(
                 Icon::Crosshair,
                 12.0,
@@ -197,7 +200,7 @@ impl FlowlistApp {
             .text_color(theme.text_faint)
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.danger).bg(theme.hover))
-            .tooltip(widgets::tip(theme, "Delete"))
+            .flow_tip(self, cx, theme, "Delete")
             .child(icons::icon(Icon::Close, 12.0, theme.danger))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
@@ -411,6 +414,7 @@ impl FlowlistApp {
         self.focus = FocusArea::Sidebar;
         self.sort_menu_open = false;
         self.group_menu_open = false;
+        self.priority_menu_open = false;
         self.sidebar_menu = Some(SidebarMenu { target, position });
         cx.notify();
     }
@@ -1181,14 +1185,16 @@ impl FlowlistApp {
                                 .id(super::sid(format!("folder-toggle:{id}")))
                                 .w(px(14.))
                                 .text_color(self.theme.text_faint)
-                                .tooltip(widgets::tip(
+                                .flow_tip(
+                                    self,
+                                    cx,
                                     self.theme,
                                     if open {
                                         "Collapse folder"
                                     } else {
                                         "Expand folder"
                                     },
-                                ))
+                                )
                                 .child(icons::icon(
                                     if open {
                                         Icon::ChevronDown
@@ -1332,10 +1338,12 @@ impl FlowlistApp {
                                 .id(super::sid(format!("project-count:{id}")))
                                 .text_xs()
                                 .text_color(self.theme.text_faint)
-                                .tooltip(widgets::tip(
+                                .flow_tip(
+                                    self,
+                                    cx,
                                     self.theme,
                                     format!("{open} open · {done} of {total} done"),
-                                ))
+                                )
                                 .child(open.to_string()),
                         )
                         .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
@@ -1433,10 +1441,12 @@ impl FlowlistApp {
                         .id(super::sid(format!("tag-toggle:{tag}")))
                         .w(px(12.))
                         .text_color(self.theme.text_faint)
-                        .tooltip(widgets::tip(
+                        .flow_tip(
+                            self,
+                            cx,
                             self.theme,
                             if open { "Collapse tag" } else { "Expand tag" },
-                        ))
+                        )
                         .child(icons::icon(
                             if open {
                                 Icon::ChevronDown

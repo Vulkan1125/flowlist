@@ -51,6 +51,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Sorting: manual, due, defer, name, flagged, estimate, created, completed
 - [x] Grouping: project, folder, tag, due, defer, flagged, estimate
 - [x] Sort and Group menus that list every option instead of cycling
+- [x] Priority menu with All priorities / High / Medium / Low, matching the
+      Sort and Group chips
 - [x] First Available filter (only the next actionable row)
 - [x] Per-perspective sort, grouping, completed and availability memory
 
@@ -95,8 +97,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 ## GUI
 
 - [x] Full-height glass window with a blended header, persistent sidebar
-      and optional inspector. The macOS traffic lights are hidden and the
-      header shows only the app name.
+      and optional inspector. The macOS traffic lights are hidden; the
+      header shows the app name and an **Add task** button with a plus icon,
+      which focuses capture from any view.
 - [x] Forecast month calendar above the list: Monday-first grid, previous /
       Today / next controls and an accent bar under dates with a task.
       Clicking a date filters the list to that day; click again or press `\`
@@ -107,7 +110,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Task capture with quick-entry syntax
 - [x] Multi-select, range select, keyboard navigation
 - [x] Complete/reopen, flag/unflag, delete, undo/redo and post-delete focus
-- [x] Trash restore / delete forever, with retention set in Settings
+- [x] Trash restore / delete forever, with retention set in Settings, plus a
+      **Select all** button and `⌘A` for one-step restore or purge
 - [x] Priority chips in the inspector and a priority filter in every view
 - [x] Inline title/notes/tag/project/date/estimate/repeat editing
 - [x] Inspector with checklist add/toggle/rename/reorder/delete and progress
@@ -211,8 +215,9 @@ shortcut set.
 
 ### Delayed tooltips for icon-only controls
 
-- One reusable tooltip component with GPUI's built-in hover delay (500 ms) and
-  immediate dismissal on leave, click or scroll.
+- One reusable tooltip component that stays hidden for roughly five seconds
+  after hover begins. Clicking the button mutes its tooltip until the pointer
+  leaves; hovering again later shows it normally.
 - Applied to all icon-only controls: sidebar pencil and ×, completion circles,
   flag toggles, checklist add/toggle/reorder/delete, project status chips,
   disclosure arrows, toolbar and modal close buttons.
