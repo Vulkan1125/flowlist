@@ -112,8 +112,11 @@ landed and verified.
       tight and reopens on focus or while a query is active; a wide window or
       full screen keeps the full field. A view name that cannot fit beside the
       controls is omitted rather than clipped to a few letters.
-- [x] Long project, folder, tag, perspective, review-card and inspector names
-      stay on one line and clip at the edge instead of wrapping mid-word.
+- [x] Long project, folder, tag, perspective and review-card names end with an
+      ellipsis when they do not fit, instead of stopping mid-word. The inspector
+      wraps the full project name so it is never cut off.
+- [x] Deleting a project from the sidebar asks for confirmation in a sheet
+      that names the project; Enter confirms and Esc cancels.
 
 ## OmniFocus gap research (first pass, November 2026)
 

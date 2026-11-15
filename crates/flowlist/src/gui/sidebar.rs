@@ -204,12 +204,19 @@ impl FlowlistApp {
             .child(icons::icon(Icon::Close, 12.0, theme.danger))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
-                this.execute(command.clone());
-                if this.view == view {
-                    this.view = View::Builtin(BuiltinPerspective::Inbox);
+                if let flowlist_core::command::Command::DeleteProject { id } = &command {
+                    // A project takes its whole outline to Trash, so the
+                    // sidebar asks before removing it.
+                    let modal = modals::Modal::delete_project(this, id.clone());
+                    this.open_modal(modal, cx);
+                } else {
+                    this.execute(command.clone());
+                    if this.view == view {
+                        this.view = View::Builtin(BuiltinPerspective::Inbox);
+                    }
+                    this.save_session();
+                    cx.notify();
                 }
-                this.save_session();
-                cx.notify();
             }))
     }
     pub(super) fn sidebar_targets(&self) -> Vec<SidebarTarget> {
@@ -1114,14 +1121,7 @@ impl FlowlistApp {
                     .justify_center()
                     .child(icons::icon(Icon::Perspective, 14.0, icon_color)),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .child(row.name),
-            )
+            .child(div().flex_1().min_w_0().truncate().child(row.name))
             .child(self.edit_perspective_button(
                 format!("edit-perspective:{rename_id}"),
                 rename_id,
@@ -1228,14 +1228,7 @@ impl FlowlistApp {
                                     self.theme.text_faint,
                                 )),
                         )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .child(name),
-                        )
+                        .child(div().flex_1().min_w_0().truncate().child(name))
                         .child(self.rename_button(
                             format!("rename-folder:{rename_id}"),
                             modals::EntityRef::Folder(rename_id),
@@ -1329,8 +1322,7 @@ impl FlowlistApp {
                             div()
                                 .flex_1()
                                 .min_w_0()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
+                                .truncate()
                                 .child(project.name.clone()),
                         )
                         .child(self.rename_button(
@@ -1495,14 +1487,7 @@ impl FlowlistApp {
                             },
                         )),
                 )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .child(name),
-                )
+                .child(div().flex_1().min_w_0().truncate().child(name))
                 .when(
                     status != flowlist_core::model::TagStatus::Available,
                     |this| {

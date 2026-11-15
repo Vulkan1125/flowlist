@@ -41,8 +41,9 @@
   reopens on focus or while a query is active; a roomy window or full screen
   keeps the full field. If the view name cannot fit beside the controls it is
   left out entirely instead of being clipped to a few letters.
-- Long project, folder, tag, perspective, review-card and inspector names no
-  longer wrap onto a second line; they clip at the edge of their row.
+- Long project, folder, tag, perspective and review-card names end with an
+  ellipsis (…) when they do not fit, so it is clear there is more. The
+  inspector shows the project name in full and wraps it instead of cutting it.
 - Sort and Group menus open directly under their chip, stay above the task
   list, and close on any click outside. The outside-click scrim now closes on
   mouse-up, so the menu item under the pointer still receives its click.
@@ -53,7 +54,9 @@
   active row, and project rows gained a delete button.
 - Project deletion is an undoable command in the GUI, CLI (`project delete`)
   and MCP (`delete_project`). Deleting a project moves its tasks to Trash and
-  detaches the project from its folder.
+  detaches the project from its folder. The sidebar's × now opens a Delete
+  project sheet that names the project, so one click cannot remove it by
+  accident; Enter confirms and Esc cancels.
 - Typing an unknown `Folder / Project` path in the task inspector now asks
   before creating the project. Dismissing the prompt leaves the task alone.
 - The inspector's project picker only opens once you start typing, instead of

@@ -104,9 +104,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       Sort/Group/Filter chips share one row, while the subtitle sits on its own
       row. When the row is tight the search field folds to a magnifier and
       reopens on focus or while a query is active. A view name that cannot fit
-      beside the controls is omitted instead of clipped. Sidebar, review-card
-      and inspector names stay on one line and clip at the edge when a project,
-      folder, tag or perspective name is long.
+      beside the controls is omitted instead of clipped. Long sidebar and
+      review-card names end with an ellipsis, and the inspector wraps the full
+      project name instead of truncating it.
 - [x] Forecast month calendar above the list: Monday-first grid, previous /
       Today / next controls and an accent bar under dates with a task.
       Clicking a date filters the list to that day; click again or press `\`

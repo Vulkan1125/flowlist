@@ -41,6 +41,12 @@ pub enum Modal {
         task: TaskId,
         path: String,
     },
+    /// Deleting a project trashes everything inside it. The sheet names the
+    /// project and asks first; Undo still restores it in one step.
+    DeleteProject {
+        id: ProjectId,
+        name: String,
+    },
     NewFolder {
         name: TextBuffer,
     },
@@ -94,6 +100,17 @@ impl Modal {
             entity,
             name: TextBuffer::new(name),
         }
+    }
+
+    pub fn delete_project(app: &FlowlistApp, id: ProjectId) -> Self {
+        let name = app
+            .store
+            .db()
+            .projects
+            .get(&id)
+            .map(|project| project.name.clone())
+            .unwrap_or_default();
+        Modal::DeleteProject { id, name }
     }
 
     pub fn new_project(_app: &FlowlistApp) -> Self {
@@ -170,6 +187,7 @@ impl Modal {
             Modal::Rename { .. } => "Rename",
             Modal::NewProject { .. } => "New project",
             Modal::CreateProject { .. } => "Create project",
+            Modal::DeleteProject { .. } => "Delete project",
             Modal::NewFolder { .. } => "New folder",
             Modal::NewTag { .. } => "New tag",
             Modal::Perspective { .. } => "Perspective",
@@ -189,6 +207,9 @@ impl Modal {
             }
             Modal::CreateProject { .. } => {
                 "This path is not in the library yet. Create it and file the task there?"
+            }
+            Modal::DeleteProject { .. } => {
+                "Its tasks move to Trash. Undo restores the project and its tasks."
             }
             Modal::NewFolder { .. } => "Folders group projects. They can be nested.",
             Modal::NewTag { .. } => "Tags are contexts: places, tools or people.",
@@ -216,6 +237,7 @@ impl Modal {
     pub fn confirm_label(&self) -> &'static str {
         match self {
             Modal::CreateProject { .. } => "Create",
+            Modal::DeleteProject { .. } => "Delete",
             _ => "Save",
         }
     }
@@ -225,6 +247,7 @@ impl Modal {
             Modal::Rename { .. } => 1,
             Modal::NewProject { .. } => 2,
             Modal::CreateProject { .. } => 0,
+            Modal::DeleteProject { .. } => 0,
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
             Modal::Perspective { .. } => 1,
             Modal::Import { .. } => 1,
@@ -243,6 +266,7 @@ impl Modal {
                 _ => None,
             },
             Modal::CreateProject { .. } => None,
+            Modal::DeleteProject { .. } => None,
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&form.name),
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -279,6 +303,7 @@ impl Modal {
                 _ => None,
             },
             Modal::CreateProject { .. } => None,
+            Modal::DeleteProject { .. } => None,
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&mut form.name),
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -315,6 +340,7 @@ impl Modal {
                 _ => "",
             },
             Modal::CreateProject { .. } => "",
+            Modal::DeleteProject { .. } => "",
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
             Modal::Perspective { .. } => "Name",
             Modal::Import { .. } => "Library text",
@@ -448,6 +474,20 @@ impl FlowlistApp {
                         .child(path.clone()),
                 );
             }
+            if let Modal::DeleteProject { name, .. } = modal {
+                body = body.child(
+                    div()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.danger)
+                        .bg(theme.field)
+                        .text_sm()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.text)
+                        .child(name.clone()),
+                );
+            }
             for index in 0..field_count {
                 body = body.child(self.render_modal_field(index, cx));
             }
@@ -492,7 +532,11 @@ impl FlowlistApp {
                         div()
                             .text_xs()
                             .text_color(theme.text_faint)
-                            .child("Esc close · ⇥ next field"),
+                            .child(if field_count > 0 {
+                                "Esc close · ⇥ next field"
+                            } else {
+                                "Esc close"
+                            }),
                     )
                     .child(
                         div()

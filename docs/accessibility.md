@@ -88,6 +88,9 @@ Trash is an ordinary perspective in the same keyboard model. `Delete` moves
 selected tasks to Trash everywhere except inside Trash, where it permanently
 deletes them; `r` restores the selection, and the header exposes labelled
 Restore and Delete forever buttons. Deleting keeps the next row selected.
+The × on a sidebar project opens a Delete project sheet that names the project
+and explains that its tasks move to Trash. Enter confirms, Esc cancels, and
+`⌘Z` still restores everything in one step.
 
 ## Tooltip coverage
 

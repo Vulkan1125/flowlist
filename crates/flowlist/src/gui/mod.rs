@@ -1971,6 +1971,15 @@ impl FlowlistApp {
                     },
                 });
             }
+            modals::Modal::DeleteProject { id, .. } => {
+                self.execute(Command::DeleteProject { id: id.clone() });
+                if self.view == View::Project(id.clone()) {
+                    self.view = View::Builtin(BuiltinPerspective::Inbox);
+                    self.selected.clear();
+                    self.anchor = None;
+                }
+                self.save_session();
+            }
             modals::Modal::NewFolder { name } => {
                 let name = name.text().trim().to_string();
                 if name.is_empty() {
