@@ -1556,7 +1556,8 @@ impl FlowlistApp {
                                 div()
                                     .flex_1()
                                     .min_w_0()
-                                    .truncate()
+                                    .line_clamp(1)
+                                    .text_ellipsis()
                                     .font_weight(gpui::FontWeight::SEMIBOLD)
                                     .child(project.name.clone()),
                             )

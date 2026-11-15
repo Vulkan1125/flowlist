@@ -51,7 +51,8 @@
   delete, new child, project status, tag location and Empty Trash where they
   apply. The menu opens under the pointer and `Esc` closes it.
 - Sidebar rows reveal their edit and delete buttons on hover, including the
-  active row, and project rows gained a delete button.
+  selected row, which no longer pins them visible. Project rows gained a
+  delete button.
 - Project deletion is an undoable command in the GUI, CLI (`project delete`)
   and MCP (`delete_project`). Deleting a project moves its tasks to Trash and
   detaches the project from its folder. The sidebar's × now opens a Delete

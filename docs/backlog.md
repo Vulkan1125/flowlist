@@ -88,7 +88,8 @@ landed and verified.
       click is delivered.
 - [x] Every sidebar row has a right-click menu (Open, Rename, Delete, New
       child, status, tag location, Empty Trash).
-- [x] Sidebar rows reveal edit/delete on hover, including the active row.
+- [x] Sidebar rows reveal edit/delete on hover, including the selected row,
+      which no longer pins the icons visible.
 - [x] Undoable project deletion in the GUI, CLI and MCP; tasks move to Trash.
 - [x] Typing an unknown project path asks before creating the project, and the
       project picker stays closed until the user types.

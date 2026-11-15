@@ -92,6 +92,10 @@ The × on a sidebar project opens a Delete project sheet that names the project
 and explains that its tasks move to Trash. Enter confirms, Esc cancels, and
 `⌘Z` still restores everything in one step.
 
+A sidebar row's pencil and × stay hidden until the row is hovered, even when
+the row is selected. The same actions keep their keyboard routes (`⌘R` to
+rename, `⌘⌫` to delete, `dd` in vim mode) and their tooltips.
+
 ## Tooltip coverage
 
 Tooltips stay hidden for roughly five seconds after hover begins, and clicking

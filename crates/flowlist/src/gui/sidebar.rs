@@ -67,7 +67,7 @@ impl FlowlistApp {
         key: String,
         entity: modals::EntityRef,
         group: String,
-        active: bool,
+        pinned: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
@@ -76,8 +76,10 @@ impl FlowlistApp {
             .id(super::sid(key))
             .px_1()
             .rounded_sm()
-            .opacity(if active { 1.0 } else { 0.0 })
-            .when(!active, |this| {
+            // Sidebar rows reveal the pencil on hover; the inspector pins it
+            // because that is the only rename route in the panel.
+            .opacity(if pinned { 1.0 } else { 0.0 })
+            .when(!pinned, |this| {
                 this.group_hover(reveal_group, |style| style.opacity(1.0))
             })
             .text_color(theme.text_faint)
@@ -99,7 +101,6 @@ impl FlowlistApp {
         key: String,
         id: flowlist_core::ids::PerspectiveId,
         group: String,
-        active: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
@@ -108,10 +109,8 @@ impl FlowlistApp {
             .id(super::sid(key))
             .px_1()
             .rounded_sm()
-            .opacity(if active { 1.0 } else { 0.0 })
-            .when(!active, |this| {
-                this.group_hover(reveal_group, |style| style.opacity(1.0))
-            })
+            .opacity(0.0)
+            .group_hover(reveal_group, |style| style.opacity(1.0))
             .text_color(theme.text_faint)
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.text).bg(theme.hover))
@@ -184,7 +183,6 @@ impl FlowlistApp {
         command: flowlist_core::command::Command,
         view: View,
         group: String,
-        active: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
@@ -193,10 +191,8 @@ impl FlowlistApp {
             .id(super::sid(key))
             .px_1()
             .rounded_sm()
-            .opacity(if active { 1.0 } else { 0.0 })
-            .when(!active, |this| {
-                this.group_hover(reveal_group, |style| style.opacity(1.0))
-            })
+            .opacity(0.0)
+            .group_hover(reveal_group, |style| style.opacity(1.0))
             .text_color(theme.text_faint)
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.danger).bg(theme.hover))
@@ -1121,12 +1117,18 @@ impl FlowlistApp {
                     .justify_center()
                     .child(icons::icon(Icon::Perspective, 14.0, icon_color)),
             )
-            .child(div().flex_1().min_w_0().truncate().child(row.name))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .line_clamp(1)
+                    .text_ellipsis()
+                    .child(row.name),
+            )
             .child(self.edit_perspective_button(
                 format!("edit-perspective:{rename_id}"),
                 rename_id,
                 group.clone(),
-                active,
                 cx,
             ))
             .child(self.delete_entity_button(
@@ -1134,7 +1136,6 @@ impl FlowlistApp {
                 flowlist_core::command::Command::DeletePerspective { id: delete_id },
                 delete_view,
                 group.clone(),
-                active,
                 cx,
             ))
             .on_mouse_down(
@@ -1228,12 +1229,19 @@ impl FlowlistApp {
                                     self.theme.text_faint,
                                 )),
                         )
-                        .child(div().flex_1().min_w_0().truncate().child(name))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .line_clamp(1)
+                                .text_ellipsis()
+                                .child(name),
+                        )
                         .child(self.rename_button(
                             format!("rename-folder:{rename_id}"),
                             modals::EntityRef::Folder(rename_id),
                             group.clone(),
-                            active,
+                            false,
                             cx,
                         ))
                         .child(self.delete_entity_button(
@@ -1241,7 +1249,6 @@ impl FlowlistApp {
                             flowlist_core::command::Command::DeleteFolder { id: delete_id },
                             delete_view,
                             group.clone(),
-                            active,
                             cx,
                         ))
                         .when(count > 0, |this| {
@@ -1322,14 +1329,15 @@ impl FlowlistApp {
                             div()
                                 .flex_1()
                                 .min_w_0()
-                                .truncate()
+                                .line_clamp(1)
+                                .text_ellipsis()
                                 .child(project.name.clone()),
                         )
                         .child(self.rename_button(
                             format!("rename-project:{rename_id}"),
                             modals::EntityRef::Project(rename_id),
                             group.clone(),
-                            active,
+                            false,
                             cx,
                         ))
                         .child(self.delete_entity_button(
@@ -1337,7 +1345,6 @@ impl FlowlistApp {
                             flowlist_core::command::Command::DeleteProject { id: delete_id },
                             View::Project(id.clone()),
                             group.clone(),
-                            active,
                             cx,
                         ))
                         .child(
@@ -1487,7 +1494,14 @@ impl FlowlistApp {
                             },
                         )),
                 )
-                .child(div().flex_1().min_w_0().truncate().child(name))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .line_clamp(1)
+                        .text_ellipsis()
+                        .child(name),
+                )
                 .when(
                     status != flowlist_core::model::TagStatus::Available,
                     |this| {
@@ -1511,7 +1525,7 @@ impl FlowlistApp {
                     format!("rename-tag:{rename_id}"),
                     modals::EntityRef::Tag(rename_id),
                     group.clone(),
-                    active,
+                    false,
                     cx,
                 ))
                 .child(self.delete_entity_button(
@@ -1519,7 +1533,6 @@ impl FlowlistApp {
                     flowlist_core::command::Command::DeleteTag { id: delete_id },
                     delete_view,
                     group.clone(),
-                    active,
                     cx,
                 ))
                 .when(usage > 0, |this| {
