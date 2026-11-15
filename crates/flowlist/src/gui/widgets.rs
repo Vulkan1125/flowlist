@@ -36,6 +36,19 @@ pub fn text_field(
     placeholder: &str,
     focused: bool,
 ) -> impl IntoElement {
+    text_field_with_trailer(theme, buffer, placeholder, focused, 0.0)
+}
+
+/// A text field that leaves room for a control painted over its right edge,
+/// such as the clear button on the title-bar search. `trailer` is the extra
+/// right padding in pixels; the normal field is the same with zero.
+pub fn text_field_with_trailer(
+    theme: Theme,
+    buffer: &TextBuffer,
+    placeholder: &str,
+    focused: bool,
+    trailer: f32,
+) -> impl IntoElement {
     let chars: Vec<char> = buffer.text().chars().collect();
     let (start, end) = buffer.selection();
     let has_selection = start != end;
@@ -50,7 +63,8 @@ pub fn text_field(
         .flex()
         .items_center()
         .h(px(28.))
-        .px_2()
+        .pl_2()
+        .pr(px(8.0 + trailer))
         .rounded_md()
         .border_1()
         .border_color(if focused { theme.accent } else { theme.border })

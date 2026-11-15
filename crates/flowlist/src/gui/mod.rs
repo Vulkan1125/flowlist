@@ -3619,14 +3619,14 @@ impl FlowlistApp {
 
     fn render_header(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
+        let window_width = self.window_size.map_or(1254.0, |(width, _)| width);
+        let (search_left, search_width) = search_slot(window_width, self.show_inspector);
         div()
             .flex()
             .items_center()
             .justify_between()
-            .gap_4()
+            .relative()
             .h(px(46.))
-            .pl_4()
-            .pr_3()
             .border_b_1()
             .border_color(theme.border)
             .bg(theme.glass)
@@ -3635,6 +3635,7 @@ impl FlowlistApp {
                     .flex()
                     .flex_shrink_0()
                     .items_center()
+                    .pl_4()
                     .cursor(CursorStyle::OpenHand)
                     .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
                     .child(
@@ -3646,22 +3647,54 @@ impl FlowlistApp {
             )
             .child(
                 div()
+                    .absolute()
+                    .left(px(search_left))
+                    .top_0()
+                    .bottom_0()
+                    .w(px(search_width))
                     .flex()
-                    .flex_1()
-                    .min_w_0()
                     .items_center()
-                    .justify_center()
                     .child(
                         div()
                             .id("search")
+                            .relative()
                             .w_full()
-                            .max_w(px(420.))
-                            .child(widgets::text_field(
+                            .child(widgets::text_field_with_trailer(
                                 theme,
                                 &self.search,
                                 "Search tasks",
                                 self.focus == FocusArea::Search,
+                                if self.search.is_empty() { 0.0 } else { 26.0 },
                             ))
+                            .when(!self.search.is_empty(), |this| {
+                                this.child(
+                                    div()
+                                        .id("search-clear")
+                                        .absolute()
+                                        .right(px(2.))
+                                        .top(px(2.))
+                                        .size(px(24.))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .rounded_sm()
+                                        .bg(if self.focus == FocusArea::Search {
+                                            theme.raised
+                                        } else {
+                                            theme.field
+                                        })
+                                        .cursor_pointer()
+                                        .hover(|style| style.bg(theme.hover))
+                                        .flow_tip(self, cx, theme, "Clear search")
+                                        .child(icons::icon(Icon::Close, 12.0, theme.text_faint))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            cx.stop_propagation();
+                                            this.search.clear();
+                                            this.focus = FocusArea::Search;
+                                            cx.notify();
+                                        })),
+                                )
+                            })
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.focus = FocusArea::Search;
                                 this.search.select_all();
@@ -3675,6 +3708,7 @@ impl FlowlistApp {
                     .flex_shrink_0()
                     .items_center()
                     .gap_1()
+                    .pr_3()
                     .child(
                         div()
                             .id("add-task")
@@ -4189,6 +4223,45 @@ pub fn run(paths: DataPaths) -> Result<()> {
     Ok(())
 }
 
+/// The title-bar search sits centered on the content pane, not on the whole
+/// window: the sidebar is 240 wide and the inspector 320. The field keeps a
+/// usable width by giving way to the title-bar action cluster at the right
+/// edge, shrinking first and, below that, shifting left just enough.
+fn search_slot(window_width: f32, show_inspector: bool) -> (f32, f32) {
+    const SIDEBAR: f32 = 240.0;
+    const INSPECTOR: f32 = 320.0;
+    const ACTIONS: f32 = 300.0;
+    const FIELD_MAX: f32 = 420.0;
+    const FIELD_MIN: f32 = 120.0;
+    const PANE_INSET: f32 = 16.0;
+    const ACTIONS_GAP: f32 = 8.0;
+
+    let pane_left = SIDEBAR;
+    let pane_right = window_width - if show_inspector { INSPECTOR } else { 0.0 };
+    let pane_width = (pane_right - pane_left).max(0.0);
+    let pane_center = pane_left + pane_width / 2.0;
+    let mut width = FIELD_MAX.min((pane_width - 2.0 * PANE_INSET).max(0.0));
+    let mut left = pane_left + (pane_width - width) / 2.0;
+
+    if !show_inspector {
+        // With the inspector hidden the actions float over the content pane's
+        // right edge. Try to stay centered by shortening the field; if the
+        // centered field would still be cramped, sit in the free band instead.
+        let right_limit = window_width - ACTIONS - ACTIONS_GAP;
+        let centered_room = 2.0 * (right_limit - pane_center);
+        if centered_room >= FIELD_MIN {
+            width = width.min(centered_room);
+            left = pane_left + (pane_width - width) / 2.0;
+        } else {
+            let band_left = pane_left + PANE_INSET;
+            let band_width = (right_limit - band_left).max(0.0);
+            width = width.min(band_width);
+            left = (right_limit - width).max(band_left);
+        }
+    }
+    (left, width)
+}
+
 #[cfg(test)]
 mod tests {
     use super::rank_suggestions;
@@ -4233,5 +4306,33 @@ mod tests {
     fn suggestions_are_capped_at_six() {
         let many: Vec<String> = (0..10).map(|index| format!("Item {index}")).collect();
         assert_eq!(rank_suggestions(many, "item").len(), 6);
+    }
+
+    #[test]
+    fn search_sits_centered_on_the_content_pane() {
+        use super::search_slot;
+
+        // Inspector open at the working size: 240..934, center 587.
+        let (left, width) = search_slot(1254.0, true);
+        assert_eq!(width, 420.0);
+        assert!((left + width / 2.0 - 587.0).abs() < 0.01);
+
+        // Inspector hidden: the pane runs to the window edge, center 747. The
+        // field shortens a little so the action cluster keeps its gutter.
+        let (left, width) = search_slot(1254.0, false);
+        assert_eq!(width, 398.0);
+        assert!((left + width / 2.0 - 747.0).abs() < 0.01);
+
+        // At the minimum window, a centered 160px field would collide with
+        // the actions, so the field uses the free band and stays clear.
+        let (left, width) = search_slot(880.0, false);
+        assert_eq!(width, 316.0);
+        assert_eq!(left, 256.0);
+        assert!((left + width) <= 880.0 - 300.0 - 8.0 + 0.01);
+
+        // With the inspector open at the minimum size, centering still fits.
+        let (left, width) = search_slot(880.0, true);
+        assert_eq!(width, 288.0);
+        assert!((left + width / 2.0 - 400.0).abs() < 0.01);
     }
 }

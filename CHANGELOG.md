@@ -40,13 +40,18 @@
   If the view name cannot fit beside the controls it is left out entirely
   instead of being clipped to a few letters.
 - Search moved into the title bar as a full field at every window width, so it
-  no longer competes with the view title and chips. The title-bar theme
-  (palette) icon is gone; `⌘T` and `⇧⌘T` / `⌥⌘T` still change the theme.
+  no longer competes with the view title and chips. The field is centered on
+  the content pane, not on the whole window, and a × at its right edge clears
+  the query in one click. The title-bar theme (palette) icon is gone; `⌘T` and
+  `⇧⌘T` / `⌥⌘T` still change the theme.
 - Sidebar rows spend their width on the name until the pointer arrives. Only
   the hovered row makes room for its pencil and ×, and its long name then fades
   out at the edge instead of adding an ellipsis. At rest long project, folder,
   tag, perspective and review-card names still end with an ellipsis (…). The
   inspector shows the project name in full and wraps it instead of cutting it.
+- Project rows in the Library use the same small boxed count as perspectives,
+  and their names line up with the folder icon and count instead of sitting a
+  couple of pixels low.
 - Sort and Group menus open directly under their chip, stay above the task
   list, and close on any click outside. The outside-click scrim now closes on
   mouse-up, so the menu item under the pointer still receives its click.

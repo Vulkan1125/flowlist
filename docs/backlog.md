@@ -111,12 +111,14 @@ landed and verified.
       one row, with the subtitle on its own row so it is never squeezed. A view
       name that cannot fit beside the controls is omitted rather than clipped
       to a few letters. Search moved to the title bar as a full field at every
-      window width, and the title-bar theme icon was removed.
+      window width, centered on the content pane with a × to clear the query;
+      the title-bar theme icon was removed.
 - [x] Sidebar rows give their full width to the name until hovered. The
       hovered row alone makes room for the pencil and × and fades its long name
       at the edge; idle long project, folder, tag, perspective and review-card
       names end with an ellipsis instead of stopping mid-word. The inspector
-      wraps the full project name so it is never cut off.
+      wraps the full project name so it is never cut off. Library project rows
+      use the perspective-style boxed count and align the name with the icon.
 - [x] Deleting a project from the sidebar asks for confirmation in a sheet
       that names the project; Enter confirms and Esc cancels.
 

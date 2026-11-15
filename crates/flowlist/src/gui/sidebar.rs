@@ -85,6 +85,11 @@ impl FlowlistApp {
     /// The name slot. At rest the row width belongs to the name, so long names
     /// end in an ellipsis. On hover the row makes room for the pencil and the
     /// ×, and the name fades out at that edge instead of adding dots.
+    ///
+    /// The slot sits a hair above the flex center: the icon and the count box
+    /// in these rows center on their own drawing, while a line of text carries
+    /// its descender space below the baseline. Without the nudge the name
+    /// reads as sitting low next to them.
     fn row_name(&self, name: impl Into<gpui::SharedString>, hovered: bool) -> impl IntoElement {
         let name = name.into();
         if hovered {
@@ -92,6 +97,7 @@ impl FlowlistApp {
                 .flex_1()
                 .min_w_0()
                 .relative()
+                .top(px(-2.))
                 .overflow_hidden()
                 .child(div().whitespace_nowrap().child(name))
                 .child(div().absolute().top_0().right_0().h_full().w(px(22.)).bg(
@@ -105,6 +111,8 @@ impl FlowlistApp {
             div()
                 .flex_1()
                 .min_w_0()
+                .relative()
+                .top(px(-2.))
                 .line_clamp(1)
                 .text_ellipsis()
                 .child(name)
@@ -1370,15 +1378,13 @@ impl FlowlistApp {
                         .child(
                             div()
                                 .id(super::sid(format!("project-count:{id}")))
-                                .text_xs()
-                                .text_color(self.theme.text_faint)
                                 .flow_tip(
                                     self,
                                     cx,
                                     self.theme,
                                     format!("{open} open · {done} of {total} done"),
                                 )
-                                .child(open.to_string()),
+                                .child(widgets::count(self.theme, open)),
                         )
                         .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
                             this.drop_on_project(drop_id.clone(), payload, cx)

@@ -21,12 +21,13 @@ them, so the keyboard routes below are the primary way to reach them.
 | Gear | Settings (⌘,) | `⌘,` |
 | Info (i) | Toggle inspector (i) | `i` or `⌘I` |
 
-The title bar holds the search field, so the content header keeps only the view
-title and Sort/Group/Filter chips on one row, with the subtitle below. Focusing
-search (`⌘F` or `/`) selects its contents. If a view name is too long to fit
-beside the controls it is omitted rather than clipped; the same name is always
-available in the sidebar and the window title, and every view has a keyboard
-shortcut.
+The title bar holds the search field, centered on the content pane, so the
+content header keeps only the view title and Sort/Group/Filter chips on one
+row, with the subtitle below. Focusing search (`⌘F` or `/`) selects its
+contents; its × clears the query and keeps the field focused. If a view name is
+too long to fit beside the controls it is omitted rather than clipped; the same
+name is always available in the sidebar and the window title, and every view
+has a keyboard shortcut.
 
 The Forecast month calendar adds three controls beside the month name:
 previous month, Today and next month. They are labelled `‹`, `Today` and `›`

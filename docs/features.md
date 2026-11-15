@@ -103,13 +103,15 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Content header layout: the view title and Sort/Group/Filter chips share
       one row, while the subtitle sits on its own row. A view name that cannot
       fit beside the controls is omitted instead of clipped. Search lives in
-      the title bar at every window width, and the title-bar theme (palette)
-      icon is gone while its keyboard shortcuts remain.
+      the title bar at every window width, centered on the content pane, with
+      a × that clears the query. The title-bar theme (palette) icon is gone
+      while its keyboard shortcuts remain.
 - [x] Sidebar rows give their full width to the name until hovered. Only the
       hovered row makes room for the pencil and ×, and its long name fades out
       at the edge without an ellipsis. At rest, long sidebar and review-card
       names end with an ellipsis, and the inspector wraps the full project name
-      instead of truncating it.
+      instead of truncating it. Library project rows carry the same boxed count
+      as perspectives, aligned with the folder icon and the name.
 - [x] Forecast month calendar above the list: Monday-first grid, previous /
       Today / next controls and an accent bar under dates with a task.
       Clicking a date filters the list to that day; click again or press `\`
