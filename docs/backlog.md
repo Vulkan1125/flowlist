@@ -104,9 +104,16 @@ landed and verified.
 - [x] Trash has a **Select all** button and `⌘A`, so the whole bin can be
       restored or purged in one action.
 - [x] The **Add task** action moved to the title bar as a labelled plus button
-      that works from any view. Removing it from the content header lets the
-      search field shrink so long Sort/Group labels no longer clip the right
-      chip under the inspector.
+      that works from any view, so the content header keeps its full width for
+      the view controls.
+- [x] The content header keeps the view title, search control and
+      Sort/Group/Filter chips on one row, with the subtitle on its own row so
+      it is never squeezed. Search folds down to a magnifier when the row is
+      tight and reopens on focus or while a query is active; a wide window or
+      full screen keeps the full field. A view name that cannot fit beside the
+      controls is omitted rather than clipped to a few letters.
+- [x] Long project, folder, tag, perspective, review-card and inspector names
+      stay on one line and clip at the edge instead of wrapping mid-word.
 
 ## OmniFocus gap research (first pass, November 2026)
 

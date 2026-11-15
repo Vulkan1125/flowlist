@@ -33,9 +33,16 @@
   keeps its tooltip quiet until the pointer leaves the button. Hovering again
   later restores the normal behaviour.
 - The **Add task** action moved to the title bar as a labelled plus button,
-  so it is available in every view. The content header no longer carries it,
-  and the search field narrows when long Sort/Group labels would otherwise
-  push the rightmost chip under the inspector.
+  so it is available in every view and the content header keeps its full width
+  for the view controls.
+- The content header now keeps the view title, the search control and the
+  Sort/Group/Filter chips on one row, with the subtitle on its own row so it is
+  never squeezed. When the row is tight, search folds down to a magnifier and
+  reopens on focus or while a query is active; a roomy window or full screen
+  keeps the full field. If the view name cannot fit beside the controls it is
+  left out entirely instead of being clipped to a few letters.
+- Long project, folder, tag, perspective, review-card and inspector names no
+  longer wrap onto a second line; they clip at the edge of their row.
 - Sort and Group menus open directly under their chip, stay above the task
   list, and close on any click outside. The outside-click scrim now closes on
   mouse-up, so the menu item under the pointer still receives its click.

@@ -1114,7 +1114,14 @@ impl FlowlistApp {
                     .justify_center()
                     .child(icons::icon(Icon::Perspective, 14.0, icon_color)),
             )
-            .child(div().flex_1().min_w_0().child(row.name))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .child(row.name),
+            )
             .child(self.edit_perspective_button(
                 format!("edit-perspective:{rename_id}"),
                 rename_id,
@@ -1221,7 +1228,14 @@ impl FlowlistApp {
                                     self.theme.text_faint,
                                 )),
                         )
-                        .child(div().flex_1().min_w_0().overflow_hidden().child(name))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .overflow_hidden()
+                                .whitespace_nowrap()
+                                .child(name),
+                        )
                         .child(self.rename_button(
                             format!("rename-folder:{rename_id}"),
                             modals::EntityRef::Folder(rename_id),
@@ -1316,6 +1330,7 @@ impl FlowlistApp {
                                 .flex_1()
                                 .min_w_0()
                                 .overflow_hidden()
+                                .whitespace_nowrap()
                                 .child(project.name.clone()),
                         )
                         .child(self.rename_button(
@@ -1480,7 +1495,14 @@ impl FlowlistApp {
                             },
                         )),
                 )
-                .child(div().flex_1().min_w_0().overflow_hidden().child(name))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .child(name),
+                )
                 .when(
                     status != flowlist_core::model::TagStatus::Available,
                     |this| {

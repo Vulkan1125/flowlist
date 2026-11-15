@@ -22,6 +22,13 @@ them, so the keyboard routes below are the primary way to reach them.
 | Palette | Next theme family (⇧⌘T) | `⌘T` light/dark, `⇧⌘T` / `⌥⌘T` family, `⇧T` in vim mode |
 | Info (i) | Toggle inspector (i) | `i` or `⌘I` |
 
+The content header keeps the view title, search and Sort/Group/Filter chips on
+one row, with the subtitle below. Search folds to a magnifier button (tooltip
+"Search tasks") when the row is tight; focusing it (`⌘F` or `/`) expands the
+field, as does typing a query. If a view name is too long to fit beside the
+controls it is omitted rather than clipped; the same name is always available
+in the sidebar and the window title, and every view has a keyboard shortcut.
+
 The Forecast month calendar adds three controls beside the month name:
 previous month, Today and next month. They are labelled `‹`, `Today` and `›`
 with tooltips. Every date cell is clickable and has a tooltip naming the day;

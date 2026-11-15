@@ -59,6 +59,11 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "sort_anchor": true,
   "group_anchor": true,
   "priority_anchor": true,
+  "title_space": 80.0,
+  "title_visible": true,
+  "header_inner": 662.0,
+  "header_chips": 348.0,
+  "search_full": true,
   "tip": "Show only the next available task (First Available)",
   "tip_muted": null
 }
@@ -75,7 +80,12 @@ whether the AppKit window buttons were hidden. `sort_menu`, `group_menu` and
 `priority_menu` say whether the header menus are open; `sidebar_menu` names the
 row a right-click menu belongs to (`builtin:inbox`, `project:<id>`, `tag:<id>`,
 …) or is null. `sort_anchor`, `group_anchor` and `priority_anchor` confirm the
-chip bounds needed to position those menus were measured. `modal_close` is
+chip bounds needed to position those menus were measured. `title_space` is the
+width the view title painted into on the last frame and `title_visible` says
+whether it was drawn at all: a name that cannot fit in full is omitted.
+`header_inner` and `header_chips` are the measured row width and chip-cluster
+width, and `search_full` says whether search painted as the full field (true) or
+the magnifier (false). `modal_close` is
 false for sheets that deliberately omit the corner close control, such as
 project creation. `tip` names the tooltip under the pointer and `tip_muted` the
 one a click silenced until the pointer leaves. The file is rewritten only when

@@ -155,6 +155,20 @@ pub struct FlowlistApp {
     sort_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     group_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     priority_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// How wide the title's slot painted on the last frame. A view name that
+    /// does not fit there is left out entirely instead of showing a stub.
+    title_space: Rc<Cell<Option<f32>>>,
+    /// Whether the last frame painted the view title. Exposed through the
+    /// test-state file so the layout rule can be checked without a screenshot.
+    title_visible: Rc<Cell<bool>>,
+    /// The header row's inside width and the width of the chip cluster, both
+    /// measured on the last frame. Together with the title's natural width
+    /// they decide whether search shows as a field or a single magnifier.
+    header_inner: Rc<Cell<Option<f32>>>,
+    header_chips: Rc<Cell<Option<f32>>>,
+    /// Whether the last frame painted the full search field. Test-state hook,
+    /// like `title_visible`.
+    search_full: Rc<Cell<bool>>,
     /// The right-click menu on a sidebar row, opened at the mouse position.
     sidebar_menu: Option<sidebar::SidebarMenu>,
     /// A click's mouse-up closed the sort or group menu. The chip under the
@@ -287,6 +301,11 @@ impl FlowlistApp {
             sort_anchor: Rc::new(Cell::new(None)),
             group_anchor: Rc::new(Cell::new(None)),
             priority_anchor: Rc::new(Cell::new(None)),
+            title_space: Rc::new(Cell::new(None)),
+            title_visible: Rc::new(Cell::new(true)),
+            header_inner: Rc::new(Cell::new(None)),
+            header_chips: Rc::new(Cell::new(None)),
+            search_full: Rc::new(Cell::new(true)),
             sidebar_menu: None,
             sort_closed_on_up: false,
             group_closed_on_up: false,
@@ -3545,6 +3564,11 @@ impl FlowlistApp {
             "sort_anchor": self.sort_anchor.get().is_some(),
             "group_anchor": self.group_anchor.get().is_some(),
             "priority_anchor": self.priority_anchor.get().is_some(),
+            "title_space": self.title_space.get(),
+            "title_visible": self.title_visible.get(),
+            "header_inner": self.header_inner.get(),
+            "header_chips": self.header_chips.get(),
+            "search_full": self.search_full.get(),
             "sidebar_menu": self.sidebar_menu.as_ref().map(|menu| menu.key()),
             "forecast_date": self.forecast_date.map(|date| date.to_string()),
             "trashed": self.store.db().trash_count(),
@@ -3964,7 +3988,6 @@ impl Render for FlowlistApp {
                 self.blur_mode = Some(self.theme.appearance());
             }
         }
-        self.sync_test_state();
         let theme = self.theme;
 
         let mut root = div()
@@ -4088,6 +4111,9 @@ impl Render for FlowlistApp {
         if self.modal.is_some() {
             root = root.child(self.render_modal(window, cx));
         }
+        // Written after the body renders, so measurements taken during this
+        // frame (such as the title slot width) are current in the file.
+        self.sync_test_state();
         root
     }
 }
