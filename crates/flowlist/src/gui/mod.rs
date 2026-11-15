@@ -161,14 +161,6 @@ pub struct FlowlistApp {
     /// Whether the last frame painted the view title. Exposed through the
     /// test-state file so the layout rule can be checked without a screenshot.
     title_visible: Rc<Cell<bool>>,
-    /// The header row's inside width and the width of the chip cluster, both
-    /// measured on the last frame. Together with the title's natural width
-    /// they decide whether search shows as a field or a single magnifier.
-    header_inner: Rc<Cell<Option<f32>>>,
-    header_chips: Rc<Cell<Option<f32>>>,
-    /// Whether the last frame painted the full search field. Test-state hook,
-    /// like `title_visible`.
-    search_full: Rc<Cell<bool>>,
     /// The right-click menu on a sidebar row, opened at the mouse position.
     sidebar_menu: Option<sidebar::SidebarMenu>,
     /// A click's mouse-up closed the sort or group menu. The chip under the
@@ -193,6 +185,9 @@ pub struct FlowlistApp {
     vim_mode: bool,
     vim: vim::VimState,
     sidebar_cursor: Option<sidebar::SidebarTarget>,
+    /// The sidebar row under the pointer, if any. Hover-only row actions
+    /// render only for this row so an idle row spends no width on them.
+    sidebar_hover: Option<sidebar::SidebarTarget>,
     checklist_cursor: Option<usize>,
     focus: FocusArea,
     focus_handle: FocusHandle,
@@ -303,9 +298,6 @@ impl FlowlistApp {
             priority_anchor: Rc::new(Cell::new(None)),
             title_space: Rc::new(Cell::new(None)),
             title_visible: Rc::new(Cell::new(true)),
-            header_inner: Rc::new(Cell::new(None)),
-            header_chips: Rc::new(Cell::new(None)),
-            search_full: Rc::new(Cell::new(true)),
             sidebar_menu: None,
             sort_closed_on_up: false,
             group_closed_on_up: false,
@@ -322,6 +314,7 @@ impl FlowlistApp {
             vim_mode,
             vim: vim::VimState::default(),
             sidebar_cursor: None,
+            sidebar_hover: None,
             checklist_cursor: None,
             focus: FocusArea::Content,
             focus_handle,
@@ -3575,9 +3568,6 @@ impl FlowlistApp {
             "priority_anchor": self.priority_anchor.get().is_some(),
             "title_space": self.title_space.get(),
             "title_visible": self.title_visible.get(),
-            "header_inner": self.header_inner.get(),
-            "header_chips": self.header_chips.get(),
-            "search_full": self.search_full.get(),
             "sidebar_menu": self.sidebar_menu.as_ref().map(|menu| menu.key()),
             "forecast_date": self.forecast_date.map(|date| date.to_string()),
             "trashed": self.store.db().trash_count(),
@@ -3633,6 +3623,7 @@ impl FlowlistApp {
             .flex()
             .items_center()
             .justify_between()
+            .gap_4()
             .h(px(46.))
             .pl_4()
             .pr_3()
@@ -3642,6 +3633,7 @@ impl FlowlistApp {
             .child(
                 div()
                     .flex()
+                    .flex_shrink_0()
                     .items_center()
                     .cursor(CursorStyle::OpenHand)
                     .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
@@ -3655,6 +3647,32 @@ impl FlowlistApp {
             .child(
                 div()
                     .flex()
+                    .flex_1()
+                    .min_w_0()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .id("search")
+                            .w_full()
+                            .max_w(px(420.))
+                            .child(widgets::text_field(
+                                theme,
+                                &self.search,
+                                "Search tasks",
+                                self.focus == FocusArea::Search,
+                            ))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.focus = FocusArea::Search;
+                                this.search.select_all();
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_shrink_0()
                     .items_center()
                     .gap_1()
                     .child(
@@ -3704,31 +3722,6 @@ impl FlowlistApp {
                             .child(widgets::icon_button(theme, Icon::Settings, false))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.open_modal(modals::Modal::settings(this), cx)
-                            })),
-                    )
-                    .child(
-                        div()
-                            .id("theme")
-                            .flow_tip(
-                                self,
-                                cx,
-                                theme,
-                                format!(
-                                    "Next theme — {} {} (⇧⌘T)",
-                                    theme.kind().label(),
-                                    theme.appearance().label()
-                                ),
-                            )
-                            .child(widgets::icon_button(theme, Icon::Palette, false))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.theme = this.theme.next_theme();
-                                this.toast = Some(format!(
-                                    "{} · {}",
-                                    this.theme.kind().label(),
-                                    this.theme.appearance().label()
-                                ));
-                                this.save_session();
-                                cx.notify();
                             })),
                     )
                     .child(

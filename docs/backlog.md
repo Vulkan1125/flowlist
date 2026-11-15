@@ -107,14 +107,15 @@ landed and verified.
 - [x] The **Add task** action moved to the title bar as a labelled plus button
       that works from any view, so the content header keeps its full width for
       the view controls.
-- [x] The content header keeps the view title, search control and
-      Sort/Group/Filter chips on one row, with the subtitle on its own row so
-      it is never squeezed. Search folds down to a magnifier when the row is
-      tight and reopens on focus or while a query is active; a wide window or
-      full screen keeps the full field. A view name that cannot fit beside the
-      controls is omitted rather than clipped to a few letters.
-- [x] Long project, folder, tag, perspective and review-card names end with an
-      ellipsis when they do not fit, instead of stopping mid-word. The inspector
+- [x] The content header keeps the view title and Sort/Group/Filter chips on
+      one row, with the subtitle on its own row so it is never squeezed. A view
+      name that cannot fit beside the controls is omitted rather than clipped
+      to a few letters. Search moved to the title bar as a full field at every
+      window width, and the title-bar theme icon was removed.
+- [x] Sidebar rows give their full width to the name until hovered. The
+      hovered row alone makes room for the pencil and × and fades its long name
+      at the edge; idle long project, folder, tag, perspective and review-card
+      names end with an ellipsis instead of stopping mid-word. The inspector
       wraps the full project name so it is never cut off.
 - [x] Deleting a project from the sidebar asks for confirmation in a sheet
       that names the project; Enter confirms and Esc cancels.

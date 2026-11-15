@@ -61,9 +61,6 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "priority_anchor": true,
   "title_space": 80.0,
   "title_visible": true,
-  "header_inner": 662.0,
-  "header_chips": 348.0,
-  "search_full": true,
   "tip": "Show only the next available task (First Available)",
   "tip_muted": null
 }
@@ -83,9 +80,7 @@ row a right-click menu belongs to (`builtin:inbox`, `project:<id>`, `tag:<id>`,
 chip bounds needed to position those menus were measured. `title_space` is the
 width the view title painted into on the last frame and `title_visible` says
 whether it was drawn at all: a name that cannot fit in full is omitted.
-`header_inner` and `header_chips` are the measured row width and chip-cluster
-width, and `search_full` says whether search painted as the full field (true) or
-the magnifier (false). Deleting a project from the sidebar sets `modal` to
+Deleting a project from the sidebar sets `modal` to
 `Delete project` while the project still exists; a probe confirms it,
 presses Return and checks that the project's tasks moved to Trash. `modal_close` is
 false for sheets that deliberately omit the corner close control, such as

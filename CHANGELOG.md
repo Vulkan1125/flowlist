@@ -35,14 +35,17 @@
 - The **Add task** action moved to the title bar as a labelled plus button,
   so it is available in every view and the content header keeps its full width
   for the view controls.
-- The content header now keeps the view title, the search control and the
-  Sort/Group/Filter chips on one row, with the subtitle on its own row so it is
-  never squeezed. When the row is tight, search folds down to a magnifier and
-  reopens on focus or while a query is active; a roomy window or full screen
-  keeps the full field. If the view name cannot fit beside the controls it is
-  left out entirely instead of being clipped to a few letters.
-- Long project, folder, tag, perspective and review-card names end with an
-  ellipsis (…) when they do not fit, so it is clear there is more. The
+- The content header keeps only the view title and the Sort/Group/Filter chips
+  on its first row, with the subtitle on its own row so it is never squeezed.
+  If the view name cannot fit beside the controls it is left out entirely
+  instead of being clipped to a few letters.
+- Search moved into the title bar as a full field at every window width, so it
+  no longer competes with the view title and chips. The title-bar theme
+  (palette) icon is gone; `⌘T` and `⇧⌘T` / `⌥⌘T` still change the theme.
+- Sidebar rows spend their width on the name until the pointer arrives. Only
+  the hovered row makes room for its pencil and ×, and its long name then fades
+  out at the edge instead of adding an ellipsis. At rest long project, folder,
+  tag, perspective and review-card names still end with an ellipsis (…). The
   inspector shows the project name in full and wraps it instead of cutting it.
 - Sort and Group menus open directly under their chip, stay above the task
   list, and close on any click outside. The outside-click scrim now closes on

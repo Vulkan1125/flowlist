@@ -19,15 +19,14 @@ them, so the keyboard routes below are the primary way to reach them.
 | Redo arrow | Redo (⇧⌘Z) | `⇧⌘Z` or `Ctrl-r` |
 | Question mark | Keyboard and mouse help (?) | `?` |
 | Gear | Settings (⌘,) | `⌘,` |
-| Palette | Next theme family (⇧⌘T) | `⌘T` light/dark, `⇧⌘T` / `⌥⌘T` family, `⇧T` in vim mode |
 | Info (i) | Toggle inspector (i) | `i` or `⌘I` |
 
-The content header keeps the view title, search and Sort/Group/Filter chips on
-one row, with the subtitle below. Search folds to a magnifier button (tooltip
-"Search tasks") when the row is tight; focusing it (`⌘F` or `/`) expands the
-field, as does typing a query. If a view name is too long to fit beside the
-controls it is omitted rather than clipped; the same name is always available
-in the sidebar and the window title, and every view has a keyboard shortcut.
+The title bar holds the search field, so the content header keeps only the view
+title and Sort/Group/Filter chips on one row, with the subtitle below. Focusing
+search (`⌘F` or `/`) selects its contents. If a view name is too long to fit
+beside the controls it is omitted rather than clipped; the same name is always
+available in the sidebar and the window title, and every view has a keyboard
+shortcut.
 
 The Forecast month calendar adds three controls beside the month name:
 previous month, Today and next month. They are labelled `‹`, `Today` and `›`
@@ -93,7 +92,9 @@ and explains that its tasks move to Trash. Enter confirms, Esc cancels, and
 `⌘Z` still restores everything in one step.
 
 A sidebar row's pencil and × stay hidden until the row is hovered, even when
-the row is selected. The same actions keep their keyboard routes (`⌘R` to
+the row is selected. While idle the name uses the whole row width; hovering
+makes room for the actions, and a long name fades at that edge instead of
+ending in an ellipsis. The same actions keep their keyboard routes (`⌘R` to
 rename, `⌘⌫` to delete, `dd` in vim mode) and their tooltips.
 
 ## Tooltip coverage

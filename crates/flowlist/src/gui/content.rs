@@ -358,17 +358,6 @@ impl FlowlistApp {
             .title_space
             .get()
             .is_none_or(|space| title_width + 1.0 <= space);
-        // Search sits beside the chips. When the row cannot hold the full
-        // field and the title together it folds down to a magnifier; it opens
-        // again while focused or while a query is active, so a filter is never
-        // invisible. A roomy window (and full screen) keeps the field.
-        let search_full = self.focus == FocusArea::Search
-            || !self.search.is_empty()
-            || match (self.header_inner.get(), self.header_chips.get()) {
-                (Some(inner), Some(chips)) => search_field_fits(inner, chips, title_width),
-                _ => true,
-            };
-        self.search_full.set(search_full);
         self.title_visible.set(title_fits);
         let title_block = div().min_w_0().flex_1().when(title_fits, |this| {
             this.child(
@@ -381,40 +370,6 @@ impl FlowlistApp {
                     .child(title),
             )
         });
-        let search_control = if search_full {
-            div()
-                .id("search")
-                .w(px(SEARCH_FIELD_WIDTH))
-                .min_w(px(120.))
-                .child(widgets::text_field(
-                    theme,
-                    &self.search,
-                    "Search tasks",
-                    self.focus == FocusArea::Search,
-                ))
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.focus = FocusArea::Search;
-                    this.search.select_all();
-                    cx.notify();
-                }))
-                .into_any_element()
-        } else {
-            div()
-                .id("search")
-                .flex_shrink_0()
-                .flow_tip(self, cx, theme, "Search tasks")
-                .child(widgets::icon_button(
-                    theme,
-                    Icon::Search,
-                    self.focus == FocusArea::Search,
-                ))
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.focus = FocusArea::Search;
-                    this.search.select_all();
-                    cx.notify();
-                }))
-                .into_any_element()
-        };
         let count = self
             .current_groups()
             .into_iter()
@@ -443,7 +398,6 @@ impl FlowlistApp {
                             .min_w_0()
                             .items_center()
                             .gap_2()
-                            .child(search_control)
                             .when(!is_trash, |this| {
                                 this.child({
                                     let anchor = self.sort_anchor.clone();
@@ -621,24 +575,6 @@ impl FlowlistApp {
                                             cx.listener(|this, _, _, cx| this.purge_selected(cx)),
                                         ),
                                 )
-                            })
-                            .on_children_prepainted({
-                                // Child zero is the search control; the rest
-                                // are the chips. Their combined width, plus the
-                                // row width, decides whether search stays a
-                                // field or folds to a magnifier.
-                                let header_chips = self.header_chips.clone();
-                                move |bounds, window, _| {
-                                    if bounds.len() >= 2 {
-                                        let width = f32::from(
-                                            bounds.last().unwrap().right() - bounds[1].left(),
-                                        );
-                                        if header_chips.get() != Some(width) {
-                                            header_chips.set(Some(width));
-                                            window.request_animation_frame();
-                                        }
-                                    }
-                                }
                             }),
                     )
                     .on_children_prepainted({
@@ -685,21 +621,6 @@ impl FlowlistApp {
                         )
                     }),
             )
-            .on_children_prepainted({
-                // The first child is the title row, which spans the header's
-                // inside width. Record it so search can decide between its
-                // field and magnifier forms.
-                let header_inner = self.header_inner.clone();
-                move |bounds, window, _| {
-                    if let Some(row) = bounds.first() {
-                        let width = f32::from(row.size.width);
-                        if header_inner.get() != Some(width) {
-                            header_inner.set(Some(width));
-                            window.request_animation_frame();
-                        }
-                    }
-                }
-            })
     }
 
     /// A real list of sort choices: the chip opens a menu instead of
@@ -1753,51 +1674,9 @@ fn repeat_label(db: &flowlist_core::db::Db, id: &TaskId) -> Option<String> {
     Some(rule.description())
 }
 
-/// The full search field, its folded magnifier, and the gaps around them.
-/// The header rule and its tests read the same numbers so they cannot drift.
-const SEARCH_FIELD_WIDTH: f32 = 210.0;
-const SEARCH_ICON_WIDTH: f32 = 28.0;
-const ROW_GAP: f32 = 16.0;
-const CONTROL_GAP: f32 = 8.0;
-
-/// Whether the header row can show the full search field beside the chips.
-///
-/// The field keeps its full width when the title still fits next to it. If it
-/// does not, search folds to a magnifier so the title survives. When the title
-/// cannot fit in either shape, the field takes the room as long as it fits on
-/// its own; otherwise the magnifier does.
-fn search_field_fits(inner: f32, chips: f32, title_width: f32) -> bool {
-    let room = inner - ROW_GAP - chips - CONTROL_GAP;
-    if room >= SEARCH_FIELD_WIDTH + title_width + 1.0 {
-        true
-    } else if room >= SEARCH_ICON_WIDTH + title_width + 1.0 {
-        false
-    } else {
-        room >= SEARCH_FIELD_WIDTH
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn search_field_folds_only_when_the_row_is_tight() {
-        // Inbox at 1254 with the inspector: title, field and chips coexist.
-        assert!(search_field_fits(662.0, 348.0, 62.0));
-        // A short project name fits beside the chips, so search folds.
-        assert!(!search_field_fits(662.0, 454.0, 91.0));
-        // A long name fits in neither shape; the field returns only when it
-        // fits on its own, which the narrow row still refuses.
-        assert!(!search_field_fits(662.0, 454.0, 500.0));
-        // A roomy window or full screen shows the field and the long title.
-        assert!(search_field_fits(1408.0, 454.0, 500.0));
-        // Without the inspector the inbox keeps the field.
-        assert!(search_field_fits(982.0, 348.0, 62.0));
-        // At the minimum window with the inspector open nothing fits, so the
-        // magnifier is the only honest option.
-        assert!(!search_field_fits(288.0, 348.0, 62.0));
-    }
 
     #[test]
     fn month_grid_starts_on_monday_and_covers_the_month() {

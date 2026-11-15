@@ -989,8 +989,6 @@ impl FlowlistApp {
                     .child(self.rename_button(
                         format!("rename-project-inspector:{rename_id}"),
                         super::modals::EntityRef::Project(rename_id),
-                        "inspector-project".to_string(),
-                        true,
                         cx,
                     )),
             )
