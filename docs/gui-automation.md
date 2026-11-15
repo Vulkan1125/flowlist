@@ -50,7 +50,12 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "appearance": "light",
   "blur": "light",
   "traffic_lights": "hidden",
-  "modal_theme": null
+  "modal_theme": null,
+  "sort_menu": false,
+  "group_menu": false,
+  "sidebar_menu": "project:01M79...",
+  "sort_anchor": true,
+  "group_anchor": true
 }
 ```
 
@@ -61,7 +66,11 @@ inspector field being edited (`Title`, `Notes`, `Project`, …) and is null
 otherwise. `draft` is true while a
 task created with `o`/`O` is still being titled, and `suggestions` counts the
 rows in the open project picker. `traffic_lights` reports
-whether the AppKit window buttons were hidden. The file is rewritten only when one of
+whether the AppKit window buttons were hidden. `sort_menu` and `group_menu`
+say whether the header menus are open; `sidebar_menu` names the row a
+right-click menu belongs to (`builtin:inbox`, `project:<id>`, `tag:<id>`, …)
+or is null. `sort_anchor` and `group_anchor` confirm the chip bounds needed to
+position those menus were measured. The file is rewritten only when one of
 those values changes, and the hook is inert unless the variable is set. It does
 not contain task text, notes or the library itself.
 
@@ -86,7 +95,11 @@ these clicks can be replaced by named actions without changing the assertions.
 
 ## Helpers
 
-- `scripts/gui/flowctl.swift` posts mouse moves, clicks and key events. Its
-  modifiers include `ctrlalt`, used for the capture hotkey.
+- `scripts/gui/flowctl.swift` posts mouse moves, left and right clicks and key
+  events. Its modifiers include `ctrlalt`, used for the capture hotkey.
 - `scripts/gui/window.swift` prints the live window title, origin and size.
 - Both are compiled into the temporary directory when the smoke test runs.
+
+Dropdown menus close on mouse-up, not mouse-down: closing on mouse-down
+removes the menu before GPUI delivers the click to the item under the pointer.
+Keep that ordering in mind when adding new overlays.

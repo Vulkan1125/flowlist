@@ -34,7 +34,7 @@ clears the day filter. The list below keeps the normal task keyboard routes.
 | --- | --- | --- |
 | Pencil on a saved perspective | Edit perspective | `Ctrl-w h` then `r` |
 | Pencil on a project / folder / tag | Rename | `Ctrl-w h` then `r` |
-| × on a perspective / folder / tag | Delete | `Ctrl-w h` then `⌘⌫` or `dd` |
+| × on a perspective / folder / tag / project | Delete | `Ctrl-w h` then `⌘⌫` or `dd` |
 | Chevron on a folder | Expand / collapse folder | `l` / `h` |
 | Chevron on a tag | Expand / collapse tag | `l` / `h` |
 | Crosshair on a tag | Set location / Change location | `⇧L` |
@@ -43,6 +43,20 @@ clears the day filter. The list below keeps the normal task keyboard routes.
 `Ctrl-w h` focuses the sidebar, except inside a text field where `Ctrl-w` is
 left to the field. Arrow keys also move through the sidebar, `Enter` opens the
 row, and `Esc` returns to the content list.
+
+Every sidebar row also has a right-click menu with the actions that apply to
+it: Open, Rename, Delete, New project/subfolder/subtag, project status, tag
+location and Empty Trash. The same actions keep their keyboard routes, and
+`Esc` closes the menu. Hovering a row reveals its pencil and × even when the
+row is the active view.
+
+### Dropdown menus and the new-project prompt
+
+Sort and Group open a menu under their chip, and the inspector's project
+picker opens once you type. Clicking anywhere outside closes them, and `Esc`
+does the same. When a typed project path does not exist, a Create project
+sheet asks first: `Enter` creates the project and files the task, `Esc` leaves
+the task unchanged.
 
 ### Task rows and inspector
 

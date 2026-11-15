@@ -18,6 +18,22 @@ pub enum ProjectStatus {
 }
 
 impl ProjectStatus {
+    pub const ALL: [ProjectStatus; 4] = [
+        ProjectStatus::Active,
+        ProjectStatus::OnHold,
+        ProjectStatus::Done,
+        ProjectStatus::Dropped,
+    ];
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            ProjectStatus::Active => "active",
+            ProjectStatus::OnHold => "on_hold",
+            ProjectStatus::Done => "done",
+            ProjectStatus::Dropped => "dropped",
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             ProjectStatus::Active => "Active",
@@ -102,8 +118,8 @@ impl ProjectKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectIcon {
-    #[default]
     Project,
+    #[default]
     Folder,
     Star,
     Briefcase,

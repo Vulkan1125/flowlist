@@ -990,3 +990,50 @@ fn assigning_an_unknown_project_path_creates_the_project() {
     assert_eq!(store.db().tasks[&task_id].project, None);
     assert!(!store.db().projects.contains_key(&project));
 }
+
+#[test]
+fn deleting_a_project_trashes_its_tasks_and_undo_restores_both() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let project = store
+        .execute(Command::CreateProject(NewProject::new("Launch")))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("project id");
+    let project_id = store.db().resolve_project(&project).unwrap();
+
+    let mut task = NewTask::new("Draft the brief");
+    task.project = Some(project_id.clone());
+    let task = store
+        .execute(Command::CreateTask(task))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("task id");
+    let task_id = store.db().resolve_task(&task).unwrap();
+
+    store
+        .execute(Command::DeleteProject {
+            id: project_id.clone(),
+        })
+        .unwrap();
+
+    assert!(!store.db().projects.contains_key(&project_id));
+    assert!(store.db().tasks[&task_id].is_trashed());
+    assert_eq!(
+        store.undo_label().as_deref(),
+        Some("Undo Delete project “Launch”")
+    );
+
+    store.undo().unwrap();
+    assert!(store.db().projects.contains_key(&project_id));
+    assert!(!store.db().tasks[&task_id].is_trashed());
+    assert_eq!(
+        store.db().tasks[&task_id].project.as_ref(),
+        Some(&project_id)
+    );
+}

@@ -3,7 +3,7 @@
 
 use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px, rgba};
 
-use flowlist_core::ids::{PerspectiveId, ProjectId, TagId};
+use flowlist_core::ids::{PerspectiveId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{ProjectIcon, ProjectKind};
 
 use super::perspective::PerspectiveForm;
@@ -33,6 +33,12 @@ pub enum Modal {
         icon: ProjectIcon,
         /// The icon grid stays folded away until the current icon is clicked.
         icon_open: bool,
+    },
+    /// Typing a project path that does not exist yet asks before creating it,
+    /// so a typo cannot silently fill the sidebar with projects.
+    CreateProject {
+        task: TaskId,
+        path: String,
     },
     NewFolder {
         name: TextBuffer,
@@ -162,6 +168,7 @@ impl Modal {
         match self {
             Modal::Rename { .. } => "Rename",
             Modal::NewProject { .. } => "New project",
+            Modal::CreateProject { .. } => "Create project",
             Modal::NewFolder { .. } => "New folder",
             Modal::NewTag { .. } => "New tag",
             Modal::Perspective { .. } => "Perspective",
@@ -178,6 +185,9 @@ impl Modal {
             Modal::Rename { .. } => "Names are shared by the sidebar, CLI and MCP server.",
             Modal::NewProject { .. } => {
                 "Projects hold an outline of tasks; folders keep projects together."
+            }
+            Modal::CreateProject { .. } => {
+                "This path is not in the library yet. Create it and file the task there?"
             }
             Modal::NewFolder { .. } => "Folders group projects. They can be nested.",
             Modal::NewTag { .. } => "Tags are contexts: places, tools or people.",
@@ -196,10 +206,18 @@ impl Modal {
         }
     }
 
+    pub fn confirm_label(&self) -> &'static str {
+        match self {
+            Modal::CreateProject { .. } => "Create",
+            _ => "Save",
+        }
+    }
+
     pub fn field_count(&self) -> usize {
         match self {
             Modal::Rename { .. } => 1,
             Modal::NewProject { .. } => 2,
+            Modal::CreateProject { .. } => 0,
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
             Modal::Perspective { .. } => 1,
             Modal::Import { .. } => 1,
@@ -217,6 +235,7 @@ impl Modal {
                 1 => Some(notes),
                 _ => None,
             },
+            Modal::CreateProject { .. } => None,
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&form.name),
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -252,6 +271,7 @@ impl Modal {
                 1 => Some(notes),
                 _ => None,
             },
+            Modal::CreateProject { .. } => None,
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&mut form.name),
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -287,6 +307,7 @@ impl Modal {
                 1 => "Notes",
                 _ => "",
             },
+            Modal::CreateProject { .. } => "",
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
             Modal::Perspective { .. } => "Name",
             Modal::Import { .. } => "Library text",
@@ -340,6 +361,7 @@ impl FlowlistApp {
         let subtitle = modal.subtitle().to_string();
         let width = modal.width();
         let field_count = modal.field_count();
+        let confirm_label = modal.confirm_label();
         let is_help = matches!(modal, Modal::Help);
         let is_perspective = matches!(modal, Modal::Perspective { .. });
         let is_import = matches!(modal, Modal::Import { .. });
@@ -405,6 +427,19 @@ impl FlowlistApp {
             if is_settings {
                 body = body.child(self.render_settings_controls(cx));
             }
+            if let Modal::CreateProject { path, .. } = modal {
+                body = body.child(
+                    div()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.field)
+                        .text_sm()
+                        .text_color(theme.text)
+                        .child(path.clone()),
+                );
+            }
             for index in 0..field_count {
                 body = body.child(self.render_modal_field(index, cx));
             }
@@ -465,7 +500,7 @@ impl FlowlistApp {
                             .child(
                                 div()
                                     .id("modal-save")
-                                    .child(widgets::button(theme, "Save", true))
+                                    .child(widgets::button(theme, confirm_label, true))
                                     .on_click(cx.listener(|this, _, _, cx| this.commit_modal(cx))),
                             ),
                     ),

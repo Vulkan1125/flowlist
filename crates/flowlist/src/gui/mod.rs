@@ -19,8 +19,10 @@ mod theme;
 mod vim;
 mod widgets;
 
+use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -109,6 +111,22 @@ enum BufferKey {
     Tab,
 }
 
+/// Where to paint a dropdown below a measured chip. Root overlays are
+/// positioned this way so the painted menu and its hitboxes agree.
+fn menu_position(
+    anchor: Bounds<gpui::Pixels>,
+    viewport: (f32, f32),
+    width: f32,
+    height: f32,
+) -> (f32, f32) {
+    let x = f32::from(anchor.origin.x);
+    let y = f32::from(anchor.origin.y) + f32::from(anchor.size.height) + 4.0;
+    (
+        x.min((viewport.0 - width).max(0.0)).max(0.0),
+        y.min((viewport.1 - height).max(0.0)).max(0.0),
+    )
+}
+
 pub struct FlowlistApp {
     store: Store,
     theme: Theme,
@@ -128,6 +146,18 @@ pub struct FlowlistApp {
     /// The header dropdowns, which list every option instead of cycling.
     sort_menu_open: bool,
     group_menu_open: bool,
+    /// Where the header chips painted on the last frame. The menus are root
+    /// overlays positioned from these bounds, so their hitboxes line up with
+    /// what is on screen (anchored/deferred paint offsets do not move
+    /// hitboxes in GPUI 0.2).
+    sort_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    group_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The right-click menu on a sidebar row, opened at the mouse position.
+    sidebar_menu: Option<sidebar::SidebarMenu>,
+    /// A click's mouse-up closed the sort or group menu. The chip under the
+    /// same click must not immediately reopen it.
+    sort_closed_on_up: bool,
+    group_closed_on_up: bool,
     /// The project inspector's icon grid, shown only on request.
     project_icon_open: bool,
     /// Highlighted completion in the project and tag fields.
@@ -244,6 +274,11 @@ impl FlowlistApp {
             view_options,
             sort_menu_open: false,
             group_menu_open: false,
+            sort_anchor: Rc::new(Cell::new(None)),
+            group_anchor: Rc::new(Cell::new(None)),
+            sidebar_menu: None,
+            sort_closed_on_up: false,
+            group_closed_on_up: false,
             project_icon_open: false,
             suggestion_index: 0,
             suggestion_engaged: false,
@@ -986,6 +1021,20 @@ impl FlowlistApp {
         cx.notify();
     }
 
+    fn empty_trash(&mut self, cx: &mut Context<Self>) {
+        let ids = self.store.db().trashed_roots();
+        if ids.is_empty() {
+            self.toast = Some("Trash is already empty".to_string());
+            cx.notify();
+            return;
+        }
+        self.execute(Command::PurgeTasks { ids });
+        self.selected.clear();
+        self.anchor = None;
+        self.save_session();
+        cx.notify();
+    }
+
     fn delete_selected(&mut self, cx: &mut Context<Self>) {
         if self.selected.is_empty() {
             self.toast = Some("Select a task first".to_string());
@@ -1354,16 +1403,11 @@ impl FlowlistApp {
             return Vec::new();
         }
         let query = self.field.text().trim().to_string();
-        let current = self
-            .selected_one()
-            .and_then(|id| self.store.db().tasks.get(&id))
-            .and_then(|task| task.project.as_ref())
-            .map(|project| self.store.db().project_path(project))
-            .unwrap_or_default();
-        // Opening the field is a dropdown: show every project. Once the user
-        // types, narrow the list; an unknown typed path becomes a new project.
-        if query.is_empty() || query == current {
-            return self.project_paths();
+        // The dropdown stays closed until the user types. Listing every
+        // project on open would take over the whole inspector once a library
+        // has a few dozen projects.
+        if query.is_empty() {
+            return Vec::new();
         }
         self.suggest_paths(self.project_paths(), &query)
     }
@@ -1472,7 +1516,31 @@ impl FlowlistApp {
                 patch.notes = Some(raw);
             }
             EditField::Project => {
-                patch.project_path = Some(if value.is_empty() { None } else { Some(value) });
+                if value.is_empty() {
+                    patch.project_path = Some(None);
+                } else {
+                    let known = {
+                        let db = self.store.db();
+                        db.find_project_by_path(&value).is_some()
+                            || db.find_project_by_name(&value).is_some()
+                    };
+                    if !known {
+                        // Ask before adding a project. A typo should not
+                        // silently create a new entry in the sidebar.
+                        self.editing = None;
+                        self.field_error = None;
+                        self.focus = FocusArea::Content;
+                        self.open_modal(
+                            modals::Modal::CreateProject {
+                                task: id,
+                                path: value,
+                            },
+                            cx,
+                        );
+                        return;
+                    }
+                    patch.project_path = Some(Some(value));
+                }
             }
             EditField::Defer | EditField::Due => {
                 let stamp = if value.is_empty() {
@@ -1724,6 +1792,9 @@ impl FlowlistApp {
         self.modal = Some(modal);
         self.modal_focus = 0;
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
+        self.sort_menu_open = false;
+        self.group_menu_open = false;
+        self.sidebar_menu = None;
         self.focus = FocusArea::Modal;
         cx.notify();
     }
@@ -1843,6 +1914,15 @@ impl FlowlistApp {
                         }
                     }
                 }
+            }
+            modals::Modal::CreateProject { task, path } => {
+                self.execute(Command::UpdateTask {
+                    id: task.clone(),
+                    patch: TaskPatch {
+                        project_path: Some(Some(path.clone())),
+                        ..Default::default()
+                    },
+                });
             }
             modals::Modal::NewFolder { name } => {
                 let name = name.text().trim().to_string();
@@ -2097,6 +2177,15 @@ impl FlowlistApp {
                     }
                     BufferKey::Ignored => {}
                 }
+            }
+            // Modals without text fields still need Escape and Return.
+            if stroke.key == "escape" {
+                self.close_modal(cx);
+                return;
+            }
+            if stroke.key == "enter" || stroke.key == "return" {
+                self.commit_modal(cx);
+                return;
             }
             return;
         }
@@ -2403,9 +2492,10 @@ impl FlowlistApp {
                 }
             }
             "escape" => {
-                if self.sort_menu_open || self.group_menu_open {
+                if self.sort_menu_open || self.group_menu_open || self.sidebar_menu.is_some() {
                     self.sort_menu_open = false;
                     self.group_menu_open = false;
+                    self.sidebar_menu = None;
                     cx.notify();
                     return;
                 }
@@ -2520,7 +2610,16 @@ impl FlowlistApp {
         use vim::VimAction as A;
         match action {
             A::Cancel => {
+                // Escape closes an open dropdown first. Vim handling runs
+                // before the plain key map, so without this the menus would
+                // stay open while the selection cleared underneath them.
                 self.vim.reset();
+                if self.sort_menu_open || self.group_menu_open || self.sidebar_menu.is_some() {
+                    self.sort_menu_open = false;
+                    self.group_menu_open = false;
+                    self.sidebar_menu = None;
+                    return;
+                }
                 self.selected.clear();
                 self.anchor = None;
                 self.search.clear();
@@ -3398,6 +3497,9 @@ impl FlowlistApp {
             "group": self.group.map(group_slug),
             "sort_menu": self.sort_menu_open,
             "group_menu": self.group_menu_open,
+            "sort_anchor": self.sort_anchor.get().is_some(),
+            "group_anchor": self.group_anchor.get().is_some(),
+            "sidebar_menu": self.sidebar_menu.as_ref().map(|menu| menu.key()),
             "forecast_date": self.forecast_date.map(|date| date.to_string()),
             "trashed": self.store.db().trash_count(),
             "traffic_lights": if self.traffic_lights_hidden { "hidden" } else { "visible" },
@@ -3776,7 +3878,12 @@ impl Render for FlowlistApp {
             .on_key_down(cx.listener(Self::on_key_down))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, _, window, _| window.focus(&this.focus_handle)),
+                cx.listener(|this, _, window, _| {
+                    // A new click starts a new mouse-up lifecycle.
+                    this.sort_closed_on_up = false;
+                    this.group_closed_on_up = false;
+                    window.focus(&this.focus_handle);
+                }),
             );
         root = root.child(self.render_header(window, cx));
         let mut body = div().flex().flex_1().min_h_0();
@@ -3787,23 +3894,70 @@ impl Render for FlowlistApp {
         }
         root = root.child(body);
         root = root.child(self.render_status(window, cx));
-        // The header dropdowns are drawn at the root so the task list cannot
-        // paint over them; the chips only toggle this state.
-        if self.sort_menu_open {
+        // Any open dropdown gets a full-window scrim, so a click anywhere
+        // closes it instead of leaving an orphan menu behind.
+        if self.sort_menu_open || self.group_menu_open || self.sidebar_menu.is_some() {
             root = root.child(
-                self.render_sort_menu(cx)
+                div()
+                    .id("menu-scrim")
                     .absolute()
-                    .top(px(112.))
-                    .right(px(500.)),
+                    .top_0()
+                    .left_0()
+                    .size_full()
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            this.sort_closed_on_up = this.sort_menu_open;
+                            this.group_closed_on_up = this.group_menu_open;
+                            this.sort_menu_open = false;
+                            this.group_menu_open = false;
+                            this.sidebar_menu = None;
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(|this, _, _, cx| {
+                            this.sort_menu_open = false;
+                            this.group_menu_open = false;
+                            this.sidebar_menu = None;
+                            cx.notify();
+                        }),
+                    ),
             );
         }
+        if self.sidebar_menu.is_some() {
+            root = root.child(self.render_sidebar_menu(cx));
+        }
+        // Header dropdowns are root overlays positioned from the chip bounds
+        // measured on the previous frame, so their hitboxes are exactly where
+        // they paint.
+        let viewport = self.window_size.unwrap_or((1254.0, 1404.0));
+        if self.sort_menu_open {
+            if let Some(anchor) = self.sort_anchor.get() {
+                let (x, y) = menu_position(anchor, viewport, 160.0, 250.0);
+                root = root.child(
+                    div()
+                        .id("sort-menu-layer")
+                        .absolute()
+                        .left(px(x))
+                        .top(px(y))
+                        .child(self.render_sort_menu(cx)),
+                );
+            }
+        }
         if self.group_menu_open {
-            root = root.child(
-                self.render_group_menu(cx)
-                    .absolute()
-                    .top(px(112.))
-                    .right(px(360.)),
-            );
+            if let Some(anchor) = self.group_anchor.get() {
+                let (x, y) = menu_position(anchor, viewport, 160.0, 250.0);
+                root = root.child(
+                    div()
+                        .id("group-menu-layer")
+                        .absolute()
+                        .left(px(x))
+                        .top(px(y))
+                        .child(self.render_group_menu(cx)),
+                );
+            }
         }
         if self.toast.is_some() {
             root = root.child(self.render_toast(cx));

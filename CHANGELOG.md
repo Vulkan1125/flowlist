@@ -25,6 +25,23 @@
   New Project sheet and cycled from the project banner.
 - Sort and Group header chips now open a list of every option instead of
   cycling blindly. `Esc` closes the menu.
+- Sort and Group menus open directly under their chip, stay above the task
+  list, and close on any click outside. The outside-click scrim now closes on
+  mouse-up, so the menu item under the pointer still receives its click.
+- Right-clicking any sidebar row opens a menu for that row: open, rename,
+  delete, new child, project status, tag location and Empty Trash where they
+  apply. The menu opens under the pointer and `Esc` closes it.
+- Sidebar rows reveal their edit and delete buttons on hover, including the
+  active row, and project rows gained a delete button.
+- Project deletion is an undoable command in the GUI, CLI (`project delete`)
+  and MCP (`delete_project`). Deleting a project moves its tasks to Trash and
+  detaches the project from its folder.
+- Typing an unknown `Folder / Project` path in the task inspector now asks
+  before creating the project. Dismissing the prompt leaves the task alone.
+- The inspector's project picker only opens once you start typing, instead of
+  covering the panel with every project as soon as the field is focused.
+- New projects default to the folder icon instead of the generic project
+  glyph.
 - Added a **First Available** header toggle that hides blocked rows.
 - Sort, grouping, completed visibility and availability are remembered per
   perspective.

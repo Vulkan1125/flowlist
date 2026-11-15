@@ -393,40 +393,63 @@ impl FlowlistApp {
                                     })),
                             )
                             .when(!is_trash, |this| {
-                                this.child(
-                                    div().relative().child(
-                                        div()
-                                            .id("sort")
-                                            .tooltip(widgets::tip(theme, "Pick a sort order"))
-                                            .child(widgets::toggle_chip(
-                                                theme,
-                                                format!("Sort · {}", sort_label(self.sort)),
-                                                self.sort_menu_open,
-                                            ))
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.sort_menu_open = !this.sort_menu_open;
-                                                this.group_menu_open = false;
-                                                cx.notify();
-                                            })),
-                                    ),
-                                )
-                                .child(
-                                    div().relative().child(
-                                        div()
-                                            .id("group")
-                                            .tooltip(widgets::tip(theme, "Pick a grouping"))
-                                            .child(widgets::toggle_chip(
-                                                theme,
-                                                format!("Group · {}", group_label(self.group)),
-                                                self.group_menu_open,
-                                            ))
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.group_menu_open = !this.group_menu_open;
-                                                this.sort_menu_open = false;
-                                                cx.notify();
-                                            })),
-                                    ),
-                                )
+                                this.child({
+                                    let anchor = self.sort_anchor.clone();
+                                    div()
+                                        .child(
+                                            div()
+                                                .id("sort")
+                                                .tooltip(widgets::tip(theme, "Pick a sort order"))
+                                                .child(widgets::toggle_chip(
+                                                    theme,
+                                                    format!("Sort · {}", sort_label(self.sort)),
+                                                    self.sort_menu_open,
+                                                ))
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    let suppress =
+                                                        std::mem::take(&mut this.sort_closed_on_up);
+                                                    this.sort_menu_open =
+                                                        !this.sort_menu_open && !suppress;
+                                                    this.group_menu_open = false;
+                                                    this.sidebar_menu = None;
+                                                    cx.notify();
+                                                })),
+                                        )
+                                        .on_children_prepainted(move |bounds, _, _| {
+                                            if let Some(bounds) = bounds.first() {
+                                                anchor.set(Some(*bounds));
+                                            }
+                                        })
+                                })
+                                .child({
+                                    let anchor = self.group_anchor.clone();
+                                    div()
+                                        .child(
+                                            div()
+                                                .id("group")
+                                                .tooltip(widgets::tip(theme, "Pick a grouping"))
+                                                .child(widgets::toggle_chip(
+                                                    theme,
+                                                    format!("Group · {}", group_label(self.group)),
+                                                    self.group_menu_open,
+                                                ))
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    let suppress = std::mem::take(
+                                                        &mut this.group_closed_on_up,
+                                                    );
+                                                    this.group_menu_open =
+                                                        !this.group_menu_open && !suppress;
+                                                    this.sort_menu_open = false;
+                                                    this.sidebar_menu = None;
+                                                    cx.notify();
+                                                })),
+                                        )
+                                        .on_children_prepainted(move |bounds, _, _| {
+                                            if let Some(bounds) = bounds.first() {
+                                                anchor.set(Some(*bounds));
+                                            }
+                                        })
+                                })
                                 .child(
                                     div()
                                         .id("only-available")

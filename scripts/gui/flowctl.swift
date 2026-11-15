@@ -2,6 +2,7 @@
 //
 // Usage: flowctl mouse <x> <y>
 //        flowctl move <x> <y>
+//        flowctl rightmouse <x> <y>
 //        flowctl key <keycode> [cmd|shift|ctrl|cmdshift|ctrlshift]
 //        flowctl text <string>
 //
@@ -30,8 +31,26 @@ func mouse(_ x: Double, _ y: Double) {
     }
 }
 
-func move(_ x: Double, _ y: Double) {
-    let event = CGEvent(
+func rightMouse(_ x: Double, _ y: Double) {
+    let point = CGPoint(x: x, y: y)
+    for (type, delay) in [
+        (CGEventType.mouseMoved, 60_000),
+        (CGEventType.rightMouseDown, 40_000),
+        (CGEventType.rightMouseUp, 0),
+    ] {
+        let event = CGEvent(
+            mouseEventSource: nil,
+            mouseType: type,
+            mouseCursorPosition: point,
+            mouseButton: .right
+        )
+        event?.flags = []
+        event?.post(tap: .cghidEventTap)
+        usleep(useconds_t(delay))
+    }
+}
+
+func move(_ x: Double, _ y: Double) {    let event = CGEvent(
         mouseEventSource: nil,
         mouseType: .mouseMoved,
         mouseCursorPosition: CGPoint(x: x, y: y),
@@ -84,6 +103,7 @@ let args = CommandLine.arguments
 guard args.count >= 2 else { exit(1) }
 switch args[1] {
 case "mouse": mouse(Double(args[2])!, Double(args[3])!)
+case "rightmouse": rightMouse(Double(args[2])!, Double(args[3])!)
 case "move": move(Double(args[2])!, Double(args[3])!)
 case "key": key(CGKeyCode(args[2])!, args.count > 3 ? args[3] : nil)
 case "text": type(args[2])

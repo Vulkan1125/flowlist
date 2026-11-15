@@ -203,6 +203,7 @@ impl Server {
             "create_project" => self.tool_create_project(args),
             "update_project" => self.tool_update_project(args),
             "set_project_status" => self.tool_set_project_status(args),
+            "delete_project" => self.tool_delete_project(args),
             "list_tags" => self.tool_list_tags(args),
             "create_tag" => self.tool_create_tag(args),
             "delete_tag" => self.tool_delete_tag(args),
@@ -840,8 +841,17 @@ impl Server {
         Ok(render::project_value(self.store.db(), &id))
     }
 
-    // ----------------------------------------------------------------- tags
+    fn tool_delete_project(&mut self, args: &Value) -> Result<Value> {
+        let id = self
+            .store
+            .db()
+            .resolve_project(&require_string(args, "id")?)?;
+        self.store
+            .execute(CoreCommand::DeleteProject { id: id.clone() })?;
+        Ok(json!({ "deleted": id.to_string() }))
+    }
 
+    // ----------------------------------------------------------------- tags
     fn tool_list_tags(&mut self, args: &Value) -> Result<Value> {
         self.store.refresh()?;
         let db = self.store.db();
@@ -1521,6 +1531,16 @@ fn tool_definitions() -> Vec<Value> {
                     "status": s("active | on-hold | done | dropped"),
                 }),
                 &["id", "status"],
+            ),
+        ),
+        tool(
+            "delete_project",
+            "Delete a project and move its tasks to Trash.",
+            schema(
+                json!({
+                    "id": s("Project id or prefix"),
+                }),
+                &["id"],
             ),
         ),
         tool(

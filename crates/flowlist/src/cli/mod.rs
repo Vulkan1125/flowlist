@@ -440,6 +440,10 @@ pub enum ProjectCommand {
         id: String,
         status: String,
     },
+    /// Delete a project, moving its tasks to Trash.
+    Delete {
+        id: String,
+    },
     /// Mark a project reviewed.
     Review {
         id: String,
@@ -1760,6 +1764,17 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
                     paint.green("Project"),
                     paint.cyan(id.short()),
                     status.label()
+                );
+            }
+        }
+        ProjectCommand::Delete { id } => {
+            let id = resolve_project(store.db(), &id)?;
+            store.execute(CoreCommand::DeleteProject { id: id.clone() })?;
+            if !cli.json {
+                println!(
+                    "{} {}",
+                    paint.green("Deleted project"),
+                    paint.cyan(id.short())
                 );
             }
         }

@@ -16,7 +16,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Optional High / Medium / Low task priorities
 - [x] Task and project attachments stored as referenced file paths
 - [x] Fixed project icon set (project, folder, star, briefcase, home, heart,
-      book, code, rocket, coffee)
+      book, code, rocket, coffee); new projects start with the folder icon
 - [x] Restorable Trash with configurable auto-delete
 - [x] Repeat rules: fixed/after-completion, due-again/defer-another, end date,
       end count, completion counter
@@ -119,7 +119,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       inspector and New Project sheet, with the chosen icon in the sidebar
       and dashboard
 - [x] Project and tag autocomplete: prefix-first `Folder / Project` and
-      `Parent / Child` paths, `↑`/`↓` to highlight, `Tab` or click to accept
+      `Parent / Child` paths, `↑`/`↓` to highlight, `Tab` or click to accept.
+      The project list opens only after typing; an unknown path asks before
+      creating the project
 - [x] System-wide capture (`⌃⌥Space`) works while another app is in front;
       Flowlist comes forward with capture focused and switches to Inbox from
       perspectives that have no capture bar
@@ -130,10 +132,14 @@ working domain and GUI. This page tracks what is implemented and verified.
       `⌃⌘N`, `⇧⌘P`)
 - [x] Rich custom-perspective editor: conditions, project/tag pickers,
       status, due/defer windows, grouping and sort, preserving unknown filters
-- [x] Rename project/folder/tag/perspective (`⌘R` or hover pencil)
+- [x] Rename project/folder/tag/perspective (`⌘R` or hover pencil);
+      hover each sidebar row for its edit and delete buttons
+- [x] Right-click any sidebar row for open/rename/delete, project status,
+      tag location, new child items and Empty Trash
 - [x] Tag locations from the sidebar (`⌖`) or `⇧L`, with validation and clear
 - [x] Nearby ranks tasks by the distance between the library and tag locations
-- [x] Delete folder/tag/perspective from the sidebar (`⌘⌫` or `dd`)
+- [x] Delete folder/tag/perspective/project from the sidebar (`⌘⌫` or `dd`);
+      deleting a project moves its tasks to Trash and is undoable
 - [x] Project status management (active/on hold/done/dropped)
 - [x] Import modal (JSON or TaskPaper, merge or replace)
 - [x] TaskPaper clipboard export (`⇧⌘E`)

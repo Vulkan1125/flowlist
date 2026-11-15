@@ -82,6 +82,17 @@ landed and verified.
 - [x] Header and status chrome use the flat glass tint instead of a
       left-to-right gradient ramp; the sidebar and inspector keep their
       vertical wash.
+- [x] Sort and Group menus open under their chip, paint above the list, close
+      on an outside click and accept clicks on their items. The scrim closes
+      on mouse-up so the item under the pointer is not removed before its
+      click is delivered.
+- [x] Every sidebar row has a right-click menu (Open, Rename, Delete, New
+      child, status, tag location, Empty Trash).
+- [x] Sidebar rows reveal edit/delete on hover, including the active row.
+- [x] Undoable project deletion in the GUI, CLI and MCP; tasks move to Trash.
+- [x] Typing an unknown project path asks before creating the project, and the
+      project picker stays closed until the user types.
+- [x] New projects use the folder icon by default.
 
 ## OmniFocus gap research (first pass, November 2026)
 

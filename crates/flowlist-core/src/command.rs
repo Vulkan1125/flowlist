@@ -288,6 +288,11 @@ pub enum Command {
         id: ProjectId,
         placement: ContainerPlacement,
     },
+    /// Remove a project and move everything inside it to Trash. Undo brings
+    /// the project and its tasks back in one step.
+    DeleteProject {
+        id: ProjectId,
+    },
     CreateFolder {
         name: String,
         parent: Option<FolderId>,
@@ -417,6 +422,10 @@ impl Command {
             Command::MoveProject { id, .. } => match project_name(id) {
                 Some(name) => format!("Move project “{name}”"),
                 None => "Move project".to_string(),
+            },
+            Command::DeleteProject { id } => match project_name(id) {
+                Some(name) => format!("Delete project “{name}”"),
+                None => "Delete project".to_string(),
             },
             Command::CreateFolder { name, .. } => format!("Add folder “{name}”"),
             Command::RenameFolder { id, .. } => match folder_name(id) {
@@ -1060,6 +1069,45 @@ impl Command {
                 );
                 db.touch();
                 outcome.affected.push(id.to_string());
+            }
+            Command::DeleteProject { id } => {
+                db.project(&id)?;
+                let roots: Vec<TaskId> = db
+                    .tasks
+                    .values()
+                    .filter(|task| task.project.as_ref() == Some(&id) && task.parent.is_none())
+                    .map(|task| task.id.clone())
+                    .collect();
+                let mut trashed: BTreeSet<TaskId> = BTreeSet::new();
+                for root in &roots {
+                    for descendant in db.task_subtree(root) {
+                        trashed.insert(descendant);
+                    }
+                }
+                for task_id in &trashed {
+                    if let Some(task) = db.tasks.get_mut(task_id) {
+                        task.trashed_at = Some(at);
+                        task.modified_at = at;
+                    }
+                }
+                // The project's ordering list disappears with it. Keep the
+                // trashed roots addressable from the Inbox so validation and
+                // an Undo can both find them.
+                for root in roots {
+                    if let Some(task) = db.tasks.get_mut(&root) {
+                        task.project = None;
+                    }
+                    if !db.inbox_order.contains(&root) {
+                        db.inbox_order.push(root);
+                    }
+                }
+                db.detach_container(&ContainerId::Project(id.clone()));
+                db.projects.remove(&id);
+                db.touch();
+                outcome.message = Some(format!(
+                    "Project deleted; {} task(s) moved to Trash",
+                    trashed.len()
+                ));
             }
             Command::CreateFolder {
                 name,

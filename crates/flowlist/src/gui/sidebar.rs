@@ -4,7 +4,7 @@
 use gpui::{AnyElement, Context, IntoElement, MouseButton, Window, div, prelude::*, px};
 
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId};
-use flowlist_core::model::{BuiltinPerspective, Priority};
+use flowlist_core::model::{BuiltinPerspective, Priority, ProjectStatus};
 
 use super::drag::DragTask;
 use super::icons::{self, Icon};
@@ -19,6 +19,29 @@ pub(super) enum SidebarTarget {
     Project(ProjectId),
     Tag(TagId),
     Priority(Priority),
+}
+
+/// The right-click menu on a sidebar row. The position is in window
+/// coordinates, so the menu opens exactly under the pointer.
+#[derive(Clone, Debug)]
+pub(super) struct SidebarMenu {
+    target: SidebarTarget,
+    position: gpui::Point<gpui::Pixels>,
+}
+
+impl SidebarMenu {
+    /// Stable identifier for the row the menu belongs to, used by the GUI
+    /// test-state file.
+    pub(super) fn key(&self) -> String {
+        match &self.target {
+            SidebarTarget::Builtin(perspective) => format!("builtin:{}", perspective.slug()),
+            SidebarTarget::Custom(id) => format!("custom:{id}"),
+            SidebarTarget::Folder(id) => format!("folder:{id}"),
+            SidebarTarget::Project(id) => format!("project:{id}"),
+            SidebarTarget::Tag(id) => format!("tag:{id}"),
+            SidebarTarget::Priority(priority) => format!("priority:{}", priority.slug()),
+        }
+    }
 }
 
 fn glyph(perspective: BuiltinPerspective) -> Icon {
@@ -42,14 +65,20 @@ impl FlowlistApp {
         &self,
         key: String,
         entity: modals::EntityRef,
+        group: String,
+        active: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
+        let reveal_group = group.clone();
         div()
             .id(super::sid(key))
             .px_1()
             .rounded_sm()
-            .opacity(0.0)
+            .opacity(if active { 1.0 } else { 0.0 })
+            .when(!active, |this| {
+                this.group_hover(reveal_group, |style| style.opacity(1.0))
+            })
             .text_color(theme.text_faint)
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.text).bg(theme.hover))
@@ -68,14 +97,20 @@ impl FlowlistApp {
         &self,
         key: String,
         id: flowlist_core::ids::PerspectiveId,
+        group: String,
+        active: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
+        let reveal_group = group.clone();
         div()
             .id(super::sid(key))
             .px_1()
             .rounded_sm()
-            .opacity(0.0)
+            .opacity(if active { 1.0 } else { 0.0 })
+            .when(!active, |this| {
+                this.group_hover(reveal_group, |style| style.opacity(1.0))
+            })
             .text_color(theme.text_faint)
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.text).bg(theme.hover))
@@ -95,14 +130,20 @@ impl FlowlistApp {
         key: String,
         tag: flowlist_core::ids::TagId,
         located: bool,
+        group: String,
+        active: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
+        let reveal_group = group.clone();
         div()
             .id(super::sid(key))
             .px_1()
             .rounded_sm()
-            .opacity(0.0)
+            .opacity(if active { 1.0 } else { 0.0 })
+            .when(!active, |this| {
+                this.group_hover(reveal_group, |style| style.opacity(1.0))
+            })
             .text_color(if located {
                 theme.success
             } else {
@@ -139,14 +180,20 @@ impl FlowlistApp {
         key: String,
         command: flowlist_core::command::Command,
         view: View,
+        group: String,
+        active: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
+        let reveal_group = group.clone();
         div()
             .id(super::sid(key))
             .px_1()
             .rounded_sm()
-            .opacity(0.0)
+            .opacity(if active { 1.0 } else { 0.0 })
+            .when(!active, |this| {
+                this.group_hover(reveal_group, |style| style.opacity(1.0))
+            })
             .text_color(theme.text_faint)
             .cursor_pointer()
             .hover(|style| style.opacity(1.0).text_color(theme.danger).bg(theme.hover))
@@ -354,6 +401,441 @@ impl FlowlistApp {
         }
     }
 
+    pub(super) fn open_sidebar_menu(
+        &mut self,
+        target: SidebarTarget,
+        position: gpui::Point<gpui::Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        self.sidebar_cursor = Some(target.clone());
+        self.focus = FocusArea::Sidebar;
+        self.sort_menu_open = false;
+        self.group_menu_open = false;
+        self.sidebar_menu = Some(SidebarMenu { target, position });
+        cx.notify();
+    }
+
+    fn close_sidebar_menu(&mut self, cx: &mut Context<Self>) {
+        self.sidebar_menu = None;
+        cx.notify();
+    }
+
+    fn delete_sidebar_entity(
+        &mut self,
+        command: flowlist_core::command::Command,
+        view: View,
+        cx: &mut Context<Self>,
+    ) {
+        self.execute(command);
+        if self.view == view {
+            self.view = View::Builtin(BuiltinPerspective::Inbox);
+            self.selected.clear();
+            self.anchor = None;
+        }
+        self.save_session();
+        cx.notify();
+    }
+
+    fn sidebar_menu_item(
+        &self,
+        id: String,
+        label: impl Into<String>,
+        danger: bool,
+        checked: bool,
+        cx: &mut Context<Self>,
+        on_click: impl Fn(&mut FlowlistApp, &mut Context<FlowlistApp>) + 'static,
+    ) -> AnyElement {
+        let theme = self.theme;
+        div()
+            .id(super::sid(id))
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .px_2()
+            .py_1()
+            .rounded_sm()
+            .text_xs()
+            .text_color(if danger {
+                theme.danger
+            } else if checked {
+                theme.accent
+            } else {
+                theme.text_dim
+            })
+            .bg(if checked {
+                theme.selection
+            } else {
+                theme.clear
+            })
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.hover))
+            .child(label.into())
+            .when(checked, |this| {
+                this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+            })
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.close_sidebar_menu(cx);
+                on_click(this, cx);
+            }))
+            .into_any_element()
+    }
+
+    fn sidebar_menu_divider(&self) -> AnyElement {
+        div()
+            .h(px(1.))
+            .my_1()
+            .w_full()
+            .bg(self.theme.border_soft)
+            .into_any_element()
+    }
+
+    pub(super) fn render_sidebar_menu(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let Some(menu) = self.sidebar_menu.as_ref() else {
+            return div().into_any_element();
+        };
+        let target = menu.target.clone();
+        let db = self.store.db();
+        let mut items: Vec<AnyElement> = Vec::new();
+
+        match target.clone() {
+            SidebarTarget::Builtin(perspective) => {
+                let open_target = SidebarTarget::Builtin(perspective);
+                items.push(self.sidebar_menu_item(
+                    "menu-open-view".to_string(),
+                    format!("Open {}", perspective.label()),
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| this.sidebar_activate(open_target.clone(), cx),
+                ));
+                if perspective == BuiltinPerspective::Trash {
+                    items.push(self.sidebar_menu_item(
+                        "menu-empty-trash".to_string(),
+                        "Empty Trash",
+                        true,
+                        false,
+                        cx,
+                        |this, cx| this.empty_trash(cx),
+                    ));
+                }
+            }
+            SidebarTarget::Priority(priority) => {
+                let open_target = SidebarTarget::Priority(priority);
+                items.push(self.sidebar_menu_item(
+                    "menu-open-view".to_string(),
+                    format!("Open {} priority", priority.label()),
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| this.sidebar_activate(open_target.clone(), cx),
+                ));
+                if self.priority_filter == Some(priority) {
+                    items.push(self.sidebar_menu_item(
+                        "menu-clear-priority".to_string(),
+                        "Clear priority filter",
+                        false,
+                        false,
+                        cx,
+                        |this, cx| {
+                            this.priority_filter = None;
+                            this.save_session();
+                            cx.notify();
+                        },
+                    ));
+                }
+            }
+            SidebarTarget::Custom(id) => {
+                let open_target = SidebarTarget::Custom(id.clone());
+                let edit_id = id.clone();
+                let delete_id = id.clone();
+                let name = db
+                    .perspectives
+                    .get(&id)
+                    .map(|perspective| perspective.name.clone())
+                    .unwrap_or_else(|| "view".to_string());
+                items.push(self.sidebar_menu_item(
+                    "menu-open-view".to_string(),
+                    format!("Open “{name}”"),
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| this.sidebar_activate(open_target.clone(), cx),
+                ));
+                items.push(self.sidebar_menu_item(
+                    "menu-edit-view".to_string(),
+                    "Edit perspective…",
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        if let Some(modal) = modals::Modal::perspective(this, &edit_id) {
+                            this.open_modal(modal, cx);
+                        }
+                    },
+                ));
+                items.push(self.sidebar_menu_divider());
+                items.push(self.sidebar_menu_item(
+                    "menu-delete-view".to_string(),
+                    "Delete perspective",
+                    true,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        this.delete_sidebar_entity(
+                            flowlist_core::command::Command::DeletePerspective {
+                                id: delete_id.clone(),
+                            },
+                            View::Custom(delete_id.clone()),
+                            cx,
+                        )
+                    },
+                ));
+            }
+            SidebarTarget::Folder(id) => {
+                let open_target = SidebarTarget::Folder(id.clone());
+                let rename_id = id.clone();
+                let delete_id = id.clone();
+                let project_folder = id.clone();
+                let child_folder = id.clone();
+                let name = db
+                    .folders
+                    .get(&id)
+                    .map(|folder| folder.name.clone())
+                    .unwrap_or_else(|| "folder".to_string());
+                items.push(self.sidebar_menu_item(
+                    "menu-open-view".to_string(),
+                    format!("Open “{name}”"),
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| this.sidebar_activate(open_target.clone(), cx),
+                ));
+                items.push(self.sidebar_menu_item(
+                    "menu-rename-folder".to_string(),
+                    "Rename…",
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        let modal = modals::Modal::rename(
+                            this,
+                            modals::EntityRef::Folder(rename_id.clone()),
+                        );
+                        this.open_modal(modal, cx);
+                    },
+                ));
+                items.push(self.sidebar_menu_divider());
+                items.push(self.sidebar_menu_item(
+                    "menu-new-project-here".to_string(),
+                    "New project here…",
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        this.view = View::Folder(project_folder.clone());
+                        let modal = modals::Modal::new_project(this);
+                        this.open_modal(modal, cx);
+                    },
+                ));
+                items.push(self.sidebar_menu_item(
+                    "menu-new-folder-here".to_string(),
+                    "New subfolder…",
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        this.view = View::Folder(child_folder.clone());
+                        let modal = modals::Modal::new_folder(this);
+                        this.open_modal(modal, cx);
+                    },
+                ));
+                items.push(self.sidebar_menu_divider());
+                items.push(self.sidebar_menu_item(
+                    "menu-delete-folder".to_string(),
+                    "Delete folder",
+                    true,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        this.delete_sidebar_entity(
+                            flowlist_core::command::Command::DeleteFolder {
+                                id: delete_id.clone(),
+                            },
+                            View::Folder(delete_id.clone()),
+                            cx,
+                        )
+                    },
+                ));
+            }
+            SidebarTarget::Project(id) => {
+                let open_target = SidebarTarget::Project(id.clone());
+                let edit_id = id.clone();
+                let delete_id = id.clone();
+                let name = db
+                    .projects
+                    .get(&id)
+                    .map(|project| project.name.clone())
+                    .unwrap_or_else(|| "project".to_string());
+                let status = db.projects.get(&id).map(|project| project.status);
+                items.push(self.sidebar_menu_item(
+                    "menu-open-project".to_string(),
+                    format!("Open “{name}”"),
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| this.sidebar_activate(open_target.clone(), cx),
+                ));
+                items.push(self.sidebar_menu_item(
+                    "menu-rename-project".to_string(),
+                    "Rename…",
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        let modal = modals::Modal::rename(
+                            this,
+                            modals::EntityRef::Project(edit_id.clone()),
+                        );
+                        this.open_modal(modal, cx);
+                    },
+                ));
+                items.push(self.sidebar_menu_divider());
+                for option in ProjectStatus::ALL {
+                    let status_id = id.clone();
+                    items.push(self.sidebar_menu_item(
+                        format!("menu-project-status:{}", option.slug()),
+                        option.label(),
+                        false,
+                        status == Some(option),
+                        cx,
+                        move |this, cx| {
+                            this.execute(flowlist_core::command::Command::SetProjectStatus {
+                                id: status_id.clone(),
+                                status: option,
+                            });
+                            cx.notify();
+                        },
+                    ));
+                }
+                items.push(self.sidebar_menu_divider());
+                items.push(self.sidebar_menu_item(
+                    "menu-delete-project".to_string(),
+                    "Delete project",
+                    true,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        this.delete_sidebar_entity(
+                            flowlist_core::command::Command::DeleteProject {
+                                id: delete_id.clone(),
+                            },
+                            View::Project(delete_id.clone()),
+                            cx,
+                        )
+                    },
+                ));
+            }
+            SidebarTarget::Tag(id) => {
+                let open_target = SidebarTarget::Tag(id.clone());
+                let rename_id = id.clone();
+                let delete_id = id.clone();
+                let location_id = id.clone();
+                let child_tag = id.clone();
+                let name = db
+                    .tags
+                    .get(&id)
+                    .map(|tag| tag.name.clone())
+                    .unwrap_or_else(|| "tag".to_string());
+                items.push(self.sidebar_menu_item(
+                    "menu-open-tag".to_string(),
+                    format!("Open “{name}”"),
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| this.sidebar_activate(open_target.clone(), cx),
+                ));
+                items.push(self.sidebar_menu_item(
+                    "menu-rename-tag".to_string(),
+                    "Rename…",
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        let modal =
+                            modals::Modal::rename(this, modals::EntityRef::Tag(rename_id.clone()));
+                        this.open_modal(modal, cx);
+                    },
+                ));
+                items.push(self.sidebar_menu_item(
+                    "menu-locate-tag".to_string(),
+                    "Set location…",
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        let modal = modals::Modal::tag_location(this, location_id.clone());
+                        this.open_modal(modal, cx);
+                    },
+                ));
+                items.push(self.sidebar_menu_item(
+                    "menu-new-subtag".to_string(),
+                    "New subtag…",
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        this.view = View::Tag(child_tag.clone());
+                        let modal = modals::Modal::new_tag(this);
+                        this.open_modal(modal, cx);
+                    },
+                ));
+                items.push(self.sidebar_menu_divider());
+                items.push(self.sidebar_menu_item(
+                    "menu-delete-tag".to_string(),
+                    "Delete tag",
+                    true,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        this.delete_sidebar_entity(
+                            flowlist_core::command::Command::DeleteTag {
+                                id: delete_id.clone(),
+                            },
+                            View::Tag(delete_id.clone()),
+                            cx,
+                        )
+                    },
+                ));
+            }
+        }
+
+        let menu_div = div()
+            .id("sidebar-menu")
+            .min_w(px(210.))
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg()
+            .children(items);
+        let viewport = self.window_size.unwrap_or((1254.0, 1404.0));
+        let x = f32::from(menu.position.x).min((viewport.0 - 210.).max(0.));
+        let y = f32::from(menu.position.y).min((viewport.1 - 240.).max(0.));
+        div()
+            .id("sidebar-menu-layer")
+            .absolute()
+            .left(px(x))
+            .top(px(y))
+            .child(menu_div)
+            .into_any_element()
+    }
+
     pub(super) fn render_sidebar(
         &mut self,
         _window: &mut Window,
@@ -531,6 +1013,12 @@ impl FlowlistApp {
             )
             .child(div().flex_1().min_w_0().child(perspective.label()))
             .when(count > 0, |this| this.child(widgets::count(theme, count)))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    this.open_sidebar_menu(SidebarTarget::Builtin(perspective), event.position, cx)
+                }),
+            )
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.sidebar_activate(SidebarTarget::Builtin(perspective), cx)
             }))
@@ -573,6 +1061,12 @@ impl FlowlistApp {
             )
             .child(div().flex_1().min_w_0().child(priority.label()))
             .when(count > 0, |this| this.child(widgets::count(theme, count)))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    this.open_sidebar_menu(SidebarTarget::Priority(priority), event.position, cx)
+                }),
+            )
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.sidebar_activate(SidebarTarget::Priority(priority), cx)
             }))
@@ -592,6 +1086,7 @@ impl FlowlistApp {
         let delete_id = row.id.clone();
         let delete_view = View::Custom(row.id.clone());
         let cursor = self.sidebar_cursor_is(&SidebarTarget::Custom(target_id.clone()));
+        let group = format!("sidebar-row:custom:{}", row.id);
         div()
             .id(super::sid(format!("custom:{}", row.id)))
             .flex()
@@ -605,6 +1100,7 @@ impl FlowlistApp {
             .when(cursor, |this| this.bg(theme.hover))
             .text_color(if active { theme.accent } else { theme.text_dim })
             .cursor_pointer()
+            .group(group.clone())
             .hover(|style| style.bg(theme.hover))
             .child(
                 div()
@@ -618,14 +1114,28 @@ impl FlowlistApp {
             .child(self.edit_perspective_button(
                 format!("edit-perspective:{rename_id}"),
                 rename_id,
+                group.clone(),
+                active,
                 cx,
             ))
             .child(self.delete_entity_button(
                 format!("delete-perspective:{delete_id}"),
                 flowlist_core::command::Command::DeletePerspective { id: delete_id },
                 delete_view,
+                group.clone(),
+                active,
                 cx,
             ))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    this.open_sidebar_menu(
+                        SidebarTarget::Custom(target_id.clone()),
+                        event.position,
+                        cx,
+                    )
+                }),
+            )
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.sidebar_activate(SidebarTarget::Custom(id.clone()), cx)
             }))
@@ -648,7 +1158,9 @@ impl FlowlistApp {
                     let rename_id = id.clone();
                     let delete_id = id.clone();
                     let delete_view = View::Folder(id.clone());
+                    let active = self.view == View::Folder(id.clone());
                     let cursor = self.sidebar_cursor_is(&SidebarTarget::Folder(target_id.clone()));
+                    let group = format!("sidebar-row:folder:{id}");
                     let mut row = div()
                         .id(super::sid(format!("sidebar-folder:{id}")))
                         .flex()
@@ -661,6 +1173,7 @@ impl FlowlistApp {
                         .rounded_md()
                         .text_color(self.theme.text_dim)
                         .cursor_pointer()
+                        .group(group.clone())
                         .hover(|style| style.bg(self.theme.hover))
                         .when(cursor, |this| this.bg(self.theme.hover))
                         .child(
@@ -706,21 +1219,35 @@ impl FlowlistApp {
                         .child(self.rename_button(
                             format!("rename-folder:{rename_id}"),
                             modals::EntityRef::Folder(rename_id),
+                            group.clone(),
+                            active,
                             cx,
                         ))
                         .child(self.delete_entity_button(
                             format!("delete-folder:{delete_id}"),
                             flowlist_core::command::Command::DeleteFolder { id: delete_id },
                             delete_view,
+                            group.clone(),
+                            active,
                             cx,
                         ))
                         .when(count > 0, |this| {
                             this.child(widgets::count(self.theme, count))
                         })
+                        .on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                                this.open_sidebar_menu(
+                                    SidebarTarget::Folder(target_id.clone()),
+                                    event.position,
+                                    cx,
+                                )
+                            }),
+                        )
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sidebar_activate(SidebarTarget::Folder(view_id.clone()), cx)
                         }));
-                    if self.view == View::Folder(id.clone()) {
+                    if active {
                         row = row.bg(self.theme.selection).text_color(self.theme.accent);
                     }
                     rows.push(row.into_any_element());
@@ -741,8 +1268,10 @@ impl FlowlistApp {
                     let target_id = id.clone();
                     let drop_id = id.clone();
                     let rename_id = id.clone();
+                    let delete_id = id.clone();
                     let active = self.view == View::Project(id.clone());
                     let cursor = self.sidebar_cursor_is(&SidebarTarget::Project(target_id.clone()));
+                    let group = format!("sidebar-row:project:{id}");
                     let mut row = div()
                         .id(super::sid(format!("sidebar-project:{id}")))
                         .flex()
@@ -765,6 +1294,7 @@ impl FlowlistApp {
                             self.theme.text
                         })
                         .cursor_pointer()
+                        .group(group.clone())
                         .hover(|style| style.bg(self.theme.hover))
                         .child(widgets::icon_for_project(
                             project.icon,
@@ -785,6 +1315,16 @@ impl FlowlistApp {
                         .child(self.rename_button(
                             format!("rename-project:{rename_id}"),
                             modals::EntityRef::Project(rename_id),
+                            group.clone(),
+                            active,
+                            cx,
+                        ))
+                        .child(self.delete_entity_button(
+                            format!("delete-project:{delete_id}"),
+                            flowlist_core::command::Command::DeleteProject { id: delete_id },
+                            View::Project(id.clone()),
+                            group.clone(),
+                            active,
                             cx,
                         ))
                         .child(
@@ -801,6 +1341,16 @@ impl FlowlistApp {
                         .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
                             this.drop_on_project(drop_id.clone(), payload, cx)
                         }))
+                        .on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                                this.open_sidebar_menu(
+                                    SidebarTarget::Project(target_id.clone()),
+                                    event.position,
+                                    cx,
+                                )
+                            }),
+                        )
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sidebar_activate(SidebarTarget::Project(view_id.clone()), cx)
                         }));
@@ -853,6 +1403,7 @@ impl FlowlistApp {
             let toggle_key = key.clone();
             let depth_pad = if parent.is_some() { 26.0 } else { 18.0 };
             let cursor = self.sidebar_cursor_is(&SidebarTarget::Tag(target_id.clone()));
+            let group = format!("sidebar-row:tag:{tag}");
             let mut row = div()
                 .id(super::sid(format!("sidebar-tag:{tag}")))
                 .flex()
@@ -875,6 +1426,7 @@ impl FlowlistApp {
                     self.theme.text_dim
                 })
                 .cursor_pointer()
+                .group(group.clone())
                 .hover(|style| style.bg(self.theme.hover))
                 .child(if children {
                     div()
@@ -934,17 +1486,23 @@ impl FlowlistApp {
                     format!("location-tag:{tag}"),
                     tag.clone(),
                     located,
+                    group.clone(),
+                    active,
                     cx,
                 ))
                 .child(self.rename_button(
                     format!("rename-tag:{rename_id}"),
                     modals::EntityRef::Tag(rename_id),
+                    group.clone(),
+                    active,
                     cx,
                 ))
                 .child(self.delete_entity_button(
                     format!("delete-tag:{delete_id}"),
                     flowlist_core::command::Command::DeleteTag { id: delete_id },
                     delete_view,
+                    group.clone(),
+                    active,
                     cx,
                 ))
                 .when(usage > 0, |this| {
@@ -953,6 +1511,16 @@ impl FlowlistApp {
                 .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
                     this.drop_on_tag(drop_id.clone(), payload, cx)
                 }))
+                .on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                        this.open_sidebar_menu(
+                            SidebarTarget::Tag(target_id.clone()),
+                            event.position,
+                            cx,
+                        )
+                    }),
+                )
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.sidebar_activate(SidebarTarget::Tag(view_id.clone()), cx)
                 }));
