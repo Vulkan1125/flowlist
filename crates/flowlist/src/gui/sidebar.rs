@@ -362,10 +362,7 @@ impl FlowlistApp {
             SidebarTarget::Folder(id) => View::Folder(id.clone()),
             SidebarTarget::Project(id) => View::Project(id.clone()),
             SidebarTarget::Tag(id) => View::Tag(id.clone()),
-            SidebarTarget::Priority(priority) => {
-                self.priority_filter = Some(*priority);
-                View::Priority(*priority)
-            }
+            SidebarTarget::Priority(priority) => View::Priority(*priority),
         };
         self.open_view(view, cx);
         self.save_session();
@@ -871,6 +868,7 @@ impl FlowlistApp {
         div()
             .id("sidebar-menu-layer")
             .absolute()
+            .occlude()
             .left(px(x))
             .top(px(y))
             .child(menu_div)

@@ -119,6 +119,10 @@ pub struct ViewOptions {
     pub show_completed: Option<bool>,
     #[serde(default)]
     pub only_available: Option<bool>,
+    /// The header priority filter, kept per view so a Priority row in the
+    /// sidebar does not leave its filter on the next perspective.
+    #[serde(default)]
+    pub priority: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -272,6 +276,7 @@ mod tests {
                     group: Some("project".to_string()),
                     show_completed: Some(false),
                     only_available: Some(true),
+                    priority: Some("high".to_string()),
                 },
             )]),
             ..Session::default()
@@ -285,6 +290,10 @@ mod tests {
             Some("due")
         );
         assert_eq!(restored.view_options["flagged"].only_available, Some(true));
+        assert_eq!(
+            restored.view_options["flagged"].priority.as_deref(),
+            Some("high")
+        );
     }
 
     #[test]

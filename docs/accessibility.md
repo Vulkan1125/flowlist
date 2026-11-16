@@ -24,8 +24,10 @@ them, so the keyboard routes below are the primary way to reach them.
 
 The title bar holds the search field, centered on the content pane, so the
 content header keeps only the view title and Sort/Group/Filter chips on one
-row, with the subtitle below. Focusing search (`⌘F` or `/`) selects its
-contents; its × clears the query and keeps the field focused. If a view name is
+row, with the subtitle below. While a chip menu or a sheet is open it owns
+the pointer: hover and clicks cannot reach the rows behind it. Focusing search
+(`⌘F` or `/`) selects its contents; its × clears the query and keeps the field
+focused. If a view name is
 too long to fit beside the controls it is omitted rather than clipped; the same
 name is always available in the sidebar and the window title, and every view
 has a keyboard shortcut.

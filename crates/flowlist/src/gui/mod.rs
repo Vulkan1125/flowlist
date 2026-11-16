@@ -389,32 +389,36 @@ impl FlowlistApp {
             follow_system: Some(self.follow_system),
             view_options: {
                 let mut map = self.view_options.clone();
-                map.insert(
-                    self.view.key(),
-                    session::ViewOptions {
-                        sort: self.sort.map(|sort| sort_slug(sort).to_string()),
-                        group: self.group.map(|group| group_slug(group).to_string()),
-                        show_completed: Some(self.show_completed),
-                        only_available: Some(self.only_available),
-                    },
-                );
+                map.insert(self.view.key(), self.current_view_options());
                 map
             },
         };
         let _ = self.store.write_session(&session);
     }
 
+    /// The layout and filters to remember for the active view. A Priority
+    /// view always takes its filter from the view itself, so it stores nothing
+    /// here and cannot leak its priority into the next perspective.
+    fn current_view_options(&self) -> session::ViewOptions {
+        let priority = match self.view {
+            View::Priority(_) => None,
+            _ => self
+                .priority_filter
+                .map(|priority| priority.slug().to_string()),
+        };
+        session::ViewOptions {
+            sort: self.sort.map(|sort| sort_slug(sort).to_string()),
+            group: self.group.map(|group| group_slug(group).to_string()),
+            show_completed: Some(self.show_completed),
+            only_available: Some(self.only_available),
+            priority,
+        }
+    }
+
     /// Remember the current view's layout before switching away.
     fn remember_view_options(&mut self) {
-        self.view_options.insert(
-            self.view.key(),
-            session::ViewOptions {
-                sort: self.sort.map(|sort| sort_slug(sort).to_string()),
-                group: self.group.map(|group| group_slug(group).to_string()),
-                show_completed: Some(self.show_completed),
-                only_available: Some(self.only_available),
-            },
-        );
+        self.view_options
+            .insert(self.view.key(), self.current_view_options());
     }
 
     /// Restore layout for the view that is now active. Views without a saved
@@ -429,6 +433,10 @@ impl FlowlistApp {
         self.group = options.group.as_deref().and_then(group_from_slug);
         self.show_completed = options.show_completed.unwrap_or(false);
         self.only_available = options.only_available.unwrap_or(false);
+        self.priority_filter = effective_priority_filter(
+            &self.view,
+            options.priority.as_deref().and_then(Priority::from_slug),
+        );
     }
 
     fn prune_selection(&mut self) {
@@ -3485,6 +3493,15 @@ fn group_label(group: Option<GroupBy>) -> &'static str {
     }
 }
 
+/// A Priority view always filters to its own priority, whatever the last
+/// header filter was. Other views use the filter saved with that view.
+fn effective_priority_filter(view: &View, saved: Option<Priority>) -> Option<Priority> {
+    match view {
+        View::Priority(priority) => Some(*priority),
+        _ => saved,
+    }
+}
+
 // ---------------------------------------------------------------- render
 
 impl FlowlistApp {
@@ -3504,6 +3521,7 @@ impl FlowlistApp {
                     .values()
                     .filter(|task| {
                         !task.completed
+                            && !task.is_trashed()
                             && (task.due.is_some_and(|stamp| stamp.local_date() <= today)
                                 || task.defer.is_some_and(|stamp| stamp.local_date() <= today))
                     })
@@ -3512,7 +3530,7 @@ impl FlowlistApp {
             BuiltinPerspective::Flagged => db
                 .tasks
                 .values()
-                .filter(|task| !task.completed && task.flagged)
+                .filter(|task| !task.completed && !task.is_trashed() && task.flagged)
                 .count(),
             BuiltinPerspective::Review => query::review_projects(db, at).len(),
             BuiltinPerspective::Tags => db
@@ -3527,6 +3545,7 @@ impl FlowlistApp {
                     .values()
                     .filter(|task| {
                         task.completed
+                            && !task.is_trashed()
                             && task
                                 .completed_at
                                 .is_some_and(|completed| completed >= cutoff)
@@ -3820,12 +3839,17 @@ impl FlowlistApp {
         let theme = self.theme;
         let db = self.store.db();
         let at = now();
-        let open = db.tasks.values().filter(|task| !task.completed).count();
+        let open = db
+            .tasks
+            .values()
+            .filter(|task| !task.completed && !task.is_trashed())
+            .count();
         let available = db
             .tasks
             .values()
             .filter(|task| {
                 !task.completed
+                    && !task.is_trashed()
                     && query::availability::availability(db, &task.id, at).is_available()
             })
             .count();
@@ -4114,6 +4138,9 @@ impl Render for FlowlistApp {
                     .top_0()
                     .left_0()
                     .size_full()
+                    // Keep hover styles and clicks on the rows behind the
+                    // scrim from firing while a dropdown is open.
+                    .occlude()
                     .on_mouse_up(
                         MouseButton::Left,
                         cx.listener(|this, _, _, cx| {
@@ -4154,6 +4181,7 @@ impl Render for FlowlistApp {
                 div()
                     .id("sort-menu-layer")
                     .absolute()
+                    .occlude()
                     .left(px(x))
                     .top(px(y))
                     .child(self.render_sort_menu(cx)),
@@ -4167,6 +4195,7 @@ impl Render for FlowlistApp {
                 div()
                     .id("group-menu-layer")
                     .absolute()
+                    .occlude()
                     .left(px(x))
                     .top(px(y))
                     .child(self.render_group_menu(cx)),
@@ -4180,6 +4209,7 @@ impl Render for FlowlistApp {
                 div()
                     .id("priority-menu-layer")
                     .absolute()
+                    .occlude()
                     .left(px(x))
                     .top(px(y))
                     .child(self.render_priority_menu(cx)),
@@ -4307,6 +4337,8 @@ fn search_slot(window_width: f32, show_inspector: bool) -> (f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::rank_suggestions;
+    use super::{View, effective_priority_filter};
+    use flowlist_core::model::{BuiltinPerspective, Priority};
 
     fn corpus() -> Vec<String> {
         vec![
@@ -4376,5 +4408,31 @@ mod tests {
         let (left, width) = search_slot(880.0, true);
         assert_eq!(width, 288.0);
         assert!((left + width / 2.0 - 400.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_priority_view_owns_its_filter() {
+        // A Priority view always shows its own priority, even though the
+        // header filter is remembered per view.
+        assert_eq!(
+            effective_priority_filter(&View::Priority(Priority::High), None),
+            Some(Priority::High)
+        );
+        assert_eq!(
+            effective_priority_filter(&View::Priority(Priority::Low), Some(Priority::Medium)),
+            Some(Priority::Low)
+        );
+        // Other views get the filter saved with them, which is usually none.
+        assert_eq!(
+            effective_priority_filter(&View::Builtin(BuiltinPerspective::Inbox), None),
+            None
+        );
+        assert_eq!(
+            effective_priority_filter(
+                &View::Builtin(BuiltinPerspective::Inbox),
+                Some(Priority::Medium)
+            ),
+            Some(Priority::Medium)
+        );
     }
 }

@@ -616,6 +616,101 @@ fn tag_location_edit_is_undoable() {
 }
 
 #[test]
+fn trashed_tasks_stay_out_of_every_other_perspective() {
+    use flowlist_core::model::{BuiltinPerspective, Priority};
+    use flowlist_core::query;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let project = store
+        .execute(Command::CreateProject(NewProject::new("Work")))
+        .unwrap()
+        .created[0]
+        .clone();
+    let project_id = store.db().resolve_project(&project).unwrap();
+    let tag = store
+        .execute(Command::CreateTag {
+            name: "Office".into(),
+            parent: None,
+            status: TagStatus::Available,
+            location: None,
+            position: Position::End,
+        })
+        .unwrap()
+        .created[0]
+        .clone();
+    let tag_id = store.db().resolve_tag(&tag).unwrap();
+
+    let id = add(&mut store, "Throw me away");
+    let task_id = store.db().resolve_task(&id).unwrap();
+    store
+        .execute(Command::MoveTasks {
+            ids: vec![task_id.clone()],
+            placement: TaskPlacement::Project {
+                project: project_id.clone(),
+                position: Position::End,
+            },
+        })
+        .unwrap();
+    store
+        .execute(Command::SetTaskTags {
+            ids: vec![task_id.clone()],
+            add: vec![tag_id.clone()],
+            remove: Vec::new(),
+        })
+        .unwrap();
+    store
+        .execute(Command::UpdateTask {
+            id: task_id.clone(),
+            patch: TaskPatch {
+                flagged: Some(true),
+                priority: Some(Some(Priority::High)),
+                due: Some(Some(Stamp::date_only(local_date(Utc::now())))),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+
+    store
+        .execute(Command::DeleteTasks {
+            ids: vec![task_id.clone()],
+        })
+        .unwrap();
+
+    let ids = |groups: Vec<query::Group>| {
+        groups
+            .into_iter()
+            .flat_map(|group| group.rows)
+            .map(|row| row.id)
+            .collect::<Vec<_>>()
+    };
+    let at = Utc::now();
+    for perspective in BuiltinPerspective::ALL {
+        if perspective == BuiltinPerspective::Trash {
+            continue;
+        }
+        assert!(
+            !ids(query::view(store.db(), perspective, at)).contains(&task_id),
+            "{perspective:?} lists a trashed task"
+        );
+    }
+    assert!(!ids(query::priority(store.db(), Priority::High, at)).contains(&task_id));
+    assert!(
+        !store
+            .db()
+            .project_outline(&project_id, true)
+            .iter()
+            .any(|row| row.task == task_id)
+    );
+    assert!(!store.db().tasks_tagged(&tag_id, true).contains(&task_id));
+    assert_eq!(
+        ids(query::view(store.db(), BuiltinPerspective::Trash, at)),
+        vec![task_id]
+    );
+}
+
+#[test]
 fn deleting_moves_to_trash_and_restores_or_purges() {
     use flowlist_core::model::BuiltinPerspective;
     use flowlist_core::query;

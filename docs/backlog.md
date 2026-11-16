@@ -126,6 +126,11 @@ landed and verified.
 - [x] The Forecast calendar shows two consecutive months once the content pane
       is wide enough, keeping calendar-sized cells on large windows and full
       screen. Narrow panes keep one month.
+- [x] Dropdown menus and sheet backdrops occlude the window underneath, so
+      choosing an option no longer selects a row behind it.
+- [x] The Priority filter is stored per view; sidebar priority rows no longer
+      leave their filter on the next perspective.
+- [x] Sidebar badges and the status bar exclude tasks in Trash.
 
 ## OmniFocus gap research (first pass, November 2026)
 

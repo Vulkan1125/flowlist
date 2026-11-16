@@ -567,6 +567,9 @@ impl FlowlistApp {
             .flex()
             .items_center()
             .justify_center()
+            // The dimmed backdrop must swallow clicks meant for the window
+            // underneath, not select a row or chip through the sheet.
+            .occlude()
             .bg(rgba(0x00000055))
             .child(
                 div()

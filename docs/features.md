@@ -119,7 +119,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       list to that day; click again or press `\` to clear, with `[`/`]` day
       steps and `{`/`}` month steps.
 - [x] Sidebar perspectives, Trash, priority rows, custom perspectives and
-      project/folder/tag trees
+      project/folder/tag trees. Badges count shown tasks only, so Trash never
+      inflates another perspective.
 - [x] Content list with grouped rows, progress indicators and inline status
 - [x] Task capture with quick-entry syntax
 - [x] Multi-select, range select, keyboard navigation
@@ -163,8 +164,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] TaskPaper clipboard export (`⇧⌘E`)
 - [x] Settings and tag location modals
 - [x] Session persistence: view, selection, inspector, sort, grouping,
-      priority filter, per-view options, First Available, theme, follow-system,
-      vim mode and window size
+      per-view options, per-view priority filter, First Available, theme,
+      follow-system, vim mode and window size
 - [x] Ten theme families — Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula,
       Tokyo Night, Vesper, Graphite and Midnight — each with a light and a dark
       palette, chosen in Settings or with the title-bar moon/sun button,

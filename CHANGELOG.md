@@ -56,6 +56,15 @@
   out at the edge instead of adding an ellipsis. At rest long project, folder,
   tag, perspective and review-card names still end with an ellipsis (…). The
   inspector shows the project name in full and wraps it instead of cutting it.
+- Dropdown menus and sheets now block the window underneath, so clicking a
+  Sort, Group or Priority option no longer also selects or highlights the row
+  beneath the menu, and a dimmed sheet backdrop swallows clicks instead of
+  passing them to the list.
+- The Priority filter is remembered per view. Opening a sidebar priority row
+  no longer leaves that filter on the next perspective, and each perspective
+  keeps its own choice.
+- Sidebar Forecast, Flagged and Completed badges, plus the status bar's open
+  and available totals, no longer count tasks sitting in Trash.
 - Project rows in the Library use the same small boxed count as perspectives,
   and their names line up with the folder icon and count instead of sitting a
   couple of pixels low.
