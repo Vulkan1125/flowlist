@@ -21,6 +21,10 @@ landed and verified.
       but the current grammar uses `o`/`O` to add a task below/above. Decide
       which wins, keep the other on an unused key, and update the help card,
       README and `docs/features.md` together. Do not silently keep both.
+- [x] **Rename text selection** — rename sheets select the whole name on
+      open, so typing replaces it and one key clears it. Sheet fields accept a
+      click for the caret and a drag for a selection, with the layout mapped
+      from a transparent copy of the field text.
 - [x] **Focus after delete** — deleting selected task(s) selects the row that
       took their place, or the previous row at the end of the list. Works in
       Trash too, where delete is permanent.

@@ -113,6 +113,11 @@ makes room for the actions, and a long name fades at that edge instead of
 ending in an ellipsis. The same actions keep their keyboard routes (`⌘R` to
 rename, `⌘⌫` to delete, `dd` in vim mode) and their tooltips.
 
+A rename sheet opens with the whole name selected. Typing replaces it, one
+`Backspace` or `Delete` clears it, and the arrow keys or a click place the
+caret. Dragging inside any sheet text field selects a range, and `⌘A`, `⌘C`
+and `⌘X` work as usual.
+
 ## Tooltip coverage
 
 Tooltips stay hidden for roughly five seconds after hover begins, and clicking

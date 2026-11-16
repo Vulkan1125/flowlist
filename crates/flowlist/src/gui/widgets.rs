@@ -4,11 +4,14 @@
 //! Text fields render their buffer as runs so the caret and selection land on
 //! the right characters even with multi-byte input.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{
-    AnyView, App, Context, CursorStyle, Div, FontWeight, HighlightStyle, IntoElement, Render,
-    SharedString, Stateful, StyledText, TextStyle, Window, div, prelude::*, px,
+    AnyView, App, Context, CursorStyle, Div, FontWeight, HighlightStyle, IntoElement, MouseButton,
+    Pixels, Point, Render, SharedString, Stateful, StyledText, TextLayout, TextStyle, Window, div,
+    prelude::*, px,
 };
 
 use super::FlowlistApp;
@@ -49,6 +52,46 @@ pub fn text_field_with_trailer(
     focused: bool,
     trailer: f32,
 ) -> impl IntoElement {
+    text_field_inner(theme, buffer, placeholder, focused, trailer, None)
+}
+
+/// A character offset from a click or drag inside a text field.
+pub struct TextHit {
+    pub index: usize,
+    pub extend: bool,
+}
+
+/// The sheet's handler for a click or drag hit in a text field.
+type CursorHandler = Rc<dyn Fn(&TextHit, &mut Window, &mut App)>;
+
+/// A single-line field that also accepts mouse selection. The caller turns a
+/// hit into a caret move (or, while dragging, an extended selection). Used by
+/// the sheets, where the old field could only be edited with the keyboard.
+pub fn text_field_with_cursor(
+    theme: Theme,
+    buffer: &TextBuffer,
+    placeholder: &str,
+    focused: bool,
+    on_cursor: impl Fn(&TextHit, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    text_field_inner(
+        theme,
+        buffer,
+        placeholder,
+        focused,
+        0.0,
+        Some(Rc::new(on_cursor)),
+    )
+}
+
+fn text_field_inner(
+    theme: Theme,
+    buffer: &TextBuffer,
+    placeholder: &str,
+    focused: bool,
+    trailer: f32,
+    on_cursor: Option<CursorHandler>,
+) -> impl IntoElement {
     let chars: Vec<char> = buffer.text().chars().collect();
     let (start, end) = buffer.selection();
     let has_selection = start != end;
@@ -58,6 +101,40 @@ pub fn text_field_with_trailer(
         .collect();
     let after: String = chars[end.min(chars.len())..].iter().collect();
     let empty = chars.is_empty();
+
+    // A transparent copy of the text gives click handling a real layout to
+    // map pixels back to character offsets. The visible runs keep the caret
+    // and selection drawing unchanged.
+    let layout: Rc<RefCell<Option<TextLayout>>> = Rc::new(RefCell::new(None));
+    let measure = on_cursor.as_ref().map(|_| {
+        // The visible runs inherit the field's `text_sm` (14px) style, so
+        // the hidden copy must match or clicks land on the wrong character.
+        let style = TextStyle {
+            color: theme.text,
+            font_family: "SF Pro Text".into(),
+            font_size: px(14.).into(),
+            line_height: px(28.).into(),
+            ..Default::default()
+        };
+        let styled =
+            StyledText::new(buffer.text().to_string()).with_default_highlights(&style, Vec::new());
+        *layout.borrow_mut() = Some(styled.layout().clone());
+        styled
+    });
+    let hit_text = buffer.text().to_string();
+    let hit_layout = layout.clone();
+    let hit = Rc::new(move |position: Point<Pixels>| -> Option<usize> {
+        let layout = hit_layout.borrow();
+        let layout = layout.as_ref()?;
+        let byte = layout
+            .index_for_position(position)
+            .unwrap_or_else(|index| index)
+            .min(hit_text.len());
+        Some(hit_text[..byte].chars().count())
+    });
+
+    let cursor_down = on_cursor.clone();
+    let cursor_move = on_cursor.clone();
 
     div()
         .flex()
@@ -93,6 +170,53 @@ pub fn text_field_with_trailer(
                     )
                 }),
         )
+        .when_some(measure, |this, measure| {
+            this.child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .bottom_0()
+                    .left(px(8.0))
+                    .right(px(8.0 + trailer))
+                    .opacity(0.0)
+                    .child(measure),
+            )
+        })
+        .when_some(cursor_down, |this, cursor| {
+            let hit = hit.clone();
+            this.on_mouse_down(MouseButton::Left, move |event, window, cx| {
+                if let Some(index) = hit(event.position) {
+                    cursor(
+                        &TextHit {
+                            index,
+                            extend: false,
+                        },
+                        window,
+                        cx,
+                    );
+                }
+            })
+        })
+        // The pressed button on the move event, rather than a drag flag,
+        // decides whether to extend: a mouse-up outside the field would
+        // otherwise leave the flag stuck on.
+        .when_some(cursor_move, |this, cursor| {
+            let hit = hit.clone();
+            this.on_mouse_move(move |event, window, cx| {
+                if event.pressed_button == Some(MouseButton::Left)
+                    && let Some(index) = hit(event.position)
+                {
+                    cursor(
+                        &TextHit {
+                            index,
+                            extend: true,
+                        },
+                        window,
+                        cx,
+                    );
+                }
+            })
+        })
 }
 
 /// A multi-line field used for notes and pasted imports.

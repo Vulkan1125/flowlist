@@ -170,6 +170,15 @@ impl TextBuffer {
         self.cursor = self.cursor_chars();
     }
 
+    /// Put the caret at a character index, clamped to the text. `extend`
+    /// keeps the old anchor, which turns a mouse drag into a selection.
+    pub fn set_cursor(&mut self, index: usize, extend: bool) {
+        self.cursor = index.min(self.cursor_chars());
+        if !extend {
+            self.anchor = self.cursor;
+        }
+    }
+
     pub fn move_word_left(&mut self, extend: bool) {
         let chars: Vec<char> = self.text.chars().collect();
         let mut index = self.cursor;
@@ -208,5 +217,23 @@ impl TextBuffer {
     /// Multi-line helper: insert a newline at the caret.
     pub fn newline(&mut self) {
         self.insert('\n');
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_cursor_clamps_and_can_extend_a_selection() {
+        let mut buffer = TextBuffer::new("hello");
+        buffer.set_cursor(2, false);
+        assert_eq!(buffer.cursor(), 2);
+        assert!(!buffer.has_selection());
+        buffer.set_cursor(4, true);
+        assert_eq!(buffer.selection(), (2, 4));
+        buffer.set_cursor(99, false);
+        assert_eq!(buffer.cursor(), 5);
+        assert!(!buffer.has_selection());
     }
 }

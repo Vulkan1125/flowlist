@@ -96,10 +96,12 @@ impl Modal {
                 .map(|perspective| perspective.name.clone()),
         }
         .unwrap_or_default();
-        Modal::Rename {
-            entity,
-            name: TextBuffer::new(name),
-        }
+        // The name is already selected, so typing replaces it and a single
+        // Backspace clears it. Previously the caret sat at the end and the
+        // only way to change a name was to erase it one key at a time.
+        let mut name = TextBuffer::new(name);
+        name.select_all();
+        Modal::Rename { entity, name }
     }
 
     pub fn delete_project(app: &FlowlistApp, id: ProjectId) -> Self {
@@ -603,15 +605,33 @@ impl FlowlistApp {
             )
             .into_any_element()
         } else {
-            widgets::text_field(theme, buffer, "", focused).into_any_element()
+            widgets::text_field_with_cursor(
+                theme,
+                buffer,
+                "",
+                focused,
+                cx.listener(move |this, hit: &widgets::TextHit, _, cx| {
+                    this.set_modal_cursor(index, hit.index, hit.extend, cx);
+                }),
+            )
+            .into_any_element()
         };
+        let anchor = self.modal_field_anchor.clone();
         div()
             .id(super::sid(format!("modal-field:{index}")))
             .flex()
             .flex_col()
             .gap_1()
             .child(div().text_xs().text_color(theme.text_faint).child(label))
-            .child(field)
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            anchor.set(Some(*bounds));
+                        }
+                    })
+                    .child(field),
+            )
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.modal_focus = index;
                 this.focus = super::FocusArea::Modal;

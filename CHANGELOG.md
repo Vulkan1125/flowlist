@@ -19,6 +19,10 @@
   the inspector) it shows two consecutive months side by side, so a single
   month never stretches into wide, empty cells. The existing forecast buckets
   below it are unchanged.
+- Rename sheets now open with the whole name selected: typing replaces it,
+  one Backspace or Delete clears it, and arrows or a click place the caret.
+  Sheet text fields also accept a click or drag, so a range of a name can be
+  selected with the mouse instead of erased key by key.
 - The inspector's Due and Defer fields gained a calendar icon that opens a
   small month picker right under the field. Clicking a day applies it as a
   normal undoable edit, keeping an existing time of day; Today, Clear, month

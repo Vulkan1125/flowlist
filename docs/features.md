@@ -129,6 +129,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       **Select all** button and `⌘A` for one-step restore or purge
 - [x] Priority chips in the inspector and a priority filter in every view
 - [x] Inline title/notes/tag/project/date/estimate/repeat editing
+- [x] Rename sheets select the whole name when they open, so typing replaces
+      it and one Backspace clears it. Clicks and drags inside sheet fields
+      place the caret or select a range with the mouse.
 - [x] Calendar icons on the inspector's Due and Defer fields open a month
       picker. A clicked day is applied through the normal command layer (so it
       is undoable), an existing time of day survives a date change, and Today,

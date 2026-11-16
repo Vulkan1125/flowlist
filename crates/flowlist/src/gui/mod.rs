@@ -236,6 +236,9 @@ pub struct FlowlistApp {
     sort_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     group_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     priority_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The first text field in the open sheet, measured so a GUI probe can
+    /// click and drag inside it.
+    modal_field_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// The Due and Defer field rows, measured so their calendar popover can
     /// paint under the right field.
     due_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
@@ -386,6 +389,7 @@ impl FlowlistApp {
             sort_anchor: Rc::new(Cell::new(None)),
             group_anchor: Rc::new(Cell::new(None)),
             priority_anchor: Rc::new(Cell::new(None)),
+            modal_field_anchor: Rc::new(Cell::new(None)),
             due_anchor: Rc::new(Cell::new(None)),
             defer_anchor: Rc::new(Cell::new(None)),
             date_picker: None,
@@ -3422,6 +3426,25 @@ impl FlowlistApp {
         self.sidebar_activate(target, cx);
     }
 
+    /// Move the caret in a sheet field. `extend` keeps the old anchor so a
+    /// drag paints a selection; a plain click collapses it.
+    fn set_modal_cursor(
+        &mut self,
+        index: usize,
+        char_index: usize,
+        extend: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.modal_focus = index;
+        self.focus = FocusArea::Modal;
+        if let Some(modal) = self.modal.as_mut()
+            && let Some(buffer) = modal.field_mut(index)
+        {
+            buffer.set_cursor(char_index, extend);
+        }
+        cx.notify();
+    }
+
     fn active_buffer_mut(&mut self) -> Option<&mut text::TextBuffer> {
         match self.focus {
             FocusArea::Capture => Some(&mut self.capture),
@@ -3845,6 +3868,25 @@ impl FlowlistApp {
         let state = serde_json::json!({
             "view": self.view.key(),
             "modal": self.modal.as_ref().map(|modal| modal.title()),
+            "modal_name": self
+                .modal
+                .as_ref()
+                .and_then(|modal| modal.field(0))
+                .map(|buffer| buffer.text().to_string()),
+            "modal_cursor": self
+                .modal
+                .as_ref()
+                .and_then(|modal| modal.field(0))
+                .map(|buffer| buffer.cursor()),
+            "modal_selection": self
+                .modal
+                .as_ref()
+                .and_then(|modal| modal.field(0))
+                .map(|buffer| {
+                    let (start, end) = buffer.selection();
+                    [start, end]
+                }),
+            "modal_field": anchor(self.modal_field_anchor.get()),
             "modal_close": self.modal.as_ref().is_some_and(|modal| modal.shows_close()),
             "tip": self.hovered_tip.as_ref().map(|tip| tip.to_string()),
             "tip_muted": self.suppressed_tip.as_ref().map(|tip| tip.to_string()),
