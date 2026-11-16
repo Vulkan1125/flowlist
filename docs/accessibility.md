@@ -38,8 +38,14 @@ with tooltips. Every date cell is clickable and has a tooltip naming the day;
 the selected day is highlighted and an "All dates" button clears it. On a wide
 pane the calendar shows two consecutive months; the heading names the range and
 each month keeps its own weekday rail. Keyboard routes: `[` / `]` step the
-selected day, `{` / `}` step the month, and `\` clears the day filter. The
-list below keeps the normal task keyboard routes.
+selected day, `{` / `}` step the month, and `\` clears the day filter.
+
+Two more chips sit before those controls. Months cycles Auto → one month → two
+months (`M`); Auto follows the pane width, while a pinned count stays put even
+in a narrow pane. Width switches between calendar-sized cells and a calendar
+that fills the pane (`W`). Both chips show the current choice and have
+tooltips; the settings are stored in the library, so they survive a relaunch.
+The list below keeps the normal task keyboard routes.
 
 ### Sidebar
 

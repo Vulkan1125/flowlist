@@ -119,7 +119,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       pane shows two consecutive months side by side so the grid keeps
       calendar-sized cells instead of stretching. Clicking a date filters the
       list to that day; click again or press `\` to clear, with `[`/`]` day
-      steps and `{`/`}` month steps.
+      steps and `{`/`}` month steps. A Months chip cycles Auto / one / two
+      months and a width chip toggles calendar-sized cells and the full pane;
+      both are saved library settings.
 - [x] Sidebar perspectives, Trash, priority rows, custom perspectives and
       project/folder/tag trees. Badges count shown tasks only, so Trash never
       inflates another perspective.

@@ -22,6 +22,10 @@
   the inspector) it shows two consecutive months side by side, so a single
   month never stretches into wide, empty cells. The existing forecast buckets
   below it are unchanged.
+- The Forecast calendar's Months chip cycles Auto, one month and two months,
+  and its width chip switches between calendar-sized cells and the full pane.
+  Both choices are library settings, so they survive a relaunch and apply in
+  every window; `M` and `W` do the same from the keyboard.
 - Rename sheets now open with the whole name selected: typing replaces it,
   one Backspace or Delete clears it, and arrows or a click place the caret.
   Sheet text fields also accept a click or drag, so a range of a name can be

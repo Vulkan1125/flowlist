@@ -578,6 +578,30 @@ fn nearby_ranks_tagged_tasks_by_distance() {
 }
 
 #[test]
+fn forecast_calendar_settings_are_clamped_and_persisted() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths.clone()).unwrap();
+
+    store
+        .execute(Command::UpdateSettings(
+            flowlist_core::command::SettingsPatch {
+                // Anything above two months is not a choice the calendar has.
+                forecast_months: Some(9),
+                forecast_full_width: Some(true),
+                ..Default::default()
+            },
+        ))
+        .unwrap();
+    assert_eq!(store.db().settings.forecast_months, 2);
+    assert!(store.db().settings.forecast_full_width);
+
+    // A fresh process sees the same layout choice.
+    let reopened = Store::open(paths).unwrap();
+    assert_eq!(reopened.db().settings.forecast_months, 2);
+    assert!(reopened.db().settings.forecast_full_width);
+}
+
+#[test]
 fn tag_location_edit_is_undoable() {
     let (_dir, paths) = setup();
     let mut store = Store::open(paths).unwrap();

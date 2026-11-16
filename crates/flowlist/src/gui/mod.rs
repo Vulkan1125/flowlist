@@ -236,6 +236,12 @@ pub struct FlowlistApp {
     forecast_month: chrono::NaiveDate,
     /// A clicked calendar date; `None` shows the normal Forecast buckets.
     forecast_date: Option<chrono::NaiveDate>,
+    /// The width the Forecast calendar painted on the last frame, so a GUI
+    /// probe can tell fixed cells from a full-width pane.
+    forecast_calendar_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The months and width chips, measured so the GUI probe can click them.
+    forecast_months_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    forecast_width_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// Applies to every list, and is what the sidebar priority rows set.
     priority_filter: Option<Priority>,
     /// Hide everything blocked behind another task (First Available).
@@ -403,6 +409,9 @@ impl FlowlistApp {
             view,
             forecast_month,
             forecast_date: None,
+            forecast_calendar_anchor: Rc::new(Cell::new(None)),
+            forecast_months_anchor: Rc::new(Cell::new(None)),
+            forecast_width_anchor: Rc::new(Cell::new(None)),
             priority_filter,
             only_available,
             follow_system,
@@ -3008,6 +3017,12 @@ impl FlowlistApp {
                 self.anchor = None;
                 self.save_session();
             }
+            "m" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
+                self.cycle_forecast_months(cx);
+            }
+            "w" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
+                self.toggle_forecast_width(cx);
+            }
             key if matches!(
                 key,
                 "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
@@ -4053,6 +4068,20 @@ impl FlowlistApp {
             f32::from(b.size.width),
             f32::from(b.size.height),
         ]));
+        let settings = &self.store.db().settings;
+        let window_width = self.window_size.map_or(1254.0, |(width, _)| width);
+        state["forecast_months"] = serde_json::json!(settings.forecast_months.min(2));
+        state["forecast_full_width"] = serde_json::json!(settings.forecast_full_width);
+        state["forecast_month_count"] = serde_json::json!(content::forecast_month_count(
+            window_width,
+            self.show_inspector,
+            settings.forecast_months.min(2),
+        ));
+        state["forecast_calendar"] = serde_json::json!(anchor(self.forecast_calendar_anchor.get()));
+        state["forecast_months_anchor"] =
+            serde_json::json!(anchor(self.forecast_months_anchor.get()));
+        state["forecast_width_anchor"] =
+            serde_json::json!(anchor(self.forecast_width_anchor.get()));
         let text = state.to_string();
         if self.test_state_last.as_deref() == Some(text.as_str()) {
             return;

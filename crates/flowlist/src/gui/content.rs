@@ -8,7 +8,7 @@ use gpui::{
     prelude::*, px,
 };
 
-use flowlist_core::command::{Command, ProjectPatch};
+use flowlist_core::command::{Command, ProjectPatch, SettingsPatch};
 use flowlist_core::ids::{ProjectId, TaskId};
 use flowlist_core::model::{
     BuiltinPerspective, GroupBy, Priority, ProjectStatus, RepeatRule, SortBy,
@@ -130,11 +130,35 @@ impl FlowlistApp {
         self.forecast_month = add_months(self.forecast_month, delta);
     }
 
+    /// Cycle the calendar between Auto, one month and two months. The choice is
+    /// a library setting, so the CLI and a second window see the same layout.
+    pub(super) fn cycle_forecast_months(&mut self, cx: &mut Context<Self>) {
+        let next = match self.store.db().settings.forecast_months.min(2) {
+            0 => 1,
+            1 => 2,
+            _ => 0,
+        };
+        self.execute(Command::UpdateSettings(SettingsPatch {
+            forecast_months: Some(next),
+            ..Default::default()
+        }));
+        cx.notify();
+    }
+
+    /// Switch the calendar between calendar-sized cells and the full pane.
+    pub(super) fn toggle_forecast_width(&mut self, cx: &mut Context<Self>) {
+        let full = !self.store.db().settings.forecast_full_width;
+        self.execute(Command::UpdateSettings(SettingsPatch {
+            forecast_full_width: Some(full),
+            ..Default::default()
+        }));
+        cx.notify();
+    }
+
     /// The month grid above the Forecast list. Monday-first, with an accent
-    /// bar under every date that has a task. Two months sit side by side once
-    /// the pane is wide enough, so a full-screen window does not stretch one
-    /// month's cells into wide slabs. Beyond calendar size the whole block is
-    /// centred rather than widened.
+    /// bar under every date that has a task. The Months and Width chips pick
+    /// how many grids paint and whether they fill the pane; in Fixed mode the
+    /// block is capped at calendar size and centred rather than widened.
     fn render_forecast_calendar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let today = local_date(now());
@@ -142,14 +166,79 @@ impl FlowlistApp {
         let marked = self.forecast_marked_dates();
         let window_width = self.window_size.map_or(1254.0, |(width, _)| width);
         let pane_width = forecast_pane_width(window_width, self.show_inspector);
-        let months = forecast_month_count(window_width, self.show_inspector);
+        let configured_months = self.store.db().settings.forecast_months.min(2);
+        let months = forecast_month_count(window_width, self.show_inspector, configured_months);
+        let full_width = self.store.db().settings.forecast_full_width;
         let compact = pane_width < 520.0;
+        let calendar_anchor = self.forecast_calendar_anchor.clone();
+        let months_anchor = self.forecast_months_anchor.clone();
+        let width_anchor = self.forecast_width_anchor.clone();
 
         let mut panels = div().flex().w_full().gap_6();
         for slot in 0..months {
             let month = add_months(first, slot as i32);
             panels = panels.child(self.render_forecast_month(month, slot, &marked, today, cx));
         }
+
+        let month_label = match (configured_months, compact) {
+            (0, true) => "Auto".to_string(),
+            (0, false) => format!("Auto · {months}"),
+            (1, true) => "1 mo".to_string(),
+            (1, false) => "1 month".to_string(),
+            (_, true) => "2 mo".to_string(),
+            (_, false) => "2 months".to_string(),
+        };
+        let month_tip = match configured_months {
+            0 => "Calendar months: Auto (M)".to_string(),
+            1 => "Calendar months: 1 (M)".to_string(),
+            _ => "Calendar months: 2 (M)".to_string(),
+        };
+        let width_label = if full_width { "Full width" } else { "Fixed" };
+        let width_tip = if full_width {
+            "Calendar width: fills the pane (W)"
+        } else {
+            "Calendar width: calendar-sized cells (W)"
+        };
+
+        let display_controls = div()
+            .flex()
+            .flex_shrink_0()
+            .items_center()
+            .gap_1()
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            months_anchor.set(Some(*bounds));
+                        }
+                    })
+                    .child(
+                        div()
+                            .id("forecast-months")
+                            .flow_tip(self, cx, theme, month_tip)
+                            .child(widgets::toggle_chip(
+                                theme,
+                                month_label,
+                                configured_months != 0,
+                            ))
+                            .on_click(cx.listener(|this, _, _, cx| this.cycle_forecast_months(cx))),
+                    ),
+            )
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            width_anchor.set(Some(*bounds));
+                        }
+                    })
+                    .child(
+                        div()
+                            .id("forecast-width")
+                            .flow_tip(self, cx, theme, width_tip)
+                            .child(widgets::toggle_chip(theme, width_label, full_width))
+                            .on_click(cx.listener(|this, _, _, cx| this.toggle_forecast_width(cx))),
+                    ),
+            );
 
         let mut controls = div().flex().flex_shrink_0().items_center().gap_1();
         if let Some(date) = self.forecast_date {
@@ -218,19 +307,58 @@ impl FlowlistApp {
                     })),
             );
 
-        let header = div()
+        let title = div()
+            .text_sm()
+            .font_weight(gpui::FontWeight::SEMIBOLD)
+            .child(forecast_title(first, months));
+        let header = if compact {
+            // A narrow pane cannot fit the title, both display chips and the
+            // month controls on one line, so the chips take their own row.
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .pb_1()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(title)
+                        .child(controls),
+                )
+                .child(display_controls)
+        } else {
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .pb_1()
+                .child(title)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(display_controls)
+                        .child(controls),
+                )
+        };
+
+        let calendar = div()
             .flex()
-            .items_center()
-            .justify_between()
-            .gap_3()
-            .pb_1()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .child(forecast_title(first, months)),
-            )
-            .child(controls);
+            .flex_col()
+            .w_full()
+            .gap_1()
+            .child(header)
+            .child(panels);
+        let calendar = if full_width {
+            calendar
+        } else {
+            calendar.max_w(px(forecast_max_width(months)))
+        };
 
         div()
             .flex()
@@ -241,16 +369,12 @@ impl FlowlistApp {
             .pb_3()
             .border_b_1()
             .border_color(theme.border_soft)
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .w_full()
-                    .max_w(px(forecast_max_width(months)))
-                    .gap_1()
-                    .child(header)
-                    .child(panels),
-            )
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    calendar_anchor.set(Some(*bounds));
+                }
+            })
+            .child(calendar)
     }
 
     /// One month's weekday rail and date grid. `slot` keeps element ids unique
@@ -1684,18 +1808,25 @@ fn forecast_pane_width(window_width: f32, show_inspector: bool) -> f32 {
 }
 
 /// Two months once the pane can give each one enough room for readable cells.
-fn forecast_month_count(window_width: f32, show_inspector: bool) -> usize {
+/// A pinned one- or two-month choice overrides the width check; 0 means auto.
+pub(super) fn forecast_month_count(
+    window_width: f32,
+    show_inspector: bool,
+    configured: u8,
+) -> usize {
     const TWO_MONTH_MIN: f32 = 620.0;
-    if forecast_pane_width(window_width, show_inspector) >= TWO_MONTH_MIN {
-        2
-    } else {
-        1
+    match configured {
+        1 => 1,
+        2 => 2,
+        _ if forecast_pane_width(window_width, show_inspector) >= TWO_MONTH_MIN => 2,
+        _ => 1,
     }
 }
 
-/// The calendar never grows past a comfortable month size: 520px per month,
-/// plus the 24px gap the panels already use. Anything wider is centred, so a
-/// full-screen window keeps calendar-sized cells instead of wide slabs.
+/// The fixed-width calendar never grows past a comfortable month size: 520px
+/// per month, plus the 24px gap the panels already use. Anything wider is
+/// centred, so a full-screen window keeps calendar-sized cells instead of wide
+/// slabs. Full-width mode skips this cap.
 fn forecast_max_width(months: usize) -> f32 {
     let months = months.max(1) as f32;
     months * 520.0 + (months - 1.0) * 24.0
@@ -1848,14 +1979,24 @@ mod tests {
     fn two_months_need_a_wide_enough_pane() {
         // The working window at 1254 shows two months with or without the
         // inspector; the outer panes leave 694 or 1014 pixels.
-        assert_eq!(forecast_month_count(1254.0, true), 2);
-        assert_eq!(forecast_month_count(1254.0, false), 2);
+        assert_eq!(forecast_month_count(1254.0, true, 0), 2);
+        assert_eq!(forecast_month_count(1254.0, false, 0), 2);
         // The minimum window with the inspector keeps one readable grid.
-        assert_eq!(forecast_month_count(880.0, true), 1);
+        assert_eq!(forecast_month_count(880.0, true, 0), 1);
         // Without the inspector the pane is wide enough for two.
-        assert_eq!(forecast_month_count(880.0, false), 2);
+        assert_eq!(forecast_month_count(880.0, false, 0), 2);
         // A mid-size window with the inspector is still single.
-        assert_eq!(forecast_month_count(1000.0, true), 1);
+        assert_eq!(forecast_month_count(1000.0, true, 0), 1);
+    }
+
+    #[test]
+    fn a_pinned_month_count_overrides_the_pane_width() {
+        // One month even in a wide pane.
+        assert_eq!(forecast_month_count(1600.0, false, 1), 1);
+        // Two months in a pane that would otherwise keep one.
+        assert_eq!(forecast_month_count(880.0, true, 2), 2);
+        // Values outside the three choices fall back to automatic.
+        assert_eq!(forecast_month_count(1254.0, false, 9), 2);
     }
 
     #[test]
