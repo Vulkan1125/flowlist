@@ -1315,6 +1315,7 @@ fn help_body(theme: super::theme::Theme) -> impl IntoElement {
                 ("⏎", "edit the selected title"),
                 ("⌘⌫", "delete selection or the sidebar entity"),
                 ("Tab / ⇧Tab", "nest / unnest"),
+                ("za / zo / zc", "toggle / open / close subtasks"),
                 ("⌥↑ / ⌥↓", "move within siblings"),
                 ("⌘D", "toggle flag on selection"),
             ],

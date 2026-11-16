@@ -413,14 +413,14 @@ impl FlowlistApp {
         let open = self.is_open(&key, true);
         if expand {
             if !open && has_children {
-                self.toggle_open(key);
+                self.toggle_open(key, true);
                 cx.notify();
                 return true;
             }
             return false;
         }
         if open && has_children {
-            self.toggle_open(key);
+            self.toggle_open(key, true);
             cx.notify();
             return true;
         }
@@ -1293,7 +1293,7 @@ impl FlowlistApp {
                                 ))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
-                                    this.toggle_expanded(toggle_key.clone(), cx);
+                                    this.toggle_expanded(toggle_key.clone(), true, cx);
                                 })),
                         )
                         .child(
@@ -1605,7 +1605,7 @@ impl FlowlistApp {
                         ))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
-                            this.toggle_expanded(toggle_key.clone(), cx);
+                            this.toggle_expanded(toggle_key.clone(), true, cx);
                         }))
                         .into_any_element()
                 } else {

@@ -4,6 +4,10 @@
 
 ### Interface
 
+- Subtasks now sit indented under their parent in every list instead of being
+  hidden until the first click. The disclosure chevron collapses a whole
+  branch in one click (the first click used to do nothing), and `za`, `zo` and
+  `zc` fold the selected task from the keyboard.
 - Projects can now be dragged between folders in the sidebar. Dropping one on
   the LIBRARY heading moves it back to the root. Every move goes through the
   normal move command, so `⌘Z` restores the previous placement, and task drags

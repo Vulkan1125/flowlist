@@ -222,6 +222,10 @@ fn date_picker_position(
     )
 }
 
+/// One task row painted on the last frame: id, outline depth, title, and
+/// whether the row has children (so a probe knows a disclosure belongs there).
+pub(super) type PaintedTaskRow = (String, u32, String, bool);
+
 /// The two fixed panes around the content. The title-bar search and Forecast
 /// calendar line up with the content pane, so they read these instead of
 /// hard-coding their own copies.
@@ -245,6 +249,12 @@ pub struct FlowlistApp {
     /// Sidebar row boxes keyed by target, so a GUI probe can drag a project
     /// onto a folder without guessing at coordinates.
     sidebar_row_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Task rows painted on the last frame, in order, with their depth. The
+    /// list reflects which subtasks are visible, not just what the query
+    /// matched.
+    content_rows: Rc<RefCell<Vec<PaintedTaskRow>>>,
+    /// Subtask disclosure chevrons, measured so the GUI probe can click them.
+    task_disclosures: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Applies to every list, and is what the sidebar priority rows set.
     priority_filter: Option<Priority>,
     /// Hide everything blocked behind another task (First Available).
@@ -416,6 +426,8 @@ impl FlowlistApp {
             forecast_months_anchor: Rc::new(Cell::new(None)),
             forecast_width_anchor: Rc::new(Cell::new(None)),
             sidebar_row_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            content_rows: Rc::new(RefCell::new(Vec::new())),
+            task_disclosures: Rc::new(RefCell::new(BTreeMap::new())),
             priority_filter,
             only_available,
             follow_system,
@@ -2034,18 +2046,56 @@ impl FlowlistApp {
         cx.notify();
     }
 
-    fn toggle_expanded(&mut self, key: String, cx: &mut Context<Self>) {
-        self.toggle_open(key);
+    /// Open, close or toggle the selected task's subtasks from the keyboard
+    /// (`zo`, `zc`, `za`). A task without children keeps its state and says so.
+    fn set_selected_subtasks(&mut self, open: Option<bool>, cx: &mut Context<Self>) {
+        let Some(id) = self.selected_one() else {
+            self.toast = Some("Select a task first".to_string());
+            cx.notify();
+            return;
+        };
+        let has_children = self
+            .store
+            .db()
+            .tasks
+            .get(&id)
+            .is_some_and(|task| task.has_children());
+        if !has_children {
+            self.toast = Some("This task has no subtasks".to_string());
+            cx.notify();
+            return;
+        }
+        let key = format!("task:{id}");
+        let current = self.is_open(&key, true);
+        let target = open.unwrap_or(!current);
+        if target == current {
+            return;
+        }
+        if target {
+            self.collapsed_groups.remove(&key);
+            self.expanded.insert(key);
+        } else {
+            self.expanded.remove(&key);
+            self.collapsed_groups.insert(key);
+        }
+        cx.notify();
+    }
+
+    /// Flip a branch's disclosure. `default` must match how the caller paints
+    /// the branch, otherwise the first click closes a branch that already
+    /// looks closed and nothing moves.
+    fn toggle_expanded(&mut self, key: String, default: bool, cx: &mut Context<Self>) {
+        self.toggle_open(key, default);
         cx.notify();
     }
 
     fn toggle_group_collapsed(&mut self, key: String, cx: &mut Context<Self>) {
-        self.toggle_open(key);
+        self.toggle_open(key, true);
         cx.notify();
     }
 
-    fn toggle_open(&mut self, key: String) {
-        if self.is_open(&key, true) {
+    fn toggle_open(&mut self, key: String, default: bool) {
+        if self.is_open(&key, default) {
             self.expanded.remove(&key);
             self.collapsed_groups.insert(key);
         } else {
@@ -3206,6 +3256,9 @@ impl FlowlistApp {
                 }
                 _ => self.outdent_selected(cx),
             },
+            A::ToggleSubtasks => self.set_selected_subtasks(None, cx),
+            A::ExpandSubtasks => self.set_selected_subtasks(Some(true), cx),
+            A::CollapseSubtasks => self.set_selected_subtasks(Some(false), cx),
             A::Open => match self.focus {
                 FocusArea::Sidebar => self.sidebar_open_current(cx),
                 FocusArea::ChecklistList => self.checklist_begin_edit(cx),
@@ -4114,6 +4167,19 @@ impl FlowlistApp {
             _ => None,
         });
         state["sidebar_rows"] = serde_json::json!(self.sidebar_row_boxes.borrow().clone());
+        state["content_rows"] = serde_json::json!(
+            self.content_rows
+                .borrow()
+                .iter()
+                .map(|(id, depth, title, has_children)| serde_json::json!({
+                    "id": id,
+                    "depth": depth,
+                    "title": title,
+                    "has_children": has_children,
+                }))
+                .collect::<Vec<_>>()
+        );
+        state["task_disclosures"] = serde_json::json!(self.task_disclosures.borrow().clone());
         let text = state.to_string();
         if self.test_state_last.as_deref() == Some(text.as_str()) {
             return;

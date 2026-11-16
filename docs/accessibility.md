@@ -85,11 +85,19 @@ the task unchanged.
 
 ### Task rows and inspector
 
+Subtasks appear indented under their parent from the start in every list, and
+keep their place through sorting and grouping. The disclosure chevron hides or
+shows a whole branch with one click, and folding a middle task leaves its
+siblings visible. `za` toggles the selected task's branch, `zo` opens it and
+`zc` closes it; a task without children says so in the status bar instead of
+changing the view. Expansion is view state, not a library edit, so it is not
+undoable and does not touch the data file.
+
 | Control | Tooltip | Keyboard |
 | --- | --- | --- |
 | ○ completion circle | Complete task (x) / Reopen task (x) | `x` or `space` |
 | Flag | Flag task (!) / Unflag task (!) | `!` or `⌘D` |
-| ▸ / ▾ subtasks | Expand / collapse subtasks | `l` / `h` on the parent, or `Tab` to nest |
+| ▸ / ▾ subtasks | Expand / collapse subtasks | `za` toggles, `zo` opens, `zc` closes |
 | ○ checklist step | Tick / untick step | `Ctrl-w j`, then `space` |
 | ↑ / ↓ checklist arrows | Move step up / down | `⇧J` / `⇧K` in the checklist pane |
 | × checklist step | Delete step | `⌫` in the checklist pane |

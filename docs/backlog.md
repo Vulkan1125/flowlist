@@ -69,6 +69,11 @@ landed and verified.
       onto the LIBRARY heading to return to the root. Drops use
       `Command::MoveProject`, so they are undoable and shared with the CLI.
       The GUI test state exposes every sidebar row's painted box for the probe.
+- [x] **Inline subtasks** — outlines are expanded by default, so children sit
+      under their parent without a first click. The disclosure previously
+      disagreed with the render default, which made its first click a no-op;
+      both now share one default. `za`/`zo`/`zc` fold the selected task, and
+      the GUI test state lists the painted rows and disclosure boxes.
 - [ ] **Calendar view** — a dedicated Calendar perspective with a full month
       grid, day columns or an agenda, drag-to-reschedule and keyboard
       navigation. The Forecast month calendar is a first step, not the whole

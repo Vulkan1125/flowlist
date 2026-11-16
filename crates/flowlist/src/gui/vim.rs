@@ -33,6 +33,9 @@ pub enum VimAction {
     NextMatch,
     PrevMatch,
     Open,
+    ToggleSubtasks,
+    ExpandSubtasks,
+    CollapseSubtasks,
     Inspector,
     Theme,
     Help,
@@ -57,6 +60,7 @@ pub struct VimState {
     pending_g: bool,
     pending_d: bool,
     pending_y: bool,
+    pending_z: bool,
     pending_ctrl_w: bool,
 }
 
@@ -70,6 +74,7 @@ impl VimState {
             || self.pending_g
             || self.pending_d
             || self.pending_y
+            || self.pending_z
             || self.pending_ctrl_w
     }
 
@@ -156,6 +161,18 @@ impl VimState {
             return VimInput::Ignored;
         }
 
+        // Vim folds: za toggles, zo opens and zc closes the selected subtasks.
+        if self.pending_z {
+            self.pending_z = false;
+            self.count = None;
+            return match key {
+                "a" => VimInput::Action(VimAction::ToggleSubtasks),
+                "o" => VimInput::Action(VimAction::ExpandSubtasks),
+                "c" => VimInput::Action(VimAction::CollapseSubtasks),
+                _ => VimInput::Ignored,
+            };
+        }
+
         match key {
             "j" if mods.shift => {
                 self.count = None;
@@ -211,6 +228,11 @@ impl VimState {
             "x" => {
                 self.count = None;
                 VimInput::Action(VimAction::Complete)
+            }
+            "z" => {
+                self.count = None;
+                self.pending_z = true;
+                VimInput::Pending
             }
             "!" => {
                 self.count = None;
@@ -368,5 +390,23 @@ mod tests {
         let mut mods = plain();
         mods.platform = true;
         assert_eq!(state.feed("z", mods), VimInput::Ignored);
+    }
+
+    #[test]
+    fn z_toggles_subtask_disclosures() {
+        assert_eq!(keys(&["z"]), VimInput::Pending);
+        assert_eq!(
+            keys(&["z", "a"]),
+            VimInput::Action(VimAction::ToggleSubtasks)
+        );
+        assert_eq!(
+            keys(&["z", "o"]),
+            VimInput::Action(VimAction::ExpandSubtasks)
+        );
+        assert_eq!(
+            keys(&["z", "c"]),
+            VimInput::Action(VimAction::CollapseSubtasks)
+        );
+        assert_eq!(keys(&["z", "x"]), VimInput::Ignored);
     }
 }

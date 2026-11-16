@@ -109,6 +109,7 @@ Frequently used shortcuts:
 | `!` or `⌘D` | flag / unflag |
 | `⏎` | edit title |
 | `Tab` / `⇧Tab` | nest / unnest |
+| `za` / `zo` / `zc` | toggle / open / close subtasks |
 | `⌥↑` / `⌥↓` | move within siblings |
 | `i` or `⌘I` | toggle inspector |
 | `⌘L` | add a checklist step |

@@ -32,6 +32,9 @@ impl FlowlistApp {
     ) -> impl IntoElement {
         let theme = self.theme;
         let groups = self.current_groups();
+        // Rebuilt as rows paint, so the test state lists only what is on
+        // screen, including the subtasks an expanded parent reveals.
+        self.content_rows.borrow_mut().clear();
 
         let mut column = div()
             .flex()
@@ -1044,7 +1047,7 @@ impl FlowlistApp {
     fn row_is_hidden(&self, id: &TaskId) -> bool {
         let db = self.store.db();
         for ancestor in db.task_ancestors(id) {
-            if !self.is_open(&format!("task:{ancestor}"), false) {
+            if !self.is_open(&format!("task:{ancestor}"), true) {
                 return true;
             }
         }
@@ -1158,8 +1161,11 @@ impl FlowlistApp {
         let completed = task.completed;
         let flagged = task.flagged;
         let title = task.title.clone();
+        let painted_title = title.clone();
         let has_children = task.has_children();
-        let expanded = self.is_open(&format!("task:{id}"), false);
+        // Subtasks sit under their parent from the start, like an outline;
+        // the disclosure collapses a branch instead of hiding it until asked.
+        let expanded = self.is_open(&format!("task:{id}"), true);
         let estimate = task.estimate_min;
         let attachment_count = task.attachments.len();
         let (checklist_done, checklist_total) = task.checklist_progress();
@@ -1186,6 +1192,8 @@ impl FlowlistApp {
         let drop_id = id.clone();
         let disclosure_id = id.clone();
         let drag_payload = DragTask::task(id.clone(), title.clone());
+        let disclosure_anchor = self.task_disclosures.clone();
+        let disclosure_key = id.to_string();
         let due_color = due
             .map(|stamp| due_color(stamp, &theme))
             .unwrap_or(theme.text_faint);
@@ -1270,32 +1278,48 @@ impl FlowlistApp {
             )
             .child(if has_children {
                 div()
-                    .id(super::sid(format!("disclosure:{}", disclosure_id)))
-                    .w(px(12.))
-                    .text_color(theme.text_faint)
-                    .flow_tip(
-                        self,
-                        cx,
-                        theme,
-                        if expanded {
-                            "Collapse subtasks"
-                        } else {
-                            "Expand subtasks"
-                        },
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            disclosure_anchor.borrow_mut().insert(
+                                disclosure_key.clone(),
+                                [
+                                    f32::from(bounds.origin.x),
+                                    f32::from(bounds.origin.y),
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
+                                ],
+                            );
+                        }
+                    })
+                    .child(
+                        div()
+                            .id(super::sid(format!("disclosure:{}", disclosure_id)))
+                            .w(px(12.))
+                            .text_color(theme.text_faint)
+                            .flow_tip(
+                                self,
+                                cx,
+                                theme,
+                                if expanded {
+                                    "Collapse subtasks"
+                                } else {
+                                    "Expand subtasks"
+                                },
+                            )
+                            .child(icons::icon(
+                                if expanded {
+                                    Icon::ChevronDown
+                                } else {
+                                    Icon::ChevronRight
+                                },
+                                12.0,
+                                theme.text_faint,
+                            ))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.toggle_expanded(format!("task:{}", disclosure_id), true, cx);
+                            })),
                     )
-                    .child(icons::icon(
-                        if expanded {
-                            Icon::ChevronDown
-                        } else {
-                            Icon::ChevronRight
-                        },
-                        12.0,
-                        theme.text_faint,
-                    ))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.toggle_expanded(format!("task:{}", disclosure_id), cx);
-                    }))
                     .into_any_element()
             } else {
                 div().w(px(12.)).into_any_element()
@@ -1447,6 +1471,12 @@ impl FlowlistApp {
                             .child(short),
                     ),
             );
+        self.content_rows.borrow_mut().push((
+            id.to_string(),
+            row.depth,
+            painted_title,
+            has_children,
+        ));
         base.into_any_element()
     }
 

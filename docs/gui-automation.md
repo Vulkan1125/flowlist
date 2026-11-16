@@ -68,7 +68,11 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
 
 `sidebar_rows` maps each painted sidebar row (`project:<id>`, `folder:<id>`,
 `library`, …) to its window-space box, so a probe can drag a project onto a
-folder without hard-coding sidebar offsets. `modal` is `null` when no sheet is
+folder without hard-coding sidebar offsets. `content_rows` lists the task rows
+actually painted on the last frame, in order, with `id`, `title`, `depth` and
+`has_children`; hidden descendants are absent, so a probe can assert what a
+disclosure reveals. `task_disclosures` maps each parent id to its chevron box
+for clicking it. `modal` is `null` when no sheet is
 open, otherwise the sheet title (`New
 project`, `Perspective`, `Settings`, …). `focus` names the active pane or field
 (`Content`, `Capture`, `Sidebar`, `Field`, `Modal`, …). `field` names the
