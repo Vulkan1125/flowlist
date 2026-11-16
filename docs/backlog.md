@@ -121,6 +121,11 @@ landed and verified.
       use the perspective-style boxed count and align the name with the icon.
 - [x] Deleting a project from the sidebar asks for confirmation in a sheet
       that names the project; Enter confirms and Esc cancels.
+- [x] Added a title-bar moon/sun button for light/dark, left of the inspector
+      toggle. A manual switch turns off follow-system appearance so it sticks.
+- [x] The Forecast calendar shows two consecutive months once the content pane
+      is wide enough, keeping calendar-sized cells on large windows and full
+      screen. Narrow panes keep one month.
 
 ## OmniFocus gap research (first pass, November 2026)
 

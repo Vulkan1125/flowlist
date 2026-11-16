@@ -113,9 +113,11 @@ working domain and GUI. This page tracks what is implemented and verified.
       instead of truncating it. Library project rows carry the same boxed count
       as perspectives, aligned with the folder icon and the name.
 - [x] Forecast month calendar above the list: Monday-first grid, previous /
-      Today / next controls and an accent bar under dates with a task.
-      Clicking a date filters the list to that day; click again or press `\`
-      to clear, with `[`/`]` day steps and `{`/`}` month steps.
+      Today / next controls and an accent bar under dates with a task. A wide
+      pane shows two consecutive months side by side so the grid keeps
+      calendar-sized cells instead of stretching. Clicking a date filters the
+      list to that day; click again or press `\` to clear, with `[`/`]` day
+      steps and `{`/`}` month steps.
 - [x] Sidebar perspectives, Trash, priority rows, custom perspectives and
       project/folder/tag trees
 - [x] Content list with grouped rows, progress indicators and inline status
@@ -165,9 +167,11 @@ working domain and GUI. This page tracks what is implemented and verified.
       vim mode and window size
 - [x] Ten theme families — Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula,
       Tokyo Night, Vesper, Graphite and Midnight — each with a light and a dark
-      palette, chosen in Settings or with `⌘T` / `⇧⌘T` / `⌥⌘T` (`⇧T` in vim mode)
+      palette, chosen in Settings or with the title-bar moon/sun button,
+      `⌘T` / `⇧⌘T` / `⌥⌘T` (`⇧T` in vim mode)
 - [x] Follow-system appearance: keep the theme family, take light/dark from
-      the macOS window appearance.
+      the macOS window appearance. A manual light/dark switch turns this off so
+      the chosen mode is not reverted on the next frame.
 - [x] Blurred sidebar, inspector, header and status bar over an opaque reading
       surface. The window's `NSVisualEffectView` uses the
       `.underWindowBackground` material and is pinned to the palette's

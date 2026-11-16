@@ -22,7 +22,7 @@ impl FlowlistApp {
         let mut panel = div()
             .flex()
             .flex_col()
-            .w(px(320.))
+            .w(px(super::INSPECTOR_WIDTH))
             .h_full()
             .flex_shrink_0()
             .bg(theme.glass_fill(180.))

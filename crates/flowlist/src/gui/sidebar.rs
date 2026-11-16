@@ -886,7 +886,7 @@ impl FlowlistApp {
         let mut rail = div()
             .flex()
             .flex_col()
-            .w(px(240.))
+            .w(px(super::SIDEBAR_WIDTH))
             .h_full()
             .flex_shrink_0()
             .bg(theme.glass_fill(180.))

@@ -9,9 +9,16 @@
   `Flowlist / view` suffix are gone.
 - Replaced the inspector toggle's sidebar glyph with an info (`i`) icon, in
   both the header and the inspector panel.
+- Added a moon/sun button to the title bar, left of the inspector toggle. It
+  switches light/dark in the current theme family and shows the mode it will
+  switch to; `⌘T` still does the same. A manual switch turns off follow-system
+  appearance so the choice sticks.
 - Added a Monday-first month calendar to the top of Forecast, with previous /
-  Today / next controls and an accent bar under every date that has a task. The
-  existing forecast buckets below it are unchanged.
+  Today / next controls and an accent bar under every date that has a task. On
+  a wide pane (the working window, full screen, or the minimum window without
+  the inspector) it shows two consecutive months side by side, so a single
+  month never stretches into wide, empty cells. The existing forecast buckets
+  below it are unchanged.
 - Header and status chrome now use a flat glass tint; only the sidebar and
   inspector keep the vertical tint wash. This removes the unintended
   left-to-right gradient ramp under the title bar.

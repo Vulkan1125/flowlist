@@ -128,6 +128,12 @@ fn menu_position(
     )
 }
 
+/// The two fixed panes around the content. The title-bar search and Forecast
+/// calendar line up with the content pane, so they read these instead of
+/// hard-coding their own copies.
+pub(super) const SIDEBAR_WIDTH: f32 = 240.0;
+pub(super) const INSPECTOR_WIDTH: f32 = 320.0;
+
 pub struct FlowlistApp {
     store: Store,
     theme: Theme,
@@ -352,6 +358,20 @@ impl FlowlistApp {
 
     // ------------------------------------------------------------- session
 
+    /// Switch light/dark inside the current family. A manual switch opts out
+    /// of following the system appearance; otherwise the next frame would put
+    /// the old appearance straight back.
+    fn toggle_appearance(&mut self) {
+        self.theme = self.theme.toggled();
+        self.follow_system = false;
+        self.toast = Some(format!(
+            "{} · {}",
+            self.theme.kind().label(),
+            self.theme.appearance().label()
+        ));
+        self.save_session();
+    }
+
     fn save_session(&self) {
         let session = Session {
             view: Some(self.view.key()),
@@ -554,22 +574,23 @@ impl FlowlistApp {
                 let Some(task) = db.tasks.get(&row.id) else {
                     return false;
                 };
-                let project = task
-                    .project
-                    .as_ref()
-                    .map(|id| db.project_path(id))
-                    .unwrap_or_default();
-                let tags = task
-                    .tags
-                    .iter()
-                    .filter_map(|id| db.tags.get(id))
-                    .map(|tag| tag.name.clone())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                task.title.to_lowercase().contains(&needle)
+                // Stop at the first hit: title and notes cover most queries
+                // without building the project path or joined tag list.
+                if task.title.to_lowercase().contains(&needle)
                     || task.notes.to_lowercase().contains(&needle)
-                    || project.to_lowercase().contains(&needle)
-                    || tags.to_lowercase().contains(&needle)
+                {
+                    return true;
+                }
+                if let Some(project) = task.project.as_ref().map(|id| db.project_path(id))
+                    && project.to_lowercase().contains(&needle)
+                {
+                    return true;
+                }
+                task.tags.iter().any(|id| {
+                    db.tags
+                        .get(id)
+                        .is_some_and(|tag| tag.name.to_lowercase().contains(&needle))
+                })
             });
             if !group.rows.is_empty() {
                 out.push(group);
@@ -2403,19 +2424,21 @@ impl FlowlistApp {
                     self.save_session();
                 }
                 "t" => {
-                    self.theme = if mods.shift {
-                        self.theme.next_theme()
-                    } else if mods.alt {
-                        self.theme.previous_theme()
+                    if mods.shift || mods.alt {
+                        self.theme = if mods.shift {
+                            self.theme.next_theme()
+                        } else {
+                            self.theme.previous_theme()
+                        };
+                        self.toast = Some(format!(
+                            "{} · {}",
+                            self.theme.kind().label(),
+                            self.theme.appearance().label()
+                        ));
+                        self.save_session();
                     } else {
-                        self.theme.toggled()
-                    };
-                    self.toast = Some(format!(
-                        "{} · {}",
-                        self.theme.kind().label(),
-                        self.theme.appearance().label()
-                    ));
-                    self.save_session();
+                        self.toggle_appearance();
+                    }
                 }
                 "d" => self.flag_selected(cx),
                 "a" if matches!(self.view, View::Builtin(BuiltinPerspective::Trash)) => {
@@ -2696,10 +2719,7 @@ impl FlowlistApp {
             }
             A::NextMatch => self.search_step(true, cx),
             A::PrevMatch => self.search_step(false, cx),
-            A::Theme => {
-                self.theme = self.theme.toggled();
-                self.save_session();
-            }
+            A::Theme => self.toggle_appearance(),
             A::Inspector => {
                 self.show_inspector = !self.show_inspector;
                 if !self.show_inspector && self.focus == FocusArea::ChecklistList {
@@ -3758,6 +3778,30 @@ impl FlowlistApp {
                                 this.open_modal(modals::Modal::settings(this), cx)
                             })),
                     )
+                    .child({
+                        let dark = self.theme.appearance() == theme::Appearance::Dark;
+                        div()
+                            .id("theme-mode")
+                            .flow_tip(
+                                self,
+                                cx,
+                                theme,
+                                if dark {
+                                    "Switch to light mode (⌘T)"
+                                } else {
+                                    "Switch to dark mode (⌘T)"
+                                },
+                            )
+                            .child(widgets::icon_button(
+                                theme,
+                                if dark { Icon::Sun } else { Icon::Moon },
+                                false,
+                            ))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.toggle_appearance();
+                                cx.notify();
+                            }))
+                    })
                     .child(
                         div()
                             .id("inspector")
@@ -4228,16 +4272,14 @@ pub fn run(paths: DataPaths) -> Result<()> {
 /// usable width by giving way to the title-bar action cluster at the right
 /// edge, shrinking first and, below that, shifting left just enough.
 fn search_slot(window_width: f32, show_inspector: bool) -> (f32, f32) {
-    const SIDEBAR: f32 = 240.0;
-    const INSPECTOR: f32 = 320.0;
     const ACTIONS: f32 = 300.0;
     const FIELD_MAX: f32 = 420.0;
     const FIELD_MIN: f32 = 120.0;
     const PANE_INSET: f32 = 16.0;
     const ACTIONS_GAP: f32 = 8.0;
 
-    let pane_left = SIDEBAR;
-    let pane_right = window_width - if show_inspector { INSPECTOR } else { 0.0 };
+    let pane_left = SIDEBAR_WIDTH;
+    let pane_right = window_width - if show_inspector { INSPECTOR_WIDTH } else { 0.0 };
     let pane_width = (pane_right - pane_left).max(0.0);
     let pane_center = pane_left + pane_width / 2.0;
     let mut width = FIELD_MAX.min((pane_width - 2.0 * PANE_INSET).max(0.0));

@@ -19,6 +19,7 @@ them, so the keyboard routes below are the primary way to reach them.
 | Redo arrow | Redo (⇧⌘Z) | `⇧⌘Z` or `Ctrl-r` |
 | Question mark | Keyboard and mouse help (?) | `?` |
 | Gear | Settings (⌘,) | `⌘,` |
+| Moon / sun | Switch to dark/light mode (⌘T) | `⌘T`, or `t` in vim mode |
 | Info (i) | Toggle inspector (i) | `i` or `⌘I` |
 
 The title bar holds the search field, centered on the content pane, so the
@@ -32,9 +33,11 @@ has a keyboard shortcut.
 The Forecast month calendar adds three controls beside the month name:
 previous month, Today and next month. They are labelled `‹`, `Today` and `›`
 with tooltips. Every date cell is clickable and has a tooltip naming the day;
-the selected day is highlighted and an "All dates" button clears it. Keyboard
-routes: `[` / `]` step the selected day, `{` / `}` step the month, and `\`
-clears the day filter. The list below keeps the normal task keyboard routes.
+the selected day is highlighted and an "All dates" button clears it. On a wide
+pane the calendar shows two consecutive months; the heading names the range and
+each month keeps its own weekday rail. Keyboard routes: `[` / `]` step the
+selected day, `{` / `}` step the month, and `\` clears the day filter. The
+list below keeps the normal task keyboard routes.
 
 ### Sidebar
 

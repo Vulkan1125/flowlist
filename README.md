@@ -73,9 +73,9 @@ expected. An unambiguous prefix also works.
 ## Desktop app
 
 The window hides the native macOS titlebar and its traffic lights. A custom
-glass header shows the app name, the search field and a labelled **Add task**
-button, with a persistent sidebar and an optional inspector around the task
-list.
+glass header shows the app name, the search field, a light/dark toggle and a
+labelled **Add task** button, with a persistent sidebar and an optional
+inspector around the task list.
 
 Key behaviour:
 
