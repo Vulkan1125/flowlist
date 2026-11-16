@@ -110,7 +110,8 @@ landed and verified.
 - [x] Undoable project deletion in the GUI, CLI and MCP; tasks move to Trash.
 - [x] Typing an unknown project path asks before creating the project, and the
       project picker stays closed until the user types.
-- [x] New projects use the folder icon by default.
+- [x] New projects use the project icon by default; Folder remains one of the
+      ten choices. Tasks converted to projects take the same default.
 - [x] Sort, Group and Priority chips all open anchored option menus; Escape,
       an outside click or the same chip closes them, and only one is open at a
       time.

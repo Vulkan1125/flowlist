@@ -4,6 +4,8 @@
 
 ### Interface
 
+- New projects and tasks converted to projects use the Project icon by default
+  again instead of the Folder glyph; Folder is still one of the ten choices.
 - A sidebar project with tasks but nothing left open now shows a tick in place
   of its count. A brand-new project still shows 0, and adding any open task
   brings the number back.

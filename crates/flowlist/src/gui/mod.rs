@@ -4082,6 +4082,10 @@ impl FlowlistApp {
             serde_json::json!(anchor(self.forecast_months_anchor.get()));
         state["forecast_width_anchor"] =
             serde_json::json!(anchor(self.forecast_width_anchor.get()));
+        state["modal_project_icon"] = serde_json::json!(match &self.modal {
+            Some(modals::Modal::NewProject { icon, .. }) => Some(icon.slug()),
+            _ => None,
+        });
         let text = state.to_string();
         if self.test_state_last.as_deref() == Some(text.as_str()) {
             return;

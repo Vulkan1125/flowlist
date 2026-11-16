@@ -922,6 +922,11 @@ fn attachments_and_project_icons_round_trip() {
     assert_eq!(store.db().tasks[&task_id].attachments.len(), 2);
 
     let mut project = NewProject::new("Launch");
+    assert_eq!(
+        project.icon,
+        flowlist_core::model::ProjectIcon::Project,
+        "a new project starts with the project icon"
+    );
     project.icon = flowlist_core::model::ProjectIcon::Rocket;
     project.attachments = vec!["/tmp/spec.pdf".to_string()];
     let created = store
@@ -999,6 +1004,11 @@ fn convert_task_to_project_is_one_undo_step() {
         .unwrap();
     let project_id = store.db().resolve_project(&outcome.created[0]).unwrap();
     assert!(!store.db().tasks.contains_key(&parent_id));
+    assert_eq!(
+        store.db().projects[&project_id].icon,
+        flowlist_core::model::ProjectIcon::Project,
+        "converting a task keeps the default project icon"
+    );
     // Two subtasks plus the checklist item, which became a task.
     assert_eq!(store.db().projects[&project_id].task_order.len(), 3);
     assert_eq!(

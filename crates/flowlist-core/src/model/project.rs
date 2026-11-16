@@ -118,8 +118,8 @@ impl ProjectKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectIcon {
-    Project,
     #[default]
+    Project,
     Folder,
     Star,
     Briefcase,
@@ -275,5 +275,15 @@ impl Project {
 
     pub fn is_due_for_review(&self, date: NaiveDate) -> bool {
         self.status.is_open() && self.next_review <= date
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ProjectIcon;
+
+    #[test]
+    fn new_projects_use_the_project_icon() {
+        assert_eq!(ProjectIcon::default(), ProjectIcon::Project);
     }
 }

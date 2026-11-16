@@ -16,7 +16,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Optional High / Medium / Low task priorities
 - [x] Task and project attachments stored as referenced file paths
 - [x] Fixed project icon set (project, folder, star, briefcase, home, heart,
-      book, code, rocket, coffee); new projects start with the folder icon
+      book, code, rocket, coffee); new projects start with the project icon
 - [x] Restorable Trash with configurable auto-delete
 - [x] Repeat rules: fixed/after-completion, due-again/defer-another, end date,
       end count, completion counter
