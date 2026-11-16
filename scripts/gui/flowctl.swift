@@ -5,6 +5,7 @@
 //        flowctl drag <x1> <y1> <x2> <y2>
 //        flowctl down <x> <y> / dragto <x> <y> / up <x> <y>
 //        flowctl rightmouse <x> <y>
+//        flowctl scroll <x> <y> <lines>   (positive scrolls down)
 //        flowctl key <keycode> [cmd|shift|ctrl|cmdshift|ctrlshift]
 //        flowctl text <string>
 //
@@ -60,6 +61,25 @@ func move(_ x: Double, _ y: Double) {    let event = CGEvent(
     )
     event?.flags = []
     event?.post(tap: .cghidEventTap)
+}
+
+func scroll(_ x: Double, _ y: Double, _ lines: Int32) {
+    move(x, y)
+    usleep(60_000)
+    let steps = abs(lines)
+    for _ in 0..<steps {
+        let event = CGEvent(
+            scrollWheelEvent2Source: nil,
+            units: .line,
+            wheelCount: 1,
+            wheel1: lines > 0 ? -1 : 1,
+            wheel2: 0,
+            wheel3: 0
+        )
+        event?.location = CGPoint(x: x, y: y)
+        event?.post(tap: .cghidEventTap)
+        usleep(20_000)
+    }
 }
 
 func flags(_ name: String?) -> CGEventFlags {
@@ -172,6 +192,12 @@ case "drag":
         Double(args[5])!
     )
 case "rightmouse": rightMouse(Double(args[2])!, Double(args[3])!)
+case "scroll":
+    scroll(
+        Double(args[2])!,
+        Double(args[3])!,
+        Int32(args[4])!
+    )
 case "move": move(Double(args[2])!, Double(args[3])!)
 case "down": button(Double(args[2])!, Double(args[3])!, down: true)
 case "up": button(Double(args[2])!, Double(args[3])!, down: false)

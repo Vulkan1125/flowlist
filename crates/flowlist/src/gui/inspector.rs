@@ -1,7 +1,7 @@
 //! The right-hand inspector: edit one task (or project) without leaving the
 //! list. Every field commits through the same command layer as the CLI.
 
-use chrono::{Datelike, Duration};
+use chrono::{Datelike, Duration, Timelike};
 use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px};
 
 use flowlist_core::command::{Command, ProjectPatch};
@@ -12,7 +12,7 @@ use flowlist_core::time::{format_duration, human_date, local_date, now};
 use super::content::month_grid;
 use super::icons::Icon;
 use super::widgets::TipExt;
-use super::{DateField, EditField, FlowlistApp, View, icons, widgets};
+use super::{ClockUnit, DateField, DatePickerStep, EditField, FlowlistApp, View, icons, widgets};
 
 impl FlowlistApp {
     pub(super) fn render_inspector(
@@ -575,9 +575,67 @@ impl FlowlistApp {
         row
     }
 
-    /// The calendar popover: one month, Monday-first, today marked, the stored
-    /// date filled in and the keyboard cursor outlined.
+    /// Record one control's painted bounds in the date picker's probe map.
+    /// The map outlives a frame because boxes fill in during paint, after the
+    /// test state for that frame has already been written.
+    fn probe_box(
+        &self,
+        key: String,
+    ) -> impl Fn(Vec<gpui::Bounds<gpui::Pixels>>, &mut Window, &mut gpui::App) + 'static {
+        let boxes = self.date_picker_boxes.clone();
+        move |bounds, _, _| {
+            let Some(bounds) = bounds.first() else {
+                return;
+            };
+            boxes.borrow_mut().insert(
+                key.clone(),
+                [
+                    f32::from(bounds.origin.x),
+                    f32::from(bounds.origin.y),
+                    f32::from(bounds.size.width),
+                    f32::from(bounds.size.height),
+                ],
+            );
+        }
+    }
+
+    /// Wrap a control so its painted bounds land in the probe map. The click
+    /// itself stays on the wrapper's stateful parent.
+    fn probed(&self, key: &'static str, child: impl IntoElement) -> impl IntoElement {
+        div()
+            .on_children_prepainted(self.probe_box(key.to_string()))
+            .child(child)
+    }
+
+    /// The date popover. It is one card with two steps: a month calendar, then
+    /// a clock face when the chosen day carries a time.
     pub(super) fn render_date_picker(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        if self.date_picker.is_none() {
+            return div().into_any_element();
+        }
+        let body = match self.date_picker_step {
+            DatePickerStep::Calendar => self.render_date_calendar(cx),
+            DatePickerStep::Clock => self.render_time_clock(cx),
+        };
+        div()
+            .flex()
+            .flex_col()
+            .p_3()
+            .w(px(super::DATE_PICKER_WIDTH))
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg()
+            .child(body)
+            .into_any_element()
+    }
+
+    /// Step one: one month, Monday-first, today marked, the stored date filled
+    /// in and the keyboard cursor outlined. Picking a day with a time selected
+    /// moves on to the clock instead of closing.
+    fn render_date_calendar(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
         let Some(field) = self.date_picker else {
             return div().into_any_element();
@@ -587,10 +645,7 @@ impl FlowlistApp {
         let cursor = self.date_picker_cursor;
         let stored = self.date_picker_value(field);
         let selected = stored.map(|stamp| stamp.local_date());
-        let time = self.date_picker_time;
-        let time_label = time
-            .map(|time| time.format("%-I:%M %p").to_string())
-            .unwrap_or_else(|| "—".to_string());
+        let timed = self.date_picker_time.is_some();
         let (grid_start, _, weeks) = month_grid(month);
 
         let header = div()
@@ -636,7 +691,7 @@ impl FlowlistApp {
             .gap(px(2.))
             .children(["M", "T", "W", "T", "F", "S", "S"].map(|label| {
                 div()
-                    .w(px(30.))
+                    .flex_1()
                     .flex()
                     .justify_center()
                     .text_xs()
@@ -655,8 +710,8 @@ impl FlowlistApp {
                 let is_cursor = cursor == date;
                 let mut cell = div()
                     .id(super::sid(format!("date-picker-day:{date}")))
-                    .w(px(30.))
-                    .h(px(26.))
+                    .flex_1()
+                    .h(px(32.))
                     .flex()
                     .items_center()
                     .justify_center()
@@ -664,9 +719,13 @@ impl FlowlistApp {
                     .text_xs()
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover))
-                    .child(date.day().to_string())
+                    .child(
+                        div()
+                            .on_children_prepainted(self.probe_box(format!("day:{date}")))
+                            .child(date.day().to_string()),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.apply_date_picker(date, cx);
+                        this.choose_date_picker_date(date, cx);
                     }));
                 if is_selected {
                     cell = cell
@@ -689,105 +748,43 @@ impl FlowlistApp {
             grid = grid.child(row);
         }
 
-        // The time row: All day turns the time off, and the stepper buttons
-        // move it 15 minutes at a time. The `a`, `[`/`]` and `{`/`}` keys do
-        // the same from the keyboard.
-        let time_row = self.date_picker_time_row.clone();
-        let all_day_anchor = self.date_picker_all_day.clone();
-        let time_section = div()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(div().text_xs().text_color(theme.text_faint).child("Time"))
-                    .child(
-                        div()
-                            .on_children_prepainted(move |bounds, _, _| {
-                                if let Some(bounds) = bounds.first() {
-                                    all_day_anchor.set(Some(*bounds));
-                                }
-                            })
-                            .child(
-                                div()
-                                    .id("date-picker-all-day")
-                                    .flow_tip(
-                                        self,
-                                        cx,
-                                        theme,
-                                        if time.is_some() {
-                                            "Make it all-day (a)"
-                                        } else {
-                                            "Add a time (a)"
-                                        },
-                                    )
-                                    .child(widgets::toggle_chip(theme, "All day", time.is_none()))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.toggle_date_picker_time(cx)
-                                    })),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .on_children_prepainted(move |bounds, _, _| {
-                        if bounds.len() < 3 {
-                            return;
-                        }
-                        let mut cells = [[0.0; 4]; 3];
-                        for (slot, bounds) in bounds.iter().take(3).enumerate() {
-                            cells[slot] = [
-                                f32::from(bounds.origin.x),
-                                f32::from(bounds.origin.y),
-                                f32::from(bounds.size.width),
-                                f32::from(bounds.size.height),
-                            ];
-                        }
-                        time_row.set(Some(cells));
-                    })
-                    .child(
-                        div()
-                            .id("date-picker-earlier")
-                            .flow_tip(self, cx, theme, "15 minutes earlier ([)")
-                            .child(widgets::button(theme, "−", false))
-                            .on_click(
-                                cx.listener(|this, _, _, cx| this.step_date_picker_time(-15, cx)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .justify_center()
-                            .text_sm()
-                            .text_color(if time.is_some() {
-                                theme.text
-                            } else {
-                                theme.text_faint
-                            })
-                            .child(time_label),
-                    )
-                    .child(
-                        div()
-                            .id("date-picker-later")
-                            .flow_tip(self, cx, theme, "15 minutes later (])")
-                            .child(widgets::button(theme, "+", false))
-                            .on_click(
-                                cx.listener(|this, _, _, cx| this.step_date_picker_time(15, cx)),
-                            ),
-                    ),
-            );
+        let mode =
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(div().text_xs().text_color(theme.text_faint).child("Time"))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(
+                            div()
+                                .id("date-picker-all-day")
+                                .flow_tip(self, cx, theme, "Keep the day all-day")
+                                .child(self.probed(
+                                    "all-day",
+                                    widgets::toggle_chip(theme, "All day", !timed),
+                                ))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.set_date_picker_all_day(true, cx)
+                                })),
+                        )
+                        .child(
+                            div()
+                                .id("date-picker-at-time")
+                                .flow_tip(self, cx, theme, "Set a time on the clock")
+                                .child(self.probed(
+                                    "at-time",
+                                    widgets::toggle_chip(theme, "At time", timed),
+                                ))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.set_date_picker_all_day(false, cx)
+                                })),
+                        ),
+                );
 
-        let hint = match time {
-            Some(_) => "a all-day · [ ] ±15m · { } ±1h".to_string(),
-            None => "a sets a time · [ ] ±15m".to_string(),
-        };
         let footer = div()
             .flex()
             .items_center()
@@ -801,45 +798,293 @@ impl FlowlistApp {
                     .child(
                         div()
                             .id("date-picker-today")
-                            .child(widgets::button(theme, "Today", false))
+                            .flow_tip(self, cx, theme, "Today (t)")
+                            .child(self.probed("today", widgets::button(theme, "Today", false)))
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.apply_date_picker(local_date(now()), cx);
+                                this.choose_date_picker_date(local_date(now()), cx);
                             })),
                     )
                     .child(
                         div()
                             .id("date-picker-clear")
-                            .child(widgets::button(theme, "Clear", false))
+                            .flow_tip(self, cx, theme, "Clear the date (⌫)")
+                            .child(self.probed("clear", widgets::button(theme, "Clear", false)))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.clear_date_picker(cx);
                             })),
                     ),
             )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child("⏎ pick · esc"),
-            );
+            .child(div().text_xs().text_color(theme.text_faint).child("⏎ pick"));
+
+        let hint = if timed {
+            "←↑↓→ day · ⇞⇟ month · a all-day · ⏎ clock"
+        } else {
+            "←↑↓→ day · ⇞⇟ month · a time · ⏎ pick"
+        };
 
         div()
             .flex()
             .flex_col()
             .gap_2()
-            .p_3()
-            .w(px(super::DATE_PICKER_WIDTH))
-            .rounded_lg()
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.raised)
-            .shadow_lg()
             .child(header)
             .child(weekdays)
             .child(grid)
             .child(widgets::divider(theme))
-            .child(time_section)
+            .child(mode)
             .child(footer)
             .child(div().text_xs().text_color(theme.text_faint).child(hint))
+            .into_any_element()
+    }
+
+    /// Step two: an Android-style clock face. The hour comes first; choosing
+    /// one advances to minutes. The dial is a square with the numbers placed
+    /// on a circle and a hand drawn from the centre to the active number.
+    fn render_time_clock(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let Some(base) = self.date_picker_clock_base() else {
+            return div().into_any_element();
+        };
+        let hour12 = super::clock_hour_12(base.hour());
+        let minute = base.minute();
+        let pm = base.hour() >= 12;
+        let unit = self.date_picker_unit;
+        let cursor = self.date_picker_cursor;
+
+        let hour_color = if unit == ClockUnit::Hour {
+            theme.accent
+        } else {
+            theme.text_dim
+        };
+        let minute_color = if unit == ClockUnit::Minute {
+            theme.accent
+        } else {
+            theme.text_dim
+        };
+        let display =
+            div()
+                .flex()
+                .items_center()
+                .justify_center()
+                .gap_1()
+                .child(
+                    div()
+                        .id("clock-hour")
+                        .px_2()
+                        .rounded_md()
+                        .cursor_pointer()
+                        .text_3xl()
+                        .text_color(hour_color)
+                        .hover(|style| style.bg(theme.hover))
+                        .child(format!("{hour12:02}"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.set_date_picker_unit(ClockUnit::Hour, cx)
+                        })),
+                )
+                .child(div().text_3xl().text_color(theme.text_faint).child(":"))
+                .child(
+                    div()
+                        .id("clock-minute")
+                        .px_2()
+                        .rounded_md()
+                        .cursor_pointer()
+                        .text_3xl()
+                        .text_color(minute_color)
+                        .hover(|style| style.bg(theme.hover))
+                        .child(format!("{minute:02}"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.set_date_picker_unit(ClockUnit::Minute, cx)
+                        })),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.))
+                        .ml_2()
+                        .child(
+                            div()
+                                .id("clock-am")
+                                .flow_tip(self, cx, theme, "Morning")
+                                .child(widgets::toggle_chip(theme, "AM", !pm))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.set_date_picker_half(false, cx)
+                                })),
+                        )
+                        .child(
+                            div()
+                                .id("clock-pm")
+                                .flow_tip(self, cx, theme, "Afternoon and evening")
+                                .child(widgets::toggle_chip(theme, "PM", pm))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.set_date_picker_half(true, cx)
+                                })),
+                        ),
+                );
+
+        let dial_size = 236.0;
+        let center = dial_size / 2.0;
+        let radius = 92.0;
+        let cell = 36.0;
+        let active = match unit {
+            ClockUnit::Hour => (hour12 % 12) as usize,
+            ClockUnit::Minute => ((minute as f32 / 5.0).round() as usize) % 12,
+        };
+        let (tx, ty) = super::clock_dial_position(active, center, radius);
+        let hand_color = theme.accent;
+        let hand = gpui::canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let origin = bounds.center();
+                let end = gpui::point(bounds.origin.x + px(tx), bounds.origin.y + px(ty));
+                // A short tail on the far side, the way the Android dial reads.
+                let tail = gpui::point(
+                    bounds.origin.x + px(center - (tx - center) * 0.16),
+                    bounds.origin.y + px(center - (ty - center) * 0.16),
+                );
+                let mut path = gpui::PathBuilder::stroke(px(2.));
+                path.move_to(origin);
+                path.line_to(end);
+                path.move_to(origin);
+                path.line_to(tail);
+                if let Ok(path) = path.build() {
+                    window.paint_path(path, hand_color);
+                }
+            },
+        )
+        .absolute()
+        .top_0()
+        .left_0()
+        .size(px(dial_size));
+
+        let mut dial = div()
+            .relative()
+            .w(px(dial_size))
+            .h(px(dial_size))
+            .child(hand)
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size(px(dial_size))
+                    .rounded_full()
+                    .border_1()
+                    .border_color(theme.border_soft),
+            );
+        for index in 0..12usize {
+            let (x, y) = super::clock_dial_position(index, center, radius);
+            let (label, key) = match unit {
+                ClockUnit::Hour => {
+                    let hour = if index == 0 { 12 } else { index };
+                    (format!("{hour}"), format!("hour:{hour}"))
+                }
+                ClockUnit::Minute => {
+                    let minute = index * 5;
+                    (format!("{minute:02}"), format!("minute:{minute}"))
+                }
+            };
+            let hour_value = if index == 0 { 12 } else { index as u32 };
+            let minute_value = (index * 5) as u32;
+            let mut number = div()
+                .id(super::sid(format!("date-picker-{key}")))
+                .absolute()
+                .left(px(x - cell / 2.0))
+                .top(px(y - cell / 2.0))
+                .size(px(cell))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_full()
+                .text_sm()
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover))
+                .child(
+                    div()
+                        .on_children_prepainted(self.probe_box(key))
+                        .child(label),
+                )
+                .on_click(cx.listener(move |this, _, _, cx| match unit {
+                    ClockUnit::Hour => this.set_date_picker_hour(hour_value, cx),
+                    ClockUnit::Minute => this.set_date_picker_minute(minute_value, cx),
+                }));
+            if index == active {
+                number = number
+                    .bg(theme.accent)
+                    .text_color(theme.bg)
+                    .font_weight(gpui::FontWeight::SEMIBOLD);
+            } else {
+                number = number.text_color(theme.text);
+            }
+            dial = dial.child(number);
+        }
+
+        let footer =
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(
+                            div()
+                                .id("date-picker-back")
+                                .flow_tip(self, cx, theme, "Back to the calendar (esc)")
+                                .child(self.probed("back", widgets::button(theme, "Back", false)))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.date_picker_back_to_calendar(cx)
+                                })),
+                        )
+                        .child(
+                            div()
+                                .id("date-picker-clock-all-day")
+                                .flow_tip(self, cx, theme, "Clear the time (a)")
+                                .child(self.probed(
+                                    "clock-all-day",
+                                    widgets::toggle_chip(theme, "All day", false),
+                                ))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.set_date_picker_all_day(true, cx)
+                                })),
+                        ),
+                )
+                .child(
+                    div()
+                        .id("date-picker-done")
+                        .flow_tip(self, cx, theme, "Set the date and time (⏎)")
+                        .child(self.probed("done", widgets::button(theme, "Done", true)))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let date = this.date_picker_cursor;
+                            this.apply_date_picker(date, cx);
+                        })),
+                );
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(
+                div()
+                    .flex()
+                    .justify_center()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(cursor.format("%a, %b %-d").to_string()),
+            )
+            .child(display)
+            .child(div().flex().justify_center().child(dial))
+            .child(footer)
+            .child(
+                div()
+                    .flex()
+                    .justify_center()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("←↑↓→ set · ⇥ hour/min · ⏎ done"),
+            )
             .into_any_element()
     }
 

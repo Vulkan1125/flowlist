@@ -77,7 +77,16 @@ null), so a split drag can check the highlight before releasing the mouse.
 actually painted on the last frame, in order, with `id`, `title`, `depth` and
 `has_children`; hidden descendants are absent, so a probe can assert what a
 disclosure reveals. `task_disclosures` maps each parent id to its chevron box
-for clicking it. `modal` is `null` when no sheet is
+for clicking it. `date_picker` names the open date field (`due` or `defer`, or
+null) with `date_picker_step` (`calendar` or `clock`), `date_picker_unit`
+(`hour` or `minute`), `date_picker_time` as `HH:MM`, `date_picker_cursor` and
+`date_picker_month`. `date_picker_boxes` maps the picker's controls to their
+boxes: `day:<YYYY-MM-DD>` for each calendar cell, `hour:<1-12>` or
+`minute:<0-55>` for the clock numbers, and `all-day`, `at-time`, `clock-all-day`,
+`today`, `clear`, `back` and `done` for the buttons. Prepaint boxes land in the
+state file one frame after they are measured, so a probe that opens the picker
+should poll for the key (nudging the pointer forces the repaint). `due_anchor`
+and `defer_anchor` give the calendar icon boxes. `modal` is `null` when no sheet is
 open, otherwise the sheet title (`New
 project`, `Perspective`, `Settings`, …). `focus` names the active pane or field
 (`Content`, `Capture`, `Sidebar`, `Field`, `Modal`, …). `field` names the
@@ -122,8 +131,9 @@ these clicks can be replaced by named actions without changing the assertions.
 
 ## Helpers
 
-- `scripts/gui/flowctl.swift` posts mouse moves, left and right clicks and key
-  events. Its modifiers include `ctrlalt`, used for the capture hotkey.
+- `scripts/gui/flowctl.swift` posts mouse moves, left and right clicks, scroll
+  wheel lines and key events. Its modifiers include `ctrlalt`, used for the
+  capture hotkey.
   `drag` does a complete drag in one call; `down`, `dragto` and `up` split it
   so a probe can read the test state mid-drag and assert the drop highlight.
 - `scripts/gui/window.swift` prints the live window title, origin and size.

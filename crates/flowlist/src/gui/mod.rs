@@ -26,7 +26,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use chrono::Datelike;
+use chrono::{Datelike, Timelike};
 use gpui::{
     App, Application, Bounds, ClipboardItem, Context, CursorStyle, FocusHandle, Focusable,
     IntoElement, KeyDownEvent, Keystroke, MouseButton, Render, ScrollHandle, SharedString, Window,
@@ -113,6 +113,24 @@ pub(super) enum DateField {
     Due,
 }
 
+/// The date popover is a two-step surface: pick a day on the calendar, then
+/// (when a time is wanted) set it on a clock face.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum DatePickerStep {
+    #[default]
+    Calendar,
+    Clock,
+}
+
+/// Which hand the clock face is editing. Picking an hour advances to minutes,
+/// the way the Android time picker does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum ClockUnit {
+    #[default]
+    Hour,
+    Minute,
+}
+
 impl DateField {
     pub(super) fn edit_field(self) -> EditField {
         match self {
@@ -169,8 +187,8 @@ fn menu_position(
 
 /// Size of the inspector's date popover. The constants are shared with the
 /// root overlay so its hitboxes match the painted card.
-pub(super) const DATE_PICKER_WIDTH: f32 = 252.0;
-pub(super) const DATE_PICKER_HEIGHT: f32 = 396.0;
+pub(super) const DATE_PICKER_WIDTH: f32 = 288.0;
+pub(super) const DATE_PICKER_HEIGHT: f32 = 440.0;
 
 /// The first day of a date's month; the calendar paints whole months.
 fn first_of_month(date: chrono::NaiveDate) -> chrono::NaiveDate {
@@ -204,6 +222,32 @@ fn picker_default_time(
 /// 11:45 PM lands on 12:00 AM rather than failing.
 fn stepped_time(time: chrono::NaiveTime, minutes: i64) -> chrono::NaiveTime {
     time + chrono::Duration::minutes(minutes)
+}
+
+/// A 24-hour hour as the clock face shows it: midnight and noon both read 12.
+fn clock_hour_12(hour: u32) -> u32 {
+    match hour % 12 {
+        0 => 12,
+        hour => hour,
+    }
+}
+
+/// Turn a clock-face hour and half of day back into a 24-hour hour.
+fn clock_hour_24(hour12: u32, pm: bool) -> u32 {
+    let hour12 = hour12.clamp(1, 12);
+    match (hour12, pm) {
+        (12, false) => 0,
+        (12, true) => 12,
+        (hour, false) => hour,
+        (hour, true) => hour + 12,
+    }
+}
+
+/// Where a clock-face number sits inside a square dial. Index 0 is 12 at the
+/// top; the rest run clockwise.
+fn clock_dial_position(index: usize, center: f32, radius: f32) -> (f32, f32) {
+    let angle = (index as f32 * 30.0 - 90.0).to_radians();
+    (center + radius * angle.cos(), center + radius * angle.sin())
 }
 
 /// A calendar popover hangs below its icon and right-aligns to it, so it
@@ -295,9 +339,12 @@ pub struct FlowlistApp {
     date_picker_month: chrono::NaiveDate,
     date_picker_cursor: chrono::NaiveDate,
     date_picker_time: Option<chrono::NaiveTime>,
-    /// The time controls, measured so the GUI probe can click them.
-    date_picker_time_row: Rc<Cell<Option<[[f32; 4]; 3]>>>,
-    date_picker_all_day: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// Which half of the two-step popover is showing, and which hand the clock
+    /// is editing.
+    date_picker_step: DatePickerStep,
+    date_picker_unit: ClockUnit,
+    /// Controls in the date popover, measured so the GUI probe can click them.
+    date_picker_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// How wide the title's slot painted on the last frame. A view name that
     /// does not fit there is left out entirely instead of showing a stub.
     title_space: Rc<Cell<Option<f32>>>,
@@ -454,8 +501,9 @@ impl FlowlistApp {
             date_picker_month: forecast_month,
             date_picker_cursor: today,
             date_picker_time: None,
-            date_picker_time_row: Rc::new(Cell::new(None)),
-            date_picker_all_day: Rc::new(Cell::new(None)),
+            date_picker_step: DatePickerStep::Calendar,
+            date_picker_unit: ClockUnit::Hour,
+            date_picker_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             title_space: Rc::new(Cell::new(None)),
             title_visible: Rc::new(Cell::new(true)),
             sidebar_menu: None,
@@ -1665,8 +1713,11 @@ impl FlowlistApp {
         self.date_picker = Some(field);
         self.date_picker_cursor = cursor;
         self.date_picker_month = first_of_month(cursor);
-        // Keep a stored time, but start an all-day date all-day: the time row
-        // is what turns it into a timed stamp.
+        self.date_picker_step = DatePickerStep::Calendar;
+        self.date_picker_unit = ClockUnit::Hour;
+        self.date_picker_boxes.borrow_mut().clear();
+        // Keep a stored time, but start an all-day date all-day: the clock
+        // controls are what turn it into a timed stamp.
         self.date_picker_time = stored
             .filter(|stamp| stamp.has_time)
             .map(|stamp| stamp.local_time());
@@ -1705,6 +1756,119 @@ impl FlowlistApp {
     fn set_date_picker_cursor(&mut self, date: chrono::NaiveDate) {
         self.date_picker_cursor = date;
         self.date_picker_month = first_of_month(date);
+    }
+
+    /// Pick a day from the calendar. All-day dates are written at once; a
+    /// timed date opens the clock step, so the time is confirmed as part of
+    /// the same choice instead of sitting cramped under the month.
+    fn choose_date_picker_date(&mut self, date: chrono::NaiveDate, cx: &mut Context<Self>) {
+        self.set_date_picker_cursor(date);
+        if self.date_picker_time.is_some() {
+            self.date_picker_step = DatePickerStep::Clock;
+            self.date_picker_unit = ClockUnit::Hour;
+            cx.notify();
+        } else {
+            self.apply_date_picker(date, cx);
+        }
+    }
+
+    /// The time the clock step shows: the staged time, or the library default
+    /// for this field when the date is still all-day.
+    fn date_picker_clock_base(&self) -> Option<chrono::NaiveTime> {
+        let field = self.date_picker?;
+        let settings = &self.store.db().settings;
+        Some(self.date_picker_time.unwrap_or_else(|| {
+            picker_default_time(
+                field,
+                settings.default_due_time,
+                settings.default_defer_time,
+            )
+        }))
+    }
+
+    /// Set the hour from the clock face. Choosing an hour moves the face on to
+    /// minutes, like the Android time picker.
+    fn set_date_picker_hour(&mut self, hour12: u32, cx: &mut Context<Self>) {
+        let Some(base) = self.date_picker_clock_base() else {
+            return;
+        };
+        let pm = base.hour() >= 12;
+        if let Some(time) = base.with_hour(clock_hour_24(hour12, pm)) {
+            self.date_picker_time = Some(time);
+        }
+        self.date_picker_unit = ClockUnit::Minute;
+        cx.notify();
+    }
+
+    fn set_date_picker_minute(&mut self, minute: u32, cx: &mut Context<Self>) {
+        let Some(base) = self.date_picker_clock_base() else {
+            return;
+        };
+        if let Some(time) = base.with_minute(minute) {
+            self.date_picker_time = Some(time);
+        }
+        cx.notify();
+    }
+
+    /// Switch AM/PM without changing the 12-hour reading.
+    fn set_date_picker_half(&mut self, pm: bool, cx: &mut Context<Self>) {
+        let Some(base) = self.date_picker_clock_base() else {
+            return;
+        };
+        if let Some(time) = base.with_hour(clock_hour_24(clock_hour_12(base.hour()), pm)) {
+            self.date_picker_time = Some(time);
+        }
+        cx.notify();
+    }
+
+    fn set_date_picker_unit(&mut self, unit: ClockUnit, cx: &mut Context<Self>) {
+        self.date_picker_unit = unit;
+        cx.notify();
+    }
+
+    /// Arrow keys on the clock face move one hour or one minute, depending on
+    /// the active hand.
+    fn step_date_picker_clock(&mut self, delta: i64, cx: &mut Context<Self>) {
+        let Some(base) = self.date_picker_clock_base() else {
+            return;
+        };
+        let minutes = match self.date_picker_unit {
+            ClockUnit::Hour => delta.saturating_mul(60),
+            ClockUnit::Minute => delta,
+        };
+        self.date_picker_time = Some(stepped_time(base, minutes));
+        cx.notify();
+    }
+
+    fn date_picker_back_to_calendar(&mut self, cx: &mut Context<Self>) {
+        if self.date_picker_step == DatePickerStep::Clock {
+            self.date_picker_step = DatePickerStep::Calendar;
+            cx.notify();
+        }
+    }
+
+    /// The All day / At time choice. All-day drops the time and stays on the
+    /// calendar; a time starts the clock face at the library default.
+    fn set_date_picker_all_day(&mut self, all_day: bool, cx: &mut Context<Self>) {
+        let Some(field) = self.date_picker else {
+            return;
+        };
+        if all_day {
+            self.date_picker_time = None;
+            self.date_picker_step = DatePickerStep::Calendar;
+        } else {
+            if self.date_picker_time.is_none() {
+                let settings = &self.store.db().settings;
+                self.date_picker_time = Some(picker_default_time(
+                    field,
+                    settings.default_due_time,
+                    settings.default_defer_time,
+                ));
+            }
+            self.date_picker_step = DatePickerStep::Clock;
+            self.date_picker_unit = ClockUnit::Hour;
+        }
+        cx.notify();
     }
 
     /// Turn the staged time on (at the library default for this field) or off
@@ -1759,6 +1923,8 @@ impl FlowlistApp {
         let stamp = picker_stamp(date, self.date_picker_time);
         self.date_picker = None;
         self.date_picker_time = None;
+        self.date_picker_step = DatePickerStep::Calendar;
+        self.date_picker_unit = ClockUnit::Hour;
         let mut patch = TaskPatch::default();
         match field {
             DateField::Defer => patch.defer = Some(Some(stamp)),
@@ -1779,6 +1945,8 @@ impl FlowlistApp {
         };
         self.date_picker = None;
         self.date_picker_time = None;
+        self.date_picker_step = DatePickerStep::Calendar;
+        self.date_picker_unit = ClockUnit::Hour;
         if self.date_picker_value(field).is_none() {
             cx.notify();
             return;
@@ -2688,77 +2856,62 @@ impl FlowlistApp {
             return;
         }
 
-        // A calendar popover owns the keyboard while it is open: arrows move a
-        // day, Return picks it, T jumps to today and Delete clears the field.
+        // The date popover owns the keyboard while it is open. The calendar
+        // moves by day, the clock face by hour or minute, and every key is
+        // swallowed so typing cannot edit the list behind the popover.
         if self.date_picker.is_some() && !mods.platform {
-            let handled = match stroke.key.as_str() {
-                "escape" => {
-                    self.close_date_picker(cx);
-                    true
-                }
-                "left" => {
-                    self.move_date_picker_cursor(-1);
-                    true
-                }
-                "right" => {
-                    self.move_date_picker_cursor(1);
-                    true
-                }
-                "up" => {
-                    self.move_date_picker_cursor(-7);
-                    true
-                }
-                "down" => {
-                    self.move_date_picker_cursor(7);
-                    true
-                }
-                "pageup" => {
-                    self.shift_date_picker_month(-1);
-                    true
-                }
-                "pagedown" => {
-                    self.shift_date_picker_month(1);
-                    true
-                }
-                "t" => {
-                    self.apply_date_picker(local_date(now()), cx);
-                    true
-                }
-                "backspace" | "delete" => {
-                    self.clear_date_picker(cx);
-                    true
-                }
-                "a" => {
-                    self.toggle_date_picker_time(cx);
-                    true
-                }
-                "[" => {
-                    self.step_date_picker_time(-15, cx);
-                    true
-                }
-                "]" => {
-                    self.step_date_picker_time(15, cx);
-                    true
-                }
-                "{" => {
-                    self.step_date_picker_time(-60, cx);
-                    true
-                }
-                "}" => {
-                    self.step_date_picker_time(60, cx);
-                    true
-                }
-                "enter" | "return" => {
-                    let date = self.date_picker_cursor;
-                    self.apply_date_picker(date, cx);
-                    true
-                }
-                _ => false,
-            };
-            if handled {
-                cx.notify();
-                return;
+            match self.date_picker_step {
+                DatePickerStep::Calendar => match stroke.key.as_str() {
+                    "escape" => self.close_date_picker(cx),
+                    "left" => self.move_date_picker_cursor(-1),
+                    "right" => self.move_date_picker_cursor(1),
+                    "up" => self.move_date_picker_cursor(-7),
+                    "down" => self.move_date_picker_cursor(7),
+                    "pageup" => self.shift_date_picker_month(-1),
+                    "pagedown" => self.shift_date_picker_month(1),
+                    "t" => self.choose_date_picker_date(local_date(now()), cx),
+                    "backspace" | "delete" => self.clear_date_picker(cx),
+                    "a" => self.toggle_date_picker_time(cx),
+                    "[" => self.step_date_picker_time(-15, cx),
+                    "]" => self.step_date_picker_time(15, cx),
+                    "{" => self.step_date_picker_time(-60, cx),
+                    "}" => self.step_date_picker_time(60, cx),
+                    "enter" | "return" => {
+                        let date = self.date_picker_cursor;
+                        self.choose_date_picker_date(date, cx);
+                    }
+                    _ => {}
+                },
+                DatePickerStep::Clock => match stroke.key.as_str() {
+                    "escape" => self.date_picker_back_to_calendar(cx),
+                    "left" | "down" => self.step_date_picker_clock(-1, cx),
+                    "right" | "up" => self.step_date_picker_clock(1, cx),
+                    "pageup" => self.step_date_picker_clock(5, cx),
+                    "pagedown" => self.step_date_picker_clock(-5, cx),
+                    "tab" => {
+                        let unit = match self.date_picker_unit {
+                            ClockUnit::Hour => ClockUnit::Minute,
+                            ClockUnit::Minute => ClockUnit::Hour,
+                        };
+                        self.set_date_picker_unit(unit, cx);
+                    }
+                    "h" => self.set_date_picker_unit(ClockUnit::Hour, cx),
+                    "m" => self.set_date_picker_unit(ClockUnit::Minute, cx),
+                    "a" => self.set_date_picker_all_day(true, cx),
+                    "[" => self.step_date_picker_time(-15, cx),
+                    "]" => self.step_date_picker_time(15, cx),
+                    "{" => self.step_date_picker_time(-60, cx),
+                    "}" => self.step_date_picker_time(60, cx),
+                    "backspace" | "delete" => self.clear_date_picker(cx),
+                    "enter" | "return" => {
+                        let date = self.date_picker_cursor;
+                        self.apply_date_picker(date, cx);
+                    }
+                    _ => {}
+                },
             }
+            cx.notify();
+            return;
         }
 
         if matches!(
@@ -4201,13 +4354,15 @@ impl FlowlistApp {
             self.date_picker_time
                 .map(|time| time.format("%H:%M").to_string())
         );
-        state["date_picker_time_row"] = serde_json::json!(self.date_picker_time_row.get());
-        state["date_picker_all_day"] = serde_json::json!(self.date_picker_all_day.get().map(|b| [
-            f32::from(b.origin.x),
-            f32::from(b.origin.y),
-            f32::from(b.size.width),
-            f32::from(b.size.height),
-        ]));
+        state["date_picker_step"] = serde_json::json!(match self.date_picker_step {
+            DatePickerStep::Calendar => "calendar",
+            DatePickerStep::Clock => "clock",
+        });
+        state["date_picker_unit"] = serde_json::json!(match self.date_picker_unit {
+            ClockUnit::Hour => "hour",
+            ClockUnit::Minute => "minute",
+        });
+        state["date_picker_boxes"] = serde_json::json!(self.date_picker_boxes.borrow().clone());
         let settings = &self.store.db().settings;
         let window_width = self.window_size.map_or(1254.0, |(width, _)| width);
         state["forecast_months"] = serde_json::json!(settings.forecast_months.min(2));
@@ -4980,8 +5135,9 @@ fn search_slot(window_width: f32, show_inspector: bool) -> (f32, f32) {
 mod tests {
     use super::rank_suggestions;
     use super::{
-        DATE_PICKER_HEIGHT, DATE_PICKER_WIDTH, DateField, View, date_picker_position,
-        effective_priority_filter, first_of_month, picker_default_time, picker_stamp, stepped_time,
+        DATE_PICKER_HEIGHT, DATE_PICKER_WIDTH, DateField, View, clock_dial_position, clock_hour_12,
+        clock_hour_24, date_picker_position, effective_priority_filter, first_of_month,
+        picker_default_time, picker_stamp, stepped_time,
     };
     use chrono::{NaiveDate, NaiveTime};
     use flowlist_core::model::{BuiltinPerspective, Priority};
@@ -5099,6 +5255,44 @@ mod tests {
     }
 
     #[test]
+    fn the_clock_face_reads_and_writes_a_12_hour_day() {
+        assert_eq!(clock_hour_12(0), 12);
+        assert_eq!(clock_hour_12(1), 1);
+        assert_eq!(clock_hour_12(11), 11);
+        assert_eq!(clock_hour_12(12), 12);
+        assert_eq!(clock_hour_12(13), 1);
+        assert_eq!(clock_hour_12(23), 11);
+
+        // Midnight and noon both read 12, but land in different halves.
+        assert_eq!(clock_hour_24(12, false), 0);
+        assert_eq!(clock_hour_24(12, true), 12);
+        assert_eq!(clock_hour_24(1, false), 1);
+        assert_eq!(clock_hour_24(1, true), 13);
+        assert_eq!(clock_hour_24(11, true), 23);
+
+        // Round-tripping every hour keeps the time of day.
+        for hour in 0..24 {
+            let pm = hour >= 12;
+            assert_eq!(clock_hour_24(clock_hour_12(hour), pm), hour);
+        }
+    }
+
+    #[test]
+    fn the_clock_face_starts_at_12_and_runs_clockwise() {
+        let (x, y) = clock_dial_position(0, 100.0, 50.0);
+        assert!((x - 100.0).abs() < 0.01 && (y - 50.0).abs() < 0.01);
+        // 3 o'clock sits a quarter turn to the right.
+        let (x, y) = clock_dial_position(3, 100.0, 50.0);
+        assert!((x - 150.0).abs() < 0.01 && (y - 100.0).abs() < 0.01);
+        // 6 o'clock sits at the bottom.
+        let (x, y) = clock_dial_position(6, 100.0, 50.0);
+        assert!((x - 100.0).abs() < 0.01 && (y - 150.0).abs() < 0.01);
+        // 9 o'clock sits a quarter turn to the left.
+        let (x, y) = clock_dial_position(9, 100.0, 50.0);
+        assert!((x - 50.0).abs() < 0.01 && (y - 100.0).abs() < 0.01);
+    }
+
+    #[test]
     fn all_day_dates_start_at_the_library_default() {
         let due_default = NaiveTime::from_hms_opt(17, 0, 0).unwrap();
         let defer_default = NaiveTime::from_hms_opt(8, 30, 0).unwrap();
@@ -5148,14 +5342,14 @@ mod tests {
         assert_eq!(x, 1140.0 + 28.0 - DATE_PICKER_WIDTH);
         assert_eq!(y, 300.0 + 28.0 + 4.0);
 
-        // A window too short for the card clamps it to the bottom edge.
+        // A window too short for the card pulls it up to the last usable line.
         let (_, y) = date_picker_position(
             anchor,
-            (1254.0, 400.0),
+            (1254.0, 500.0),
             DATE_PICKER_WIDTH,
             DATE_PICKER_HEIGHT,
         );
-        assert_eq!(y, 4.0);
+        assert_eq!(y, 500.0 - DATE_PICKER_HEIGHT);
         // And a picker near the left edge never gains a negative x.
         let left = Bounds {
             origin: point(px(10.0), px(20.0)),

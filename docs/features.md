@@ -142,12 +142,16 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Rename sheets select the whole name when they open, so typing replaces
       it and one Backspace clears it. Clicks and drags inside sheet fields
       place the caret or select a range with the mouse.
-- [x] Calendar icons on the inspector's Due and Defer fields open a month
-      picker. A clicked day is applied through the normal command layer (so it
-      is undoable), an existing time of day survives a date change, and Today,
-      Clear, month arrows, arrow keys, Enter and Esc all work. A Time row in
-      the picker turns an all-day date into a timed one, steps it by 15
-      minutes or an hour, and returns it to all-day.
+- [x] Calendar icons on the inspector's Due and Defer fields open a two-step
+      picker. The first step is a month calendar: a clicked day is applied
+      through the normal command layer (so it is undoable), an existing time
+      of day survives a date change, and Today, Clear, month arrows, arrow
+      keys, Enter and Esc all work. An All day / At time switch decides whether
+      the chosen day carries a time; an all-day pick commits at once, while a
+      timed one opens the second step. That step is an Android-style clock
+      face: the hour comes first and picking one advances to minutes, the
+      digital hour/minute readout and the AM/PM chips switch what is being set,
+      and Back returns to the calendar. Done (or Enter) writes the timed stamp.
 - [x] Inspector with checklist add/toggle/rename/reorder/delete and progress
 - [x] Task subtitle type chips (parallel/sequential action groups)
 - [x] Attachments in the task and project inspectors: add paths, open,

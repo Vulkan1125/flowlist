@@ -109,23 +109,31 @@ undoable and does not touch the data file.
 | × close inspector | Close inspector (i) | `i` or `⌘I` |
 | Project badge | `N open · M of T done`, or `All N done` | opens the project |
 | Calendar | Pick a due/defer date | icon opens it; arrows, `Enter`, `T`, `Delete`, `Esc` |
-| Time row | Add or clear a time | `A` toggles all-day, `[`/`]` step 15 minutes, `{`/`}` step an hour |
+| All day / At time | Keep the day all-day / set a time | `A` toggles; chips are clickable |
+| Clock face | Set the hour and minute | arrows, `Page Up`/`Page Down`, `Tab` or `H`/`M`, `A`, `Enter`, `Esc` |
 
 ### Due and Defer date pickers
 
-The calendar icon at the right of each date field opens a month picker below
-it. `←`/`→` move a day, `↑`/`↓` a week, `Page Up`/`Page Down` change month,
-`Enter` applies, `T` picks today, `Delete` clears the field and `Esc` closes
-without changing anything. Clicking the field's text still opens the normal
-editor, so a typed time of day can be entered there; picking a day from the
-calendar keeps a time that is already set.
+The calendar icon at the right of each date field opens a two-step picker
+below it. Step one is a month grid: `←`/`→` move a day, `↑`/`↓` a week,
+`Page Up`/`Page Down` change month, `Enter` picks, `T` picks today, `Delete`
+clears the field and `Esc` closes without changing anything. Clicking the
+field's text still opens the normal editor, so a typed time of day can be
+entered there; picking a day from the calendar keeps a time that is already
+set.
 
-The Time row below the grid edits the time that will be written with the day.
-`A` toggles between all-day and the library's default due/defer time (9 AM
-when none is set), `[`/`]` move 15 minutes and `{`/`}` move an hour, wrapping
-at midnight. The same controls work with the mouse: the All day chip and the
-− / + stepper buttons have tooltips. Turning the time off writes a date-only
-stamp; clicking a day always applies the time shown in the row.
+The All day / At time chips choose what the day carries. All day (the default
+when the field has no time) commits the day as soon as it is clicked, so a
+plain date stays two clicks. At time turns the picker into step two, either
+straight away or after a day is chosen: a clock face showing 1–12 with the
+hour hand. Clicking or using the arrow keys sets the hour and advances to
+minutes, where the numbers run 0–55 in fives; `Page Up`/`Page Down` move five,
+`Tab` or `H`/`M` switch between hour and minute, and the digital hour, minute
+and AM/PM controls set the same values. `Enter` applies the date and time,
+`Esc` goes back to the calendar with the time kept, and `Delete` clears the
+field. The time starts at the library's default due/defer time (9 AM when none
+is set) and is only written on Done or Enter, so backing out leaves the stored
+stamp alone.
 
 Toolbar chips (`Sort`, `Group`, `Completed`, `Priority`) and project status
 and type chips are labelled buttons rather than icon-only controls, so they

@@ -4,6 +4,13 @@
 
 ### Interface
 
+- The Due and Defer date pickers are now a two-step surface. A proper month
+  calendar replaces the cramped date-plus-stepper card, and choosing a timed
+  day opens an Android-style clock face: pick the hour, it moves on to
+  minutes, then Done writes the stamp. All-day picks still commit in one
+  click, so a plain date stays quick. The clock shows the date being set, an
+  AM/PM pair and a Back button, and every control has a tooltip and a keyboard
+  route.
 - The inspector no longer repeats the completion circle beside the task status;
   the Complete / Reopen button at the bottom of the panel is the one control
   for that. The status text and flag stay at the top.
