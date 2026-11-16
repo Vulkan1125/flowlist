@@ -83,6 +83,16 @@ the task unchanged.
 | × checklist step | Delete step | `⌫` in the checklist pane |
 | × tag chip | Remove tag | no direct key; remove it in the inspector Tag field |
 | × close inspector | Close inspector (i) | `i` or `⌘I` |
+| Calendar | Pick a due/defer date | icon opens it; arrows, `Enter`, `T`, `Delete`, `Esc` |
+
+### Due and Defer date pickers
+
+The calendar icon at the right of each date field opens a month picker below
+it. `←`/`→` move a day, `↑`/`↓` a week, `Page Up`/`Page Down` change month,
+`Enter` applies, `T` picks today, `Delete` clears the field and `Esc` closes
+without changing anything. Clicking the field's text still opens the normal
+editor, so a typed time of day can be entered there; picking a day from the
+calendar keeps a time that is already set.
 
 Toolbar chips (`Sort`, `Group`, `Completed`, `Priority`) and project status
 and type chips are labelled buttons rather than icon-only controls, so they
@@ -113,7 +123,8 @@ attached to every icon-only control:
 - sidebar pencils, × buttons, disclosure arrows and the `⌖` location button;
 - task completion circles, flags and subtask disclosures;
 - checklist tick boxes, reorder arrows and delete buttons;
-- inspector flag, close, tag-remove and project-status controls;
+- inspector flag, close, tag-remove, Due/Defer calendar and project-status
+  controls;
 - every Forecast date cell and the priority filter chip.
 
 The help card (`?`) lists the same routes in one place, so a keyboard user does

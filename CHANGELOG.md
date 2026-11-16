@@ -19,6 +19,10 @@
   the inspector) it shows two consecutive months side by side, so a single
   month never stretches into wide, empty cells. The existing forecast buckets
   below it are unchanged.
+- The inspector's Due and Defer fields gained a calendar icon that opens a
+  small month picker right under the field. Clicking a day applies it as a
+  normal undoable edit, keeping an existing time of day; Today, Clear, month
+  arrows and keyboard navigation are included, and Esc closes without change.
 - Header and status chrome now use a flat glass tint; only the sidebar and
   inspector keep the vertical tint wash. This removes the unintended
   left-to-right gradient ramp under the title bar.

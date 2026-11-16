@@ -1,16 +1,18 @@
 //! The right-hand inspector: edit one task (or project) without leaving the
 //! list. Every field commits through the same command layer as the CLI.
 
+use chrono::{Datelike, Duration};
 use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px};
 
 use flowlist_core::command::{Command, ProjectPatch};
 use flowlist_core::ids::{ChecklistId, TaskId};
 use flowlist_core::model::{Priority, ProjectIcon, ProjectStatus};
-use flowlist_core::time::{format_duration, human_date, now};
+use flowlist_core::time::{format_duration, human_date, local_date, now};
 
+use super::content::month_grid;
 use super::icons::Icon;
 use super::widgets::TipExt;
-use super::{EditField, FlowlistApp, View, icons, widgets};
+use super::{DateField, EditField, FlowlistApp, View, icons, widgets};
 
 impl FlowlistApp {
     pub(super) fn render_inspector(
@@ -234,13 +236,8 @@ impl FlowlistApp {
             .child(self.inspector_attachments(&attachments, cx))
             .child(self.inspector_tag_section(&tags, cx))
             .child(self.inspector_project_row(project, project_id, cx))
-            .child(self.inspector_text_field(
-                "Defer",
-                EditField::Defer,
-                &defer.unwrap_or_default(),
-                cx,
-            ))
-            .child(self.inspector_text_field("Due", EditField::Due, &due.unwrap_or_default(), cx))
+            .child(self.inspector_date_field(DateField::Defer, &defer.unwrap_or_default(), cx))
+            .child(self.inspector_date_field(DateField::Due, &due.unwrap_or_default(), cx))
             .child(self.inspector_text_field(
                 "Estimate",
                 EditField::Estimate,
@@ -468,6 +465,294 @@ impl FlowlistApp {
             );
         }
         row
+    }
+
+    /// A Due or Defer field. The value still opens the text editor; the
+    /// calendar icon on the right opens a small month picker instead.
+    fn inspector_date_field(
+        &self,
+        field: DateField,
+        value: &str,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let editing =
+            self.editing == Some(field.edit_field()) && self.focus == super::FocusArea::Field;
+        let open = self.date_picker == Some(field);
+        let anchor = self.date_anchor(field);
+        let mut row = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(field.label()),
+            )
+            .child(if editing {
+                div()
+                    .id("field-editor")
+                    .child(widgets::text_field(
+                        theme,
+                        &self.field,
+                        field.placeholder(),
+                        true,
+                    ))
+                    .into_any_element()
+            } else {
+                div()
+                    .id(super::sid(format!("field:{}", field.slug())))
+                    .h(px(28.))
+                    .flex()
+                    .items_center()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(if open {
+                        theme.accent
+                    } else {
+                        theme.border_soft
+                    })
+                    .child(
+                        div()
+                            .id(super::sid(format!("date-value:{}", field.slug())))
+                            .flex_1()
+                            .h_full()
+                            .flex()
+                            .items_center()
+                            .px_2()
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover))
+                            .text_color(if value.is_empty() {
+                                theme.text_faint
+                            } else {
+                                theme.text
+                            })
+                            .child(if value.is_empty() {
+                                field.placeholder().to_string()
+                            } else {
+                                value.to_string()
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.begin_edit(field.edit_field(), cx)
+                            })),
+                    )
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .child(
+                                div()
+                                    .id(super::sid(format!("date-picker:{}", field.slug())))
+                                    .h(px(28.))
+                                    .w(px(28.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .cursor_pointer()
+                                    .hover(|style| style.bg(theme.hover))
+                                    .flow_tip(
+                                        self,
+                                        cx,
+                                        theme,
+                                        format!("Pick a {} date", field.label().to_lowercase()),
+                                    )
+                                    .child(icons::icon(
+                                        Icon::Calendar,
+                                        14.0,
+                                        if open { theme.accent } else { theme.text_faint },
+                                    ))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.open_date_picker(field, cx)
+                                    })),
+                            )
+                            .on_children_prepainted(move |bounds, _, _| {
+                                if let Some(bounds) = bounds.first() {
+                                    anchor.set(Some(*bounds));
+                                }
+                            }),
+                    )
+                    .into_any_element()
+            });
+        if editing {
+            row = row.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("⏎ save · ⇥ next · esc cancel"),
+            );
+        }
+        row
+    }
+
+    /// The calendar popover: one month, Monday-first, today marked, the stored
+    /// date filled in and the keyboard cursor outlined.
+    pub(super) fn render_date_picker(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let Some(field) = self.date_picker else {
+            return div().into_any_element();
+        };
+        let today = local_date(now());
+        let month = self.date_picker_month;
+        let cursor = self.date_picker_cursor;
+        let stored = self.date_picker_value(field);
+        let selected = stored.map(|stamp| stamp.local_date());
+        let kept_time = stored
+            .filter(|stamp| stamp.has_time)
+            .map(|stamp| stamp.local_time());
+        let (grid_start, _, weeks) = month_grid(month);
+
+        let header = div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child(month.format("%B %Y").to_string()),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .id("date-picker-prev")
+                            .flow_tip(self, cx, theme, "Previous month")
+                            .child(widgets::button(theme, "‹", false))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.shift_date_picker_month(-1);
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id("date-picker-next")
+                            .flow_tip(self, cx, theme, "Next month")
+                            .child(widgets::button(theme, "›", false))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.shift_date_picker_month(1);
+                                cx.notify();
+                            })),
+                    ),
+            );
+
+        let weekdays = div()
+            .flex()
+            .gap(px(2.))
+            .children(["M", "T", "W", "T", "F", "S", "S"].map(|label| {
+                div()
+                    .w(px(30.))
+                    .flex()
+                    .justify_center()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(label)
+            }));
+
+        let mut grid = div().flex().flex_col().gap(px(2.));
+        for week in 0..weeks {
+            let mut row = div().flex().gap(px(2.));
+            for weekday in 0..7 {
+                let date = grid_start + Duration::days((week * 7 + weekday) as i64);
+                let in_month = date.month() == month.month() && date.year() == month.year();
+                let is_today = date == today;
+                let is_selected = selected == Some(date);
+                let is_cursor = cursor == date;
+                let mut cell = div()
+                    .id(super::sid(format!("date-picker-day:{date}")))
+                    .w(px(30.))
+                    .h(px(26.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_md()
+                    .text_xs()
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(date.day().to_string())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.apply_date_picker(date, cx);
+                    }));
+                if is_selected {
+                    cell = cell
+                        .bg(theme.accent)
+                        .text_color(theme.bg)
+                        .font_weight(gpui::FontWeight::SEMIBOLD);
+                } else if is_today {
+                    cell = cell.bg(theme.accent_soft).text_color(theme.accent);
+                } else {
+                    cell = cell.text_color(if in_month { theme.text } else { theme.text_dim });
+                }
+                if is_cursor {
+                    cell = cell.border_1().border_color(theme.accent);
+                }
+                if !in_month {
+                    cell = cell.opacity(0.45);
+                }
+                row = row.child(cell);
+            }
+            grid = grid.child(row);
+        }
+
+        let hint = match kept_time {
+            Some(time) => format!("Keeps {}", time.format("%-I:%M %p")),
+            None => "Date only".to_string(),
+        };
+        let footer = div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .id("date-picker-today")
+                            .child(widgets::button(theme, "Today", false))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.apply_date_picker(local_date(now()), cx);
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id("date-picker-clear")
+                            .child(widgets::button(theme, "Clear", false))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.clear_date_picker(cx);
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("⏎ pick · esc"),
+            );
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_3()
+            .w(px(super::DATE_PICKER_WIDTH))
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg()
+            .child(header)
+            .child(weekdays)
+            .child(grid)
+            .child(widgets::divider(theme))
+            .child(footer)
+            .child(div().text_xs().text_color(theme.text_faint).child(hint))
+            .into_any_element()
     }
 
     fn inspector_notes(&self, notes: &str, cx: &mut Context<Self>) -> impl IntoElement {

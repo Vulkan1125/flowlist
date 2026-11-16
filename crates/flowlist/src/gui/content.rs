@@ -1721,7 +1721,7 @@ fn forecast_title(first: NaiveDate, months: usize) -> String {
 
 /// The first day of the month `delta` months after `month`. The Forecast month
 /// is always the first of a month, so this only needs to wrap the year.
-fn add_months(month: NaiveDate, delta: i32) -> NaiveDate {
+pub(super) fn add_months(month: NaiveDate, delta: i32) -> NaiveDate {
     let mut year = month.year();
     let mut month_number = month.month() as i32 + delta;
     while month_number < 1 {
@@ -1737,7 +1737,7 @@ fn add_months(month: NaiveDate, delta: i32) -> NaiveDate {
 
 /// The Monday-first grid for a month: the first visible date, how many days
 /// the month has, and how many week rows the grid needs.
-fn month_grid(month: NaiveDate) -> (NaiveDate, i64, usize) {
+pub(super) fn month_grid(month: NaiveDate) -> (NaiveDate, i64, usize) {
     let first = NaiveDate::from_ymd_opt(month.year(), month.month(), 1).unwrap_or(month);
     let offset = i64::from(first.weekday().num_days_from_monday());
     let days_in_month = if first.month() == 12 {

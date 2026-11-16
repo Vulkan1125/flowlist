@@ -44,7 +44,7 @@ use flowlist_core::parse::{parse_duration, parse_quick, parse_repeat, parse_stam
 use flowlist_core::paths::DataPaths;
 use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::store::Store;
-use flowlist_core::time::{format_duration, local_date, now};
+use flowlist_core::time::{Stamp, format_duration, local_date, now};
 use flowlist_core::{export, taskpaper};
 
 use drag::DragTask;
@@ -104,6 +104,45 @@ impl EditField {
     }
 }
 
+/// The two task dates that can be changed from the inspector's calendar
+/// popover. Each has its own measured anchor so the popover opens under the
+/// field it belongs to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum DateField {
+    Defer,
+    Due,
+}
+
+impl DateField {
+    pub(super) fn edit_field(self) -> EditField {
+        match self {
+            DateField::Defer => EditField::Defer,
+            DateField::Due => EditField::Due,
+        }
+    }
+
+    pub(super) fn slug(self) -> &'static str {
+        match self {
+            DateField::Defer => "defer",
+            DateField::Due => "due",
+        }
+    }
+
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            DateField::Defer => "Defer",
+            DateField::Due => "Due",
+        }
+    }
+
+    pub(super) fn placeholder(self) -> &'static str {
+        match self {
+            DateField::Defer => "No defer date",
+            DateField::Due => "No due date",
+        }
+    }
+}
+
 enum BufferKey {
     Ignored,
     Changed,
@@ -121,6 +160,42 @@ fn menu_position(
     height: f32,
 ) -> (f32, f32) {
     let x = f32::from(anchor.origin.x);
+    let y = f32::from(anchor.origin.y) + f32::from(anchor.size.height) + 4.0;
+    (
+        x.min((viewport.0 - width).max(0.0)).max(0.0),
+        y.min((viewport.1 - height).max(0.0)).max(0.0),
+    )
+}
+
+/// Size of the inspector's date popover. The constants are shared with the
+/// root overlay so its hitboxes match the painted card.
+pub(super) const DATE_PICKER_WIDTH: f32 = 252.0;
+pub(super) const DATE_PICKER_HEIGHT: f32 = 322.0;
+
+/// The first day of a date's month; the calendar paints whole months.
+fn first_of_month(date: chrono::NaiveDate) -> chrono::NaiveDate {
+    chrono::NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date)
+}
+
+/// Move a stamp to another day. A stamp that carries a time of day keeps it,
+/// so picking a new date does not silently turn a 5 PM reminder into all-day.
+/// A date-only stamp (or no stamp) stays date-only.
+fn stamp_on_date(existing: Option<Stamp>, date: chrono::NaiveDate) -> Stamp {
+    match existing {
+        Some(stamp) if stamp.has_time => Stamp::on(date, stamp.local_time()),
+        _ => Stamp::date_only(date),
+    }
+}
+
+/// A calendar popover hangs below its icon and right-aligns to it, so it
+/// stays inside the inspector instead of half off the window edge.
+fn date_picker_position(
+    anchor: Bounds<gpui::Pixels>,
+    viewport: (f32, f32),
+    width: f32,
+    height: f32,
+) -> (f32, f32) {
+    let x = f32::from(anchor.origin.x) + f32::from(anchor.size.width) - width;
     let y = f32::from(anchor.origin.y) + f32::from(anchor.size.height) + 4.0;
     (
         x.min((viewport.0 - width).max(0.0)).max(0.0),
@@ -161,6 +236,15 @@ pub struct FlowlistApp {
     sort_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     group_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     priority_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The Due and Defer field rows, measured so their calendar popover can
+    /// paint under the right field.
+    due_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    defer_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// Which date field's calendar is open, the month on screen and the day
+    /// the arrow keys point at.
+    date_picker: Option<DateField>,
+    date_picker_month: chrono::NaiveDate,
+    date_picker_cursor: chrono::NaiveDate,
     /// How wide the title's slot painted on the last frame. A view name that
     /// does not fit there is left out entirely instead of showing a stub.
     title_space: Rc<Cell<Option<f32>>>,
@@ -302,6 +386,11 @@ impl FlowlistApp {
             sort_anchor: Rc::new(Cell::new(None)),
             group_anchor: Rc::new(Cell::new(None)),
             priority_anchor: Rc::new(Cell::new(None)),
+            due_anchor: Rc::new(Cell::new(None)),
+            defer_anchor: Rc::new(Cell::new(None)),
+            date_picker: None,
+            date_picker_month: forecast_month,
+            date_picker_cursor: today,
             title_space: Rc::new(Cell::new(None)),
             title_visible: Rc::new(Cell::new(true)),
             sidebar_menu: None,
@@ -1482,6 +1571,117 @@ impl FlowlistApp {
         self.add_tag_from_buffer(cx);
     }
 
+    // ----------------------------------------------------------- date picker
+
+    fn date_anchor(&self, field: DateField) -> Rc<Cell<Option<Bounds<gpui::Pixels>>>> {
+        match field {
+            DateField::Defer => self.defer_anchor.clone(),
+            DateField::Due => self.due_anchor.clone(),
+        }
+    }
+
+    /// The stamp currently stored in the selected task's date field.
+    fn date_picker_value(&self, field: DateField) -> Option<Stamp> {
+        let id = self.selected_one()?;
+        let task = self.store.db().tasks.get(&id)?;
+        match field {
+            DateField::Defer => task.defer,
+            DateField::Due => task.due,
+        }
+    }
+
+    /// Open the calendar under one field, starting on the stored date (or
+    /// today) and closing every other overlay first.
+    fn open_date_picker(&mut self, field: DateField, cx: &mut Context<Self>) {
+        let cursor = self
+            .date_picker_value(field)
+            .map(|stamp| stamp.local_date())
+            .unwrap_or_else(|| local_date(now()));
+        self.date_picker = Some(field);
+        self.date_picker_cursor = cursor;
+        self.date_picker_month = first_of_month(cursor);
+        self.editing = None;
+        self.field_error = None;
+        self.sort_menu_open = false;
+        self.group_menu_open = false;
+        self.priority_menu_open = false;
+        self.sidebar_menu = None;
+        self.focus = FocusArea::Content;
+        cx.notify();
+    }
+
+    fn close_date_picker(&mut self, cx: &mut Context<Self>) {
+        if self.date_picker.take().is_some() {
+            cx.notify();
+        }
+    }
+
+    /// Flip the shown month, keeping the cursor on the same day where that
+    /// day exists in the new month.
+    fn shift_date_picker_month(&mut self, delta: i32) {
+        self.date_picker_month = content::add_months(self.date_picker_month, delta);
+        let (_, days, _) = content::month_grid(self.date_picker_month);
+        let day = self.date_picker_cursor.day().min(days as u32).max(1);
+        self.date_picker_cursor = self
+            .date_picker_month
+            .with_day(day)
+            .unwrap_or(self.date_picker_month);
+    }
+
+    fn move_date_picker_cursor(&mut self, days: i64) {
+        self.set_date_picker_cursor(self.date_picker_cursor + chrono::Duration::days(days));
+    }
+
+    fn set_date_picker_cursor(&mut self, date: chrono::NaiveDate) {
+        self.date_picker_cursor = date;
+        self.date_picker_month = first_of_month(date);
+    }
+
+    /// Write the clicked day through the normal command layer, so the change
+    /// is undoable. An existing time of day survives the date change.
+    fn apply_date_picker(&mut self, date: chrono::NaiveDate, cx: &mut Context<Self>) {
+        let Some(field) = self.date_picker else {
+            return;
+        };
+        let Some(id) = self.selected_one() else {
+            self.date_picker = None;
+            cx.notify();
+            return;
+        };
+        let stamp = stamp_on_date(self.date_picker_value(field), date);
+        self.date_picker = None;
+        let mut patch = TaskPatch::default();
+        match field {
+            DateField::Defer => patch.defer = Some(Some(stamp)),
+            DateField::Due => patch.due = Some(Some(stamp)),
+        }
+        self.execute(Command::UpdateTask { id, patch });
+        cx.notify();
+    }
+
+    fn clear_date_picker(&mut self, cx: &mut Context<Self>) {
+        let Some(field) = self.date_picker else {
+            return;
+        };
+        let Some(id) = self.selected_one() else {
+            self.date_picker = None;
+            cx.notify();
+            return;
+        };
+        self.date_picker = None;
+        if self.date_picker_value(field).is_none() {
+            cx.notify();
+            return;
+        }
+        let mut patch = TaskPatch::default();
+        match field {
+            DateField::Defer => patch.defer = Some(None),
+            DateField::Due => patch.due = Some(None),
+        }
+        self.execute(Command::UpdateTask { id, patch });
+        cx.notify();
+    }
+
     fn begin_edit(&mut self, field: EditField, cx: &mut Context<Self>) {
         // Leaving the title editor ends the new-task draft even if the user
         // clicked straight into another field instead of pressing Return.
@@ -2266,6 +2466,59 @@ impl FlowlistApp {
                 return;
             }
             return;
+        }
+
+        // A calendar popover owns the keyboard while it is open: arrows move a
+        // day, Return picks it, T jumps to today and Delete clears the field.
+        if self.date_picker.is_some() && !mods.platform {
+            let handled = match stroke.key.as_str() {
+                "escape" => {
+                    self.close_date_picker(cx);
+                    true
+                }
+                "left" => {
+                    self.move_date_picker_cursor(-1);
+                    true
+                }
+                "right" => {
+                    self.move_date_picker_cursor(1);
+                    true
+                }
+                "up" => {
+                    self.move_date_picker_cursor(-7);
+                    true
+                }
+                "down" => {
+                    self.move_date_picker_cursor(7);
+                    true
+                }
+                "pageup" => {
+                    self.shift_date_picker_month(-1);
+                    true
+                }
+                "pagedown" => {
+                    self.shift_date_picker_month(1);
+                    true
+                }
+                "t" => {
+                    self.apply_date_picker(local_date(now()), cx);
+                    true
+                }
+                "backspace" | "delete" => {
+                    self.clear_date_picker(cx);
+                    true
+                }
+                "enter" | "return" => {
+                    let date = self.date_picker_cursor;
+                    self.apply_date_picker(date, cx);
+                    true
+                }
+                _ => false,
+            };
+            if handled {
+                cx.notify();
+                return;
+            }
         }
 
         if matches!(
@@ -3579,6 +3832,16 @@ impl FlowlistApp {
         let Some(path) = self.test_state_path.clone() else {
             return;
         };
+        let anchor = |bounds: Option<Bounds<gpui::Pixels>>| {
+            bounds.map(|bounds| {
+                [
+                    f32::from(bounds.origin.x),
+                    f32::from(bounds.origin.y),
+                    f32::from(bounds.size.width),
+                    f32::from(bounds.size.height),
+                ]
+            })
+        };
         let state = serde_json::json!({
             "view": self.view.key(),
             "modal": self.modal.as_ref().map(|modal| modal.title()),
@@ -3595,6 +3858,9 @@ impl FlowlistApp {
             "appearance": self.theme.appearance().slug(),
             "blur": self.blur_mode.map(|appearance| appearance.slug()),
             "priority_filter": self.priority_filter.map(|priority| priority.slug()),
+            "date_picker": self.date_picker.map(DateField::slug),
+            "date_picker_cursor": self.date_picker_cursor.to_string(),
+            "date_picker_month": self.date_picker_month.format("%Y-%m").to_string(),
             "only_available": self.only_available,
             "follow_system": self.follow_system,
             "sort": self.sort.map(sort_slug),
@@ -3605,6 +3871,8 @@ impl FlowlistApp {
             "sort_anchor": self.sort_anchor.get().is_some(),
             "group_anchor": self.group_anchor.get().is_some(),
             "priority_anchor": self.priority_anchor.get().is_some(),
+            "due_anchor": anchor(self.due_anchor.get()),
+            "defer_anchor": anchor(self.defer_anchor.get()),
             "title_space": self.title_space.get(),
             "title_visible": self.title_visible.get(),
             "sidebar_menu": self.sidebar_menu.as_ref().map(|menu| menu.key()),
@@ -4130,6 +4398,7 @@ impl Render for FlowlistApp {
             || self.group_menu_open
             || self.priority_menu_open
             || self.sidebar_menu.is_some()
+            || self.date_picker.is_some()
         {
             root = root.child(
                 div()
@@ -4151,6 +4420,7 @@ impl Render for FlowlistApp {
                             this.group_menu_open = false;
                             this.priority_menu_open = false;
                             this.sidebar_menu = None;
+                            this.date_picker = None;
                             cx.notify();
                         }),
                     )
@@ -4161,6 +4431,7 @@ impl Render for FlowlistApp {
                             this.group_menu_open = false;
                             this.priority_menu_open = false;
                             this.sidebar_menu = None;
+                            this.date_picker = None;
                             cx.notify();
                         }),
                     ),
@@ -4213,6 +4484,21 @@ impl Render for FlowlistApp {
                     .left(px(x))
                     .top(px(y))
                     .child(self.render_priority_menu(cx)),
+            );
+        }
+        if let Some(field) = self.date_picker
+            && let Some(anchor) = self.date_anchor(field).get()
+        {
+            let (x, y) =
+                date_picker_position(anchor, viewport, DATE_PICKER_WIDTH, DATE_PICKER_HEIGHT);
+            root = root.child(
+                div()
+                    .id("date-picker-layer")
+                    .absolute()
+                    .occlude()
+                    .left(px(x))
+                    .top(px(y))
+                    .child(self.render_date_picker(cx)),
             );
         }
         if self.toast.is_some() {
@@ -4337,8 +4623,13 @@ fn search_slot(window_width: f32, show_inspector: bool) -> (f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::rank_suggestions;
-    use super::{View, effective_priority_filter};
+    use super::{
+        View, date_picker_position, effective_priority_filter, first_of_month, stamp_on_date,
+    };
+    use chrono::{NaiveDate, TimeZone};
     use flowlist_core::model::{BuiltinPerspective, Priority};
+    use flowlist_core::time::Stamp;
+    use gpui::{Bounds, point, px, size};
 
     fn corpus() -> Vec<String> {
         vec![
@@ -4433,6 +4724,62 @@ mod tests {
                 Some(Priority::Medium)
             ),
             Some(Priority::Medium)
+        );
+    }
+
+    #[test]
+    fn a_new_date_keeps_the_existing_time_of_day() {
+        let date = NaiveDate::from_ymd_opt(2026, 12, 24).unwrap();
+        let timed = Stamp::from_local(
+            chrono::Local
+                .with_ymd_and_hms(2026, 11, 16, 17, 30, 0)
+                .single()
+                .unwrap()
+                .naive_local(),
+        );
+        let moved = stamp_on_date(Some(timed), date);
+        assert!(moved.has_time);
+        assert_eq!(moved.local_date(), date);
+        assert_eq!(moved.local_time(), timed.local_time());
+
+        // A date-only stamp stays all-day, and so does a new one.
+        let all_day = Stamp::date_only(NaiveDate::from_ymd_opt(2026, 11, 16).unwrap());
+        assert!(!stamp_on_date(Some(all_day), date).has_time);
+        assert!(!stamp_on_date(None, date).has_time);
+        assert_eq!(stamp_on_date(None, date).local_date(), date);
+    }
+
+    #[test]
+    fn the_picker_opens_under_its_icon_and_stays_on_screen() {
+        let anchor = Bounds {
+            origin: point(px(1140.0), px(300.0)),
+            size: size(px(28.0), px(28.0)),
+        };
+        // Right edge of the icon, then four pixels below it.
+        let (x, y) = date_picker_position(anchor, (1254.0, 1000.0), 252.0, 322.0);
+        assert_eq!(x, 1140.0 + 28.0 - 252.0);
+        assert_eq!(y, 300.0 + 28.0 + 4.0);
+
+        // A window too short for the card clamps it to the bottom edge.
+        let (_, y) = date_picker_position(anchor, (1254.0, 400.0), 252.0, 322.0);
+        assert_eq!(y, 78.0);
+        // And a picker near the left edge never gains a negative x.
+        let left = Bounds {
+            origin: point(px(10.0), px(20.0)),
+            size: size(px(28.0), px(28.0)),
+        };
+        assert_eq!(
+            date_picker_position(left, (1254.0, 1000.0), 252.0, 322.0).0,
+            0.0
+        );
+    }
+
+    #[test]
+    fn month_navigation_starts_on_the_first() {
+        let date = NaiveDate::from_ymd_opt(2026, 12, 24).unwrap();
+        assert_eq!(
+            first_of_month(date),
+            NaiveDate::from_ymd_opt(2026, 12, 1).unwrap()
         );
     }
 }

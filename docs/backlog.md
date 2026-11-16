@@ -48,6 +48,10 @@ landed and verified.
 - [x] **Forecast date selection** — clicking a calendar date shows that day's
       due/deferred tasks; click again or press `\` to clear. `[`/`]` step a day,
       `{`/`}` step a month.
+- [x] **Due/Defer date pickers** — the inspector's date fields carry a
+      calendar icon that opens a month grid. A picked day is applied through
+      `UpdateTask`, keeping an existing time; Today, Clear and keyboard
+      navigation are included.
 - [ ] **Calendar view** — a dedicated Calendar perspective with a full month
       grid, day columns or an agenda, drag-to-reschedule and keyboard
       navigation. The Forecast month calendar is a first step, not the whole
