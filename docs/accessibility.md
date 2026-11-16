@@ -85,6 +85,7 @@ the task unchanged.
 | × close inspector | Close inspector (i) | `i` or `⌘I` |
 | Project badge | `N open · M of T done`, or `All N done` | opens the project |
 | Calendar | Pick a due/defer date | icon opens it; arrows, `Enter`, `T`, `Delete`, `Esc` |
+| Time row | Add or clear a time | `A` toggles all-day, `[`/`]` step 15 minutes, `{`/`}` step an hour |
 
 ### Due and Defer date pickers
 
@@ -94,6 +95,13 @@ it. `←`/`→` move a day, `↑`/`↓` a week, `Page Up`/`Page Down` change mon
 without changing anything. Clicking the field's text still opens the normal
 editor, so a typed time of day can be entered there; picking a day from the
 calendar keeps a time that is already set.
+
+The Time row below the grid edits the time that will be written with the day.
+`A` toggles between all-day and the library's default due/defer time (9 AM
+when none is set), `[`/`]` move 15 minutes and `{`/`}` move an hour, wrapping
+at midnight. The same controls work with the mouse: the All day chip and the
+− / + stepper buttons have tooltips. Turning the time off writes a date-only
+stamp; clicking a day always applies the time shown in the row.
 
 Toolbar chips (`Sort`, `Group`, `Completed`, `Priority`) and project status
 and type chips are labelled buttons rather than icon-only controls, so they

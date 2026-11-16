@@ -30,6 +30,9 @@
   small month picker right under the field. Clicking a day applies it as a
   normal undoable edit, keeping an existing time of day; Today, Clear, month
   arrows and keyboard navigation are included, and Esc closes without change.
+- The picker's Time row adds or removes a time of day. All day toggles between
+  a date-only stamp and the library's default due/defer time, −/+ step 15
+  minutes (an hour with `{`/`}`), and the chosen time is written with the day.
 - Header and status chrome now use a flat glass tint; only the sidebar and
   inspector keep the vertical tint wash. This removes the unintended
   left-to-right gradient ramp under the title bar.

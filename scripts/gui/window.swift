@@ -2,10 +2,13 @@
 // values: title <TAB> x <TAB> y <TAB> width <TAB> height
 //
 // Usage: window <pid>
+//        window <pid> move <x> <y>
 //
 // The GUI smoke test uses the live origin because window managers move
-// windows between launches.
+// windows between launches. `move` brings the window on screen and to the
+// front, which keeps absolute mouse coordinates stable across runs.
 
+import AppKit
 import ApplicationServices
 import Foundation
 
@@ -17,6 +20,17 @@ var value: CFTypeRef?
 AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value)
 guard let windows = value as? [AXUIElement], let window = windows.first else {
     exit(1)
+}
+
+if CommandLine.arguments.count >= 5, CommandLine.arguments[2] == "move",
+    let x = Double(CommandLine.arguments[3]), let y = Double(CommandLine.arguments[4])
+{
+    var position = CGPoint(x: x, y: y)
+    if let moved = AXValueCreate(.cgPoint, &position) {
+        AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, moved)
+    }
+    NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateAllWindows])
+    usleep(300_000)
 }
 
 var titleValue: CFTypeRef?

@@ -170,21 +170,40 @@ fn menu_position(
 /// Size of the inspector's date popover. The constants are shared with the
 /// root overlay so its hitboxes match the painted card.
 pub(super) const DATE_PICKER_WIDTH: f32 = 252.0;
-pub(super) const DATE_PICKER_HEIGHT: f32 = 322.0;
+pub(super) const DATE_PICKER_HEIGHT: f32 = 396.0;
 
 /// The first day of a date's month; the calendar paints whole months.
 fn first_of_month(date: chrono::NaiveDate) -> chrono::NaiveDate {
     chrono::NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date)
 }
 
-/// Move a stamp to another day. A stamp that carries a time of day keeps it,
-/// so picking a new date does not silently turn a 5 PM reminder into all-day.
-/// A date-only stamp (or no stamp) stays date-only.
-fn stamp_on_date(existing: Option<Stamp>, date: chrono::NaiveDate) -> Stamp {
-    match existing {
-        Some(stamp) if stamp.has_time => Stamp::on(date, stamp.local_time()),
-        _ => Stamp::date_only(date),
+/// The stamp the picker will apply: a chosen day plus either the staged time
+/// or nothing, which keeps the date all-day.
+fn picker_stamp(date: chrono::NaiveDate, time: Option<chrono::NaiveTime>) -> Stamp {
+    match time {
+        Some(time) => Stamp::on(date, time),
+        None => Stamp::date_only(date),
     }
+}
+
+/// The time a picker starts from when the field is currently all-day. It uses
+/// the library's due/defer default, falling back to 9 AM when there is none.
+fn picker_default_time(
+    field: DateField,
+    due: Option<chrono::NaiveTime>,
+    defer: Option<chrono::NaiveTime>,
+) -> chrono::NaiveTime {
+    let fallback = chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap_or_default();
+    match field {
+        DateField::Due => due.unwrap_or(fallback),
+        DateField::Defer => defer.unwrap_or(fallback),
+    }
+}
+
+/// A time step for the picker. `NaiveTime` wraps at midnight, so stepping past
+/// 11:45 PM lands on 12:00 AM rather than failing.
+fn stepped_time(time: chrono::NaiveTime, minutes: i64) -> chrono::NaiveTime {
+    time + chrono::Duration::minutes(minutes)
 }
 
 /// A calendar popover hangs below its icon and right-aligns to it, so it
@@ -244,10 +263,15 @@ pub struct FlowlistApp {
     due_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     defer_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// Which date field's calendar is open, the month on screen and the day
-    /// the arrow keys point at.
+    /// the arrow keys point at. `date_picker_time` is the time that will be
+    /// written with the day, or None for an all-day date.
     date_picker: Option<DateField>,
     date_picker_month: chrono::NaiveDate,
     date_picker_cursor: chrono::NaiveDate,
+    date_picker_time: Option<chrono::NaiveTime>,
+    /// The time controls, measured so the GUI probe can click them.
+    date_picker_time_row: Rc<Cell<Option<[[f32; 4]; 3]>>>,
+    date_picker_all_day: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// How wide the title's slot painted on the last frame. A view name that
     /// does not fit there is left out entirely instead of showing a stub.
     title_space: Rc<Cell<Option<f32>>>,
@@ -395,6 +419,9 @@ impl FlowlistApp {
             date_picker: None,
             date_picker_month: forecast_month,
             date_picker_cursor: today,
+            date_picker_time: None,
+            date_picker_time_row: Rc::new(Cell::new(None)),
+            date_picker_all_day: Rc::new(Cell::new(None)),
             title_space: Rc::new(Cell::new(None)),
             title_visible: Rc::new(Cell::new(true)),
             sidebar_menu: None,
@@ -1597,13 +1624,18 @@ impl FlowlistApp {
     /// Open the calendar under one field, starting on the stored date (or
     /// today) and closing every other overlay first.
     fn open_date_picker(&mut self, field: DateField, cx: &mut Context<Self>) {
-        let cursor = self
-            .date_picker_value(field)
+        let stored = self.date_picker_value(field);
+        let cursor = stored
             .map(|stamp| stamp.local_date())
             .unwrap_or_else(|| local_date(now()));
         self.date_picker = Some(field);
         self.date_picker_cursor = cursor;
         self.date_picker_month = first_of_month(cursor);
+        // Keep a stored time, but start an all-day date all-day: the time row
+        // is what turns it into a timed stamp.
+        self.date_picker_time = stored
+            .filter(|stamp| stamp.has_time)
+            .map(|stamp| stamp.local_time());
         self.editing = None;
         self.field_error = None;
         self.sort_menu_open = false;
@@ -1641,6 +1673,44 @@ impl FlowlistApp {
         self.date_picker_month = first_of_month(date);
     }
 
+    /// Turn the staged time on (at the library default for this field) or off
+    /// again, which makes the picked day all-day.
+    fn toggle_date_picker_time(&mut self, cx: &mut Context<Self>) {
+        let Some(field) = self.date_picker else {
+            return;
+        };
+        self.date_picker_time = match self.date_picker_time {
+            Some(_) => None,
+            None => {
+                let settings = &self.store.db().settings;
+                Some(picker_default_time(
+                    field,
+                    settings.default_due_time,
+                    settings.default_defer_time,
+                ))
+            }
+        };
+        cx.notify();
+    }
+
+    /// Step the staged time. An all-day date starts at its default, so the
+    /// first press turns a time on instead of silently jumping to midnight.
+    fn step_date_picker_time(&mut self, minutes: i64, cx: &mut Context<Self>) {
+        let Some(field) = self.date_picker else {
+            return;
+        };
+        let base = self.date_picker_time.unwrap_or_else(|| {
+            let settings = &self.store.db().settings;
+            picker_default_time(
+                field,
+                settings.default_due_time,
+                settings.default_defer_time,
+            )
+        });
+        self.date_picker_time = Some(stepped_time(base, minutes));
+        cx.notify();
+    }
+
     /// Write the clicked day through the normal command layer, so the change
     /// is undoable. An existing time of day survives the date change.
     fn apply_date_picker(&mut self, date: chrono::NaiveDate, cx: &mut Context<Self>) {
@@ -1652,8 +1722,9 @@ impl FlowlistApp {
             cx.notify();
             return;
         };
-        let stamp = stamp_on_date(self.date_picker_value(field), date);
+        let stamp = picker_stamp(date, self.date_picker_time);
         self.date_picker = None;
+        self.date_picker_time = None;
         let mut patch = TaskPatch::default();
         match field {
             DateField::Defer => patch.defer = Some(Some(stamp)),
@@ -1673,6 +1744,7 @@ impl FlowlistApp {
             return;
         };
         self.date_picker = None;
+        self.date_picker_time = None;
         if self.date_picker_value(field).is_none() {
             cx.notify();
             return;
@@ -2510,6 +2582,26 @@ impl FlowlistApp {
                 }
                 "backspace" | "delete" => {
                     self.clear_date_picker(cx);
+                    true
+                }
+                "a" => {
+                    self.toggle_date_picker_time(cx);
+                    true
+                }
+                "[" => {
+                    self.step_date_picker_time(-15, cx);
+                    true
+                }
+                "]" => {
+                    self.step_date_picker_time(15, cx);
+                    true
+                }
+                "{" => {
+                    self.step_date_picker_time(-60, cx);
+                    true
+                }
+                "}" => {
+                    self.step_date_picker_time(60, cx);
                     true
                 }
                 "enter" | "return" => {
@@ -3860,7 +3952,7 @@ impl FlowlistApp {
         let project_badges = {
             let db = self.store.db();
             let mut projects: Vec<_> = db.projects.values().collect();
-            projects.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+            projects.sort_by_key(|project| project.name.to_lowercase());
             projects
                 .iter()
                 .map(|project| {
@@ -3950,6 +4042,17 @@ impl FlowlistApp {
         // Inserted after the macro: the full field list is already at the
         // json! recursion limit, so new debug fields go in one at a time.
         state["project_badges"] = serde_json::json!(project_badges);
+        state["date_picker_time"] = serde_json::json!(
+            self.date_picker_time
+                .map(|time| time.format("%H:%M").to_string())
+        );
+        state["date_picker_time_row"] = serde_json::json!(self.date_picker_time_row.get());
+        state["date_picker_all_day"] = serde_json::json!(self.date_picker_all_day.get().map(|b| [
+            f32::from(b.origin.x),
+            f32::from(b.origin.y),
+            f32::from(b.size.width),
+            f32::from(b.size.height),
+        ]));
         let text = state.to_string();
         if self.test_state_last.as_deref() == Some(text.as_str()) {
             return;
@@ -4688,11 +4791,11 @@ fn search_slot(window_width: f32, show_inspector: bool) -> (f32, f32) {
 mod tests {
     use super::rank_suggestions;
     use super::{
-        View, date_picker_position, effective_priority_filter, first_of_month, stamp_on_date,
+        DATE_PICKER_HEIGHT, DATE_PICKER_WIDTH, DateField, View, date_picker_position,
+        effective_priority_filter, first_of_month, picker_default_time, picker_stamp, stepped_time,
     };
-    use chrono::{NaiveDate, TimeZone};
+    use chrono::{NaiveDate, NaiveTime};
     use flowlist_core::model::{BuiltinPerspective, Priority};
-    use flowlist_core::time::Stamp;
     use gpui::{Bounds, point, px, size};
 
     fn corpus() -> Vec<String> {
@@ -4792,25 +4895,52 @@ mod tests {
     }
 
     #[test]
-    fn a_new_date_keeps_the_existing_time_of_day() {
+    fn a_picked_day_carries_the_staged_time() {
         let date = NaiveDate::from_ymd_opt(2026, 12, 24).unwrap();
-        let timed = Stamp::from_local(
-            chrono::Local
-                .with_ymd_and_hms(2026, 11, 16, 17, 30, 0)
-                .single()
-                .unwrap()
-                .naive_local(),
-        );
-        let moved = stamp_on_date(Some(timed), date);
-        assert!(moved.has_time);
-        assert_eq!(moved.local_date(), date);
-        assert_eq!(moved.local_time(), timed.local_time());
+        let time = NaiveTime::from_hms_opt(17, 30, 0).unwrap();
+        let timed = picker_stamp(date, Some(time));
+        assert!(timed.has_time);
+        assert_eq!(timed.local_date(), date);
+        assert_eq!(timed.local_time(), time);
 
-        // A date-only stamp stays all-day, and so does a new one.
-        let all_day = Stamp::date_only(NaiveDate::from_ymd_opt(2026, 11, 16).unwrap());
-        assert!(!stamp_on_date(Some(all_day), date).has_time);
-        assert!(!stamp_on_date(None, date).has_time);
-        assert_eq!(stamp_on_date(None, date).local_date(), date);
+        // No staged time keeps the day all-day.
+        let all_day = picker_stamp(date, None);
+        assert!(!all_day.has_time);
+        assert_eq!(all_day.local_date(), date);
+    }
+
+    #[test]
+    fn all_day_dates_start_at_the_library_default() {
+        let due_default = NaiveTime::from_hms_opt(17, 0, 0).unwrap();
+        let defer_default = NaiveTime::from_hms_opt(8, 30, 0).unwrap();
+        let fallback = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
+        assert_eq!(
+            picker_default_time(DateField::Due, Some(due_default), None),
+            due_default
+        );
+        assert_eq!(
+            picker_default_time(DateField::Defer, None, Some(defer_default)),
+            defer_default
+        );
+        // A field with no configured default starts at 9 AM, and a Defer date
+        // never borrows the Due default.
+        assert_eq!(picker_default_time(DateField::Due, None, None), fallback);
+        assert_eq!(
+            picker_default_time(DateField::Defer, Some(due_default), None),
+            fallback
+        );
+    }
+
+    #[test]
+    fn time_steps_wrap_at_midnight() {
+        let late = NaiveTime::from_hms_opt(23, 50, 0).unwrap();
+        let early = NaiveTime::from_hms_opt(0, 5, 0).unwrap();
+        assert_eq!(stepped_time(late, 15), early);
+        assert_eq!(stepped_time(early, -15), late);
+        assert_eq!(
+            stepped_time(NaiveTime::from_hms_opt(12, 0, 0).unwrap(), 60),
+            NaiveTime::from_hms_opt(13, 0, 0).unwrap()
+        );
     }
 
     #[test]
@@ -4820,20 +4950,36 @@ mod tests {
             size: size(px(28.0), px(28.0)),
         };
         // Right edge of the icon, then four pixels below it.
-        let (x, y) = date_picker_position(anchor, (1254.0, 1000.0), 252.0, 322.0);
-        assert_eq!(x, 1140.0 + 28.0 - 252.0);
+        let (x, y) = date_picker_position(
+            anchor,
+            (1254.0, 1000.0),
+            DATE_PICKER_WIDTH,
+            DATE_PICKER_HEIGHT,
+        );
+        assert_eq!(x, 1140.0 + 28.0 - DATE_PICKER_WIDTH);
         assert_eq!(y, 300.0 + 28.0 + 4.0);
 
         // A window too short for the card clamps it to the bottom edge.
-        let (_, y) = date_picker_position(anchor, (1254.0, 400.0), 252.0, 322.0);
-        assert_eq!(y, 78.0);
+        let (_, y) = date_picker_position(
+            anchor,
+            (1254.0, 400.0),
+            DATE_PICKER_WIDTH,
+            DATE_PICKER_HEIGHT,
+        );
+        assert_eq!(y, 4.0);
         // And a picker near the left edge never gains a negative x.
         let left = Bounds {
             origin: point(px(10.0), px(20.0)),
             size: size(px(28.0), px(28.0)),
         };
         assert_eq!(
-            date_picker_position(left, (1254.0, 1000.0), 252.0, 322.0).0,
+            date_picker_position(
+                left,
+                (1254.0, 1000.0),
+                DATE_PICKER_WIDTH,
+                DATE_PICKER_HEIGHT
+            )
+            .0,
             0.0
         );
     }

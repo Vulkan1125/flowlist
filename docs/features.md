@@ -137,7 +137,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Calendar icons on the inspector's Due and Defer fields open a month
       picker. A clicked day is applied through the normal command layer (so it
       is undoable), an existing time of day survives a date change, and Today,
-      Clear, month arrows, arrow keys, Enter and Esc all work.
+      Clear, month arrows, arrow keys, Enter and Esc all work. A Time row in
+      the picker turns an all-day date into a timed one, steps it by 15
+      minutes or an hour, and returns it to all-day.
 - [x] Inspector with checklist add/toggle/rename/reorder/delete and progress
 - [x] Task subtitle type chips (parallel/sequential action groups)
 - [x] Attachments in the task and project inspectors: add paths, open,

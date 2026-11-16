@@ -596,9 +596,10 @@ impl FlowlistApp {
         let cursor = self.date_picker_cursor;
         let stored = self.date_picker_value(field);
         let selected = stored.map(|stamp| stamp.local_date());
-        let kept_time = stored
-            .filter(|stamp| stamp.has_time)
-            .map(|stamp| stamp.local_time());
+        let time = self.date_picker_time;
+        let time_label = time
+            .map(|time| time.format("%-I:%M %p").to_string())
+            .unwrap_or_else(|| "—".to_string());
         let (grid_start, _, weeks) = month_grid(month);
 
         let header = div()
@@ -697,9 +698,104 @@ impl FlowlistApp {
             grid = grid.child(row);
         }
 
-        let hint = match kept_time {
-            Some(time) => format!("Keeps {}", time.format("%-I:%M %p")),
-            None => "Date only".to_string(),
+        // The time row: All day turns the time off, and the stepper buttons
+        // move it 15 minutes at a time. The `a`, `[`/`]` and `{`/`}` keys do
+        // the same from the keyboard.
+        let time_row = self.date_picker_time_row.clone();
+        let all_day_anchor = self.date_picker_all_day.clone();
+        let time_section = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(div().text_xs().text_color(theme.text_faint).child("Time"))
+                    .child(
+                        div()
+                            .on_children_prepainted(move |bounds, _, _| {
+                                if let Some(bounds) = bounds.first() {
+                                    all_day_anchor.set(Some(*bounds));
+                                }
+                            })
+                            .child(
+                                div()
+                                    .id("date-picker-all-day")
+                                    .flow_tip(
+                                        self,
+                                        cx,
+                                        theme,
+                                        if time.is_some() {
+                                            "Make it all-day (a)"
+                                        } else {
+                                            "Add a time (a)"
+                                        },
+                                    )
+                                    .child(widgets::toggle_chip(theme, "All day", time.is_none()))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.toggle_date_picker_time(cx)
+                                    })),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if bounds.len() < 3 {
+                            return;
+                        }
+                        let mut cells = [[0.0; 4]; 3];
+                        for (slot, bounds) in bounds.iter().take(3).enumerate() {
+                            cells[slot] = [
+                                f32::from(bounds.origin.x),
+                                f32::from(bounds.origin.y),
+                                f32::from(bounds.size.width),
+                                f32::from(bounds.size.height),
+                            ];
+                        }
+                        time_row.set(Some(cells));
+                    })
+                    .child(
+                        div()
+                            .id("date-picker-earlier")
+                            .flow_tip(self, cx, theme, "15 minutes earlier ([)")
+                            .child(widgets::button(theme, "−", false))
+                            .on_click(
+                                cx.listener(|this, _, _, cx| this.step_date_picker_time(-15, cx)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .justify_center()
+                            .text_sm()
+                            .text_color(if time.is_some() {
+                                theme.text
+                            } else {
+                                theme.text_faint
+                            })
+                            .child(time_label),
+                    )
+                    .child(
+                        div()
+                            .id("date-picker-later")
+                            .flow_tip(self, cx, theme, "15 minutes later (])")
+                            .child(widgets::button(theme, "+", false))
+                            .on_click(
+                                cx.listener(|this, _, _, cx| this.step_date_picker_time(15, cx)),
+                            ),
+                    ),
+            );
+
+        let hint = match time {
+            Some(_) => "a all-day · [ ] ±15m · { } ±1h".to_string(),
+            None => "a sets a time · [ ] ±15m".to_string(),
         };
         let footer = div()
             .flex()
@@ -750,6 +846,7 @@ impl FlowlistApp {
             .child(weekdays)
             .child(grid)
             .child(widgets::divider(theme))
+            .child(time_section)
             .child(footer)
             .child(div().text_xs().text_color(theme.text_faint).child(hint))
             .into_any_element()

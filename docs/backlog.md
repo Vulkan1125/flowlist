@@ -57,8 +57,11 @@ landed and verified.
       `{`/`}` step a month.
 - [x] **Due/Defer date pickers** — the inspector's date fields carry a
       calendar icon that opens a month grid. A picked day is applied through
-      `UpdateTask`, keeping an existing time; Today, Clear and keyboard
-      navigation are included.
+      `UpdateTask`; Today, Clear and keyboard navigation are included.
+- [x] **Time picker** — the date popover has a Time row: All day toggles a
+      time on or off at the library default, −/+ step 15 minutes, and `A`,
+      `[`/`]`, `{`/`}` do the same from the keyboard. A picked day writes the
+      staged time, or a date-only stamp when the row is all-day.
 - [ ] **Calendar view** — a dedicated Calendar perspective with a full month
       grid, day columns or an agenda, drag-to-reschedule and keyboard
       navigation. The Forecast month calendar is a first step, not the whole

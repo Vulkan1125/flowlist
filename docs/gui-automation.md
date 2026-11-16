@@ -113,6 +113,9 @@ these clicks can be replaced by named actions without changing the assertions.
 - `scripts/gui/flowctl.swift` posts mouse moves, left and right clicks and key
   events. Its modifiers include `ctrlalt`, used for the capture hotkey.
 - `scripts/gui/window.swift` prints the live window title, origin and size.
+  `window <pid> move <x> <y>` also activates the app and asks the window
+  server to move it, which keeps absolute clicks reliable when macOS restores
+  a window partly off screen.
 - Both are compiled into the temporary directory when the smoke test runs.
 
 Dropdown menus close on mouse-up, not mouse-down: closing on mouse-down
