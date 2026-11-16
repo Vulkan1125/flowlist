@@ -159,7 +159,6 @@ impl FlowlistApp {
             .with_timezone(&chrono::Local)
             .format("%b %-d, %Y %H:%M")
             .to_string();
-        let actions_id = id.clone();
         let delete_id = id.clone();
         let tag_open_id = project_id.clone();
 
@@ -173,14 +172,6 @@ impl FlowlistApp {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(
-                        div()
-                            .id("inspector-check")
-                            .child(widgets::checkbox(theme, completed, theme.accent))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.toggle_complete(actions_id.clone(), cx)
-                            })),
-                    )
                     .child(
                         div()
                             .flex_1()
