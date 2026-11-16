@@ -31,13 +31,6 @@ landed and verified.
 - [x] **Focus after delete** — deleting selected task(s) selects the row that
       took their place, or the previous row at the end of the list. Works in
       Trash too, where delete is permanent.
-- [ ] **Tab cycles panes** — outside a text field, `Tab` should move Content →
-      Inspector → Sidebar → Content (and `Shift-Tab` reverse), stopping on the
-      inspector only when it is open. Inside a text field, `Tab` keeps moving
-      between fields.
-- [ ] **Capture field order** — in the capture bar and new-task modal, `Tab`
-      should walk title → notes/when → project → tags in reading order, with
-      `Shift-Tab` reversing and `Enter` submitting from any field.
 
 ## Data model and features
 
