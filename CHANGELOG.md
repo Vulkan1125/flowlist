@@ -8,10 +8,19 @@
   hidden until the first click. The disclosure chevron collapses a whole
   branch in one click (the first click used to do nothing), and `za`, `zo` and
   `zc` fold the selected task from the keyboard.
-- Projects can now be dragged between folders in the sidebar. Dropping one on
-  the LIBRARY heading moves it back to the root. Every move goes through the
-  normal move command, so `⌘Z` restores the previous placement, and task drags
-  onto projects keep working.
+- Projects can now be dragged between folders in the sidebar. The folder row
+  or LIBRARY heading under the pointer highlights before the drop, empty
+  sidebar space under the tree also returns a project to the root, and the
+  list repaints immediately instead of waiting for the toast. Dropping a
+  project where it already sits is a silent no-op, so it adds no undo entry.
+  Every real move goes through the normal move command, so `⌘Z` restores the
+  previous placement, and task drags onto projects keep working.
+- Folder contents now indent under their folder, one step per nesting level,
+  including projects and subfolders. An empty folder says “Empty” instead of
+  the root’s “No projects yet”, and both notes line up with the names.
+- Changed no longer lists completed tasks; completing a task removes it from
+  the view and lowers the sidebar count, and undoing the completion puts it
+  back. The filter also excludes tasks in Trash as before.
 - New projects and tasks converted to projects use the Project icon by default
   again instead of the Folder glyph; Folder is still one of the ten choices.
 - A sidebar project with tasks but nothing left open now shows a tick in place

@@ -230,7 +230,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
             let mut ids: Vec<TaskId> = db
                 .tasks
                 .values()
-                .filter(|task| !task.is_trashed() && task.modified_at >= cutoff)
+                .filter(|task| !task.completed && !task.is_trashed() && task.modified_at >= cutoff)
                 .map(|task| task.id.clone())
                 .collect();
             ids.sort_by_key(|id| std::cmp::Reverse(db.tasks[id].modified_at));

@@ -69,11 +69,15 @@ location and Empty Trash. The same actions keep their keyboard routes, and
 `Esc` closes the menu. Hovering a row reveals its pencil and × even when the
 row is the active view.
 
-Projects can be dragged onto a folder row to file them, and onto the LIBRARY
-heading to take them back to the root. The dragged project's name follows the
-pointer, the folder row is the drop target, and each move is one undoable
-command, so `⌘Z` restores the previous placement. Task drags onto projects and
-tags are unchanged.
+Projects can be dragged onto a folder row to file them, onto the LIBRARY
+heading, or onto empty space under the tree to take them back to the root. The
+folder row or heading under the pointer highlights during the drag, so the
+destination is visible before releasing, and the project's painted row moves
+as soon as the drop lands. Each move is one undoable command, so `⌘Z`
+restores the previous placement. Task drags onto projects and tags are
+unchanged. Filing a project is pointer-only for now; the sidebar cursor can
+open and rename it but cannot move it between folders, so a keyboard route is
+still a gap.
 
 ### Dropdown menus and the new-project prompt
 

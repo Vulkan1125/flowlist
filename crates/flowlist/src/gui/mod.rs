@@ -249,6 +249,13 @@ pub struct FlowlistApp {
     /// Sidebar row boxes keyed by target, so a GUI probe can drag a project
     /// onto a folder without guessing at coordinates.
     sidebar_row_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Painted boxes for the start of each sidebar row's name (its icon), plus
+    /// `empty:<parent>` for the "no projects" note, so a probe can check that
+    /// nested rows are indented under their folder.
+    sidebar_name_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// The sidebar row under the pointer while a project is being dragged, so
+    /// that row can highlight and the test state can report the drop target.
+    sidebar_drag_target: Option<String>,
     /// Task rows painted on the last frame, in order, with their depth. The
     /// list reflects which subtasks are visible, not just what the query
     /// matched.
@@ -426,6 +433,8 @@ impl FlowlistApp {
             forecast_months_anchor: Rc::new(Cell::new(None)),
             forecast_width_anchor: Rc::new(Cell::new(None)),
             sidebar_row_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            sidebar_name_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            sidebar_drag_target: None,
             content_rows: Rc::new(RefCell::new(Vec::new())),
             task_disclosures: Rc::new(RefCell::new(BTreeMap::new())),
             priority_filter,
@@ -2114,27 +2123,73 @@ impl FlowlistApp {
         }
     }
 
-    /// Move a dragged project into a folder, or back to the Library root.
-    fn drop_on_folder(&mut self, folder: FolderId, payload: &DragProject, cx: &mut Context<Self>) {
-        self.execute(Command::MoveProject {
-            id: payload.id.clone(),
-            placement: ContainerPlacement {
-                parent: Some(folder),
-                position: ContainerPosition::End,
-            },
-        });
-        cx.notify();
+    /// Remember which sidebar row a dragged project is over. The folder row,
+    /// LIBRARY heading and the empty sidebar area paint themselves from this.
+    fn set_drag_target(&mut self, target: Option<String>, cx: &mut Context<Self>) {
+        if self.sidebar_drag_target != target {
+            self.sidebar_drag_target = target;
+            cx.notify();
+        }
     }
 
-    fn drop_on_library(&mut self, payload: &DragProject, cx: &mut Context<Self>) {
-        self.execute(Command::MoveProject {
-            id: payload.id.clone(),
-            placement: ContainerPlacement {
-                parent: None,
-                position: ContainerPosition::End,
-            },
-        });
+    /// A drop fires during mouse-up while the window is mid-frame, so a plain
+    /// `notify` records the change without scheduling the redraw that shows it.
+    /// Notify again from a background tick, once the frame has finished. This
+    /// is what makes a drag look like it lands where it was dropped.
+    fn repaint_after_drop(&self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(1))
+                .await;
+            this.update(cx, |_, cx| cx.notify()).ok();
+        })
+        .detach();
+    }
+
+    /// Move a dragged project into a folder. Dropping it on the same folder is
+    /// a no-op, so it adds no history entry.
+    fn drop_on_folder(&mut self, folder: FolderId, payload: &DragProject, cx: &mut Context<Self>) {
+        let already_there = self
+            .store
+            .db()
+            .projects
+            .get(&payload.id)
+            .is_some_and(|project| project.folder.as_ref() == Some(&folder));
+        if !already_there {
+            self.execute(Command::MoveProject {
+                id: payload.id.clone(),
+                placement: ContainerPlacement {
+                    parent: Some(folder),
+                    position: ContainerPosition::End,
+                },
+            });
+        }
+        self.sidebar_drag_target = None;
         cx.notify();
+        self.repaint_after_drop(cx);
+    }
+
+    /// Move a dragged project back to the Library root. Dropping it where it
+    /// already sits is a no-op, so it adds no history entry.
+    fn drop_on_library(&mut self, payload: &DragProject, cx: &mut Context<Self>) {
+        let at_root = self
+            .store
+            .db()
+            .projects
+            .get(&payload.id)
+            .is_some_and(|project| project.folder.is_none());
+        if !at_root {
+            self.execute(Command::MoveProject {
+                id: payload.id.clone(),
+                placement: ContainerPlacement {
+                    parent: None,
+                    position: ContainerPosition::End,
+                },
+            });
+        }
+        self.sidebar_drag_target = None;
+        cx.notify();
+        self.repaint_after_drop(cx);
     }
 
     fn drop_on_project(&mut self, project: ProjectId, payload: &DragTask, cx: &mut Context<Self>) {
@@ -2150,6 +2205,7 @@ impl FlowlistApp {
             },
         });
         cx.notify();
+        self.repaint_after_drop(cx);
     }
 
     fn drop_on_task(&mut self, target: TaskId, payload: &DragTask, cx: &mut Context<Self>) {
@@ -2171,6 +2227,7 @@ impl FlowlistApp {
             },
         });
         cx.notify();
+        self.repaint_after_drop(cx);
     }
 
     fn drop_on_tag(&mut self, tag: TagId, payload: &DragTask, cx: &mut Context<Self>) {
@@ -2181,6 +2238,7 @@ impl FlowlistApp {
             remove: Vec::new(),
         });
         cx.notify();
+        self.repaint_after_drop(cx);
     }
 
     fn drag_ids(&self, payload: &DragTask) -> Vec<TaskId> {
@@ -4021,7 +4079,9 @@ impl FlowlistApp {
                 let cutoff = at - chrono::Duration::days(days);
                 db.tasks
                     .values()
-                    .filter(|task| !task.is_trashed() && task.modified_at >= cutoff)
+                    .filter(|task| {
+                        !task.completed && !task.is_trashed() && task.modified_at >= cutoff
+                    })
                     .count()
             }
             BuiltinPerspective::Attachments => db
@@ -4167,6 +4227,8 @@ impl FlowlistApp {
             _ => None,
         });
         state["sidebar_rows"] = serde_json::json!(self.sidebar_row_boxes.borrow().clone());
+        state["sidebar_drag_target"] = serde_json::json!(self.sidebar_drag_target);
+        state["sidebar_names"] = serde_json::json!(self.sidebar_name_boxes.borrow().clone());
         state["content_rows"] = serde_json::json!(
             self.content_rows
                 .borrow()

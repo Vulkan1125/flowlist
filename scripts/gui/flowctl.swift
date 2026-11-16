@@ -3,6 +3,7 @@
 // Usage: flowctl mouse <x> <y>
 //        flowctl move <x> <y>
 //        flowctl drag <x1> <y1> <x2> <y2>
+//        flowctl down <x> <y> / dragto <x> <y> / up <x> <y>
 //        flowctl rightmouse <x> <y>
 //        flowctl key <keycode> [cmd|shift|ctrl|cmdshift|ctrlshift]
 //        flowctl text <string>
@@ -100,6 +101,28 @@ func type(_ text: String) {
     }
 }
 
+func dragTo(_ x: Double, _ y: Double) {
+    let move = CGEvent(
+        mouseEventSource: nil,
+        mouseType: .leftMouseDragged,
+        mouseCursorPosition: CGPoint(x: x, y: y),
+        mouseButton: .left
+    )
+    move?.flags = []
+    move?.post(tap: .cghidEventTap)
+}
+
+func button(_ x: Double, _ y: Double, down: Bool) {
+    let event = CGEvent(
+        mouseEventSource: nil,
+        mouseType: down ? .leftMouseDown : .leftMouseUp,
+        mouseCursorPosition: CGPoint(x: x, y: y),
+        mouseButton: .left
+    )
+    event?.flags = []
+    event?.post(tap: .cghidEventTap)
+}
+
 func drag(_ x1: Double, _ y1: Double, _ x2: Double, _ y2: Double) {
     let start = CGPoint(x: x1, y: y1)
     let down = CGEvent(
@@ -150,6 +173,9 @@ case "drag":
     )
 case "rightmouse": rightMouse(Double(args[2])!, Double(args[3])!)
 case "move": move(Double(args[2])!, Double(args[3])!)
+case "down": button(Double(args[2])!, Double(args[3])!, down: true)
+case "up": button(Double(args[2])!, Double(args[3])!, down: false)
+case "dragto": dragTo(Double(args[2])!, Double(args[3])!)
 case "key": key(CGKeyCode(args[2])!, args.count > 3 ? args[3] : nil)
 case "text": type(args[2])
 case "pos": print(NSEvent.mouseLocation)

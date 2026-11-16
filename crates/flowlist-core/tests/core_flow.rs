@@ -1261,3 +1261,39 @@ fn dragging_a_project_into_a_folder_and_back_is_undoable() {
         Some(&folder_id)
     );
 }
+
+#[test]
+fn changed_perspective_hides_completed_tasks() {
+    use flowlist_core::model::BuiltinPerspective;
+    use flowlist_core::query;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let open = add(&mut store, "Still open");
+    let done = add(&mut store, "Already done");
+    let open_id = store.db().resolve_task(&open).unwrap();
+    let done_id = store.db().resolve_task(&done).unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![done_id.clone()],
+            completed: true,
+        })
+        .unwrap();
+
+    let groups = query::view(store.db(), BuiltinPerspective::Changed, Utc::now());
+    let ids: Vec<String> = groups
+        .iter()
+        .flat_map(|group| group.rows.iter().map(|row| row.id.to_string()))
+        .collect();
+    assert_eq!(ids, vec![open_id.to_string()]);
+
+    // Undoing completion brings it back into Changed.
+    store.undo().unwrap();
+    let groups = query::view(store.db(), BuiltinPerspective::Changed, Utc::now());
+    let ids: Vec<String> = groups
+        .iter()
+        .flat_map(|group| group.rows.iter().map(|row| row.id.to_string()))
+        .collect();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&done_id.to_string()));
+}

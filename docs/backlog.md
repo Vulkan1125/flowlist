@@ -66,9 +66,18 @@ landed and verified.
       (Auto / 1 / 2, `M`) and a Width chip (fixed cells / full pane, `W`).
       Both are stored in `Settings`, so the layout survives a relaunch.
 - [x] **Project drag into folders** — project rows drag onto folder rows, or
-      onto the LIBRARY heading to return to the root. Drops use
+      onto the LIBRARY heading or empty space under the tree to return to the
+      root. The hovered folder or heading highlights during the drag, and a
+      post-drop background tick forces the repaint that mouse-up misses. A
+      drop onto the current folder or root is a no-op. Drops use
       `Command::MoveProject`, so they are undoable and shared with the CLI.
-      The GUI test state exposes every sidebar row's painted box for the probe.
+      The GUI test state exposes every sidebar row's painted box, its name
+      start, the empty-folder note and the live drag target for the probe.
+- [x] **Nested sidebar indentation** — folder contents step right once per
+      level, including projects and subfolders, and an empty folder's note
+      says “Empty” aligned with the names instead of reading like a heading.
+- [x] **Changed hides completed tasks** — the query and the sidebar badge both
+      filter out completed tasks; undo brings the row and the count back.
 - [x] **Inline subtasks** — outlines are expanded by default, so children sit
       under their parent without a first click. The disclosure previously
       disagreed with the render default, which made its first click a no-op;

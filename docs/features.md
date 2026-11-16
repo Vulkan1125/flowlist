@@ -44,7 +44,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Review
 - [x] Tags
 - [x] Completed
-- [x] Changed (recently edited, configurable window)
+- [x] Changed (recently edited and still open, configurable window)
 - [x] Attachments (open tasks with file paths)
 - [x] Nearby (location + radius)
 - [x] Trash (restore, delete forever, auto-empty)
@@ -117,6 +117,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       as perspectives, aligned with the folder icon and the name. Once a
       project has work but nothing open, that count becomes a tick; a new
       project keeps its 0 until it has a task.
+- [x] Sidebar folders indent what they contain: subfolders and projects step
+      right once per nesting level, and an empty folder shows “Empty” aligned
+      with the names. Root-level projects keep their usual position.
 - [x] Forecast month calendar above the list: Monday-first grid, previous /
       Today / next controls and an accent bar under dates with a task. A wide
       pane shows two consecutive months side by side so the grid keeps
@@ -162,8 +165,11 @@ working domain and GUI. This page tracks what is implemented and verified.
       perspectives that have no capture bar
 - [x] Task progress badge for checklists
 - [x] Drag/drop tasks into projects, tags, parents and sibling positions
-- [x] Drag/drop projects into folders; drop one on the LIBRARY heading to move
-      it back to the root. The move is undoable like any other command
+- [x] Drag/drop projects into folders; drop one on the LIBRARY heading or on
+      empty space under the tree to move it back to the root. The row or
+      heading under the pointer highlights during the drag, and the list
+      repaints as soon as the drop lands. The move is undoable like any other
+      command; dropping a project where it already sits does nothing
 - [x] Project dashboard with progress, status, review info and project type
 - [x] New project/folder/tag/perspective modals (`⇧⌘N`, `⌥⌘N`,
       `⌃⌘N`, `⇧⌘P`)

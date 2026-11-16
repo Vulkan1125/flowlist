@@ -68,7 +68,12 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
 
 `sidebar_rows` maps each painted sidebar row (`project:<id>`, `folder:<id>`,
 `library`, …) to its window-space box, so a probe can drag a project onto a
-folder without hard-coding sidebar offsets. `content_rows` lists the task rows
+folder without hard-coding sidebar offsets. `sidebar_names` maps the same rows
+to the box where the row's icon starts, plus `empty:<folder>` for an empty
+folder's note, which makes indentation assertable. `sidebar_drag_target` is
+the row a dragged project is currently over (`folder:<id>`, `library`, or
+null), so a split drag can check the highlight before releasing the mouse.
+`content_rows` lists the task rows
 actually painted on the last frame, in order, with `id`, `title`, `depth` and
 `has_children`; hidden descendants are absent, so a probe can assert what a
 disclosure reveals. `task_disclosures` maps each parent id to its chevron box
@@ -119,6 +124,8 @@ these clicks can be replaced by named actions without changing the assertions.
 
 - `scripts/gui/flowctl.swift` posts mouse moves, left and right clicks and key
   events. Its modifiers include `ctrlalt`, used for the capture hotkey.
+  `drag` does a complete drag in one call; `down`, `dragto` and `up` split it
+  so a probe can read the test state mid-drag and assert the drop highlight.
 - `scripts/gui/window.swift` prints the live window title, origin and size.
   `window <pid> move <x> <y>` also activates the app and asks the window
   server to move it, which keeps absolute clicks reliable when macOS restores

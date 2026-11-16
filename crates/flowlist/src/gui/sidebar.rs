@@ -1,7 +1,9 @@
 //! The left rail: built-in perspectives, saved perspectives, the project tree
 //! and the tag tree. Projects and tags are drop targets for task drags.
 
-use gpui::{AnyElement, Context, IntoElement, MouseButton, Window, div, prelude::*, px};
+use gpui::{
+    AnyElement, Context, DragMoveEvent, IntoElement, MouseButton, Window, div, prelude::*, px,
+};
 
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId};
 use flowlist_core::model::{BuiltinPerspective, Priority, ProjectStatus};
@@ -99,6 +101,28 @@ impl FlowlistApp {
             self.sidebar_hover = None;
             cx.notify();
         }
+    }
+
+    /// Wrap an element so its painted box is recorded for GUI probes. Used on a
+    /// row's icon, which marks where the name starts and therefore how deep the
+    /// row is nested.
+    fn measured(&self, key: String, element: impl IntoElement) -> impl IntoElement {
+        let boxes = self.sidebar_name_boxes.clone();
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        key.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .child(element)
     }
 
     /// The name slot. At rest the row width belongs to the name, so long names
@@ -900,6 +924,10 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
+        // A project drag owns the sidebar highlight only while it is live.
+        if !cx.has_active_drag() {
+            self.sidebar_drag_target = None;
+        }
         let mut rail = div()
             .flex()
             .flex_col()
@@ -920,7 +948,13 @@ impl FlowlistApp {
                     }
                     cx.notify();
                 }),
-            );
+            )
+            // Capture-phase drag handlers run shallowest-first, so the rail
+            // clears the highlight and each row below sets it again. Typing the
+            // listener to DragProject means task drags never touch this state.
+            .on_drag_move::<DragProject>(cx.listener(|this, _, _, cx| {
+                this.set_drag_target(None, cx);
+            }));
 
         rail = rail.child(widgets::section_label(theme, "PERSPECTIVES"));
         for perspective in BuiltinPerspective::ALL {
@@ -939,7 +973,21 @@ impl FlowlistApp {
             .flex_1()
             .min_h_0()
             .overflow_y_scroll()
-            .track_scroll(&self.sidebar_scroll);
+            .track_scroll(&self.sidebar_scroll)
+            // Dropping a project on empty sidebar space takes it out of its
+            // folder, the same as the LIBRARY heading. The heading and folder
+            // rows paint after this element, so their handlers run later in the
+            // capture phase and win.
+            .on_drag_move::<DragProject>(cx.listener(
+                |this, event: &DragMoveEvent<DragProject>, _, cx| {
+                    if event.bounds.contains(&event.event.position) {
+                        this.set_drag_target(Some("library".to_string()), cx);
+                    }
+                },
+            ))
+            .on_drop::<DragProject>(
+                cx.listener(|this, payload: &DragProject, _, cx| this.drop_on_library(payload, cx)),
+            );
 
         let custom: Vec<PerspectiveRow> = self
             .store
@@ -959,6 +1007,7 @@ impl FlowlistApp {
         }
 
         // Dropping a project on the heading takes it out of its folder.
+        let library_active = self.sidebar_drag_target.as_deref() == Some("library");
         let library_boxes = self.sidebar_row_boxes.clone();
         lower = lower.child(
             div()
@@ -975,16 +1024,24 @@ impl FlowlistApp {
                         );
                     }
                 })
+                .on_drag_move::<DragProject>(cx.listener(
+                    |this, event: &DragMoveEvent<DragProject>, _, cx| {
+                        if event.bounds.contains(&event.event.position) {
+                            this.set_drag_target(Some("library".to_string()), cx);
+                        }
+                    },
+                ))
                 .on_drop::<DragProject>(cx.listener(|this, payload: &DragProject, _, cx| {
                     this.drop_on_library(payload, cx)
                 }))
                 .child(
                     div()
                         .id("sidebar-library")
+                        .when(library_active, |this| this.rounded_md().bg(theme.selection))
                         .child(widgets::section_label(theme, "LIBRARY")),
                 ),
         );
-        lower = lower.children(self.container_rows(None, cx));
+        lower = lower.children(self.container_rows(None, 0, cx));
 
         lower = lower.child(widgets::section_label(theme, "TAGS"));
         lower = lower.children(self.tag_rows(None, cx));
@@ -1225,7 +1282,12 @@ impl FlowlistApp {
             }))
     }
 
-    fn container_rows(&self, parent: Option<FolderId>, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    fn container_rows(
+        &self,
+        parent: Option<FolderId>,
+        depth: usize,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
         let db = self.store.db();
         let children = db.container_children(parent.clone()).to_vec();
         let mut rows = Vec::new();
@@ -1246,6 +1308,8 @@ impl FlowlistApp {
                     let cursor = self.sidebar_cursor_is(&SidebarTarget::Folder(target_id.clone()));
                     let hovered = self.row_hovered(&SidebarTarget::Folder(target_id.clone()));
                     let hover_id = id.clone();
+                    let move_key = key.clone();
+                    let drop_here = self.sidebar_drag_target.as_deref() == Some(key.as_str());
                     let mut row = div()
                         .id(super::sid(format!("sidebar-folder:{id}")))
                         .flex()
@@ -1253,12 +1317,22 @@ impl FlowlistApp {
                         .gap_1()
                         .h(px(26.))
                         .mx_2()
-                        .pl_1()
+                        .pl(px(4.0 + depth as f32 * 14.0))
                         .pr_2()
                         .rounded_md()
                         .text_color(self.theme.text_dim)
                         .cursor_pointer()
+                        .when(drop_here, |this| {
+                            this.bg(self.theme.selection).text_color(self.theme.accent)
+                        })
                         .hover(|style| style.bg(self.theme.hover))
+                        .on_drag_move::<DragProject>(cx.listener(
+                            move |this, event: &DragMoveEvent<DragProject>, _, cx| {
+                                if event.bounds.contains(&event.event.position) {
+                                    this.set_drag_target(Some(move_key.clone()), cx);
+                                }
+                            },
+                        ))
                         .when(cursor, |this| this.bg(self.theme.hover))
                         .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                             this.set_row_hover(
@@ -1297,16 +1371,19 @@ impl FlowlistApp {
                                 })),
                         )
                         .child(
-                            div()
-                                .w(px(16.))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(icons::icon(
-                                    if open { Icon::FolderOpen } else { Icon::Folder },
-                                    14.0,
-                                    self.theme.text_faint,
-                                )),
+                            self.measured(
+                                format!("folder:{id}"),
+                                div()
+                                    .w(px(16.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(icons::icon(
+                                        if open { Icon::FolderOpen } else { Icon::Folder },
+                                        14.0,
+                                        self.theme.text_faint,
+                                    )),
+                            ),
                         )
                         .child(self.row_name(name, hovered))
                         .when(hovered, |this| {
@@ -1368,7 +1445,7 @@ impl FlowlistApp {
                             .into_any_element(),
                     );
                     if open {
-                        rows.extend(self.container_rows(Some(id), cx));
+                        rows.extend(self.container_rows(Some(id), depth + 1, cx));
                     }
                 }
                 ContainerId::Project(id) => {
@@ -1398,7 +1475,7 @@ impl FlowlistApp {
                         .gap_2()
                         .h(px(26.))
                         .mx_2()
-                        .pl_5()
+                        .pl(px(20.0 + depth as f32 * 14.0))
                         .pr_2()
                         .rounded_md()
                         .bg(if active {
@@ -1414,6 +1491,16 @@ impl FlowlistApp {
                         })
                         .cursor_pointer()
                         .hover(|style| style.bg(self.theme.hover))
+                        // Project rows are not project drop targets. This
+                        // paints after the scroller, so it overwrites the
+                        // scroller's Library target for one row.
+                        .on_drag_move::<DragProject>(cx.listener(
+                            |this, event: &DragMoveEvent<DragProject>, _, cx| {
+                                if event.bounds.contains(&event.event.position) {
+                                    this.set_drag_target(None, cx);
+                                }
+                            },
+                        ))
                         .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                             this.set_row_hover(
                                 SidebarTarget::Project(hover_id.clone()),
@@ -1421,14 +1508,17 @@ impl FlowlistApp {
                                 cx,
                             );
                         }))
-                        .child(widgets::icon_for_project(
-                            project.icon,
-                            14.0,
-                            if active {
-                                self.theme.accent
-                            } else {
-                                self.theme.text_faint
-                            },
+                        .child(self.measured(
+                            format!("project:{id}"),
+                            widgets::icon_for_project(
+                                project.icon,
+                                14.0,
+                                if active {
+                                    self.theme.accent
+                                } else {
+                                    self.theme.text_faint
+                                },
+                            ),
                         ))
                         .child(self.row_name(project.name.clone(), hovered))
                         .when(hovered, |this| {
@@ -1474,6 +1564,9 @@ impl FlowlistApp {
                         .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
                             this.drop_on_project(drop_id.clone(), payload, cx)
                         }))
+                        .on_drop::<DragProject>(cx.listener(|_, _: &DragProject, _, cx| {
+                            cx.stop_propagation();
+                        }))
                         .on_mouse_down(
                             MouseButton::Right,
                             cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
@@ -1514,13 +1607,24 @@ impl FlowlistApp {
             }
         }
         if rows.is_empty() {
+            let key = match &parent {
+                Some(folder) => format!("empty:{folder}"),
+                None => "empty:root".to_string(),
+            };
             rows.push(
                 div()
-                    .px_4()
+                    .pl(px(50.0 + depth as f32 * 14.0))
                     .py_2()
                     .text_xs()
                     .text_color(self.theme.text_faint)
-                    .child("No projects yet")
+                    .child(self.measured(
+                        key,
+                        if depth == 0 {
+                            "No projects yet"
+                        } else {
+                            "Empty"
+                        },
+                    ))
                     .into_any_element(),
             );
         }
