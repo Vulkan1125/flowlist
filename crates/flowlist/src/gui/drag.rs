@@ -2,7 +2,7 @@
 
 use gpui::{App, Context, IntoElement, Pixels, Point, Render, Window, div, prelude::*, px};
 
-use flowlist_core::ids::TaskId;
+use flowlist_core::ids::{ProjectId, TaskId};
 
 use super::icons::{self, Icon};
 use super::theme::Theme;
@@ -20,6 +20,23 @@ impl DragTask {
             id,
             label: label.into(),
             tag: false,
+        }
+    }
+}
+
+/// A project row being dragged onto a folder. Projects cannot nest, so this
+/// only ever targets folders (or the Library heading to move back out).
+#[derive(Clone, Debug)]
+pub struct DragProject {
+    pub id: ProjectId,
+    pub label: String,
+}
+
+impl DragProject {
+    pub fn project(id: ProjectId, label: impl Into<String>) -> Self {
+        Self {
+            id,
+            label: label.into(),
         }
     }
 }
@@ -91,4 +108,16 @@ pub fn ghost(
     let label = payload.label.clone();
     let tag = payload.tag;
     cx.new(|_| DragGhost::new(label, tag, position, theme))
+}
+
+/// Constructor used by a project row's `.on_drag`.
+pub fn project_ghost(
+    payload: &DragProject,
+    position: Point<Pixels>,
+    _window: &mut Window,
+    cx: &mut App,
+    theme: Theme,
+) -> gpui::Entity<DragGhost> {
+    let label = payload.label.clone();
+    cx.new(|_| DragGhost::new(label, false, position, theme))
 }

@@ -19,8 +19,8 @@ mod theme;
 mod vim;
 mod widgets;
 
-use std::cell::Cell;
-use std::collections::BTreeSet;
+use std::cell::{Cell, RefCell};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -34,8 +34,8 @@ use gpui::{
 };
 
 use flowlist_core::command::{
-    Command, NewProject, NewTask, Outcome, ProjectPatch, SettingsPatch, TagPatch, TaskPatch,
-    TaskPlacement,
+    Command, ContainerPlacement, NewProject, NewTask, Outcome, ProjectPatch, SettingsPatch,
+    TagPatch, TaskPatch, TaskPlacement,
 };
 use flowlist_core::db::{ContainerPosition, Db, OrderKey, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
@@ -47,7 +47,7 @@ use flowlist_core::store::Store;
 use flowlist_core::time::{Stamp, format_duration, local_date, now};
 use flowlist_core::{export, taskpaper};
 
-use drag::DragTask;
+use drag::{DragProject, DragTask};
 use icons::Icon;
 
 pub use session::{Session, View};
@@ -242,6 +242,9 @@ pub struct FlowlistApp {
     /// The months and width chips, measured so the GUI probe can click them.
     forecast_months_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     forecast_width_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// Sidebar row boxes keyed by target, so a GUI probe can drag a project
+    /// onto a folder without guessing at coordinates.
+    sidebar_row_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Applies to every list, and is what the sidebar priority rows set.
     priority_filter: Option<Priority>,
     /// Hide everything blocked behind another task (First Available).
@@ -412,6 +415,7 @@ impl FlowlistApp {
             forecast_calendar_anchor: Rc::new(Cell::new(None)),
             forecast_months_anchor: Rc::new(Cell::new(None)),
             forecast_width_anchor: Rc::new(Cell::new(None)),
+            sidebar_row_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             priority_filter,
             only_available,
             follow_system,
@@ -2058,6 +2062,29 @@ impl FlowlistApp {
         } else {
             default
         }
+    }
+
+    /// Move a dragged project into a folder, or back to the Library root.
+    fn drop_on_folder(&mut self, folder: FolderId, payload: &DragProject, cx: &mut Context<Self>) {
+        self.execute(Command::MoveProject {
+            id: payload.id.clone(),
+            placement: ContainerPlacement {
+                parent: Some(folder),
+                position: ContainerPosition::End,
+            },
+        });
+        cx.notify();
+    }
+
+    fn drop_on_library(&mut self, payload: &DragProject, cx: &mut Context<Self>) {
+        self.execute(Command::MoveProject {
+            id: payload.id.clone(),
+            placement: ContainerPlacement {
+                parent: None,
+                position: ContainerPosition::End,
+            },
+        });
+        cx.notify();
     }
 
     fn drop_on_project(&mut self, project: ProjectId, payload: &DragTask, cx: &mut Context<Self>) {
@@ -4086,6 +4113,7 @@ impl FlowlistApp {
             Some(modals::Modal::NewProject { icon, .. }) => Some(icon.slug()),
             _ => None,
         });
+        state["sidebar_rows"] = serde_json::json!(self.sidebar_row_boxes.borrow().clone());
         let text = state.to_string();
         if self.test_state_last.as_deref() == Some(text.as_str()) {
             return;

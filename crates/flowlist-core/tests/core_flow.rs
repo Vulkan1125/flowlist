@@ -2,9 +2,10 @@
 
 use chrono::Utc;
 use flowlist_core::command::{
-    Command, ImportMode, NewProject, NewTask, ProjectPatch, TaskPatch, TaskPlacement,
+    Command, ContainerPlacement, ImportMode, NewProject, NewTask, ProjectPatch, TaskPatch,
+    TaskPlacement,
 };
-use flowlist_core::db::Position;
+use flowlist_core::db::{ContainerPosition, Position};
 use flowlist_core::ids::TagId;
 use flowlist_core::model::{RepeatMode, RepeatRule, TagStatus, Task};
 use flowlist_core::paths::DataPaths;
@@ -1164,5 +1165,99 @@ fn deleting_a_project_trashes_its_tasks_and_undo_restores_both() {
     assert_eq!(
         store.db().tasks[&task_id].project.as_ref(),
         Some(&project_id)
+    );
+}
+
+#[test]
+fn dragging_a_project_into_a_folder_and_back_is_undoable() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let project_id = store
+        .execute(Command::CreateProject(NewProject::new("Launch")))
+        .unwrap()
+        .created[0]
+        .clone();
+    let project_id = store.db().resolve_project(&project_id).unwrap();
+    let folder_id = store
+        .execute(Command::CreateFolder {
+            name: "Work".into(),
+            parent: None,
+            position: ContainerPosition::End,
+        })
+        .unwrap()
+        .created[0]
+        .clone();
+    let folder_id = store.db().resolve_folder(&folder_id).unwrap();
+    assert!(store.db().projects[&project_id].folder.is_none());
+
+    store
+        .execute(Command::MoveProject {
+            id: project_id.clone(),
+            placement: ContainerPlacement {
+                parent: Some(folder_id.clone()),
+                position: ContainerPosition::End,
+            },
+        })
+        .unwrap();
+    assert_eq!(
+        store.db().projects[&project_id].folder.as_ref(),
+        Some(&folder_id)
+    );
+    assert!(store.db().folders[&folder_id].child_order.contains(
+        &flowlist_core::ids::ContainerId::Project(project_id.clone())
+    ));
+    assert!(
+        !store
+            .db()
+            .root
+            .contains(&flowlist_core::ids::ContainerId::Project(
+                project_id.clone()
+            ))
+    );
+
+    // Undo puts the project back at the Library root.
+    store.undo().unwrap();
+    assert!(store.db().projects[&project_id].folder.is_none());
+    assert!(
+        store
+            .db()
+            .root
+            .contains(&flowlist_core::ids::ContainerId::Project(
+                project_id.clone()
+            ))
+    );
+
+    // Redo files it again, so dropping on the LIBRARY heading has something to
+    // move out.
+    store.redo().unwrap();
+    assert_eq!(
+        store.db().projects[&project_id].folder.as_ref(),
+        Some(&folder_id)
+    );
+
+    store
+        .execute(Command::MoveProject {
+            id: project_id.clone(),
+            placement: ContainerPlacement {
+                parent: None,
+                position: ContainerPosition::End,
+            },
+        })
+        .unwrap();
+    assert!(store.db().projects[&project_id].folder.is_none());
+    assert!(
+        store
+            .db()
+            .root
+            .contains(&flowlist_core::ids::ContainerId::Project(
+                project_id.clone()
+            ))
+    );
+
+    store.undo().unwrap();
+    assert_eq!(
+        store.db().projects[&project_id].folder.as_ref(),
+        Some(&folder_id)
     );
 }

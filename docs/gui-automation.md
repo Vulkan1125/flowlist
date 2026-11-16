@@ -66,7 +66,10 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
 }
 ```
 
-`modal` is `null` when no sheet is open, otherwise the sheet title (`New
+`sidebar_rows` maps each painted sidebar row (`project:<id>`, `folder:<id>`,
+`library`, …) to its window-space box, so a probe can drag a project onto a
+folder without hard-coding sidebar offsets. `modal` is `null` when no sheet is
+open, otherwise the sheet title (`New
 project`, `Perspective`, `Settings`, …). `focus` names the active pane or field
 (`Content`, `Capture`, `Sidebar`, `Field`, `Modal`, …). `field` names the
 inspector field being edited (`Title`, `Notes`, `Project`, …) and is null

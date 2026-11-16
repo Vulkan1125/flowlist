@@ -159,6 +159,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       perspectives that have no capture bar
 - [x] Task progress badge for checklists
 - [x] Drag/drop tasks into projects, tags, parents and sibling positions
+- [x] Drag/drop projects into folders; drop one on the LIBRARY heading to move
+      it back to the root. The move is undoable like any other command
 - [x] Project dashboard with progress, status, review info and project type
 - [x] New project/folder/tag/perspective modals (`⇧⌘N`, `⌥⌘N`,
       `⌃⌘N`, `⇧⌘P`)

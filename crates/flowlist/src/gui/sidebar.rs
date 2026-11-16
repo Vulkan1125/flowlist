@@ -6,7 +6,7 @@ use gpui::{AnyElement, Context, IntoElement, MouseButton, Window, div, prelude::
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId};
 use flowlist_core::model::{BuiltinPerspective, Priority, ProjectStatus};
 
-use super::drag::DragTask;
+use super::drag::{DragProject, DragTask};
 use super::icons::{self, Icon};
 use super::modals;
 use super::widgets::TipExt;
@@ -958,7 +958,32 @@ impl FlowlistApp {
             }
         }
 
-        lower = lower.child(widgets::section_label(theme, "LIBRARY"));
+        // Dropping a project on the heading takes it out of its folder.
+        let library_boxes = self.sidebar_row_boxes.clone();
+        lower = lower.child(
+            div()
+                .on_children_prepainted(move |bounds, _, _| {
+                    if let Some(bounds) = bounds.first() {
+                        library_boxes.borrow_mut().insert(
+                            "library".to_string(),
+                            [
+                                f32::from(bounds.origin.x),
+                                f32::from(bounds.origin.y),
+                                f32::from(bounds.size.width),
+                                f32::from(bounds.size.height),
+                            ],
+                        );
+                    }
+                })
+                .on_drop::<DragProject>(cx.listener(|this, payload: &DragProject, _, cx| {
+                    this.drop_on_library(payload, cx)
+                }))
+                .child(
+                    div()
+                        .id("sidebar-library")
+                        .child(widgets::section_label(theme, "LIBRARY")),
+                ),
+        );
         lower = lower.children(self.container_rows(None, cx));
 
         lower = lower.child(widgets::section_label(theme, "TAGS"));
@@ -1316,7 +1341,32 @@ impl FlowlistApp {
                     if active {
                         row = row.bg(self.theme.selection).text_color(self.theme.accent);
                     }
-                    rows.push(row.into_any_element());
+                    let anchor_boxes = self.sidebar_row_boxes.clone();
+                    let anchor_key = format!("folder:{id}");
+                    let drop_folder = id.clone();
+                    rows.push(
+                        div()
+                            .on_children_prepainted(move |bounds, _, _| {
+                                if let Some(bounds) = bounds.first() {
+                                    anchor_boxes.borrow_mut().insert(
+                                        anchor_key.clone(),
+                                        [
+                                            f32::from(bounds.origin.x),
+                                            f32::from(bounds.origin.y),
+                                            f32::from(bounds.size.width),
+                                            f32::from(bounds.size.height),
+                                        ],
+                                    );
+                                }
+                            })
+                            .on_drop::<DragProject>(cx.listener(
+                                move |this, payload: &DragProject, _, cx| {
+                                    this.drop_on_folder(drop_folder.clone(), payload, cx)
+                                },
+                            ))
+                            .child(row)
+                            .into_any_element(),
+                    );
                     if open {
                         rows.extend(self.container_rows(Some(id), cx));
                     }
@@ -1339,6 +1389,8 @@ impl FlowlistApp {
                     let cursor = self.sidebar_cursor_is(&SidebarTarget::Project(target_id.clone()));
                     let hovered = self.row_hovered(&SidebarTarget::Project(target_id.clone()));
                     let hover_id = id.clone();
+                    let drag_id = id.clone();
+                    let drag_theme = self.theme;
                     let mut row = div()
                         .id(super::sid(format!("sidebar-project:{id}")))
                         .flex()
@@ -1411,6 +1463,14 @@ impl FlowlistApp {
                                     }
                                 })
                         })
+                        .on_drag(
+                            DragProject::project(drag_id.clone(), project.name.clone()),
+                            move |payload, position, window, cx| {
+                                super::drag::project_ghost(
+                                    payload, position, window, cx, drag_theme,
+                                )
+                            },
+                        )
                         .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
                             this.drop_on_project(drop_id.clone(), payload, cx)
                         }))
@@ -1430,7 +1490,26 @@ impl FlowlistApp {
                     if project.flagged_for_review() {
                         row = row.child(div().size(px(5.)).rounded_full().bg(self.theme.warning));
                     }
-                    rows.push(row.into_any_element());
+                    let anchor_boxes = self.sidebar_row_boxes.clone();
+                    let anchor_key = format!("project:{id}");
+                    rows.push(
+                        div()
+                            .on_children_prepainted(move |bounds, _, _| {
+                                if let Some(bounds) = bounds.first() {
+                                    anchor_boxes.borrow_mut().insert(
+                                        anchor_key.clone(),
+                                        [
+                                            f32::from(bounds.origin.x),
+                                            f32::from(bounds.origin.y),
+                                            f32::from(bounds.size.width),
+                                            f32::from(bounds.size.height),
+                                        ],
+                                    );
+                                }
+                            })
+                            .child(row)
+                            .into_any_element(),
+                    );
                 }
             }
         }

@@ -69,6 +69,12 @@ location and Empty Trash. The same actions keep their keyboard routes, and
 `Esc` closes the menu. Hovering a row reveals its pencil and × even when the
 row is the active view.
 
+Projects can be dragged onto a folder row to file them, and onto the LIBRARY
+heading to take them back to the root. The dragged project's name follows the
+pointer, the folder row is the drop target, and each move is one undoable
+command, so `⌘Z` restores the previous placement. Task drags onto projects and
+tags are unchanged.
+
 ### Dropdown menus and the new-project prompt
 
 Sort and Group open a menu under their chip, and the inspector's project

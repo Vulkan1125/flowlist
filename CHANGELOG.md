@@ -4,6 +4,10 @@
 
 ### Interface
 
+- Projects can now be dragged between folders in the sidebar. Dropping one on
+  the LIBRARY heading moves it back to the root. Every move goes through the
+  normal move command, so `⌘Z` restores the previous placement, and task drags
+  onto projects keep working.
 - New projects and tasks converted to projects use the Project icon by default
   again instead of the Folder glyph; Folder is still one of the ten choices.
 - A sidebar project with tasks but nothing left open now shows a tick in place

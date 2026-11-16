@@ -65,6 +65,10 @@ landed and verified.
 - [x] **Forecast calendar display** — the calendar header has a Months chip
       (Auto / 1 / 2, `M`) and a Width chip (fixed cells / full pane, `W`).
       Both are stored in `Settings`, so the layout survives a relaunch.
+- [x] **Project drag into folders** — project rows drag onto folder rows, or
+      onto the LIBRARY heading to return to the root. Drops use
+      `Command::MoveProject`, so they are undoable and shared with the CLI.
+      The GUI test state exposes every sidebar row's painted box for the probe.
 - [ ] **Calendar view** — a dedicated Calendar perspective with a full month
       grid, day columns or an agenda, drag-to-reschedule and keyboard
       navigation. The Forecast month calendar is a first step, not the whole
