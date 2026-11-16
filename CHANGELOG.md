@@ -4,6 +4,9 @@
 
 ### Interface
 
+- The inspector no longer repeats the completion circle beside the task status;
+  the Complete / Reopen button at the bottom of the panel is the one control
+  for that. The status text and flag stay at the top.
 - Subtasks now sit indented under their parent in every list instead of being
   hidden until the first click. The disclosure chevron collapses a whole
   branch in one click (the first click used to do nothing), and `za`, `zo` and
