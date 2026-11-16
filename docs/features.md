@@ -111,7 +111,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       at the edge without an ellipsis. At rest, long sidebar and review-card
       names end with an ellipsis, and the inspector wraps the full project name
       instead of truncating it. Library project rows carry the same boxed count
-      as perspectives, aligned with the folder icon and the name.
+      as perspectives, aligned with the folder icon and the name. Once a
+      project has work but nothing open, that count becomes a tick; a new
+      project keeps its 0 until it has a task.
 - [x] Forecast month calendar above the list: Monday-first grid, previous /
       Today / next controls and an accent bar under dates with a task. A wide
       pane shows two consecutive months side by side so the grid keeps

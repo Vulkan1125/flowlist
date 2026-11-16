@@ -3855,6 +3855,25 @@ impl FlowlistApp {
         let Some(path) = self.test_state_path.clone() else {
             return;
         };
+        // The tick/count each sidebar project shows, keyed by name so the GUI
+        // smoke test can assert the badge without reading pixels.
+        let project_badges = {
+            let db = self.store.db();
+            let mut projects: Vec<_> = db.projects.values().collect();
+            projects.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+            projects
+                .iter()
+                .map(|project| {
+                    let (_, total) = db.project_progress(&project.id);
+                    let open = db.project_open_count(&project.id);
+                    let badge = match sidebar::project_badge(open, total) {
+                        sidebar::ProjectBadge::Count(count) => count.to_string(),
+                        sidebar::ProjectBadge::Done => "tick".to_string(),
+                    };
+                    (project.name.clone(), badge)
+                })
+                .collect::<std::collections::BTreeMap<_, _>>()
+        };
         let anchor = |bounds: Option<Bounds<gpui::Pixels>>| {
             bounds.map(|bounds| {
                 [
@@ -3865,7 +3884,7 @@ impl FlowlistApp {
                 ]
             })
         };
-        let state = serde_json::json!({
+        let mut state = serde_json::json!({
             "view": self.view.key(),
             "modal": self.modal.as_ref().map(|modal| modal.title()),
             "modal_name": self
@@ -3928,6 +3947,9 @@ impl FlowlistApp {
                 _ => None,
             },
         });
+        // Inserted after the macro: the full field list is already at the
+        // json! recursion limit, so new debug fields go in one at a time.
+        state["project_badges"] = serde_json::json!(project_badges);
         let text = state.to_string();
         if self.test_state_last.as_deref() == Some(text.as_str()) {
             return;

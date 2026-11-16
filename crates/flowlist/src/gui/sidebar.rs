@@ -22,6 +22,25 @@ pub(super) enum SidebarTarget {
     Priority(Priority),
 }
 
+/// What a project's sidebar badge shows. A project with work in it but
+/// nothing left open has earned a tick; a brand-new project keeps its 0 so the
+/// row still reports how many tasks are waiting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ProjectBadge {
+    Count(usize),
+    Done,
+}
+
+/// Completed work only turns the badge into a tick once there is at least one
+/// task. That keeps a new project showing `0` instead of looking finished.
+pub(super) fn project_badge(open: usize, total: usize) -> ProjectBadge {
+    if total > 0 && open == 0 {
+        ProjectBadge::Done
+    } else {
+        ProjectBadge::Count(open)
+    }
+}
+
 /// The right-click menu on a sidebar row. The position is in window
 /// coordinates, so the menu opens exactly under the pointer.
 #[derive(Clone, Debug)]
@@ -1373,17 +1392,25 @@ impl FlowlistApp {
                                 cx,
                             ))
                         })
-                        .child(
+                        .child({
+                            let tip = match project_badge(open, total) {
+                                ProjectBadge::Done => format!("All {total} done"),
+                                ProjectBadge::Count(_) => {
+                                    format!("{open} open · {done} of {total} done")
+                                }
+                            };
                             div()
                                 .id(super::sid(format!("project-count:{id}")))
-                                .flow_tip(
-                                    self,
-                                    cx,
-                                    self.theme,
-                                    format!("{open} open · {done} of {total} done"),
-                                )
-                                .child(widgets::count(self.theme, open)),
-                        )
+                                .flow_tip(self, cx, self.theme, tip)
+                                .child(match project_badge(open, total) {
+                                    ProjectBadge::Done => {
+                                        widgets::done_badge(self.theme).into_any_element()
+                                    }
+                                    ProjectBadge::Count(open) => {
+                                        widgets::count(self.theme, open).into_any_element()
+                                    }
+                                })
+                        })
                         .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
                             this.drop_on_project(drop_id.clone(), payload, cx)
                         }))
@@ -1607,5 +1634,27 @@ pub(super) fn priority_color(theme: super::theme::Theme, priority: Priority) -> 
         Priority::High => theme.danger,
         Priority::Medium => theme.warning,
         Priority::Low => theme.text_faint,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ProjectBadge, project_badge};
+
+    #[test]
+    fn a_new_project_keeps_its_zero() {
+        assert_eq!(project_badge(0, 0), ProjectBadge::Count(0));
+    }
+
+    #[test]
+    fn finished_work_becomes_a_tick() {
+        assert_eq!(project_badge(0, 1), ProjectBadge::Done);
+        assert_eq!(project_badge(0, 12), ProjectBadge::Done);
+    }
+
+    #[test]
+    fn any_open_task_keeps_the_count() {
+        assert_eq!(project_badge(1, 2), ProjectBadge::Count(1));
+        assert_eq!(project_badge(3, 3), ProjectBadge::Count(3));
     }
 }

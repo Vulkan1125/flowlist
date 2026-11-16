@@ -21,6 +21,9 @@ landed and verified.
       but the current grammar uses `o`/`O` to add a task below/above. Decide
       which wins, keep the other on an unused key, and update the help card,
       README and `docs/features.md` together. Do not silently keep both.
+- [x] **Project completion tick** — a sidebar project with tasks but no open
+      ones shows a tick instead of 0, and any open task restores the count.
+      A new project keeps its 0 until it has a task.
 - [x] **Rename text selection** — rename sheets select the whole name on
       open, so typing replaces it and one key clears it. Sheet fields accept a
       click for the caret and a drag for a selection, with the layout mapped

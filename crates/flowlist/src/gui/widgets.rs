@@ -466,6 +466,20 @@ pub fn count(theme: Theme, value: usize) -> impl IntoElement {
         .child(value.to_string())
 }
 
+/// The counterpart of `count` for a project with nothing left open: a tick in
+/// the same small chip, so the sidebar keeps its alignment.
+pub fn done_badge(theme: Theme) -> impl IntoElement {
+    div()
+        .min_w(px(18.))
+        .px_1()
+        .rounded_sm()
+        .bg(theme.hover)
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(icons::icon(Icon::Check, 11.0, theme.text_faint))
+}
+
 /// A compact filter/metric button: same height as the search field so sort,
 /// group and toggles line up with it.
 pub fn toggle_chip(theme: Theme, label: impl Into<String>, active: bool) -> impl IntoElement {

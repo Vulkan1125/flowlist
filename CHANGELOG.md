@@ -4,6 +4,9 @@
 
 ### Interface
 
+- A sidebar project with tasks but nothing left open now shows a tick in place
+  of its count. A brand-new project still shows 0, and adding any open task
+  brings the number back.
 - Removed the macOS close/miniaturize/zoom buttons from the app window.
 - Reduced the title bar to the app name. The app badge and the
   `Flowlist / view` suffix are gone.

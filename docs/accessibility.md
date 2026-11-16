@@ -83,6 +83,7 @@ the task unchanged.
 | × checklist step | Delete step | `⌫` in the checklist pane |
 | × tag chip | Remove tag | no direct key; remove it in the inspector Tag field |
 | × close inspector | Close inspector (i) | `i` or `⌘I` |
+| Project badge | `N open · M of T done`, or `All N done` | opens the project |
 | Calendar | Pick a due/defer date | icon opens it; arrows, `Enter`, `T`, `Delete`, `Esc` |
 
 ### Due and Defer date pickers
