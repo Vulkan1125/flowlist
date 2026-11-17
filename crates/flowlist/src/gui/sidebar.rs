@@ -1252,7 +1252,9 @@ impl FlowlistApp {
         let cursor = self.sidebar_cursor_is(&SidebarTarget::Custom(target_id.clone()));
         let hovered = self.row_hovered(&SidebarTarget::Custom(target_id.clone()));
         let hover_id = id.clone();
-        div()
+        let row_boxes = self.sidebar_row_boxes.clone();
+        let row_key = format!("custom:{}", row.id);
+        let row = div()
             .id(super::sid(format!("custom:{}", row.id)))
             .flex()
             .items_center()
@@ -1303,7 +1305,24 @@ impl FlowlistApp {
             )
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.sidebar_activate(SidebarTarget::Custom(id.clone()), cx)
-            }))
+            }));
+        // Saved perspectives are rows too, so probes can reach one by id
+        // instead of guessing at a y offset below the built-in views.
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    row_boxes.borrow_mut().insert(
+                        row_key.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .child(row)
     }
 
     fn container_rows(

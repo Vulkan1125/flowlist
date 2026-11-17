@@ -4,6 +4,12 @@
 
 ### Interface
 
+- The bottom View sheet is now a settings editor instead of a row of cycling
+  chips. Every condition has a labelled row that opens a menu of all its
+  values, so Status, Due, Defer, Group and Sort are one click each, and the
+  open menu takes `j`/`k`, arrows, Home/End, Enter and Esc. The sheet previews
+  how many tasks the view matches as it is edited, Clear filters drops every
+  condition, and conditions written by the CLI are named and kept on save.
 - The Forecast calendar now paints a faint checkerboard: alternating date
   cells carry the theme's text colour at 4% alpha, so the pattern follows the
   family and appearance and is contrast-checked against the date numbers.

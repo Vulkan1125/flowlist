@@ -92,6 +92,19 @@ does the same. When a typed project path does not exist, a Create project
 sheet asks first: `Enter` creates the project and files the task, `Esc` leaves
 the task unchanged.
 
+### The View sheet
+
+Each condition in a saved perspective is a labelled row that opens a menu
+listing every value, rather than a chip that cycles. Once a menu is open, `j`
+and `k` or the arrow keys move the highlight, Home and End jump to the ends,
+`Enter` chooses and `Esc` closes the menu without changing the form. `Tab`
+still moves between the sheet's text fields, `Esc` closes the sheet, and
+`Enter` saves it. The summary row says how many tasks the current conditions
+match and offers Clear filters; clearing is the only action that removes the
+conditions the GUI cannot show. A decision menu leaves each chosen value in
+view, so the selected project, status, due window, grouping and sort can be
+read without opening anything.
+
 ### Task rows and inspector
 
 Subtasks appear indented under their parent from the start in every list, and

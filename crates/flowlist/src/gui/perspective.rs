@@ -34,16 +34,6 @@ impl DueChoice {
         }
     }
 
-    pub fn next(self) -> Self {
-        match self {
-            DueChoice::Any => DueChoice::Overdue,
-            DueChoice::Overdue => DueChoice::Today,
-            DueChoice::Today => DueChoice::Next7Days,
-            DueChoice::Next7Days => DueChoice::NoDate,
-            DueChoice::NoDate => DueChoice::Any,
-        }
-    }
-
     pub fn window(self) -> Option<DueWindow> {
         match self {
             DueChoice::Any => None,
@@ -84,15 +74,6 @@ impl DeferChoice {
         }
     }
 
-    pub fn next(self) -> Self {
-        match self {
-            DeferChoice::Any => DeferChoice::Today,
-            DeferChoice::Today => DeferChoice::Next7Days,
-            DeferChoice::Next7Days => DeferChoice::NoDate,
-            DeferChoice::NoDate => DeferChoice::Any,
-        }
-    }
-
     pub fn window(self) -> Option<DueWindow> {
         match self {
             DeferChoice::Any => None,
@@ -112,13 +93,114 @@ impl DeferChoice {
     }
 }
 
-fn next_status(status: TaskStatus) -> TaskStatus {
+/// A control in the perspective editor. Each one owns a menu of every value,
+/// so choosing a project or a status is a jump rather than a cycle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ViewField {
+    Project,
+    Tag,
+    Status,
+    Due,
+    Defer,
+    Group,
+    Sort,
+}
+
+impl ViewField {
+    pub fn key(self) -> &'static str {
+        match self {
+            ViewField::Project => "project",
+            ViewField::Tag => "tag",
+            ViewField::Status => "status",
+            ViewField::Due => "due",
+            ViewField::Defer => "defer",
+            ViewField::Group => "group",
+            ViewField::Sort => "sort",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ViewField::Project => "Project",
+            ViewField::Tag => "Tag",
+            ViewField::Status => "Status",
+            ViewField::Due => "Due",
+            ViewField::Defer => "Defer",
+            ViewField::Group => "Group by",
+            ViewField::Sort => "Sort by",
+        }
+    }
+}
+
+/// One menu value offered by a [`ViewField`]. Project and tag choices carry
+/// the library id so the editor can label them with the current name.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ViewChoice {
+    Project(Option<ProjectId>),
+    Tag(Option<TagId>),
+    Status(TaskStatus),
+    Due(DueChoice),
+    Defer(DeferChoice),
+    Group(GroupBy),
+    Sort(SortBy),
+}
+
+impl ViewChoice {
+    /// A stable id fragment for probes and element ids.
+    pub fn slug(&self) -> String {
+        match self {
+            ViewChoice::Project(Some(id)) => id.to_string(),
+            ViewChoice::Tag(Some(id)) => id.to_string(),
+            ViewChoice::Project(None) | ViewChoice::Tag(None) => "any".to_string(),
+            ViewChoice::Status(status) => status_slug(*status).to_string(),
+            ViewChoice::Due(choice) => match choice {
+                DueChoice::Any => "any",
+                DueChoice::Overdue => "overdue",
+                DueChoice::Today => "today",
+                DueChoice::Next7Days => "next7",
+                DueChoice::NoDate => "none",
+            }
+            .to_string(),
+            ViewChoice::Defer(choice) => match choice {
+                DeferChoice::Any => "any",
+                DeferChoice::Today => "today",
+                DeferChoice::Next7Days => "next7",
+                DeferChoice::NoDate => "none",
+            }
+            .to_string(),
+            ViewChoice::Group(group) => match group {
+                GroupBy::None => "none",
+                GroupBy::Project => "project",
+                GroupBy::Folder => "folder",
+                GroupBy::Tag => "tag",
+                GroupBy::DueDate => "due",
+                GroupBy::DeferDate => "defer",
+                GroupBy::Flagged => "flagged",
+                GroupBy::Estimate => "estimate",
+            }
+            .to_string(),
+            ViewChoice::Sort(sort) => match sort {
+                SortBy::Manual => "manual",
+                SortBy::Due => "due",
+                SortBy::Defer => "defer",
+                SortBy::Name => "name",
+                SortBy::Flagged => "flagged",
+                SortBy::Estimate => "estimate",
+                SortBy::Created => "created",
+                SortBy::CompletedAt => "completed",
+            }
+            .to_string(),
+        }
+    }
+}
+
+fn status_slug(status: TaskStatus) -> &'static str {
     match status {
-        TaskStatus::Any => TaskStatus::Available,
-        TaskStatus::Available => TaskStatus::Blocked,
-        TaskStatus::Blocked => TaskStatus::Deferred,
-        TaskStatus::Deferred => TaskStatus::Completed,
-        TaskStatus::Completed => TaskStatus::Any,
+        TaskStatus::Any => "any",
+        TaskStatus::Available => "available",
+        TaskStatus::Blocked => "blocked",
+        TaskStatus::Deferred => "deferred",
+        TaskStatus::Completed => "completed",
     }
 }
 
@@ -132,19 +214,6 @@ fn status_label(status: TaskStatus) -> &'static str {
     }
 }
 
-fn next_group(group: GroupBy) -> GroupBy {
-    match group {
-        GroupBy::None => GroupBy::Project,
-        GroupBy::Project => GroupBy::Tag,
-        GroupBy::Tag => GroupBy::Folder,
-        GroupBy::Folder => GroupBy::DueDate,
-        GroupBy::DueDate => GroupBy::DeferDate,
-        GroupBy::DeferDate => GroupBy::Flagged,
-        GroupBy::Flagged => GroupBy::Estimate,
-        GroupBy::Estimate => GroupBy::None,
-    }
-}
-
 fn group_label(group: GroupBy) -> &'static str {
     match group {
         GroupBy::None => "None",
@@ -155,19 +224,6 @@ fn group_label(group: GroupBy) -> &'static str {
         GroupBy::DeferDate => "Defer",
         GroupBy::Flagged => "Flagged",
         GroupBy::Estimate => "Estimate",
-    }
-}
-
-fn next_sort(sort: SortBy) -> SortBy {
-    match sort {
-        SortBy::Manual => SortBy::Due,
-        SortBy::Due => SortBy::Defer,
-        SortBy::Defer => SortBy::Name,
-        SortBy::Name => SortBy::Flagged,
-        SortBy::Flagged => SortBy::Estimate,
-        SortBy::Estimate => SortBy::Created,
-        SortBy::Created => SortBy::CompletedAt,
-        SortBy::CompletedAt => SortBy::Manual,
     }
 }
 
@@ -342,26 +398,6 @@ impl PerspectiveForm {
 
     // ------------------------------------------------------------ controls
 
-    pub fn cycle_group(&mut self) {
-        self.group = next_group(self.group);
-    }
-
-    pub fn cycle_sort(&mut self) {
-        self.sort = next_sort(self.sort);
-    }
-
-    pub fn cycle_status(&mut self) {
-        self.status = next_status(self.status);
-    }
-
-    pub fn cycle_due(&mut self) {
-        self.due = self.due.next();
-    }
-
-    pub fn cycle_defer(&mut self) {
-        self.defer = self.defer.next();
-    }
-
     /// Picking a project means "not the inbox"; the same applies to tags.
     pub fn set_project(&mut self, id: Option<ProjectId>) {
         self.project = id;
@@ -395,6 +431,43 @@ impl PerspectiveForm {
 
     pub fn status_label(&self) -> &'static str {
         status_label(self.status)
+    }
+
+    /// True when the filter would narrow the library at all, so the editor can
+    /// offer Clear filters only when there is something to clear.
+    pub fn has_filters(&self) -> bool {
+        self.inbox_only
+            || self.flagged_only
+            || self.show_completed
+            || self.status != TaskStatus::Any
+            || self.due.window().is_some()
+            || self.defer.window().is_some()
+            || self.project.is_some()
+            || self.tag.is_some()
+            || !self.extra.is_empty()
+            || !self.extra_roots.is_empty()
+    }
+
+    /// Conditions the editor cannot show. They are kept on save, and named in
+    /// the sheet so an imported view never looks simpler than it is.
+    pub fn extra_condition_count(&self) -> usize {
+        self.extra.len() + self.extra_roots.len()
+    }
+
+    /// Drop every condition, including the CLI-only ones. This is an explicit
+    /// action in the editor, never an implicit side effect of saving.
+    pub fn clear_filters(&mut self) {
+        self.inbox_only = false;
+        self.flagged_only = false;
+        self.show_completed = false;
+        self.status = TaskStatus::Any;
+        self.due = DueChoice::Any;
+        self.defer = DeferChoice::Any;
+        self.project = None;
+        self.tag = None;
+        self.tag_children = true;
+        self.extra.clear();
+        self.extra_roots.clear();
     }
 }
 
@@ -473,6 +546,47 @@ mod tests {
             min_minutes: Some(30),
             max_minutes: None
         }));
+    }
+
+    #[test]
+    fn clear_filters_drops_known_and_unknown_conditions() {
+        let mut original = Perspective::new("Mixed");
+        original.filter = FilterNode::all_conditions(vec![
+            Condition::Flagged { value: true },
+            Condition::Status {
+                value: TaskStatus::Available,
+            },
+            Condition::Text {
+                value: "deep".to_string(),
+            },
+            Condition::Estimate {
+                min_minutes: Some(30),
+                max_minutes: None,
+            },
+        ]);
+        let mut form = PerspectiveForm::edit(&original);
+        assert!(form.has_filters());
+        assert_eq!(form.extra_condition_count(), 2);
+
+        form.clear_filters();
+        assert!(!form.has_filters());
+        assert_eq!(form.extra_condition_count(), 0);
+        assert_eq!(form.status, TaskStatus::Any);
+        // Layout choices are not filters, so clearing keeps them.
+        assert_eq!(form.group, original.group_by);
+        assert_eq!(form.sort, original.sort);
+        assert!(condition_set(&form.to_perspective().filter).is_empty());
+    }
+
+    #[test]
+    fn has_filters_ignores_layout_only_forms() {
+        let mut form = PerspectiveForm::new();
+        assert!(!form.has_filters());
+        form.group = GroupBy::Tag;
+        form.sort = SortBy::Name;
+        assert!(!form.has_filters());
+        form.defer = DeferChoice::Today;
+        assert!(form.has_filters());
     }
 
     #[test]

@@ -67,8 +67,9 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
 ```
 
 `sidebar_rows` maps each painted sidebar row (`project:<id>`, `folder:<id>`,
-`library`, …) to its window-space box, so a probe can drag a project onto a
-folder without hard-coding sidebar offsets. `sidebar_names` maps the same rows
+`custom:<id>`, `library`, …) to its window-space box, so a probe can drag a
+project onto a folder, or open a saved perspective's editor, without
+hard-coding sidebar offsets. `sidebar_names` maps the same rows
 to the box where the row's icon starts, plus `empty:<folder>` for an empty
 folder's note, which makes indentation assertable. `sidebar_drag_target` is
 the row a dragged project is currently over (`folder:<id>`, `library`, or
@@ -86,7 +87,16 @@ null) with `date_picker_step` (`calendar` or `clock`), `date_picker_unit`
 `date_picker_month`. `date_picker_boxes` maps the picker's controls to their
 boxes: `day:<YYYY-MM-DD>` for each calendar cell, `hour:<1-12>` or
 `minute:<0-55>` for the clock numbers, and `all-day`, `at-time`, `clock-all-day`,
-`today`, `clear`, `back` and `done` for the buttons. `theme_boxes` maps a
+`today`, `clear`, `back` and `done` for the buttons. `view_menu` names the open menu in the View sheet (`project`, `tag`, `status`,
+`due`, `defer`, `group` or `sort`, or null). `view_boxes` maps every View sheet
+control to its box: the seven select rows by name, `option:<field>:<slug>` for
+each open menu choice, and `clear` for Clear filters, so a probe can pick a
+value directly. `view_form` reports the sheet's current state
+(`name`, `inbox_only`, `flagged_only`, `show_completed`, `tag_children`,
+`status`, `due`, `defer`, `project`, `tag`, `group`, `sort`, `extra`,
+`matches`), where `extra` counts the conditions the GUI cannot show and
+`matches` is the live task count. A fresh sheet has no Clear filters control,
+so poll for `clear` only after a condition is set. `theme_boxes` maps a
 Settings sheet's controls to their boxes: `theme:<slug>` for each family
 swatch (`paper`, `mist`, `catppuccin`, `nord`, `gruvbox`, `dracula`,
 `tokyo-night`, `vesper`, `graphite`, `midnight`) and `appearance:<slug>` for

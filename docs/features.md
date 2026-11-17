@@ -189,8 +189,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Project dashboard with progress, status, review info and project type
 - [x] New project/folder/tag/perspective modals (`⇧⌘N`, `⌥⌘N`,
       `⌃⌘N`, `⇧⌘P`)
-- [x] Rich custom-perspective editor: conditions, project/tag pickers,
-      status, due/defer windows, grouping and sort, preserving unknown filters
+- [x] Rich custom-perspective editor laid out like settings: labelled filter
+      and layout rows that each open a menu of every value, a live match count,
+      an explicit Clear filters, and unknown CLI conditions kept and counted
 - [x] Rename project/folder/tag/perspective (`⌘R` or hover pencil);
       hover each sidebar row for its edit and delete buttons
 - [x] Right-click any sidebar row for open/rename/delete, project status,

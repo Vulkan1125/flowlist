@@ -358,6 +358,12 @@ pub struct FlowlistApp {
     /// Theme swatches and appearance chips in Settings, so a probe can click
     /// a family or light/dark without guessing at the grid.
     theme_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// The perspective editor's open select, the row the arrow keys point at,
+    /// and where each select painted so its menu can be a root overlay.
+    view_menu: Option<perspective::ViewField>,
+    view_menu_cursor: usize,
+    view_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    view_menu_scroll: ScrollHandle,
     /// How wide the title's slot painted on the last frame. A view name that
     /// does not fit there is left out entirely instead of showing a stub.
     title_space: Rc<Cell<Option<f32>>>,
@@ -525,6 +531,10 @@ impl FlowlistApp {
             date_picker_unit: ClockUnit::Hour,
             date_picker_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             theme_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            view_menu: None,
+            view_menu_cursor: 0,
+            view_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            view_menu_scroll: ScrollHandle::new(),
             title_space: Rc::new(Cell::new(None)),
             title_visible: Rc::new(Cell::new(true)),
             sidebar_menu: None,
@@ -2481,6 +2491,9 @@ impl FlowlistApp {
         }
         self.modal = Some(modal);
         self.modal_focus = 0;
+        self.view_menu = None;
+        self.view_menu_cursor = 0;
+        self.view_boxes.borrow_mut().clear();
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
         self.sort_menu_open = false;
         self.group_menu_open = false;
@@ -2506,6 +2519,8 @@ impl FlowlistApp {
         }
         self.modal = None;
         self.modal_focus = 0;
+        self.view_menu = None;
+        self.view_menu_cursor = 0;
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
         self.focus = FocusArea::Content;
         cx.notify();
@@ -2515,6 +2530,8 @@ impl FlowlistApp {
         let Some(modal) = self.modal.take() else {
             return;
         };
+        self.view_menu = None;
+        self.view_menu_cursor = 0;
         let result = self.apply_modal(&modal);
         match result {
             Ok(()) => {
@@ -2837,6 +2854,43 @@ impl FlowlistApp {
                     cx.notify();
                     return;
                 }
+            }
+            if let Some(field) = self.view_menu {
+                let choices = self.view_choices(field);
+                let count = choices.len();
+                match stroke.key.as_str() {
+                    "escape" => {
+                        self.view_menu = None;
+                        cx.notify();
+                    }
+                    "down" | "j" => {
+                        if count > 0 {
+                            self.view_menu_cursor = (self.view_menu_cursor + 1) % count;
+                        }
+                        cx.notify();
+                    }
+                    "up" | "k" => {
+                        if count > 0 {
+                            self.view_menu_cursor = (self.view_menu_cursor + count - 1) % count;
+                        }
+                        cx.notify();
+                    }
+                    "home" => {
+                        self.view_menu_cursor = 0;
+                        cx.notify();
+                    }
+                    "end" => {
+                        self.view_menu_cursor = count.saturating_sub(1);
+                        cx.notify();
+                    }
+                    "enter" | "return" => {
+                        if let Some(choice) = choices.get(self.view_menu_cursor).cloned() {
+                            self.choose_view_choice(choice, cx);
+                        }
+                    }
+                    _ => {}
+                }
+                return;
             }
             let paste = if mods.platform && stroke.key == "v" {
                 cx.read_from_clipboard().and_then(|item| item.text())
@@ -4426,6 +4480,37 @@ impl FlowlistApp {
         });
         state["date_picker_boxes"] = serde_json::json!(self.date_picker_boxes.borrow().clone());
         state["theme_boxes"] = serde_json::json!(self.theme_boxes.borrow().clone());
+        state["view_menu"] = serde_json::json!(self.view_menu.map(|field| field.key()));
+        state["view_boxes"] = serde_json::json!(self.view_boxes.borrow().clone());
+        state["view_form"] = serde_json::json!(match &self.modal {
+            Some(modals::Modal::Perspective { form }) => Some(serde_json::json!({
+                "name": form.name.text(),
+                "inbox_only": form.inbox_only,
+                "flagged_only": form.flagged_only,
+                "show_completed": form.show_completed,
+                "tag_children": form.tag_children,
+                "status": form.status_label(),
+                "due": form.due.label(),
+                "defer": form.defer.label(),
+                "project": form.project.as_ref().map(|id| id.to_string()),
+                "tag": form.tag.as_ref().map(|id| id.to_string()),
+                "group": form.group_label(),
+                "sort": form.sort_label(),
+                "extra": form.extra_condition_count(),
+                "matches": query::run(
+                    self.store.db(),
+                    &form.filter(),
+                    form.sort,
+                    form.group,
+                    form.show_completed,
+                    now(),
+                )
+                .iter()
+                .map(|group| group.rows.len())
+                .sum::<usize>(),
+            })),
+            _ => None,
+        });
         state["hide_overdue"] = serde_json::json!(self.hide_overdue);
         state["hide_overdue_anchor"] = serde_json::json!(anchor(self.hide_overdue_anchor.get()));
         state["empty_note"] = serde_json::json!(self.empty_note.borrow().clone());
@@ -5092,6 +5177,9 @@ impl Render for FlowlistApp {
         }
         if self.modal.is_some() {
             root = root.child(self.render_modal(window, cx));
+        }
+        if let Some(layer) = self.render_view_menu_layer(cx) {
+            root = root.child(layer);
         }
         // Written after the body renders, so measurements taken during this
         // frame (such as the title slot width) are current in the file.
