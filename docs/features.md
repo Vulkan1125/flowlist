@@ -47,6 +47,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Review
 - [x] Tags
 - [x] Completed
+- [x] Archive (finished and dropped projects in folder sections, with Reopen)
 - [x] Changed (recently edited and still open, configurable window)
 - [x] Attachments (open tasks with file paths)
 - [x] Nearby (location + radius)
@@ -69,6 +70,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] `--priority` on add/edit/list, `--kind`/`--icon` on projects and
       `--attach`/`--clear-attachments` on tasks and projects
 - [x] `--changed` and `--attachments` on `list`
+- [x] `--archive` on `list` for finished and dropped projects
 - [x] `checklist list|add|set|move|remove`
 - [x] `tag add|remove|set`, `tags`
 - [x] `project add|list|status|review|edit`

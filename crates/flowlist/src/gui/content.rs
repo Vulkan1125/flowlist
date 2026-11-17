@@ -83,6 +83,9 @@ impl FlowlistApp {
         let body = match &self.view {
             View::Builtin(BuiltinPerspective::Review) => self.render_review(cx).into_any_element(),
             View::Builtin(BuiltinPerspective::Nearby) => self.render_nearby(cx).into_any_element(),
+            View::Builtin(BuiltinPerspective::Archive) => {
+                self.render_archive(cx).into_any_element()
+            }
             _ => self.render_groups(&groups, cx).into_any_element(),
         };
         list = list.child(body);
@@ -542,11 +545,15 @@ impl FlowlistApp {
                     .child(title),
             )
         });
-        let count = self
-            .current_groups()
-            .into_iter()
-            .map(|group| group.rows.len())
-            .sum::<usize>();
+        let is_archive = matches!(self.view, View::Builtin(BuiltinPerspective::Archive));
+        let count = if is_archive {
+            query::archived_projects(self.store.db()).len()
+        } else {
+            self.current_groups()
+                .into_iter()
+                .map(|group| group.rows.len())
+                .sum::<usize>()
+        };
         let shows_completed =
             matches!(self.view, View::Project(_) | View::Folder(_) | View::Tag(_));
         let is_trash = matches!(self.view, View::Builtin(BuiltinPerspective::Trash));
@@ -606,7 +613,7 @@ impl FlowlistApp {
                                     )
                                 },
                             )
-                            .when(!is_trash, |this| {
+                            .when(!is_trash && !is_archive, |this| {
                                 this.child({
                                     let anchor = self.sort_anchor.clone();
                                     div()
@@ -818,7 +825,11 @@ impl FlowlistApp {
                     .gap_2()
                     .text_xs()
                     .text_color(theme.text_faint)
-                    .child(format!("{count} task(s)"))
+                    .child(if is_archive {
+                        format!("{count} project(s)")
+                    } else {
+                        format!("{count} task(s)")
+                    })
                     .when(self.store.can_undo(), |this| {
                         this.child(
                             div().child(
@@ -1098,6 +1109,210 @@ impl FlowlistApp {
             }
         }
         list
+    }
+
+    /// Record where an Archive row or its Reopen button painted, so a probe
+    /// can open or revive a finished project without pixel guessing.
+    fn archive_probe(
+        &self,
+        key: String,
+    ) -> impl Fn(Vec<gpui::Bounds<gpui::Pixels>>, &mut Window, &mut gpui::App) + 'static {
+        let boxes = self.archive_boxes.clone();
+        move |bounds, _, _| {
+            let Some(bounds) = bounds.first() else {
+                return;
+            };
+            boxes.borrow_mut().insert(
+                key.clone(),
+                [
+                    f32::from(bounds.origin.x),
+                    f32::from(bounds.origin.y),
+                    f32::from(bounds.size.width),
+                    f32::from(bounds.size.height),
+                ],
+            );
+        }
+    }
+
+    /// The Archive lists finished and dropped projects rather than tasks,
+    /// grouped by the folder they lived in. Each row opens the project, and
+    /// its Reopen button sets the project back to Active through the normal
+    /// command, so the change is undoable.
+    fn render_archive(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let db = self.store.db();
+        if query::archived_projects(db).is_empty() {
+            return self
+                .render_empty(
+                    "No finished projects",
+                    "Mark a project Done or Dropped and it will wait here.",
+                )
+                .into_any_element();
+        }
+        let mut list = div().flex().flex_col().w_full().py_1();
+        for (key, title, projects) in self.archive_sections() {
+            let open = self.is_open(&key, true);
+            let toggle_key = key.clone();
+            let header = div()
+                .id(super::sid(format!("archive-group:{key}")))
+                .flex()
+                .items_center()
+                .gap_2()
+                .px_4()
+                .pt_3()
+                .pb_1()
+                .border_b_1()
+                .border_color(theme.border_soft)
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover))
+                .child(icons::icon(
+                    if open {
+                        Icon::ChevronDown
+                    } else {
+                        Icon::ChevronRight
+                    },
+                    12.0,
+                    theme.text_faint,
+                ))
+                .child(
+                    div()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.text_dim)
+                        .child(title),
+                )
+                .child(widgets::count(theme, projects.len()))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.toggle_group_collapsed(toggle_key.clone(), cx)
+                }));
+            list = list.child(header);
+            if open {
+                for id in projects {
+                    list = list.child(self.archive_project_row(&id, cx));
+                }
+            }
+        }
+        list.into_any_element()
+    }
+
+    /// Finished projects grouped by their folder, in library order, with root
+    /// projects under "Library". Shared by the Archive surface and the test
+    /// state, so what a probe sees is what the pane paints.
+    pub(super) fn archive_sections(&self) -> Vec<(String, String, Vec<ProjectId>)> {
+        let db = self.store.db();
+        let mut groups: Vec<(String, String, Vec<ProjectId>)> = Vec::new();
+        for id in query::archived_projects(db) {
+            let Some(project) = db.projects.get(&id) else {
+                continue;
+            };
+            let (key, title) = match &project.folder {
+                Some(folder) => (format!("archive:folder:{folder}"), db.folder_path(folder)),
+                None => ("archive:root".to_string(), "Library".to_string()),
+            };
+            match groups
+                .iter_mut()
+                .find(|(candidate, _, _)| candidate == &key)
+            {
+                Some((_, _, projects)) => projects.push(id),
+                None => groups.push((key, title, vec![id])),
+            }
+        }
+        groups
+    }
+
+    fn archive_project_row(&self, id: &ProjectId, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let db = self.store.db();
+        let Some(project) = db.projects.get(id) else {
+            return div().into_any_element();
+        };
+        let (done, total) = db.project_progress(id);
+        let status = project.status;
+        let status_color = match status {
+            ProjectStatus::Done => theme.success,
+            _ => theme.text_faint,
+        };
+        let open_id = id.clone();
+        let reopen_id = id.clone();
+        let row_key = format!("project:{id}");
+        let reopen_key = format!("reopen:{id}");
+        div()
+            .on_children_prepainted(self.archive_probe(row_key))
+            .child(
+                div()
+                    .id(super::sid(format!("archive-project:{id}")))
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .h(px(38.))
+                    .mx_2()
+                    .px_3()
+                    .rounded_md()
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(widgets::icon_for_project(
+                        project.icon,
+                        15.0,
+                        theme.text_faint,
+                    ))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_sm()
+                            .text_color(theme.text)
+                            .child(project.name.clone()),
+                    )
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child(format!("{done} of {total} done")),
+                    )
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(status_color)
+                            .child(status.label()),
+                    )
+                    .child(
+                        div()
+                            .on_children_prepainted(self.archive_probe(reopen_key))
+                            .child(
+                                div()
+                                    .id(super::sid(format!("archive-reopen:{id}")))
+                                    .flex_shrink_0()
+                                    .px_2()
+                                    .py_0p5()
+                                    .rounded_md()
+                                    .text_xs()
+                                    .text_color(theme.accent)
+                                    .cursor_pointer()
+                                    .hover(|style| style.bg(theme.selection))
+                                    .flow_tip(self, cx, theme, "Reopen this project (undoable)")
+                                    .child("Reopen")
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        // Reopen sits inside the row's click
+                                        // target; keep it from also opening
+                                        // the project.
+                                        cx.stop_propagation();
+                                        this.execute(Command::SetProjectStatus {
+                                            id: reopen_id.clone(),
+                                            status: ProjectStatus::Active,
+                                        });
+                                        cx.notify();
+                                    })),
+                            ),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.open_view(View::Project(open_id.clone()), cx)
+                    })),
+            )
+            .into_any_element()
     }
 
     fn row_is_hidden(&self, id: &TaskId) -> bool {

@@ -118,6 +118,24 @@ pub fn custom(db: &Db, perspective: &Perspective, at: DateTime<Utc>) -> Vec<Grou
     )
 }
 
+/// Finished and dropped projects, in library order. The GUI's Archive lists
+/// these as projects, grouped by folder; the CLI and MCP still answer in
+/// tasks, one group per archived project.
+pub fn archived_projects(db: &Db) -> Vec<ProjectId> {
+    db.flatten_containers()
+        .into_iter()
+        .filter_map(|row| match row.container {
+            ContainerId::Project(id) => Some(id),
+            ContainerId::Folder(_) => None,
+        })
+        .filter(|id| {
+            db.projects
+                .get(id)
+                .is_some_and(|project| project.status.is_closed())
+        })
+        .collect()
+}
+
 /// The eight built-in perspectives.
 pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group> {
     match which {
@@ -214,6 +232,25 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 position: 0,
                 rows,
             }]
+        }
+        BuiltinPerspective::Archive => {
+            // A project index in the GUI; tasks here keep `list` and MCP
+            // useful for clients that only speak in rows.
+            let mut groups = Vec::new();
+            for (index, id) in archived_projects(db).into_iter().enumerate() {
+                let rows = db
+                    .project_outline(&id, true)
+                    .into_iter()
+                    .map(|task_row| row_for(db, &task_row.task, at))
+                    .collect();
+                groups.push(Group {
+                    key: format!("archive:{id}"),
+                    title: db.project_path(&id),
+                    position: index as i64,
+                    rows,
+                });
+            }
+            groups
         }
         BuiltinPerspective::Nearby => {
             let hits = nearby(db, at);

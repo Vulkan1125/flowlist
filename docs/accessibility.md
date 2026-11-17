@@ -168,6 +168,14 @@ and explains that its tasks move to Trash. Enter confirms, Esc cancels, and
 menu and `⌘⌫` / `dd` open the same kind of sheet, explaining that its projects
 move up a level.
 
+The Archive is a project surface rather than a task list. Finished and dropped
+projects sit in collapsible folder sections under `Library` or their folder
+path, each row opens that project, and a labelled Reopen button shows on every
+row. Reopen runs the ordinary project-status command, so `⌘Z` puts the project
+straight back in the Archive. The pane is reached from the sidebar like any
+other perspective, and when nothing is left it shows a calm “No finished
+projects” message.
+
 A sidebar row's pencil and × stay hidden until the row is hovered, even when
 the row is selected. While idle the name uses the whole row width; hovering
 makes room for the actions, and a long name fades at that edge instead of

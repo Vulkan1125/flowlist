@@ -76,6 +76,7 @@ fn glyph(perspective: BuiltinPerspective) -> Icon {
         BuiltinPerspective::Review => Icon::Review,
         BuiltinPerspective::Tags => Icon::Tags,
         BuiltinPerspective::Completed => Icon::Completed,
+        BuiltinPerspective::Archive => Icon::Archive,
         BuiltinPerspective::Changed => Icon::Clock,
         BuiltinPerspective::Attachments => Icon::Paperclip,
         BuiltinPerspective::Nearby => Icon::Nearby,

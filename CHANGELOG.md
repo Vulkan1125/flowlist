@@ -4,6 +4,11 @@
 
 ### Interface
 
+- Added an Archive to the sidebar, after Completed. Finished and dropped
+  projects wait in collapsible folder sections with a project count, each row
+  opens the project, and a Reopen button sets it back to Active through the
+  ordinary command, so Undo puts it straight back. An empty Archive shows a
+  calm “No finished projects” state.
 - The bottom View sheet is now a settings editor instead of a row of cycling
   chips. Every condition has a labelled row that opens a menu of all its
   values, so Status, Due, Defer, Group and Sort are one click each, and the

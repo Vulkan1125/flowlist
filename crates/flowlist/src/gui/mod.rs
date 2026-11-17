@@ -364,6 +364,9 @@ pub struct FlowlistApp {
     view_menu_cursor: usize,
     view_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     view_menu_scroll: ScrollHandle,
+    /// Archive project rows and their Reopen buttons, measured so a probe can
+    /// open a finished project or bring it back without pixel guessing.
+    archive_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// How wide the title's slot painted on the last frame. A view name that
     /// does not fit there is left out entirely instead of showing a stub.
     title_space: Rc<Cell<Option<f32>>>,
@@ -535,6 +538,7 @@ impl FlowlistApp {
             view_menu_cursor: 0,
             view_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             view_menu_scroll: ScrollHandle::new(),
+            archive_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             title_space: Rc::new(Cell::new(None)),
             title_visible: Rc::new(Cell::new(true)),
             sidebar_menu: None,
@@ -691,9 +695,10 @@ impl FlowlistApp {
         let db = self.store.db();
         let at = now();
         let mut groups = match &self.view {
-            // Review has its own dashboard; Nearby its own ranked list. The
-            // rest still need ids here so j/k, x and undo work on them.
-            View::Builtin(BuiltinPerspective::Review) => Vec::new(),
+            // Review and Archive have their own surfaces; Nearby its own
+            // ranked list. The rest still need ids here so j/k, x and undo
+            // work on them.
+            View::Builtin(BuiltinPerspective::Review | BuiltinPerspective::Archive) => Vec::new(),
             View::Builtin(BuiltinPerspective::Forecast) if self.forecast_date.is_some() => {
                 let date = self.forecast_date.expect("guard checked");
                 let ids = query::tasks_on_date(db, date, at);
@@ -4342,6 +4347,7 @@ impl FlowlistApp {
                     })
                     .count()
             }
+            BuiltinPerspective::Archive => query::archived_projects(db).len(),
             BuiltinPerspective::Nearby => query::nearby(db, at).len(),
             BuiltinPerspective::Changed => {
                 let days = db.settings.changed_days.max(1) as i64;
@@ -4466,6 +4472,29 @@ impl FlowlistApp {
         // Inserted after the macro: the full field list is already at the
         // json! recursion limit, so new debug fields go in one at a time.
         state["project_badges"] = serde_json::json!(project_badges);
+        state["archive_projects"] = serde_json::json!(
+            query::archived_projects(self.store.db())
+                .into_iter()
+                .filter_map(|id| self.store.db().projects.get(&id).map(
+                    |project| serde_json::json!({
+                        "id": id.to_string(),
+                        "name": project.name,
+                        "status": project.status.slug(),
+                    })
+                ))
+                .collect::<Vec<_>>()
+        );
+        state["archive_rows"] = serde_json::json!(self.archive_boxes.borrow().clone());
+        state["archive_groups"] = serde_json::json!(
+            self.archive_sections()
+                .into_iter()
+                .map(|(key, title, projects)| serde_json::json!({
+                    "key": key,
+                    "title": title,
+                    "projects": projects.iter().map(|id| id.to_string()).collect::<Vec<_>>(),
+                }))
+                .collect::<Vec<_>>()
+        );
         state["date_picker_time"] = serde_json::json!(
             self.date_picker_time
                 .map(|time| time.format("%H:%M").to_string())

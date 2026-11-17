@@ -1051,6 +1051,68 @@ fn changed_perspective_lists_recent_edits() {
 }
 
 #[test]
+fn archive_lists_only_finished_projects() {
+    use flowlist_core::ids::ProjectId;
+    use flowlist_core::model::{BuiltinPerspective, ProjectStatus};
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let create = |store: &mut Store, name: &str| -> ProjectId {
+        let outcome = store
+            .execute(Command::CreateProject(NewProject::new(name)))
+            .unwrap();
+        store.db().resolve_project(&outcome.created[0]).unwrap()
+    };
+
+    let active = create(&mut store, "Active");
+    let done = create(&mut store, "Done");
+    let dropped = create(&mut store, "Dropped");
+    for (id, status) in [
+        (done.clone(), ProjectStatus::Done),
+        (dropped.clone(), ProjectStatus::Dropped),
+    ] {
+        store
+            .execute(Command::SetProjectStatus { id, status })
+            .unwrap();
+    }
+    let mut task = NewTask::new("Finish the write-up");
+    task.project = Some(done.clone());
+    let task_id = store.execute(Command::CreateTask(task)).unwrap().created[0].clone();
+    let task_id = store.db().resolve_task(&task_id).unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![task_id.clone()],
+            completed: true,
+        })
+        .unwrap();
+
+    let archived = flowlist_core::query::archived_projects(store.db());
+    assert_eq!(archived, vec![done.clone(), dropped.clone()]);
+    assert!(!archived.contains(&active));
+
+    // The shared view answers in tasks, including the completed ones, so the
+    // CLI and MCP server can read the same archive.
+    let groups = flowlist_core::query::view(store.db(), BuiltinPerspective::Archive, Utc::now());
+    assert_eq!(groups.len(), 2);
+    assert_eq!(groups[0].title, "Done");
+    assert!(groups[0].rows.iter().any(|row| row.id == task_id));
+
+    // Reopening a project takes it out of the archive and is undoable.
+    store
+        .execute(Command::SetProjectStatus {
+            id: done.clone(),
+            status: ProjectStatus::Active,
+        })
+        .unwrap();
+    assert_eq!(
+        flowlist_core::query::archived_projects(store.db()),
+        vec![dropped]
+    );
+    store.undo().unwrap();
+    assert!(flowlist_core::query::archived_projects(store.db()).contains(&done));
+}
+
+#[test]
 fn history_labels_use_entity_names() {
     let (_dir, paths) = setup();
     let mut store = Store::open(paths).unwrap();

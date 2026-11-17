@@ -603,6 +603,7 @@ impl Server {
             "flagged" => query::view(db, BuiltinPerspective::Flagged, at),
             "tags" => query::view(db, BuiltinPerspective::Tags, at),
             "completed" => query::view(db, BuiltinPerspective::Completed, at),
+            "archive" => query::view(db, BuiltinPerspective::Archive, at),
             "nearby" => query::view(db, BuiltinPerspective::Nearby, at),
             "changed" => query::view(db, BuiltinPerspective::Changed, at),
             "attachments" => query::view(db, BuiltinPerspective::Attachments, at),

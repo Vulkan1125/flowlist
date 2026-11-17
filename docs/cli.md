@@ -70,6 +70,7 @@ Choose a view or filter:
 | `--completed` | completed tasks |
 | `--changed` | tasks edited within the Changed window |
 | `--attachments` | open tasks that have file attachments |
+| `--archive` | tasks in finished and dropped projects |
 | `--available` | only available tasks |
 | `-t/--tag <PATH>` | tasks with a tag |
 | `-p/--project <PATH>` | tasks in a project |

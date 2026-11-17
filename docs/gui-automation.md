@@ -81,7 +81,14 @@ on pixels.
 actually painted on the last frame, in order, with `id`, `title`, `depth` and
 `has_children`; hidden descendants are absent, so a probe can assert what a
 disclosure reveals. `task_disclosures` maps each parent id to its chevron box
-for clicking it. `date_picker` names the open date field (`due` or `defer`, or
+for clicking it. `archive_projects` lists the finished and dropped projects in
+library order with `id`, `name` and `status` (`done` or `dropped`);
+`archive_groups` is the Archive's painted sections in order, each with its
+`key` (`archive:root` or `archive:folder:<id>`), `title` (`Library` or the
+folder path) and the project ids it holds. `archive_rows` maps each Archive row
+and its Reopen button to a box (`project:<id>`, `reopen:<id>`), so a probe can
+open or revive a project without guessing at pixels. `date_picker` names the
+open date field (`due` or `defer`, or
 null) with `date_picker_step` (`calendar` or `clock`), `date_picker_unit`
 (`hour` or `minute`), `date_picker_time` as `HH:MM`, `date_picker_cursor` and
 `date_picker_month`. `date_picker_boxes` maps the picker's controls to their

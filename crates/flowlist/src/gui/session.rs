@@ -85,6 +85,7 @@ impl View {
             View::Builtin(BuiltinPerspective::Review) => "Keep projects honest",
             View::Builtin(BuiltinPerspective::Tags) => "Group work by context",
             View::Builtin(BuiltinPerspective::Completed) => "Recently finished work",
+            View::Builtin(BuiltinPerspective::Archive) => "Finished and dropped projects",
             View::Builtin(BuiltinPerspective::Changed) => "Recently edited work",
             View::Builtin(BuiltinPerspective::Attachments) => "Files attached to tasks",
             View::Builtin(BuiltinPerspective::Nearby) => "Contexts with a location",

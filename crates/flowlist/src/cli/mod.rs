@@ -172,6 +172,9 @@ pub struct ListArgs {
     /// List tasks that have file attachments.
     #[arg(long)]
     pub attachments: bool,
+    /// List the tasks of finished and dropped projects.
+    #[arg(long)]
+    pub archive: bool,
     /// low | medium | high.
     #[arg(long)]
     pub priority: Option<String>,
@@ -827,6 +830,8 @@ fn cmd_list(cli: &Cli, args: ListArgs, paint: &Paint) -> Result<()> {
         query::view(db, BuiltinPerspective::Changed, at)
     } else if args.attachments {
         query::view(db, BuiltinPerspective::Attachments, at)
+    } else if args.archive {
+        query::view(db, BuiltinPerspective::Archive, at)
     } else if args.forecast {
         query::view(db, BuiltinPerspective::Forecast, at)
     } else if args.inbox
