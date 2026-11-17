@@ -15,6 +15,7 @@ them, so the keyboard routes below are the primary way to reach them.
 | Control | Tooltip | Keyboard |
 | --- | --- | --- |
 | Add task | Add a task (⌃⌥Space) | `⌃⌥Space` from anywhere; `n` or `⌘N` in a capture view |
+| Back / forward arrows | Back (⌘[) / Forward (⌘]) | `⌘[` and `⌘]`, or the header arrows |
 | Undo arrow | Undo (⌘Z) | `⌘Z` or `u` |
 | Redo arrow | Redo (⇧⌘Z) | `⇧⌘Z` or `Ctrl-r` |
 | Question mark | Keyboard and mouse help (?) | `?` |
@@ -58,6 +59,7 @@ texture. The list below keeps the normal task keyboard routes.
 | Pencil on a project / folder / tag | Rename | `Ctrl-w h` then `r` |
 | × on a perspective / folder / tag / project | Delete | `Ctrl-w h` then `⌘⌫` or `dd` |
 | Chevron on a folder | Expand / collapse folder | `l` / `h` |
+| Section heading chevron | Collapse / expand a rail section | Settings (`⌘,`) hides or shows whole sections; the pointer folds one for the session |
 | Folder row | Opens the folder; a second click folds its tree | `Enter` on the row does the same |
 | Chevron on a tag | Expand / collapse tag | `l` / `h` |
 | Hide overdue chip (Today) | Show or hide overdue tasks in Today | click only |

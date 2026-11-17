@@ -77,6 +77,21 @@ null), so a split drag can check the highlight before releasing the mouse.
 `collapsed` lists the tree keys (`folder:<id>`, `tag:<id>`) the user has
 folded, so a probe can assert a folder row's open/close click without relying
 on pixels.
+`sidebar_sections` maps each collapsible heading (`priorities`, `library`,
+`saved`, `tags`) to its box, so a probe can fold a section by name.
+`sidebar_visible` lists the row keys the rail targets on this frame, after
+Settings visibility and section folds are applied, while `expanded` lists the
+tree keys explicitly opened and `sidebar_settings` mirrors the persisted
+`show_*`/`counts_*` choices. `settings_toggle_rows` maps every Sidebar control
+in the Settings sheet to a box, and `modal_sidebar` reports the sheet's
+unsaved copy, so a probe can click a toggle and check it before Save.
+`sidebar_counts` maps each count badge actually painted (`builtin:<slug>`,
+`priority:<slug>`, `folder:<id>`, `tag:<id>`) to its box; Today's badge is
+always present, which makes the quiet count defaults assertable.
+`history` is the view trail and `history_index` the current entry;
+`history_rows` maps the header arrows (`history-back`, `history-forward`) to
+boxes, and `can_go_back` / `can_go_forward` report whether a valid view lies
+that way.
 `content_rows` lists the task rows
 actually painted on the last frame, in order, with `id`, `title`, `depth` and
 `has_children`; hidden descendants are absent, so a probe can assert what a
@@ -86,8 +101,9 @@ library order with `id`, `name` and `status` (`done` or `dropped`);
 `archive_groups` is the Archive's painted sections in order, each with its
 `key` (`archive:root` or `archive:folder:<id>`), `title` (`Library` or the
 folder path) and the project ids it holds. `archive_rows` maps each Archive row
-and its Reopen button to a box (`project:<id>`, `reopen:<id>`), so a probe can
-open or revive a project without guessing at pixels. `date_picker` names the
+and its Reopen and Delete buttons to a box (`project:<id>`, `reopen:<id>`,
+`delete:<id>`), so a probe can open, revive or remove a project without
+guessing at pixels. `date_picker` names the
 open date field (`due` or `defer`, or
 null) with `date_picker_step` (`calendar` or `clock`), `date_picker_unit`
 (`hour` or `minute`), `date_picker_time` as `HH:MM`, `date_picker_cursor` and
@@ -155,9 +171,10 @@ The offsets are:
 | Target | Offset from the window's top-left |
 | --- | --- |
 | `＋ Project` | `(35, height − 77)` |
-| saved-perspective pencil | `(186, 558)` |
 
-If the sidebar layout changes, update those two rows. The script fails loudly
+If the sidebar footer layout changes, update that row. The saved-perspective
+pencil is no longer a fixed offset: the smoke test reads the row's live box
+from `sidebar_rows` and clicks near its right edge. The script fails loudly
 rather than pretending the flow worked. When GPUI gains an accessibility API,
 these clicks can be replaced by named actions without changing the assertions.
 
@@ -173,6 +190,20 @@ these clicks can be replaced by named actions without changing the assertions.
   server to move it, which keeps absolute clicks reliable when macOS restores
   a window partly off screen.
 - Both are compiled into the temporary directory when the smoke test runs.
+
+## Probes
+
+Two focused probes use the test-state boxes above and run against a temporary
+library:
+
+- `scripts/gui/archive-probe.sh` checks Archive grouping, Reopen, Delete with
+  its confirmation sheet, Undo, row opening and the empty state.
+- `scripts/gui/sidebar-probe.sh` checks folded-on-launch folders, section
+  headings, title-bar history, Settings visibility and count choices, and
+  that those choices survive a relaunch.
+
+Both build the release binary first (`cargo build --release`) and compile the
+Swift helpers themselves.
 
 Dropdown menus close on mouse-up, not mouse-down: closing on mouse-down
 removes the menu before GPUI delivers the click to the item under the pointer.

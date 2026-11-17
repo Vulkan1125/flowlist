@@ -177,6 +177,7 @@ pub struct SettingsPatch {
     pub nearby_radius_km: Option<f64>,
     pub trash_retention_days: Option<u32>,
     pub changed_days: Option<u32>,
+    pub sidebar: Option<crate::model::SidebarOptions>,
 }
 
 #[derive(Clone, Debug)]
@@ -1388,6 +1389,9 @@ impl Command {
                 }
                 if let Some(value) = patch.changed_days {
                     settings.changed_days = value.clamp(1, 3650);
+                }
+                if let Some(sidebar) = patch.sidebar {
+                    settings.sidebar = sidebar;
                 }
                 db.touch();
             }

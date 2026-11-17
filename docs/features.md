@@ -47,7 +47,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Review
 - [x] Tags
 - [x] Completed
-- [x] Archive (finished and dropped projects in folder sections, with Reopen)
+- [x] Archive (finished and dropped projects in folder sections, with Reopen
+      and a guarded Delete that Undo can restore)
 - [x] Changed (recently edited and still open, configurable window)
 - [x] Attachments (open tasks with file paths)
 - [x] Nearby (location + radius)
@@ -108,6 +109,11 @@ working domain and GUI. This page tracks what is implemented and verified.
       and optional inspector. The macOS traffic lights are hidden; the
       header shows the app name, a search field and an **Add task** button with
       a plus icon, which focuses capture from any view.
+- [x] Back and forward arrows sit beside the app name in the title bar and
+      walk the views the window came through (`⌘[` / `⌘]`). Going from the
+      Archive to a project and pressing back returns to the Archive; a new
+      view drops the forward trail, and a vanished project is skipped instead
+      of leaving a dead arrow. The arrows dim at the ends of the history.
 - [x] Content header layout: the view title and Sort/Group/Filter chips share
       one row, while the subtitle sits on its own row. A view name that cannot
       fit beside the controls is omitted instead of clipped. Search lives in
@@ -124,10 +130,17 @@ working domain and GUI. This page tracks what is implemented and verified.
       project keeps its 0 until it has a task.
 - [x] Sidebar folders indent what they contain: subfolders and projects step
       right once per nesting level, and an empty folder shows “Empty” aligned
-      with the names. Root-level projects keep their usual position. Clicking
-      a folder row opens it and unfolds its tree; clicking the same open
-      folder again folds the tree without leaving the folder view, and a third
-      click unfolds it. The chevron still toggles the tree on its own.
+      with the names. Root-level projects keep their usual position. Folders
+      launch folded, so a fresh window is quiet; clicking a folder row opens
+      it and unfolds its tree, clicking the same open folder again folds the
+      tree without leaving the folder view, and a third click unfolds it. The
+      chevron keeps toggling just the tree.
+- [x] Rail sections fold from their headings. Perspectives stay as the fixed
+      backbone, while Priorities, Library, Saved and Tags collapse without
+      touching the view. The heading's chevron sits at the right edge and
+      only appears while the pointer is on that heading, so a resting rail
+      reads as calm labels. Keyboard focus and Settings both respect a folded
+      or hidden section.
 - [x] Forecast month calendar above the list: Monday-first grid, previous /
       Today / next controls and an accent bar under dates with a task. A wide
       pane shows two consecutive months side by side so the grid keeps
@@ -208,7 +221,12 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Project status management (active/on hold/done/dropped)
 - [x] Import modal (JSON or TaskPaper, merge or replace)
 - [x] TaskPaper clipboard export (`⇧⌘E`)
-- [x] Settings and tag location modals
+- [x] Settings and tag location modals. Settings includes a Sidebar group
+      that chooses which rail sections appear and which ones carry count
+      badges. The quiet default shows every section but only numbers the
+      Library (and Today, which always carries its day count), so a one-task
+      library does not look busy. The choice is library-wide and survives a
+      relaunch.
 - [x] Session persistence: view, selection, inspector, sort, grouping,
       per-view options, per-view priority filter, First Available, theme,
       follow-system, vim mode and window size

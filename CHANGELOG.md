@@ -4,6 +4,22 @@
 
 ### Interface
 
+- The title bar now has back and forward arrows beside the app name, with
+  `⌘[` and `⌘]` as their keyboard routes. They walk the views the window
+  came through, so Archive → project → back returns to the Archive; a new view
+  drops the forward trail and deleted projects are skipped.
+- Rail sections are calmer. Folders start folded on every launch, Priorities,
+  Library, Saved and Tags fold from their headings, and a section's chevron
+  waits at the right edge until the pointer rests on that heading.
+  Perspectives stay fixed as the backbone.
+- Settings has a Sidebar group that chooses which rail sections appear and
+  which carry count badges. Counts default quiet outside the Library, while
+  Today always keeps its day count. The choice is saved with the library.
+- Archive rows can now be deleted, not just reopened. Delete asks in the usual
+  confirmation sheet and runs through the normal command layer, so Undo
+  restores the project and its folder group.
+- The Settings sheet puts the Sidebar controls with Appearance so the new
+  choices are visible without scrolling past the numeric defaults.
 - Added an Archive to the sidebar, after Completed. Finished and dropped
   projects wait in collapsible folder sections with a project count, each row
   opens the project, and a Reopen button sets it back to Active through the

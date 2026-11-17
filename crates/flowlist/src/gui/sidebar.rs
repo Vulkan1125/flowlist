@@ -24,6 +24,21 @@ pub(super) enum SidebarTarget {
     Priority(Priority),
 }
 
+impl SidebarTarget {
+    /// Stable identifier for the row, used by the right-click menu and the
+    /// GUI test-state file.
+    pub(super) fn key(&self) -> String {
+        match self {
+            SidebarTarget::Builtin(perspective) => format!("builtin:{}", perspective.slug()),
+            SidebarTarget::Custom(id) => format!("custom:{id}"),
+            SidebarTarget::Folder(id) => format!("folder:{id}"),
+            SidebarTarget::Project(id) => format!("project:{id}"),
+            SidebarTarget::Tag(id) => format!("tag:{id}"),
+            SidebarTarget::Priority(priority) => format!("priority:{}", priority.slug()),
+        }
+    }
+}
+
 /// What a project's sidebar badge shows. A project with work in it but
 /// nothing left open has earned a tick; a brand-new project keeps its 0 so the
 /// row still reports how many tasks are waiting.
@@ -55,14 +70,7 @@ impl SidebarMenu {
     /// Stable identifier for the row the menu belongs to, used by the GUI
     /// test-state file.
     pub(super) fn key(&self) -> String {
-        match &self.target {
-            SidebarTarget::Builtin(perspective) => format!("builtin:{}", perspective.slug()),
-            SidebarTarget::Custom(id) => format!("custom:{id}"),
-            SidebarTarget::Folder(id) => format!("folder:{id}"),
-            SidebarTarget::Project(id) => format!("project:{id}"),
-            SidebarTarget::Tag(id) => format!("tag:{id}"),
-            SidebarTarget::Priority(priority) => format!("priority:{}", priority.slug()),
-        }
+        self.target.key()
     }
 }
 
@@ -110,6 +118,47 @@ impl FlowlistApp {
     /// row is nested.
     fn measured(&self, key: String, element: impl IntoElement) -> impl IntoElement {
         let boxes = self.sidebar_name_boxes.clone();
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        key.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .child(element)
+    }
+
+    /// Wrap a whole row so its click target is recorded for GUI probes, not
+    /// just the icon slot that `measured` records.
+    fn row_box(&self, key: String, element: impl IntoElement) -> impl IntoElement {
+        let boxes = self.sidebar_row_boxes.clone();
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        key.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .child(element)
+    }
+
+    /// Wrap a count badge so the test state can report which rows show numbers.
+    fn count_box(&self, key: String, element: impl IntoElement) -> impl IntoElement {
+        let boxes = self.sidebar_count_boxes.clone();
         div()
             .on_children_prepainted(move |bounds, _, _| {
                 if let Some(bounds) = bounds.first() {
@@ -305,18 +354,30 @@ impl FlowlistApp {
 
     pub(super) fn sidebar_targets(&self) -> Vec<SidebarTarget> {
         let db = self.store.db();
+        let options = &db.settings.sidebar;
         let mut out = Vec::new();
-        for perspective in BuiltinPerspective::ALL {
-            out.push(SidebarTarget::Builtin(perspective));
+        if options.show_perspectives {
+            for perspective in BuiltinPerspective::ALL {
+                out.push(SidebarTarget::Builtin(perspective));
+            }
         }
-        for priority in Priority::ALL {
-            out.push(SidebarTarget::Priority(priority));
+        if options.show_priorities && self.is_open("section:priorities", true) {
+            for priority in Priority::ALL {
+                out.push(SidebarTarget::Priority(priority));
+            }
         }
-        for perspective in db.perspectives.values() {
-            out.push(SidebarTarget::Custom(perspective.id.clone()));
+        if options.show_saved && !db.perspectives.is_empty() && self.is_open("section:saved", true)
+        {
+            for perspective in db.perspectives.values() {
+                out.push(SidebarTarget::Custom(perspective.id.clone()));
+            }
         }
-        self.container_targets(None, &mut out);
-        self.tag_targets(None, &mut out);
+        if options.show_library && self.is_open("section:library", true) {
+            self.container_targets(None, &mut out);
+        }
+        if options.show_tags && self.is_open("section:tags", true) {
+            self.tag_targets(None, &mut out);
+        }
         out
     }
 
@@ -325,7 +386,7 @@ impl FlowlistApp {
         for container in db.container_children(parent) {
             match container {
                 ContainerId::Folder(id) => {
-                    let open = self.is_open(&format!("folder:{id}"), true);
+                    let open = self.is_open(&format!("folder:{id}"), false);
                     let child_parent = id.clone();
                     out.push(SidebarTarget::Folder(id.clone()));
                     if open {
@@ -440,8 +501,8 @@ impl FlowlistApp {
             return;
         }
         self.sidebar_activate(SidebarTarget::Folder(id), cx);
-        if !self.is_open(&key, true) {
-            self.toggle_expanded(key, true, cx);
+        if !self.is_open(&key, false) {
+            self.toggle_expanded(key, false, cx);
         }
     }
 
@@ -464,10 +525,10 @@ impl FlowlistApp {
             ),
             _ => return false,
         };
-        let open = self.is_open(&key, true);
+        let open = self.is_open(&key, false);
         if expand {
             if !open && has_children {
-                self.toggle_open(key, true);
+                self.toggle_open(key, false);
                 cx.notify();
                 return true;
             }
@@ -949,6 +1010,7 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
+        let options = self.store.db().settings.sidebar.clone();
         // A project drag owns the sidebar highlight only while it is live.
         if !cx.has_active_drag() {
             self.sidebar_drag_target = None;
@@ -981,14 +1043,22 @@ impl FlowlistApp {
                 this.set_drag_target(None, cx);
             }));
 
-        rail = rail.child(widgets::section_label(theme, "PERSPECTIVES"));
-        for perspective in BuiltinPerspective::ALL {
-            rail = rail.child(self.perspective_row(perspective, cx));
+        if options.show_perspectives {
+            // Perspectives are the rail's backbone: they stay put and only
+            // their rows can be hidden from Settings.
+            rail = rail.child(widgets::section_label(theme, "PERSPECTIVES"));
+            for perspective in BuiltinPerspective::ALL {
+                rail = rail.child(self.perspective_row(perspective, cx));
+            }
         }
 
-        rail = rail.child(widgets::section_label(theme, "PRIORITIES"));
-        for priority in Priority::ALL {
-            rail = rail.child(self.priority_row(priority, cx));
+        if options.show_priorities {
+            rail = rail.child(self.sidebar_section("priorities", "PRIORITIES", cx));
+            if self.is_open("section:priorities", true) {
+                for priority in Priority::ALL {
+                    rail = rail.child(self.priority_row(priority, cx));
+                }
+            }
         }
 
         let mut lower = div()
@@ -1024,61 +1094,71 @@ impl FlowlistApp {
                 name: perspective.name.clone(),
             })
             .collect();
-        if !custom.is_empty() {
-            lower = lower.child(widgets::section_label(theme, "SAVED"));
-            for row in custom {
-                lower = lower.child(self.custom_perspective_row(row, cx));
+        if options.show_saved && !custom.is_empty() {
+            lower = lower.child(self.sidebar_section("saved", "SAVED", cx));
+            if self.is_open("section:saved", true) {
+                for row in custom {
+                    lower = lower.child(self.custom_perspective_row(row, cx));
+                }
             }
         }
 
         // Dropping a project on the heading takes it out of its folder.
-        let library_active = self.sidebar_drag_target.as_deref() == Some("library");
-        let library_boxes = self.sidebar_row_boxes.clone();
-        lower = lower.child(
-            div()
-                .on_children_prepainted(move |bounds, _, _| {
-                    if let Some(bounds) = bounds.first() {
-                        library_boxes.borrow_mut().insert(
-                            "library".to_string(),
-                            [
-                                f32::from(bounds.origin.x),
-                                f32::from(bounds.origin.y),
-                                f32::from(bounds.size.width),
-                                f32::from(bounds.size.height),
-                            ],
-                        );
-                    }
-                })
-                .on_drag_move::<DragProject>(cx.listener(
-                    |this, event: &DragMoveEvent<DragProject>, _, cx| {
-                        if event.bounds.contains(&event.event.position) {
-                            this.set_drag_target(Some("library".to_string()), cx);
-                        }
-                    },
-                ))
-                .on_drop::<DragProject>(cx.listener(|this, payload: &DragProject, _, cx| {
-                    this.drop_on_library(payload, cx)
-                }))
-                .child(
-                    div()
-                        .id("sidebar-library")
-                        .when(library_active, |this| this.rounded_md().bg(theme.selection))
-                        .child(widgets::section_label(theme, "LIBRARY")),
-                ),
-        );
-        lower = lower.children(self.container_rows(None, 0, cx));
-
-        lower = lower.child(widgets::section_label(theme, "TAGS"));
-        lower = lower.children(self.tag_rows(None, cx));
-        if self.store.db().tags.is_empty() {
+        if options.show_library {
+            let library_active = self.sidebar_drag_target.as_deref() == Some("library");
+            let library_boxes = self.sidebar_row_boxes.clone();
             lower = lower.child(
                 div()
-                    .px_3()
-                    .pb_2()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child("No tags yet — add one with #tag in quick entry."),
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            library_boxes.borrow_mut().insert(
+                                "library".to_string(),
+                                [
+                                    f32::from(bounds.origin.x),
+                                    f32::from(bounds.origin.y),
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
+                                ],
+                            );
+                        }
+                    })
+                    .on_drag_move::<DragProject>(cx.listener(
+                        |this, event: &DragMoveEvent<DragProject>, _, cx| {
+                            if event.bounds.contains(&event.event.position) {
+                                this.set_drag_target(Some("library".to_string()), cx);
+                            }
+                        },
+                    ))
+                    .on_drop::<DragProject>(cx.listener(|this, payload: &DragProject, _, cx| {
+                        this.drop_on_library(payload, cx)
+                    }))
+                    .child(
+                        div()
+                            .id("sidebar-library")
+                            .when(library_active, |this| this.rounded_md().bg(theme.selection))
+                            .child(self.sidebar_section("library", "LIBRARY", cx)),
+                    ),
             );
+            if self.is_open("section:library", true) {
+                lower = lower.children(self.container_rows(None, 0, cx));
+            }
+        }
+
+        if options.show_tags {
+            lower = lower.child(self.sidebar_section("tags", "TAGS", cx));
+            if self.is_open("section:tags", true) {
+                lower = lower.children(self.tag_rows(None, cx));
+                if self.store.db().tags.is_empty() {
+                    lower = lower.child(
+                        div()
+                            .px_3()
+                            .pb_2()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child("No tags yet — add one with #tag in quick entry."),
+                    );
+                }
+            }
         }
 
         rail = rail.child(lower);
@@ -1144,6 +1224,87 @@ impl FlowlistApp {
         )
     }
 
+    /// A collapsible section heading in the rail. Sections default open and
+    /// remember their fold in the same in-session state as folders and groups.
+    fn sidebar_section(
+        &self,
+        key: &'static str,
+        label: &'static str,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let state_key = format!("section:{key}");
+        let open = self.is_open(&state_key, true);
+        let toggle_key = state_key.clone();
+        let boxes = self.sidebar_section_boxes.clone();
+        let box_key = key.to_string();
+        let group = format!("sidebar-section:{key}");
+        let chevron_group = group.clone();
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        box_key.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .child(
+                div()
+                    .id(super::sid(format!("sidebar-section:{key}")))
+                    .group(group)
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .mx_2()
+                    .px_1()
+                    .pt_3()
+                    .pb_1()
+                    .rounded_md()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(theme.text_faint)
+                    .cursor_pointer()
+                    .hover(|style| style.text_color(theme.text_dim))
+                    .flow_tip(
+                        self,
+                        cx,
+                        theme,
+                        if open {
+                            format!("Collapse {label}")
+                        } else {
+                            format!("Expand {label}")
+                        },
+                    )
+                    .child(label)
+                    .child(div().flex_1())
+                    // The disclosure stays out of the way until the pointer is
+                    // on the heading, so a resting rail reads as labels only.
+                    .child(
+                        div()
+                            .opacity(0.0)
+                            .group_hover(chevron_group, |style| style.opacity(1.0))
+                            .child(icons::icon(
+                                if open {
+                                    Icon::ChevronDown
+                                } else {
+                                    Icon::ChevronRight
+                                },
+                                11.0,
+                                theme.text_faint,
+                            )),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.toggle_expanded(toggle_key.clone(), true, cx)
+                    })),
+            )
+    }
+
     fn perspective_row(
         &self,
         perspective: BuiltinPerspective,
@@ -1152,9 +1313,13 @@ impl FlowlistApp {
         let theme = self.theme;
         let active = self.view == View::Builtin(perspective);
         let count = self.perspective_count(perspective);
+        // Today is the daily landing view, so its number stays visible even
+        // when the quieter default hides the other perspective counts.
+        let show_count = self.store.db().settings.sidebar.counts_perspectives
+            || perspective == BuiltinPerspective::Today;
         let icon_color = if active { theme.accent } else { theme.text_dim };
         let cursor = self.sidebar_cursor_is(&SidebarTarget::Builtin(perspective));
-        div()
+        let row = div()
             .id(super::sid(format!("perspective:{}", perspective.slug())))
             .flex()
             .items_center()
@@ -1177,7 +1342,12 @@ impl FlowlistApp {
                     .child(icons::icon(glyph(perspective), 15.0, icon_color)),
             )
             .child(div().flex_1().min_w_0().child(perspective.label()))
-            .when(count > 0, |this| this.child(widgets::count(theme, count)))
+            .when(show_count && count > 0, |this| {
+                this.child(self.count_box(
+                    format!("builtin:{}", perspective.slug()),
+                    widgets::count(theme, count),
+                ))
+            })
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
@@ -1186,7 +1356,8 @@ impl FlowlistApp {
             )
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.sidebar_activate(SidebarTarget::Builtin(perspective), cx)
-            }))
+            }));
+        self.row_box(format!("builtin:{}", perspective.slug()), row)
     }
 
     fn priority_row(&self, priority: Priority, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1199,10 +1370,11 @@ impl FlowlistApp {
             .values()
             .filter(|task| !task.completed && !task.is_trashed() && task.priority == Some(priority))
             .count();
+        let show_count = self.store.db().settings.sidebar.counts_priorities;
         let color = priority_color(theme, priority);
         let icon_color = if active { theme.accent } else { color };
         let cursor = self.sidebar_cursor_is(&SidebarTarget::Priority(priority));
-        div()
+        let row = div()
             .id(super::sid(format!("priority:{}", priority.slug())))
             .flex()
             .items_center()
@@ -1225,7 +1397,12 @@ impl FlowlistApp {
                     .child(icons::icon(Icon::Flagged, 14.0, icon_color)),
             )
             .child(div().flex_1().min_w_0().child(priority.label()))
-            .when(count > 0, |this| this.child(widgets::count(theme, count)))
+            .when(show_count && count > 0, |this| {
+                this.child(self.count_box(
+                    format!("priority:{}", priority.slug()),
+                    widgets::count(theme, count),
+                ))
+            })
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
@@ -1234,7 +1411,8 @@ impl FlowlistApp {
             )
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.sidebar_activate(SidebarTarget::Priority(priority), cx)
-            }))
+            }));
+        self.row_box(format!("priority:{}", priority.slug()), row)
     }
 
     fn custom_perspective_row(
@@ -1333,13 +1511,16 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let db = self.store.db();
+        let show_counts = db.settings.sidebar.counts_library;
         let children = db.container_children(parent.clone()).to_vec();
         let mut rows = Vec::new();
         for container in children {
             match container {
                 ContainerId::Folder(id) => {
                     let key = format!("folder:{id}");
-                    let open = self.is_open(&key, true);
+                    // Folders start folded on every launch; opening one is a
+                    // deliberate act and the in-session tree remembers it.
+                    let open = self.is_open(&key, false);
                     let name = db.folder_path(&id);
                     let count = db.folder_open_project_count(&id);
                     let view_id = id.clone();
@@ -1411,7 +1592,7 @@ impl FlowlistApp {
                                 ))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
-                                    this.toggle_expanded(toggle_key.clone(), true, cx);
+                                    this.toggle_expanded(toggle_key.clone(), false, cx);
                                 })),
                         )
                         .child(
@@ -1443,8 +1624,11 @@ impl FlowlistApp {
                                 cx,
                             ))
                         })
-                        .when(count > 0, |this| {
-                            this.child(widgets::count(self.theme, count))
+                        .when(show_counts && count > 0, |this| {
+                            this.child(self.count_box(
+                                format!("folder:{id}"),
+                                widgets::count(self.theme, count),
+                            ))
                         })
                         .on_mouse_down(
                             MouseButton::Right,
@@ -1578,25 +1762,30 @@ impl FlowlistApp {
                                 cx,
                             ))
                         })
-                        .child({
-                            let tip = match project_badge(open, total) {
-                                ProjectBadge::Done => format!("All {total} done"),
-                                ProjectBadge::Count(_) => {
-                                    format!("{open} open · {done} of {total} done")
-                                }
-                            };
-                            div()
-                                .id(super::sid(format!("project-count:{id}")))
-                                .flow_tip(self, cx, self.theme, tip)
-                                .child(match project_badge(open, total) {
-                                    ProjectBadge::Done => {
-                                        widgets::done_badge(self.theme).into_any_element()
-                                    }
-                                    ProjectBadge::Count(open) => {
-                                        widgets::count(self.theme, open).into_any_element()
-                                    }
+                        .when(
+                            show_counts || project_badge(open, total) == ProjectBadge::Done,
+                            |this| {
+                                this.child({
+                                    let tip = match project_badge(open, total) {
+                                        ProjectBadge::Done => format!("All {total} done"),
+                                        ProjectBadge::Count(_) => {
+                                            format!("{open} open · {done} of {total} done")
+                                        }
+                                    };
+                                    div()
+                                        .id(super::sid(format!("project-count:{id}")))
+                                        .flow_tip(self, cx, self.theme, tip)
+                                        .child(match project_badge(open, total) {
+                                            ProjectBadge::Done => {
+                                                widgets::done_badge(self.theme).into_any_element()
+                                            }
+                                            ProjectBadge::Count(open) => {
+                                                widgets::count(self.theme, open).into_any_element()
+                                            }
+                                        })
                                 })
-                        })
+                            },
+                        )
                         .on_drag(
                             DragProject::project(drag_id.clone(), project.name.clone()),
                             move |payload, position, window, cx| {
@@ -1677,6 +1866,7 @@ impl FlowlistApp {
 
     fn tag_rows(&self, parent: Option<TagId>, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let db = self.store.db();
+        let show_counts = db.settings.sidebar.counts_tags;
         let tags = match &parent {
             Some(tag) => db.tag_children(tag).to_vec(),
             None => db.tag_roots().to_vec(),
@@ -1810,8 +2000,10 @@ impl FlowlistApp {
                         cx,
                     ))
                 })
-                .when(usage > 0, |this| {
-                    this.child(widgets::count(self.theme, usage))
+                .when(show_counts && usage > 0, |this| {
+                    this.child(
+                        self.count_box(format!("tag:{tag}"), widgets::count(self.theme, usage)),
+                    )
                 })
                 .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
                     this.drop_on_tag(drop_id.clone(), payload, cx)

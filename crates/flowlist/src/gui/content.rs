@@ -1233,8 +1233,10 @@ impl FlowlistApp {
         };
         let open_id = id.clone();
         let reopen_id = id.clone();
+        let delete_id = id.clone();
         let row_key = format!("project:{id}");
         let reopen_key = format!("reopen:{id}");
+        let delete_key = format!("delete:{id}");
         div()
             .on_children_prepainted(self.archive_probe(row_key))
             .child(
@@ -1305,6 +1307,40 @@ impl FlowlistApp {
                                             status: ProjectStatus::Active,
                                         });
                                         cx.notify();
+                                    })),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .on_children_prepainted(self.archive_probe(delete_key))
+                            .child(
+                                div()
+                                    .id(super::sid(format!("archive-delete:{id}")))
+                                    .flex_shrink_0()
+                                    .px_2()
+                                    .py_0p5()
+                                    .rounded_md()
+                                    .text_xs()
+                                    .text_color(theme.text_faint)
+                                    .cursor_pointer()
+                                    .hover(|style| style.text_color(theme.danger).bg(theme.hover))
+                                    .flow_tip(
+                                        self,
+                                        cx,
+                                        theme,
+                                        "Delete this project and its tasks (undoable)",
+                                    )
+                                    .child("Delete")
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        // Reopen and Delete sit inside the row's
+                                        // click target; keep them from also
+                                        // opening the project.
+                                        cx.stop_propagation();
+                                        let modal = super::modals::Modal::delete_project(
+                                            this,
+                                            delete_id.clone(),
+                                        );
+                                        this.open_modal(modal, cx);
                                     })),
                             ),
                     )

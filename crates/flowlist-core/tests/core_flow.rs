@@ -603,6 +603,38 @@ fn forecast_calendar_settings_are_clamped_and_persisted() {
 }
 
 #[test]
+fn sidebar_settings_are_quiet_by_default_and_persisted() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths.clone()).unwrap();
+
+    let defaults = store.db().settings.sidebar.clone();
+    assert!(defaults.show_perspectives && defaults.show_priorities && defaults.show_library);
+    assert!(defaults.show_saved && defaults.show_tags);
+    assert!(!defaults.counts_perspectives);
+    assert!(!defaults.counts_priorities);
+    assert!(defaults.counts_library);
+    assert!(!defaults.counts_tags);
+
+    // The rail can hide whole sections and choose which counts stay.
+    let mut quiet = defaults.clone();
+    quiet.show_priorities = false;
+    quiet.counts_library = false;
+    store
+        .execute(Command::UpdateSettings(
+            flowlist_core::command::SettingsPatch {
+                sidebar: Some(quiet.clone()),
+                ..Default::default()
+            },
+        ))
+        .unwrap();
+    assert_eq!(store.db().settings.sidebar, quiet);
+
+    // GUI, CLI and MCP share the value through the data file.
+    let reopened = Store::open(paths).unwrap();
+    assert_eq!(reopened.db().settings.sidebar, quiet);
+}
+
+#[test]
 fn tag_location_edit_is_undoable() {
     let (_dir, paths) = setup();
     let mut store = Store::open(paths).unwrap();

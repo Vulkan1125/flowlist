@@ -6,7 +6,7 @@ use gpui::{
 };
 
 use flowlist_core::ids::{FolderId, PerspectiveId, ProjectId, TaskId};
-use flowlist_core::model::{GroupBy, ProjectIcon, ProjectKind, SortBy, TaskStatus};
+use flowlist_core::model::{GroupBy, ProjectIcon, ProjectKind, SidebarOptions, SortBy, TaskStatus};
 use flowlist_core::query;
 use flowlist_core::time::now;
 
@@ -81,6 +81,7 @@ pub enum Modal {
         follow_system: bool,
         theme: ThemeKind,
         appearance: Appearance,
+        sidebar: SidebarOptions,
     },
     Location {
         lat: TextBuffer,
@@ -92,6 +93,37 @@ pub enum Modal {
         lon: TextBuffer,
     },
     Help,
+}
+
+/// Which sidebar preference a Settings toggle flips.
+#[derive(Clone, Copy, Debug)]
+enum SidebarFlag {
+    ShowPerspectives,
+    ShowPriorities,
+    ShowLibrary,
+    ShowSaved,
+    ShowTags,
+    CountsPerspectives,
+    CountsPriorities,
+    CountsLibrary,
+    CountsTags,
+}
+
+impl SidebarFlag {
+    fn toggle(self, sidebar: &mut SidebarOptions) {
+        let value = match self {
+            SidebarFlag::ShowPerspectives => &mut sidebar.show_perspectives,
+            SidebarFlag::ShowPriorities => &mut sidebar.show_priorities,
+            SidebarFlag::ShowLibrary => &mut sidebar.show_library,
+            SidebarFlag::ShowSaved => &mut sidebar.show_saved,
+            SidebarFlag::ShowTags => &mut sidebar.show_tags,
+            SidebarFlag::CountsPerspectives => &mut sidebar.counts_perspectives,
+            SidebarFlag::CountsPriorities => &mut sidebar.counts_priorities,
+            SidebarFlag::CountsLibrary => &mut sidebar.counts_library,
+            SidebarFlag::CountsTags => &mut sidebar.counts_tags,
+        };
+        *value = !*value;
+    }
 }
 
 impl Modal {
@@ -186,6 +218,7 @@ impl Modal {
             follow_system: app.follow_system,
             theme: app.theme.kind(),
             appearance: app.theme.appearance(),
+            sidebar: settings.sidebar.clone(),
         }
     }
 
@@ -493,6 +526,9 @@ impl FlowlistApp {
             // without scrolling on a normal window.
             if is_settings {
                 body = body.child(self.render_settings_controls(cx));
+                // The rail controls are visual, so they sit with Appearance
+                // instead of being buried under the numeric defaults.
+                body = body.child(self.render_sidebar_settings(cx));
             }
             if let Modal::CreateProject { path, .. } = modal {
                 body = body.child(
@@ -1567,6 +1603,168 @@ impl FlowlistApp {
                         "Take light or dark from macOS and keep the chosen family.",
                     )),
             )
+    }
+
+    fn render_sidebar_settings(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let Some(Modal::Settings { sidebar, .. }) = &self.modal else {
+            return div().into_any_element();
+        };
+        let sidebar = sidebar.clone();
+        let label = |text: &str| {
+            div()
+                .text_xs()
+                .text_color(theme.text_faint)
+                .child(text.to_string())
+        };
+        let toggle = |key: &'static str,
+                      text: &'static str,
+                      active: bool,
+                      flag: SidebarFlag,
+                      cx: &mut Context<Self>| {
+            self.sidebar_toggle(key, text, active, flag, cx)
+                .into_any_element()
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .pt_2()
+            .border_t_1()
+            .border_color(theme.border_soft)
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child("Sidebar"),
+            )
+            .child(label("Sections"))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_1()
+                    .child(toggle(
+                        "sidebar-show-perspectives",
+                        "Perspectives",
+                        sidebar.show_perspectives,
+                        SidebarFlag::ShowPerspectives,
+                        cx,
+                    ))
+                    .child(toggle(
+                        "sidebar-show-priorities",
+                        "Priorities",
+                        sidebar.show_priorities,
+                        SidebarFlag::ShowPriorities,
+                        cx,
+                    ))
+                    .child(toggle(
+                        "sidebar-show-library",
+                        "Library",
+                        sidebar.show_library,
+                        SidebarFlag::ShowLibrary,
+                        cx,
+                    ))
+                    .child(toggle(
+                        "sidebar-show-saved",
+                        "Saved",
+                        sidebar.show_saved,
+                        SidebarFlag::ShowSaved,
+                        cx,
+                    ))
+                    .child(toggle(
+                        "sidebar-show-tags",
+                        "Tags",
+                        sidebar.show_tags,
+                        SidebarFlag::ShowTags,
+                        cx,
+                    )),
+            )
+            .child(label("Counts"))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_1()
+                    .child(toggle(
+                        "sidebar-counts-perspectives",
+                        "Perspectives",
+                        sidebar.counts_perspectives,
+                        SidebarFlag::CountsPerspectives,
+                        cx,
+                    ))
+                    .child(toggle(
+                        "sidebar-counts-priorities",
+                        "Priorities",
+                        sidebar.counts_priorities,
+                        SidebarFlag::CountsPriorities,
+                        cx,
+                    ))
+                    .child(toggle(
+                        "sidebar-counts-library",
+                        "Library",
+                        sidebar.counts_library,
+                        SidebarFlag::CountsLibrary,
+                        cx,
+                    ))
+                    .child(toggle(
+                        "sidebar-counts-tags",
+                        "Tags",
+                        sidebar.counts_tags,
+                        SidebarFlag::CountsTags,
+                        cx,
+                    )),
+            )
+            .child(div().text_xs().text_color(theme.text_faint).child(
+                "Sections fold from their heading in the rail. Counts are quiet by default.",
+            ))
+            .into_any_element()
+    }
+
+    fn sidebar_toggle(
+        &self,
+        key: &'static str,
+        label: &'static str,
+        active: bool,
+        flag: SidebarFlag,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let boxes = self.settings_toggle_boxes.clone();
+        let box_key = key.to_string();
+        div()
+            .id(key)
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            boxes.borrow_mut().insert(
+                                box_key.clone(),
+                                [
+                                    f32::from(bounds.origin.x),
+                                    f32::from(bounds.origin.y),
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
+                                ],
+                            );
+                        }
+                    })
+                    .child(widgets::button(
+                        theme,
+                        if active {
+                            format!("{label} ✓")
+                        } else {
+                            label.to_string()
+                        },
+                        active,
+                    )),
+            )
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if let Some(Modal::Settings { sidebar, .. }) = &mut this.modal {
+                    flag.toggle(sidebar);
+                }
+                cx.notify();
+            }))
     }
 
     /// Record where a theme control painted so a GUI probe can click it.

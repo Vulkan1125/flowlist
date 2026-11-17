@@ -297,8 +297,24 @@ pub struct FlowlistApp {
     /// `empty:<parent>` for the "no projects" note, so a probe can check that
     /// nested rows are indented under their folder.
     sidebar_name_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// The title-bar back and forward arrows, measured so a GUI probe can
+    /// click them instead of guessing at the header layout.
+    history_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Settings-sheet sidebar toggles, measured for the same reason.
+    settings_toggle_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Collapsible sidebar headings, measured so a probe can fold a section.
+    sidebar_section_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Sidebar count badges keyed by row, so a probe can see which numbers a
+    /// given Settings choice actually paints.
+    sidebar_count_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Which list the window is showing, and the views it came through. The
+    /// history stores session keys so a deleted project can be skipped when
+    /// stepping back instead of bringing the app down.
+    view_history: Vec<String>,
+    view_history_index: usize,
     /// The sidebar row under the pointer while a project is being dragged, so
     /// that row can highlight and the test state can report the drop target.
+    /// A project drag owns the sidebar highlight only while it is live.
     sidebar_drag_target: Option<String>,
     /// Task rows painted on the last frame, in order, with their depth. The
     /// list reflects which subtasks are visible, not just what the query
@@ -474,6 +490,7 @@ impl FlowlistApp {
         let window_size = session.window;
         let focus_handle = cx.focus_handle();
         let toast = store_warning(&store);
+        let initial_view = view.key();
 
         cx.spawn(async move |this, cx| {
             loop {
@@ -506,6 +523,12 @@ impl FlowlistApp {
             forecast_width_anchor: Rc::new(Cell::new(None)),
             sidebar_row_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             sidebar_name_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            history_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            settings_toggle_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            sidebar_section_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            sidebar_count_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            view_history: vec![initial_view],
+            view_history_index: 0,
             sidebar_drag_target: None,
             content_rows: Rc::new(RefCell::new(Vec::new())),
             task_disclosures: Rc::new(RefCell::new(BTreeMap::new())),
@@ -864,6 +887,26 @@ impl FlowlistApp {
     /// Switch views without notifying. Callers that already repaint use this
     /// from inside a command; `open_view` is the interactive entry point.
     fn set_view(&mut self, view: View) {
+        let key = view.key();
+        if self.view.key() != key {
+            // A new branch drops the forward trail, the same as a browser.
+            self.view_history
+                .truncate(self.view_history_index.saturating_add(1));
+            if self.view_history.last() != Some(&key) {
+                self.view_history.push(key);
+                const LIMIT: usize = 50;
+                if self.view_history.len() > LIMIT {
+                    self.view_history.remove(0);
+                }
+            }
+            self.view_history_index = self.view_history.len().saturating_sub(1);
+        }
+        self.apply_view(view);
+    }
+
+    /// Paint a view without touching the back/forward trail. History
+    /// navigation uses this so stepping back does not push a new entry.
+    fn apply_view(&mut self, view: View) {
         self.remember_view_options();
         self.project_icon_open = false;
         self.view = view;
@@ -873,6 +916,42 @@ impl FlowlistApp {
         self.search.clear();
         self.focus = FocusArea::Content;
         self.save_session();
+    }
+
+    fn can_go_back(&self) -> bool {
+        let db = self.store.db();
+        self.view_history[..self.view_history_index]
+            .iter()
+            .rev()
+            .any(|key| View::from_key(db, key).is_some())
+    }
+
+    fn can_go_forward(&self) -> bool {
+        let db = self.store.db();
+        self.view_history
+            .iter()
+            .skip(self.view_history_index + 1)
+            .any(|key| View::from_key(db, key).is_some())
+    }
+
+    /// Step through views the window already visited. Entries whose project,
+    /// folder or tag disappeared are skipped, so Undo and Delete never strand
+    /// the arrows on a dead view.
+    fn step_view_history(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let mut index = self.view_history_index as isize;
+        loop {
+            index += delta;
+            if index < 0 || index as usize >= self.view_history.len() {
+                return;
+            }
+            let key = self.view_history[index as usize].clone();
+            if let Some(view) = View::from_key(self.store.db(), &key) {
+                self.view_history_index = index as usize;
+                self.apply_view(view);
+                cx.notify();
+                return;
+            }
+        }
     }
 
     fn view_title(&self) -> String {
@@ -2736,6 +2815,7 @@ impl FlowlistApp {
                 follow_system,
                 theme,
                 appearance,
+                sidebar,
             } => {
                 let review = review_days
                     .text()
@@ -2768,6 +2848,7 @@ impl FlowlistApp {
                     changed_days: Some(changed),
                     nearby_radius_km: Some(radius),
                     trash_retention_days: Some(trash),
+                    sidebar: Some(sidebar.clone()),
                     ..Default::default()
                 }));
                 if let Err(error) = self.store.sweep_trash() {
@@ -3165,6 +3246,8 @@ impl FlowlistApp {
                         self.undo(cx);
                     }
                 }
+                "[" => self.step_view_history(-1, cx),
+                "]" => self.step_view_history(1, cx),
                 "n" => {
                     if mods.shift {
                         self.open_modal(modals::Modal::new_project(self), cx);
@@ -4550,6 +4633,23 @@ impl FlowlistApp {
         );
         state["collapsed"] =
             serde_json::json!(self.collapsed_groups.iter().cloned().collect::<Vec<_>>());
+        state["can_go_back"] = serde_json::json!(self.can_go_back());
+        state["can_go_forward"] = serde_json::json!(self.can_go_forward());
+        state["history"] = serde_json::json!(self.view_history);
+        state["history_index"] = serde_json::json!(self.view_history_index);
+        state["history_rows"] = serde_json::json!(self.history_boxes.borrow().clone());
+        state["settings_toggle_rows"] =
+            serde_json::json!(self.settings_toggle_boxes.borrow().clone());
+        state["sidebar_sections"] = serde_json::json!(self.sidebar_section_boxes.borrow().clone());
+        state["sidebar_counts"] = serde_json::json!(self.sidebar_count_boxes.borrow().clone());
+        state["sidebar_visible"] = serde_json::json!(
+            self.sidebar_targets()
+                .iter()
+                .map(|target| target.key())
+                .collect::<Vec<_>>()
+        );
+        state["expanded"] = serde_json::json!(self.expanded.iter().cloned().collect::<Vec<_>>());
+        state["sidebar_settings"] = serde_json::json!(self.store.db().settings.sidebar);
         let settings = &self.store.db().settings;
         let window_width = self.window_size.map_or(1254.0, |(width, _)| width);
         state["forecast_months"] = serde_json::json!(settings.forecast_months.min(2));
@@ -4566,6 +4666,10 @@ impl FlowlistApp {
             serde_json::json!(anchor(self.forecast_width_anchor.get()));
         state["modal_project_icon"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::NewProject { icon, .. }) => Some(icon.slug()),
+            _ => None,
+        });
+        state["modal_sidebar"] = serde_json::json!(match &self.modal {
+            Some(modals::Modal::Settings { sidebar, .. }) => Some(sidebar),
             _ => None,
         });
         state["sidebar_rows"] = serde_json::json!(self.sidebar_row_boxes.borrow().clone());
@@ -4622,10 +4726,56 @@ impl FlowlistApp {
         }
     }
 
+    /// A title-bar arrow that steps through the views the window visited.
+    /// It stops the header's window-drag handler so a click never starts a
+    /// window move, and it measures itself for the GUI probe.
+    fn history_button(
+        &self,
+        key: &'static str,
+        icon: Icon,
+        enabled: bool,
+        tip: &'static str,
+        forward: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let boxes = self.history_boxes.clone();
+        let box_key = key.to_string();
+        div()
+            .id(key)
+            .opacity(if enabled { 1.0 } else { 0.35 })
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .flow_tip(self, cx, theme, tip)
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if enabled {
+                    this.step_view_history(if forward { 1 } else { -1 }, cx);
+                }
+            }))
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            boxes.borrow_mut().insert(
+                                box_key.clone(),
+                                [
+                                    f32::from(bounds.origin.x),
+                                    f32::from(bounds.origin.y),
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
+                                ],
+                            );
+                        }
+                    })
+                    .child(widgets::icon_button(theme, icon, false)),
+            )
+    }
+
     fn render_header(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let window_width = self.window_size.map_or(1254.0, |(width, _)| width);
         let (search_left, search_width) = search_slot(window_width, self.show_inspector);
+        let can_back = self.can_go_back();
+        let can_forward = self.can_go_forward();
         div()
             .flex()
             .items_center()
@@ -4640,14 +4790,43 @@ impl FlowlistApp {
                     .flex()
                     .flex_shrink_0()
                     .items_center()
+                    .gap_1()
                     .pl_4()
-                    .cursor(CursorStyle::OpenHand)
-                    .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
                     .child(
                         div()
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child("Flowlist"),
+                            .cursor(CursorStyle::OpenHand)
+                            .on_mouse_down(MouseButton::Left, |_, window, _| {
+                                window.start_window_move()
+                            })
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .child("Flowlist"),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .ml_2()
+                            .flex()
+                            .items_center()
+                            .gap_0p5()
+                            .child(self.history_button(
+                                "history-back",
+                                Icon::ArrowLeft,
+                                can_back,
+                                "Back (⌘[)",
+                                false,
+                                cx,
+                            ))
+                            .child(self.history_button(
+                                "history-forward",
+                                Icon::ArrowRight,
+                                can_forward,
+                                "Forward (⌘])",
+                                true,
+                                cx,
+                            )),
                     ),
             )
             .child(

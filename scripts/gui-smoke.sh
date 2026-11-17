@@ -143,15 +143,35 @@ if ! "$bin" --data-dir "$lib" project list --json | grep -q '"Smoke project"'; t
 	exit 1
 fi
 
-# 2. Hover pencil on the only saved perspective. The row sits below the
-#    eleven built-in perspectives, the PRIORITIES section and its three rows,
-#    so its centre is roughly 558px below the top of the window. The offsets
-#    cover spacing drift.
+# 2. Hover pencil on the only saved perspective. The row's live box comes
+#    from the test state, so adding a perspective above it (Today, Archive)
+#    cannot leave this test clicking an old offset. The pencil appears at the
+#    right edge only while the row is hovered.
+read_window
+saved=$(python3 - "$state" <<'PY'
+import json, sys
+try:
+    rows = json.load(open(sys.argv[1])).get("sidebar_rows", {})
+except (OSError, ValueError):
+    rows = {}
+for key, box in rows.items():
+    if key.startswith("custom:"):
+        print(*[int(v) for v in box])
+        break
+PY
+)
+if [ -z "$saved" ]; then
+	echo "FAIL: the saved perspective row never painted" >&2
+	exit 1
+fi
+set -- $saved; row_x=$1; row_y=$2; row_w=$3; row_h=$4
+row_mid_y=$((${wy%.*} + row_y + row_h / 2))
+right=$((${wx%.*} + row_x + row_w))
 opened=""
-for y in 556 552 560 564 568 548 572 544; do
-	for x in 186 190 182 194; do
+for dx in 38 44 32 50 26 56; do
+	for dy in 0 2 -2 4 -4; do
 		focus_app
-		"$helpers/flowctl" mouse "$((${wx%.*} + x))" "$((${wy%.*} + y))"
+		"$helpers/flowctl" mouse "$((right - dx))" "$((row_mid_y + dy))"
 		sleep 0.45
 		if [ "$(modal)" = "Perspective" ]; then
 			opened=1
