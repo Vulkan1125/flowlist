@@ -133,7 +133,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       list to that day; click again or press `\` to clear, with `[`/`]` day
       steps and `{`/`}` month steps. A Months chip cycles Auto / one / two
       months and a width chip toggles calendar-sized cells and the full pane;
-      both are saved library settings.
+      both are saved library settings. Alternating date cells carry a faint
+      checker tint mixed from the theme's own text colour, so the grid reads
+      as a checkerboard in every family without competing with the numbers.
 - [x] Sidebar perspectives, Trash, priority rows, custom perspectives and
       project/folder/tag trees. Badges count shown tasks only, so Trash never
       inflates another perspective.

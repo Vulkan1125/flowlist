@@ -4,6 +4,9 @@
 
 ### Interface
 
+- The Forecast calendar now paints a faint checkerboard: alternating date
+  cells carry the theme's text colour at 4% alpha, so the pattern follows the
+  family and appearance and is contrast-checked against the date numbers.
 - Added a Today perspective, second in the sidebar: overdue work in its own
   group, then everything due today plus tasks deferred to today. A Hide
   overdue chip (remembered with the view) drops the overdue group, and a clear

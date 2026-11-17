@@ -315,6 +315,9 @@ pub struct FlowlistApp {
     /// The message the content pane painted for an empty list, so a probe can
     /// check the calm Today copy without reading pixels.
     empty_note: Rc<RefCell<Option<String>>>,
+    /// The calendar checker tint painted last frame (packed RGBA), so a probe
+    /// can confirm the backdrop exists and follows the theme.
+    forecast_checker: Cell<Option<u32>>,
     /// Keep the theme family, but let the OS pick light or dark.
     follow_system: bool,
     /// Per-perspective sort/group/filter memory.
@@ -501,6 +504,7 @@ impl FlowlistApp {
             only_available,
             hide_overdue: false,
             empty_note: Rc::new(RefCell::new(None)),
+            forecast_checker: Cell::new(None),
             follow_system,
             view_options,
             sort_menu_open: false,
@@ -4425,6 +4429,11 @@ impl FlowlistApp {
         state["hide_overdue"] = serde_json::json!(self.hide_overdue);
         state["hide_overdue_anchor"] = serde_json::json!(anchor(self.hide_overdue_anchor.get()));
         state["empty_note"] = serde_json::json!(self.empty_note.borrow().clone());
+        state["forecast_checker"] = serde_json::json!(
+            self.forecast_checker
+                .get()
+                .map(|packed| format!("{:08x}", packed))
+        );
         state["collapsed"] =
             serde_json::json!(self.collapsed_groups.iter().cloned().collect::<Vec<_>>());
         let settings = &self.store.db().settings;

@@ -36,6 +36,7 @@ impl FlowlistApp {
         // screen, including the subtasks an expanded parent reveals.
         self.content_rows.borrow_mut().clear();
         self.empty_note.borrow_mut().take();
+        self.forecast_checker.set(None);
 
         let mut column = div()
             .flex()
@@ -165,6 +166,9 @@ impl FlowlistApp {
     /// block is capped at calendar size and centred rather than widened.
     fn render_forecast_calendar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
+        // Recorded for the GUI probe; the checker itself is per date cell.
+        self.forecast_checker
+            .set(Some(u32::from(theme.checker.to_rgb())));
         let today = local_date(now());
         let first = self.forecast_month;
         let marked = self.forecast_marked_dates();
@@ -434,6 +438,10 @@ impl FlowlistApp {
                         .justify_center()
                         .gap_1()
                         .rounded_md()
+                        // A whisper of the theme text tints alternating
+                        // squares, so the grid reads as a checkerboard while
+                        // hover and selection still paint over it.
+                        .when((week + weekday) % 2 == 0, |this| this.bg(theme.checker))
                         .cursor_pointer()
                         .hover(|style| style.bg(theme.hover))
                         .when(is_selected, |this| this.bg(theme.selection))

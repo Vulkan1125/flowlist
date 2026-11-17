@@ -45,7 +45,10 @@ months (`M`); Auto follows the pane width, while a pinned count stays put even
 in a narrow pane. Width switches between calendar-sized cells and a calendar
 that fills the pane (`W`). Both chips show the current choice and have
 tooltips; the settings are stored in the library, so they survive a relaunch.
-The list below keeps the normal task keyboard routes.
+Alternating date cells carry a decorative checker tint built from the theme's
+text colour at 4% alpha; the contrast audit checks numbers on a tinted square
+just as it does every other surface, so the pattern never trades legibility for
+texture. The list below keeps the normal task keyboard routes.
 
 ### Sidebar
 
