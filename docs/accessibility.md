@@ -57,6 +57,7 @@ The list below keeps the normal task keyboard routes.
 | Chevron on a folder | Expand / collapse folder | `l` / `h` |
 | Folder row | Opens the folder; a second click folds its tree | `Enter` on the row does the same |
 | Chevron on a tag | Expand / collapse tag | `l` / `h` |
+| Hide overdue chip (Today) | Show or hide overdue tasks in Today | click only |
 | Crosshair on a tag | Set location / Change location | `⇧L` |
 | Plus buttons | Project / Folder / Tag / View | `⇧⌘N`, `⌥⌘N`, `⌃⌘N`, `⇧⌘P` |
 

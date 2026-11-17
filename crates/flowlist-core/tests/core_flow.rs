@@ -1297,3 +1297,89 @@ fn changed_perspective_hides_completed_tasks() {
     assert_eq!(ids.len(), 2);
     assert!(ids.contains(&done_id.to_string()));
 }
+
+#[test]
+fn today_gathers_overdue_and_the_current_day() {
+    use chrono::Duration;
+    use flowlist_core::query;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let today = local_date(Utc::now());
+    let day = |offset: i64| Stamp::date_only(today + Duration::days(offset));
+
+    let mut overdue = NewTask::new("Overdue report");
+    overdue.due = Some(day(-2));
+    let overdue_id = store.execute(Command::CreateTask(overdue)).unwrap().created[0].clone();
+    let overdue_id = store.db().resolve_task(&overdue_id).unwrap();
+
+    let mut due_today = NewTask::new("Due today");
+    due_today.due = Some(day(0));
+    let due_id = store
+        .execute(Command::CreateTask(due_today))
+        .unwrap()
+        .created[0]
+        .clone();
+    let due_id = store.db().resolve_task(&due_id).unwrap();
+
+    let mut tomorrow = NewTask::new("Tomorrow");
+    tomorrow.due = Some(day(1));
+    let tomorrow_id = store
+        .execute(Command::CreateTask(tomorrow))
+        .unwrap()
+        .created[0]
+        .clone();
+    let tomorrow_id = store.db().resolve_task(&tomorrow_id).unwrap();
+
+    let mut deferred = NewTask::new("Deferred until today");
+    deferred.defer = Some(day(0));
+    let deferred_id = store
+        .execute(Command::CreateTask(deferred))
+        .unwrap()
+        .created[0]
+        .clone();
+    let deferred_id = store.db().resolve_task(&deferred_id).unwrap();
+
+    let mut later = NewTask::new("Deferred until later");
+    later.defer = Some(day(3));
+    let later_id = store.execute(Command::CreateTask(later)).unwrap().created[0].clone();
+    let later_id = store.db().resolve_task(&later_id).unwrap();
+
+    let mut done = NewTask::new("Finished today");
+    done.due = Some(day(0));
+    let done_id = store.execute(Command::CreateTask(done)).unwrap().created[0].clone();
+    let done_id = store.db().resolve_task(&done_id).unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![done_id.clone()],
+            completed: true,
+        })
+        .unwrap();
+
+    let at = Utc::now();
+    let groups = query::today(store.db(), true, at);
+    assert_eq!(groups.len(), 2);
+    assert_eq!(groups[0].title, "Overdue");
+    assert_eq!(groups[0].rows[0].id, overdue_id);
+    assert_eq!(groups[1].title, "Today");
+    let today_ids: Vec<flowlist_core::ids::TaskId> =
+        groups[1].rows.iter().map(|row| row.id.clone()).collect();
+    assert!(today_ids.contains(&due_id));
+    assert!(today_ids.contains(&deferred_id));
+    assert!(!today_ids.contains(&tomorrow_id));
+    assert!(!today_ids.contains(&later_id));
+    assert!(!today_ids.contains(&done_id));
+
+    // The header toggle drops the overdue group but keeps the day.
+    let hidden = query::today(store.db(), false, at);
+    assert_eq!(hidden.len(), 1);
+    assert_eq!(hidden[0].title, "Today");
+
+    // The shared built-in view includes overdue by default.
+    let builtin = query::view(
+        store.db(),
+        flowlist_core::model::BuiltinPerspective::Today,
+        at,
+    );
+    assert_eq!(builtin.len(), 2);
+}

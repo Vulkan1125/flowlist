@@ -4,6 +4,10 @@
 
 ### Interface
 
+- Added a Today perspective, second in the sidebar: overdue work in its own
+  group, then everything due today plus tasks deferred to today. A Hide
+  overdue chip (remembered with the view) drops the overdue group, and a clear
+  day shows “Nothing due today” instead of an empty list.
 - Theme and appearance choices in Settings now preview on the whole window as
   soon as they are clicked, including `⌘T` inside the sheet. Cancel or Esc
   restores the theme the sheet opened with, and Save keeps the new one.

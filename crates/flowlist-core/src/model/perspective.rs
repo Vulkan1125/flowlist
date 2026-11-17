@@ -10,6 +10,7 @@ use crate::model::Priority;
 #[serde(rename_all = "snake_case")]
 pub enum BuiltinPerspective {
     Inbox,
+    Today,
     Projects,
     Forecast,
     Flagged,
@@ -23,8 +24,9 @@ pub enum BuiltinPerspective {
 }
 
 impl BuiltinPerspective {
-    pub const ALL: [BuiltinPerspective; 11] = [
+    pub const ALL: [BuiltinPerspective; 12] = [
         BuiltinPerspective::Inbox,
+        BuiltinPerspective::Today,
         BuiltinPerspective::Projects,
         BuiltinPerspective::Forecast,
         BuiltinPerspective::Flagged,
@@ -40,6 +42,7 @@ impl BuiltinPerspective {
     pub fn slug(self) -> &'static str {
         match self {
             BuiltinPerspective::Inbox => "inbox",
+            BuiltinPerspective::Today => "today",
             BuiltinPerspective::Projects => "projects",
             BuiltinPerspective::Forecast => "forecast",
             BuiltinPerspective::Flagged => "flagged",
@@ -56,6 +59,7 @@ impl BuiltinPerspective {
     pub fn label(self) -> &'static str {
         match self {
             BuiltinPerspective::Inbox => "Inbox",
+            BuiltinPerspective::Today => "Today",
             BuiltinPerspective::Projects => "Projects",
             BuiltinPerspective::Forecast => "Forecast",
             BuiltinPerspective::Flagged => "Flagged",

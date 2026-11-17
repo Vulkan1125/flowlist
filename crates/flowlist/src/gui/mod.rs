@@ -310,6 +310,11 @@ pub struct FlowlistApp {
     priority_filter: Option<Priority>,
     /// Hide everything blocked behind another task (First Available).
     only_available: bool,
+    /// Today's header toggle: leave overdue work out of the list.
+    hide_overdue: bool,
+    /// The message the content pane painted for an empty list, so a probe can
+    /// check the calm Today copy without reading pixels.
+    empty_note: Rc<RefCell<Option<String>>>,
     /// Keep the theme family, but let the OS pick light or dark.
     follow_system: bool,
     /// Per-perspective sort/group/filter memory.
@@ -323,6 +328,8 @@ pub struct FlowlistApp {
     /// what is on screen (anchored/deferred paint offsets do not move
     /// hitboxes in GPUI 0.2).
     sort_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// Today's Hide overdue chip, measured so a GUI probe can click it.
+    hide_overdue_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     group_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     priority_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// The first text field in the open sheet, measured so a GUI probe can
@@ -492,12 +499,15 @@ impl FlowlistApp {
             task_disclosures: Rc::new(RefCell::new(BTreeMap::new())),
             priority_filter,
             only_available,
+            hide_overdue: false,
+            empty_note: Rc::new(RefCell::new(None)),
             follow_system,
             view_options,
             sort_menu_open: false,
             group_menu_open: false,
             priority_menu_open: false,
             sort_anchor: Rc::new(Cell::new(None)),
+            hide_overdue_anchor: Rc::new(Cell::new(None)),
             group_anchor: Rc::new(Cell::new(None)),
             priority_anchor: Rc::new(Cell::new(None)),
             modal_field_anchor: Rc::new(Cell::new(None)),
@@ -622,6 +632,7 @@ impl FlowlistApp {
             show_completed: Some(self.show_completed),
             only_available: Some(self.only_available),
             priority,
+            hide_overdue: Some(self.hide_overdue),
         }
     }
 
@@ -643,6 +654,7 @@ impl FlowlistApp {
         self.group = options.group.as_deref().and_then(group_from_slug);
         self.show_completed = options.show_completed.unwrap_or(false);
         self.only_available = options.only_available.unwrap_or(false);
+        self.hide_overdue = options.hide_overdue.unwrap_or(false);
         self.priority_filter = effective_priority_filter(
             &self.view,
             options.priority.as_deref().and_then(Priority::from_slug),
@@ -679,6 +691,7 @@ impl FlowlistApp {
                     rows: query::rows_for(db, &ids, at),
                 }]
             }
+            View::Builtin(BuiltinPerspective::Today) => query::today(db, !self.hide_overdue, at),
             View::Builtin(perspective) => query::view(db, *perspective, at),
             View::Priority(priority) => query::priority(db, *priority, at),
             View::Project(id) => self.project_groups(id),
@@ -4225,6 +4238,10 @@ impl FlowlistApp {
         let at = now();
         match perspective {
             BuiltinPerspective::Inbox => db.inbox_outline(false).len(),
+            BuiltinPerspective::Today => query::today(db, true, at)
+                .into_iter()
+                .map(|group| group.rows.len())
+                .sum(),
             BuiltinPerspective::Projects => db
                 .projects
                 .values()
@@ -4405,6 +4422,9 @@ impl FlowlistApp {
         });
         state["date_picker_boxes"] = serde_json::json!(self.date_picker_boxes.borrow().clone());
         state["theme_boxes"] = serde_json::json!(self.theme_boxes.borrow().clone());
+        state["hide_overdue"] = serde_json::json!(self.hide_overdue);
+        state["hide_overdue_anchor"] = serde_json::json!(anchor(self.hide_overdue_anchor.get()));
+        state["empty_note"] = serde_json::json!(self.empty_note.borrow().clone());
         state["collapsed"] =
             serde_json::json!(self.collapsed_groups.iter().cloned().collect::<Vec<_>>());
         let settings = &self.store.db().settings;
@@ -4841,6 +4861,8 @@ impl FlowlistApp {
 
     fn render_empty(&self, title: &str, detail: &str) -> impl IntoElement {
         let theme = self.theme;
+        // Recorded for the GUI probe, which cannot read text off the screen.
+        *self.empty_note.borrow_mut() = Some(title.to_string());
         div()
             .flex()
             .flex_col()

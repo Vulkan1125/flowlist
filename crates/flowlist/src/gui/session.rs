@@ -78,6 +78,7 @@ impl View {
     pub fn subtitle(&self) -> &'static str {
         match self {
             View::Builtin(BuiltinPerspective::Inbox) => "Capture now, organise later",
+            View::Builtin(BuiltinPerspective::Today) => "Due today, plus what is overdue",
             View::Builtin(BuiltinPerspective::Projects) => "Every project at a glance",
             View::Builtin(BuiltinPerspective::Forecast) => "What is coming up",
             View::Builtin(BuiltinPerspective::Flagged) => "Your personal priority list",
@@ -123,6 +124,9 @@ pub struct ViewOptions {
     /// sidebar does not leave its filter on the next perspective.
     #[serde(default)]
     pub priority: Option<String>,
+    /// Today's header toggle: leave overdue work out of the list.
+    #[serde(default)]
+    pub hide_overdue: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -277,6 +281,7 @@ mod tests {
                     show_completed: Some(false),
                     only_available: Some(true),
                     priority: Some("high".to_string()),
+                    hide_overdue: Some(true),
                 },
             )]),
             ..Session::default()
@@ -290,6 +295,7 @@ mod tests {
             Some("due")
         );
         assert_eq!(restored.view_options["flagged"].only_available, Some(true));
+        assert_eq!(restored.view_options["flagged"].hide_overdue, Some(true));
         assert_eq!(
             restored.view_options["flagged"].priority.as_deref(),
             Some("high")

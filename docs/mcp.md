@@ -58,9 +58,10 @@ tasks. `create_project` and `update_project` accept the same `attachments` and
 | `set_task_tags` | add or remove tag paths |
 | `list_tasks` | list by built-in view or filter |
 
-`list_tasks` accepts `view` (`inbox`, `projects`, `forecast`, `flagged`, `tags`,
-`completed`, `changed`, `attachments`, `nearby`, `review`), `project`, `tag`,
-`folder`, `search`, `filter`, `sort`, `group`, `limit` and `include_completed`.
+`list_tasks` accepts `view` (`inbox`, `today`, `projects`, `forecast`, `flagged`,
+`tags`, `completed`, `changed`, `attachments`, `nearby`, `review`), `project`,
+`tag`, `folder`, `search`, `filter`, `sort`, `group`, `limit` and
+`include_completed`.
 
 ### Checklist items
 

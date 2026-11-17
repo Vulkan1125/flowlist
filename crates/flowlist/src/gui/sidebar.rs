@@ -69,6 +69,7 @@ impl SidebarMenu {
 fn glyph(perspective: BuiltinPerspective) -> Icon {
     match perspective {
         BuiltinPerspective::Inbox => Icon::Inbox,
+        BuiltinPerspective::Today => Icon::Sun,
         BuiltinPerspective::Projects => Icon::Projects,
         BuiltinPerspective::Forecast => Icon::Forecast,
         BuiltinPerspective::Flagged => Icon::Flagged,

@@ -63,6 +63,7 @@ Choose a view or filter:
 | Flag | Meaning |
 | --- | --- |
 | `--inbox` | inbox tasks |
+| `--today` | due today, deferred to today, and overdue |
 | `--flagged` | flagged tasks |
 | `--forecast` | forecast buckets |
 | `--review` | projects due for review |

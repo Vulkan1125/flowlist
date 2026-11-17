@@ -154,6 +154,8 @@ pub struct ListArgs {
     #[arg(long)]
     pub inbox: bool,
     #[arg(long)]
+    pub today: bool,
+    #[arg(long)]
     pub flagged: bool,
     #[arg(long)]
     pub forecast: bool,
@@ -819,6 +821,8 @@ fn cmd_list(cli: &Cli, args: ListArgs, paint: &Paint) -> Result<()> {
 
     let groups: Vec<Group> = if args.trash {
         query::view(db, BuiltinPerspective::Trash, at)
+    } else if args.today {
+        query::view(db, BuiltinPerspective::Today, at)
     } else if args.changed {
         query::view(db, BuiltinPerspective::Changed, at)
     } else if args.attachments {

@@ -38,6 +38,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 ## Perspectives and queries
 
 - [x] Inbox
+- [x] Today (due today plus overdue; deferred-to-today work joins the day, and
+      a Hide overdue chip drops the overdue group. A clear day shows a calm
+      “Nothing due today” message)
 - [x] Projects
 - [x] Forecast (overdue / today / tomorrow / later)
 - [x] Flagged

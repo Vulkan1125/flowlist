@@ -597,6 +597,7 @@ impl Server {
 
         let mut groups: Vec<Group> = match view.to_lowercase().as_str() {
             "inbox" => query::view(db, BuiltinPerspective::Inbox, at),
+            "today" => query::view(db, BuiltinPerspective::Today, at),
             "projects" => query::view(db, BuiltinPerspective::Projects, at),
             "forecast" => query::view(db, BuiltinPerspective::Forecast, at),
             "flagged" => query::view(db, BuiltinPerspective::Flagged, at),
@@ -1439,10 +1440,10 @@ fn tool_definitions() -> Vec<Value> {
         ),
         tool(
             "list_tasks",
-            "List tasks using a built-in view (inbox, projects, forecast, flagged, tags, completed, changed, attachments, nearby, review) or a filter.",
+            "List tasks using a built-in view (inbox, today, projects, forecast, flagged, tags, completed, changed, attachments, nearby, review) or a filter.",
             schema(
                 json!({
-                    "view": s("all | inbox | projects | forecast | flagged | tags | completed | changed | attachments | nearby | review | trash | custom"),
+                    "view": s("all | inbox | today | projects | forecast | flagged | tags | completed | changed | attachments | nearby | review | trash | custom"),
                     "perspective": s("Custom perspective name or id (with view=custom)"),
                     "project": s("Project path filter"),
                     "folder": s("Folder path filter (includes child folders)"),

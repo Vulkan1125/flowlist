@@ -35,6 +35,7 @@ impl FlowlistApp {
         // Rebuilt as rows paint, so the test state lists only what is on
         // screen, including the subtasks an expanded parent reveals.
         self.content_rows.borrow_mut().clear();
+        self.empty_note.borrow_mut().take();
 
         let mut column = div()
             .flex()
@@ -561,6 +562,42 @@ impl FlowlistApp {
                             .min_w_0()
                             .items_center()
                             .gap_2()
+                            .when(
+                                matches!(self.view, View::Builtin(BuiltinPerspective::Today)),
+                                |this| {
+                                    let anchor = self.hide_overdue_anchor.clone();
+                                    this.child(
+                                        div()
+                                            .flex_shrink_0()
+                                            .child(
+                                                div()
+                                                    .id("hide-overdue")
+                                                    .flow_tip(
+                                                        self,
+                                                        cx,
+                                                        theme,
+                                                        "Show or hide overdue tasks in Today",
+                                                    )
+                                                    .child(widgets::toggle_chip(
+                                                        theme,
+                                                        "Hide overdue",
+                                                        self.hide_overdue,
+                                                    ))
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.hide_overdue = !this.hide_overdue;
+                                                        this.remember_view_options();
+                                                        this.save_session();
+                                                        cx.notify();
+                                                    })),
+                                            )
+                                            .on_children_prepainted(move |bounds, _, _| {
+                                                if let Some(bounds) = bounds.first() {
+                                                    anchor.set(Some(*bounds));
+                                                }
+                                            }),
+                                    )
+                                },
+                            )
                             .when(!is_trash, |this| {
                                 this.child({
                                     let anchor = self.sort_anchor.clone();
@@ -1010,11 +1047,22 @@ impl FlowlistApp {
             );
         if groups.is_empty() {
             list = list.child(
-                self.render_empty(
-                    "Nothing here",
-                    "Capture something above, or switch perspective from the sidebar.",
-                )
-                .into_any_element(),
+                if matches!(self.view, View::Builtin(BuiltinPerspective::Today)) {
+                    // Today should read as a clear day, not as an empty list.
+                    let detail = if self.hide_overdue {
+                        "Overdue tasks are hidden."
+                    } else {
+                        "A clear day. Capture something above when it comes up."
+                    };
+                    self.render_empty("Nothing due today", detail)
+                        .into_any_element()
+                } else {
+                    self.render_empty(
+                        "Nothing here",
+                        "Capture something above, or switch perspective from the sidebar.",
+                    )
+                    .into_any_element()
+                },
             );
         }
         for group in groups {

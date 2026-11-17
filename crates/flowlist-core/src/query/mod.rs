@@ -134,6 +134,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 rows,
             }]
         }
+        BuiltinPerspective::Today => today(db, true, at),
         BuiltinPerspective::Projects => {
             let mut groups = Vec::new();
             for (index, row) in db.flatten_containers().into_iter().enumerate() {
@@ -267,6 +268,71 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
             }]
         }
     }
+}
+
+/// Tasks that want attention today: due today, deferred to today or earlier,
+/// and — unless hidden — everything with an overdue due date. Completed tasks,
+/// trashed tasks and tasks in closed projects are left out, matching Forecast.
+pub fn today(db: &Db, include_overdue: bool, at: DateTime<Utc>) -> Vec<Group> {
+    let today = crate::time::local_date(at);
+    let mut overdue: Vec<TaskId> = Vec::new();
+    let mut due_today: Vec<TaskId> = Vec::new();
+    let mut deferred: Vec<TaskId> = Vec::new();
+
+    for id in manual_order(db) {
+        let Some(task) = db.tasks.get(&id) else {
+            continue;
+        };
+        if task.completed || task.is_trashed() {
+            continue;
+        }
+        if let Some(project_id) = &task.project {
+            match db.projects.get(project_id).map(|project| project.status) {
+                Some(ProjectStatus::Active) | None => {}
+                _ => continue,
+            }
+        }
+        match task.due {
+            Some(due) if due.local_date() < today => overdue.push(id),
+            Some(due) if due.local_date() == today => due_today.push(id),
+            Some(_) => {}
+            // A task deferred until today (or earlier) has come due even
+            // without a deadline, so it belongs in the day's list.
+            None if task.defer.is_some_and(|stamp| stamp.local_date() <= today) => {
+                deferred.push(id)
+            }
+            None => {}
+        }
+    }
+
+    overdue.sort_by_key(|id| db.tasks[id].due.map(|stamp| stamp.at));
+    due_today.sort_by_key(|id| {
+        (
+            db.tasks[id].due.map(|stamp| stamp.at),
+            db.tasks[id].title.to_lowercase(),
+        )
+    });
+    deferred.sort_by_key(|id| db.tasks[id].defer.map(|stamp| stamp.at));
+    due_today.extend(deferred);
+
+    let mut groups = Vec::new();
+    if include_overdue && !overdue.is_empty() {
+        groups.push(Group {
+            key: "today:overdue".to_string(),
+            title: "Overdue".to_string(),
+            position: -1,
+            rows: rows_for(db, &overdue, at),
+        });
+    }
+    if !due_today.is_empty() {
+        groups.push(Group {
+            key: "today".to_string(),
+            title: "Today".to_string(),
+            position: 0,
+            rows: rows_for(db, &due_today, at),
+        });
+    }
+    groups
 }
 
 /// Tasks with a given priority, in manual order. Completed and trashed tasks

@@ -95,7 +95,10 @@ guessing at the grid. If the sheet does not paint another frame on its own, a
 harmless Tab press forces one. Prepaint boxes land in the
 state file one frame after they are measured, so a probe that opens the picker
 should poll for the key (nudging the pointer forces the repaint). `due_anchor`
-and `defer_anchor` give the calendar icon boxes. `modal` is `null` when no sheet is
+and `defer_anchor` give the calendar icon boxes. `hide_overdue` is Today's
+header toggle and `hide_overdue_anchor` its chip box. `empty_note` is the title
+the content pane painted for an empty list (for example `Nothing due today`),
+so a probe can check the calm Today copy. `modal` is `null` when no sheet is
 open, otherwise the sheet title (`New
 project`, `Perspective`, `Settings`, …). `focus` names the active pane or field
 (`Content`, `Capture`, `Sidebar`, `Field`, `Modal`, …). `field` names the
