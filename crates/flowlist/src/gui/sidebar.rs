@@ -276,18 +276,27 @@ impl FlowlistApp {
             .child(icons::icon(Icon::Close, 12.0, theme.danger))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
-                if let flowlist_core::command::Command::DeleteProject { id } = &command {
-                    // A project takes its whole outline to Trash, so the
-                    // sidebar asks before removing it.
-                    let modal = modals::Modal::delete_project(this, id.clone());
-                    this.open_modal(modal, cx);
-                } else {
-                    this.execute(command.clone());
-                    if this.view == view {
-                        this.view = View::Builtin(BuiltinPerspective::Inbox);
+                match &command {
+                    flowlist_core::command::Command::DeleteProject { id } => {
+                        // A project takes its whole outline to Trash, so the
+                        // sidebar asks before removing it.
+                        let modal = modals::Modal::delete_project(this, id.clone());
+                        this.open_modal(modal, cx);
                     }
-                    this.save_session();
-                    cx.notify();
+                    flowlist_core::command::Command::DeleteFolder { id } => {
+                        // Removing a folder lifts its projects up a level, so
+                        // ask before changing the tree.
+                        let modal = modals::Modal::delete_folder(this, id.clone());
+                        this.open_modal(modal, cx);
+                    }
+                    _ => {
+                        this.execute(command.clone());
+                        if this.view == view {
+                            this.view = View::Builtin(BuiltinPerspective::Inbox);
+                        }
+                        this.save_session();
+                        cx.notify();
+                    }
                 }
             }))
     }
@@ -759,13 +768,8 @@ impl FlowlistApp {
                     false,
                     cx,
                     move |this, cx| {
-                        this.delete_sidebar_entity(
-                            flowlist_core::command::Command::DeleteFolder {
-                                id: delete_id.clone(),
-                            },
-                            View::Folder(delete_id.clone()),
-                            cx,
-                        )
+                        let modal = modals::Modal::delete_folder(this, delete_id.clone());
+                        this.open_modal(modal, cx);
                     },
                 ));
             }

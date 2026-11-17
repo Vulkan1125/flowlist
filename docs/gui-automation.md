@@ -86,7 +86,13 @@ null) with `date_picker_step` (`calendar` or `clock`), `date_picker_unit`
 `date_picker_month`. `date_picker_boxes` maps the picker's controls to their
 boxes: `day:<YYYY-MM-DD>` for each calendar cell, `hour:<1-12>` or
 `minute:<0-55>` for the clock numbers, and `all-day`, `at-time`, `clock-all-day`,
-`today`, `clear`, `back` and `done` for the buttons. Prepaint boxes land in the
+`today`, `clear`, `back` and `done` for the buttons. `theme_boxes` maps a
+Settings sheet's controls to their boxes: `theme:<slug>` for each family
+swatch (`paper`, `mist`, `catppuccin`, `nord`, `gruvbox`, `dracula`,
+`tokyo-night`, `vesper`, `graphite`, `midnight`) and `appearance:<slug>` for
+the `light` and `dark` chips, so a probe can check the live preview without
+guessing at the grid. If the sheet does not paint another frame on its own, a
+harmless Tab press forces one. Prepaint boxes land in the
 state file one frame after they are measured, so a probe that opens the picker
 should poll for the key (nudging the pointer forces the repaint). `due_anchor`
 and `defer_anchor` give the calendar icon boxes. `modal` is `null` when no sheet is

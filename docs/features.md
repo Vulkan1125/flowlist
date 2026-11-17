@@ -194,6 +194,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Nearby ranks tasks by the distance between the library and tag locations
 - [x] Delete folder/tag/perspective/project from the sidebar (`⌘⌫` or `dd`);
       deleting a project moves its tasks to Trash and is undoable
+- [x] Deleting a folder asks first: its projects move up to the parent, the
+      sheet names the folder, and Undo restores it. The × button, the
+      right-click menu and the sidebar's `⌘⌫` / `dd` share the confirmation.
 - [x] Project status management (active/on hold/done/dropped)
 - [x] Import modal (JSON or TaskPaper, merge or replace)
 - [x] TaskPaper clipboard export (`⇧⌘E`)
@@ -204,7 +207,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Ten theme families — Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula,
       Tokyo Night, Vesper, Graphite and Midnight — each with a light and a dark
       palette, chosen in Settings or with the title-bar moon/sun button,
-      `⌘T` / `⇧⌘T` / `⌥⌘T` (`⇧T` in vim mode)
+      `⌘T` / `⇧⌘T` / `⌥⌘T` (`⇧T` in vim mode). Clicking a swatch or appearance
+      chip previews it on the live window; Cancel or Esc puts back the theme
+      the sheet opened with, and Save keeps the new one.
 - [x] Follow-system appearance: keep the theme family, take light/dark from
       the macOS window appearance. A manual light/dark switch turns this off so
       the chosen mode is not reverted on the next frame.

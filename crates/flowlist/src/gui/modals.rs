@@ -3,7 +3,7 @@
 
 use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px, rgba};
 
-use flowlist_core::ids::{PerspectiveId, ProjectId, TagId, TaskId};
+use flowlist_core::ids::{FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{ProjectIcon, ProjectKind};
 
 use super::perspective::PerspectiveForm;
@@ -45,6 +45,12 @@ pub enum Modal {
     /// project and asks first; Undo still restores it in one step.
     DeleteProject {
         id: ProjectId,
+        name: String,
+    },
+    /// Deleting a folder moves its projects up to its parent (or the library
+    /// root). The sheet names the folder and asks first; Undo restores it.
+    DeleteFolder {
+        id: FolderId,
         name: String,
     },
     NewFolder {
@@ -113,6 +119,17 @@ impl Modal {
             .map(|project| project.name.clone())
             .unwrap_or_default();
         Modal::DeleteProject { id, name }
+    }
+
+    pub fn delete_folder(app: &FlowlistApp, id: FolderId) -> Self {
+        let name = app
+            .store
+            .db()
+            .folders
+            .get(&id)
+            .map(|folder| folder.name.clone())
+            .unwrap_or_default();
+        Modal::DeleteFolder { id, name }
     }
 
     pub fn new_project(_app: &FlowlistApp) -> Self {
@@ -190,6 +207,7 @@ impl Modal {
             Modal::NewProject { .. } => "New project",
             Modal::CreateProject { .. } => "Create project",
             Modal::DeleteProject { .. } => "Delete project",
+            Modal::DeleteFolder { .. } => "Delete folder",
             Modal::NewFolder { .. } => "New folder",
             Modal::NewTag { .. } => "New tag",
             Modal::Perspective { .. } => "Perspective",
@@ -212,6 +230,9 @@ impl Modal {
             }
             Modal::DeleteProject { .. } => {
                 "Its tasks move to Trash. Undo restores the project and its tasks."
+            }
+            Modal::DeleteFolder { .. } => {
+                "Its projects move up to its parent. Undo restores the folder."
             }
             Modal::NewFolder { .. } => "Folders group projects. They can be nested.",
             Modal::NewTag { .. } => "Tags are contexts: places, tools or people.",
@@ -240,6 +261,7 @@ impl Modal {
         match self {
             Modal::CreateProject { .. } => "Create",
             Modal::DeleteProject { .. } => "Delete",
+            Modal::DeleteFolder { .. } => "Delete",
             _ => "Save",
         }
     }
@@ -250,6 +272,7 @@ impl Modal {
             Modal::NewProject { .. } => 2,
             Modal::CreateProject { .. } => 0,
             Modal::DeleteProject { .. } => 0,
+            Modal::DeleteFolder { .. } => 0,
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
             Modal::Perspective { .. } => 1,
             Modal::Import { .. } => 1,
@@ -269,6 +292,7 @@ impl Modal {
             },
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
+            Modal::DeleteFolder { .. } => None,
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&form.name),
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -306,6 +330,7 @@ impl Modal {
             },
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
+            Modal::DeleteFolder { .. } => None,
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&mut form.name),
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -343,6 +368,7 @@ impl Modal {
             },
             Modal::CreateProject { .. } => "",
             Modal::DeleteProject { .. } => "",
+            Modal::DeleteFolder { .. } => "",
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
             Modal::Perspective { .. } => "Name",
             Modal::Import { .. } => "Library text",
@@ -476,7 +502,7 @@ impl FlowlistApp {
                         .child(path.clone()),
                 );
             }
-            if let Modal::DeleteProject { name, .. } = modal {
+            if let Modal::DeleteProject { name, .. } | Modal::DeleteFolder { name, .. } = modal {
                 body = body.child(
                     div()
                         .p_2()
@@ -1056,26 +1082,36 @@ impl FlowlistApp {
             let active = appearance == mode;
             modes = modes.child(
                 div()
-                    .id(mode.slug())
-                    .h(px(24.))
-                    .px_3()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_sm()
-                    .bg(if active { theme.raised } else { theme.clear })
-                    .text_color(if active { theme.text } else { theme.text_dim })
-                    .text_xs()
-                    .when(active, |this| this.font_weight(gpui::FontWeight::SEMIBOLD))
-                    .cursor_pointer()
-                    .hover(|style| style.text_color(theme.text))
-                    .child(mode.label())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(Modal::Settings { appearance, .. }) = &mut this.modal {
-                            *appearance = mode;
-                        }
-                        cx.notify();
-                    })),
+                    .on_children_prepainted(self.theme_probe(format!("appearance:{}", mode.slug())))
+                    .child(
+                        div()
+                            .id(mode.slug())
+                            .h(px(24.))
+                            .px_3()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded_sm()
+                            .bg(if active { theme.raised } else { theme.clear })
+                            .text_color(if active { theme.text } else { theme.text_dim })
+                            .text_xs()
+                            .when(active, |this| this.font_weight(gpui::FontWeight::SEMIBOLD))
+                            .cursor_pointer()
+                            .hover(|style| style.text_color(theme.text))
+                            .child(mode.label())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(Modal::Settings {
+                                    theme, appearance, ..
+                                }) = &mut this.modal
+                                {
+                                    *appearance = mode;
+                                    // Preview the choice right away; Cancel restores
+                                    // the theme the sheet opened with.
+                                    this.theme = Theme::new(*theme, mode);
+                                }
+                                cx.notify();
+                            })),
+                    ),
             );
         }
 
@@ -1083,7 +1119,14 @@ impl FlowlistApp {
         for chunk in ThemeKind::ALL.chunks(5) {
             let mut row = div().flex().items_start().gap_2().w_full();
             for kind in chunk {
-                row = row.child(self.theme_swatch(*kind, selected == *kind, appearance, cx));
+                row = row.child(
+                    div()
+                        .flex()
+                        .flex_1()
+                        .min_w_0()
+                        .on_children_prepainted(self.theme_probe(format!("theme:{}", kind.slug())))
+                        .child(self.theme_swatch(*kind, selected == *kind, appearance, cx)),
+                );
             }
             // Keep the last row aligned with full rows when it is short.
             for _ in chunk.len()..5 {
@@ -1110,7 +1153,7 @@ impl FlowlistApp {
                     .text_xs()
                     .text_color(theme.text_faint)
                     .child(format!(
-                        "{} · {} · ⌘T light/dark · ⇧⌘T next family · Save applies",
+                        "{} · {} · ⌘T light/dark · ⇧⌘T next family · Preview is live",
                         selected.hint(),
                         appearance.label(),
                     )),
@@ -1168,6 +1211,28 @@ impl FlowlistApp {
                         "Take light or dark from macOS and keep the chosen family.",
                     )),
             )
+    }
+
+    /// Record where a theme control painted so a GUI probe can click it.
+    fn theme_probe(
+        &self,
+        key: String,
+    ) -> impl Fn(Vec<gpui::Bounds<gpui::Pixels>>, &mut Window, &mut gpui::App) + 'static {
+        let boxes = self.theme_boxes.clone();
+        move |bounds, _, _| {
+            let Some(bounds) = bounds.first() else {
+                return;
+            };
+            boxes.borrow_mut().insert(
+                key.clone(),
+                [
+                    f32::from(bounds.origin.x),
+                    f32::from(bounds.origin.y),
+                    f32::from(bounds.size.width),
+                    f32::from(bounds.size.height),
+                ],
+            );
+        }
     }
 
     fn theme_swatch(
@@ -1237,8 +1302,13 @@ impl FlowlistApp {
                     }),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
-                if let Some(Modal::Settings { theme, .. }) = &mut this.modal {
+                if let Some(Modal::Settings {
+                    theme, appearance, ..
+                }) = &mut this.modal
+                {
                     *theme = kind;
+                    // Show the family on the whole window before Save.
+                    this.theme = Theme::new(kind, *appearance);
                 }
                 cx.notify();
             }))

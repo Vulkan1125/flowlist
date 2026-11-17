@@ -345,6 +345,9 @@ pub struct FlowlistApp {
     date_picker_unit: ClockUnit,
     /// Controls in the date popover, measured so the GUI probe can click them.
     date_picker_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Theme swatches and appearance chips in Settings, so a probe can click
+    /// a family or light/dark without guessing at the grid.
+    theme_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// How wide the title's slot painted on the last frame. A view name that
     /// does not fit there is left out entirely instead of showing a stub.
     title_space: Rc<Cell<Option<f32>>>,
@@ -393,6 +396,9 @@ pub struct FlowlistApp {
     /// Inspector actions stay out of the way until the title is committed.
     draft_task: Option<TaskId>,
     modal: Option<modals::Modal>,
+    /// The theme the Settings sheet opened with. Theme and appearance clicks
+    /// preview on the live window; Cancel puts this one back.
+    theme_on_open: Option<Theme>,
     modal_focus: usize,
     modal_scroll: ScrollHandle,
     toast: Option<String>,
@@ -504,6 +510,7 @@ impl FlowlistApp {
             date_picker_step: DatePickerStep::Calendar,
             date_picker_unit: ClockUnit::Hour,
             date_picker_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            theme_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             title_space: Rc::new(Cell::new(None)),
             title_visible: Rc::new(Cell::new(true)),
             sidebar_menu: None,
@@ -536,6 +543,7 @@ impl FlowlistApp {
             field_error: None,
             draft_task: None,
             modal: None,
+            theme_on_open: None,
             modal_focus: 0,
             modal_scroll: ScrollHandle::new(),
             toast,
@@ -1343,7 +1351,9 @@ impl FlowlistApp {
                 View::Custom(id),
             ),
             sidebar::SidebarTarget::Folder(id) => {
-                (Command::DeleteFolder { id: id.clone() }, View::Folder(id))
+                let modal = modals::Modal::delete_folder(self, id);
+                self.open_modal(modal, cx);
+                return;
             }
             sidebar::SidebarTarget::Tag(id) => {
                 (Command::DeleteTag { id: id.clone() }, View::Tag(id))
@@ -2445,6 +2455,13 @@ impl FlowlistApp {
     // -------------------------------------------------------------- modals
 
     fn open_modal(&mut self, modal: modals::Modal, cx: &mut Context<Self>) {
+        // Settings previews theme changes live, so remember what to put back
+        // if the sheet is cancelled.
+        if matches!(modal, modals::Modal::Settings { .. }) {
+            self.theme_on_open = Some(self.theme);
+        } else {
+            self.theme_on_open = None;
+        }
         self.modal = Some(modal);
         self.modal_focus = 0;
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
@@ -2467,6 +2484,9 @@ impl FlowlistApp {
     }
 
     fn close_modal(&mut self, cx: &mut Context<Self>) {
+        if let Some(theme) = self.theme_on_open.take() {
+            self.theme = theme;
+        }
         self.modal = None;
         self.modal_focus = 0;
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
@@ -2484,6 +2504,8 @@ impl FlowlistApp {
                 self.modal = None;
                 self.modal_focus = 0;
                 self.focus = FocusArea::Content;
+                // The previewed theme is now committed; drop the undo copy.
+                self.theme_on_open = None;
             }
             Err(message) => {
                 self.modal = Some(modal);
@@ -2584,6 +2606,15 @@ impl FlowlistApp {
             modals::Modal::DeleteProject { id, .. } => {
                 self.execute(Command::DeleteProject { id: id.clone() });
                 if self.view == View::Project(id.clone()) {
+                    self.view = View::Builtin(BuiltinPerspective::Inbox);
+                    self.selected.clear();
+                    self.anchor = None;
+                }
+                self.save_session();
+            }
+            modals::Modal::DeleteFolder { id, .. } => {
+                self.execute(Command::DeleteFolder { id: id.clone() });
+                if self.view == View::Folder(id.clone()) {
                     self.view = View::Builtin(BuiltinPerspective::Inbox);
                     self.selected.clear();
                     self.anchor = None;
@@ -2778,8 +2809,15 @@ impl FlowlistApp {
                         } else {
                             *appearance = appearance.toggled();
                         }
-                        cx.notify();
                     }
+                    if let Some(modals::Modal::Settings {
+                        theme, appearance, ..
+                    }) = &self.modal
+                    {
+                        // The shortcut previews just like the swatches do.
+                        self.theme = Theme::new(*theme, *appearance);
+                    }
+                    cx.notify();
                     return;
                 }
             }
@@ -4366,6 +4404,7 @@ impl FlowlistApp {
             ClockUnit::Minute => "minute",
         });
         state["date_picker_boxes"] = serde_json::json!(self.date_picker_boxes.borrow().clone());
+        state["theme_boxes"] = serde_json::json!(self.theme_boxes.borrow().clone());
         state["collapsed"] =
             serde_json::json!(self.collapsed_groups.iter().cloned().collect::<Vec<_>>());
         let settings = &self.store.db().settings;

@@ -4,6 +4,13 @@
 
 ### Interface
 
+- Theme and appearance choices in Settings now preview on the whole window as
+  soon as they are clicked, including `⌘T` inside the sheet. Cancel or Esc
+  restores the theme the sheet opened with, and Save keeps the new one.
+- Deleting a folder now asks first, in a sheet that names it and explains that
+  its projects move up a level. The × button, the right-click menu and the
+  sidebar's `⌘⌫` / `dd` all use the same confirmation, and Undo still restores
+  the folder in one step.
 - Task rows use the app's drawn icons for their metadata instead of emoji: a
   clock marks a future defer date, a tick marks checklist progress, and the
   repeat glyph marks a recurrence. The defer date no longer shows an

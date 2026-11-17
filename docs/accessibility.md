@@ -147,7 +147,9 @@ deletes them; `r` restores the selection, and the header exposes labelled
 Restore and Delete forever buttons. Deleting keeps the next row selected.
 The × on a sidebar project opens a Delete project sheet that names the project
 and explains that its tasks move to Trash. Enter confirms, Esc cancels, and
-`⌘Z` still restores everything in one step.
+`⌘Z` still restores everything in one step. The × on a folder, its right-click
+menu and `⌘⌫` / `dd` open the same kind of sheet, explaining that its projects
+move up a level.
 
 A sidebar row's pencil and × stay hidden until the row is hovered, even when
 the row is selected. While idle the name uses the whole row width; hovering
