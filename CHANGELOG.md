@@ -4,6 +4,14 @@
 
 ### Interface
 
+- Task rows use the app's drawn icons for their metadata instead of emoji: a
+  clock marks a future defer date, a tick marks checklist progress, and the
+  repeat glyph marks a recurrence. The defer date no longer shows an
+  hourglass that sat apart from every other mark.
+- Clicking a sidebar folder opens it and unfolds its tree; clicking the same,
+  already-open folder folds the tree again without leaving the folder view.
+  The chevron keeps toggling just the tree, and `Enter` on the row matches the
+  mouse.
 - The Due and Defer date pickers are now a two-step surface. A proper month
   calendar replaces the cramped date-plus-stepper card, and choosing a timed
   day opens an Android-style clock face: pick the hour, it moves on to

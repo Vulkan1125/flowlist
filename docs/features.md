@@ -119,7 +119,10 @@ working domain and GUI. This page tracks what is implemented and verified.
       project keeps its 0 until it has a task.
 - [x] Sidebar folders indent what they contain: subfolders and projects step
       right once per nesting level, and an empty folder shows “Empty” aligned
-      with the names. Root-level projects keep their usual position.
+      with the names. Root-level projects keep their usual position. Clicking
+      a folder row opens it and unfolds its tree; clicking the same open
+      folder again folds the tree without leaving the folder view, and a third
+      click unfolds it. The chevron still toggles the tree on its own.
 - [x] Forecast month calendar above the list: Monday-first grid, previous /
       Today / next controls and an accent bar under dates with a task. A wide
       pane shows two consecutive months side by side so the grid keeps
@@ -131,6 +134,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Sidebar perspectives, Trash, priority rows, custom perspectives and
       project/folder/tag trees. Badges count shown tasks only, so Trash never
       inflates another perspective.
+- [x] Task rows describe themselves with the drawn icon set instead of emoji:
+      a clock for a future defer date, a tick for checklist progress and the
+      repeat glyph for a recurrence, so the metadata matches the rest of the
+      chrome.
 - [x] Content list with grouped rows, progress indicators and inline status
 - [x] Task capture with quick-entry syntax
 - [x] Multi-select, range select, keyboard navigation

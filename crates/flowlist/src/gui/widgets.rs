@@ -322,6 +322,28 @@ pub fn chip(_theme: Theme, text: impl Into<String>, color: gpui::Hsla) -> impl I
         .child(text.into())
 }
 
+/// A chip that leads with one of the drawn icons, so row metadata reads the
+/// same as the rest of the chrome instead of borrowing a text glyph.
+pub fn chip_with_icon(
+    _theme: Theme,
+    icon: Icon,
+    text: impl Into<String>,
+    color: gpui::Hsla,
+) -> impl IntoElement {
+    div()
+        .px_2()
+        .py_0p5()
+        .rounded_sm()
+        .bg(color.opacity(0.14))
+        .text_color(color)
+        .text_xs()
+        .flex()
+        .items_center()
+        .gap_1()
+        .child(icons::icon(icon, 11.0, color))
+        .child(text.into())
+}
+
 pub fn tag_chip(theme: Theme, text: impl Into<String>) -> impl IntoElement {
     chip(theme, text, theme.text_dim)
 }

@@ -3821,7 +3821,10 @@ impl FlowlistApp {
         let Some(target) = self.sidebar_cursor.clone() else {
             return;
         };
-        self.sidebar_activate(target, cx);
+        match target {
+            sidebar::SidebarTarget::Folder(id) => self.toggle_folder_row(id, cx),
+            target => self.sidebar_activate(target, cx),
+        }
     }
 
     /// Move the caret in a sheet field. `extend` keeps the old anchor so a
@@ -4363,6 +4366,8 @@ impl FlowlistApp {
             ClockUnit::Minute => "minute",
         });
         state["date_picker_boxes"] = serde_json::json!(self.date_picker_boxes.borrow().clone());
+        state["collapsed"] =
+            serde_json::json!(self.collapsed_groups.iter().cloned().collect::<Vec<_>>());
         let settings = &self.store.db().settings;
         let window_width = self.window_size.map_or(1254.0, |(width, _)| width);
         state["forecast_months"] = serde_json::json!(settings.forecast_months.min(2));

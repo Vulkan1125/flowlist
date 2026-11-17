@@ -1422,9 +1422,10 @@ impl FlowlistApp {
                         )
                     })
                     .when(checklist_total > 0, |this| {
-                        this.child(widgets::chip(
+                        this.child(widgets::chip_with_icon(
                             theme,
-                            format!("☑ {checklist_done}/{checklist_total}"),
+                            Icon::Check,
+                            format!("{checklist_done}/{checklist_total}"),
                             if checklist_done == checklist_total {
                                 theme.success
                             } else {
@@ -1433,9 +1434,10 @@ impl FlowlistApp {
                         ))
                     })
                     .when_some(defer.filter(|stamp| stamp.at > now()), |this, stamp| {
-                        this.child(widgets::chip(
+                        this.child(widgets::chip_with_icon(
                             theme,
-                            format!("⏳ {}", human_date(&stamp, now())),
+                            Icon::Clock,
+                            human_date(&stamp, now()),
                             theme.text_faint,
                         ))
                     })
@@ -1450,9 +1452,13 @@ impl FlowlistApp {
                     .when_some(repeat_label(db, &id), |this, label| {
                         this.child(
                             div()
+                                .flex()
+                                .items_center()
+                                .gap_1()
                                 .text_xs()
                                 .text_color(theme.text_faint)
-                                .child(format!("↻ {label}")),
+                                .child(icons::icon(Icon::Repeat, 11.0, theme.text_faint))
+                                .child(label),
                         )
                     })
                     .when(!availability.is_available() && !completed, |this| {

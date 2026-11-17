@@ -73,6 +73,9 @@ to the box where the row's icon starts, plus `empty:<folder>` for an empty
 folder's note, which makes indentation assertable. `sidebar_drag_target` is
 the row a dragged project is currently over (`folder:<id>`, `library`, or
 null), so a split drag can check the highlight before releasing the mouse.
+`collapsed` lists the tree keys (`folder:<id>`, `tag:<id>`) the user has
+folded, so a probe can assert a folder row's open/close click without relying
+on pixels.
 `content_rows` lists the task rows
 actually painted on the last frame, in order, with `id`, `title`, `depth` and
 `has_children`; hidden descendants are absent, so a probe can assert what a

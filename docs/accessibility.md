@@ -55,6 +55,7 @@ The list below keeps the normal task keyboard routes.
 | Pencil on a project / folder / tag | Rename | `Ctrl-w h` then `r` |
 | × on a perspective / folder / tag / project | Delete | `Ctrl-w h` then `⌘⌫` or `dd` |
 | Chevron on a folder | Expand / collapse folder | `l` / `h` |
+| Folder row | Opens the folder; a second click folds its tree | `Enter` on the row does the same |
 | Chevron on a tag | Expand / collapse tag | `l` / `h` |
 | Crosshair on a tag | Set location / Change location | `⇧L` |
 | Plus buttons | Project / Folder / Tag / View | `⇧⌘N`, `⌥⌘N`, `⌃⌘N`, `⇧⌘P` |
