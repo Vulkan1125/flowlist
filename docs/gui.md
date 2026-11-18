@@ -87,8 +87,12 @@ task, and `//` starts a note. Wrap phrases with spaces in parentheses.
 
 Inside a task row you can edit the title inline, open the inspector for notes,
 tags, project, dates, estimate, repeat, attachments and priority, and add
-checklist steps. Checklist steps are lightweight and never appear as tasks;
-completing a repeating task copies the checklist with every step unchecked.
+checklist steps. In the inspector, `Tab` and `Enter` save the current field and
+move to the next one; a validation error keeps that field open, and `Enter` on
+the last field ends the session. A first-time task stays a draft until then, so
+its Delete and Complete actions stay hidden while you are still filling it in.
+Checklist steps are lightweight and never appear as tasks; completing a
+repeating task copies the checklist with every step unchecked.
 
 Drag a task onto a project, tag, parent or sibling position. Drag a project
 onto a folder, onto the LIBRARY heading, or onto empty space under the tree to
@@ -129,8 +133,10 @@ shows a tick in the sidebar instead of `0`; a brand-new project keeps its `0`
 until it has a task. Project rows also show their icon, and all ten icons are
 available in the New Project sheet.
 
-Review shows projects whose next review date has arrived. Completing a review
-advances the next date by the project's review interval.
+Review shows projects whose next review date has arrived. Each project keeps
+its own review interval, set in the New Project sheet (pre-filled from the
+library default) or with `flowlist project add --review-days`; completing a
+review advances the next date by that project's interval.
 
 The Archive lists finished and dropped projects grouped by folder. A row opens
 the project, Reopen brings it back without leaving the Archive, and Delete asks
@@ -143,7 +149,8 @@ The New Project, New Folder, New Tag, New Perspective, Rename, Delete, Import,
 Settings, View and Tag Location sheets share one visual language: a title,
 subtitle, fields, and Cancel / confirm in the footer. Fields accept a click for
 the caret and a drag for selection. Rename sheets select the whole name on open
-so typing replaces it.
+so typing replaces it. The New Project sheet adds Notes and a Review every
+(days) field, so each project can have its own cadence.
 
 Settings groups:
 

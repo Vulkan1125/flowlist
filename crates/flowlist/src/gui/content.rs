@@ -50,6 +50,13 @@ impl FlowlistApp {
                 MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
                     if this.focus != FocusArea::Content {
+                        // Clicking away from an inspector field ends that field
+                        // session, including a first-time task's draft state.
+                        if this.focus == FocusArea::Field {
+                            this.editing = None;
+                            this.field_error = None;
+                            this.draft_task = None;
+                        }
                         this.focus = FocusArea::Content;
                         this.checklist_cursor = None;
                         this.vim.reset();

@@ -172,7 +172,11 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Trash restore / delete forever, with retention set in Settings, plus a
       **Select all** button and `⌘A` for one-step restore or purge
 - [x] Priority chips in the inspector and a priority filter in every view
-- [x] Inline title/notes/tag/project/date/estimate/repeat editing
+- [x] Inline title/notes/tag/project/date/estimate/repeat editing. `Tab` and
+      `Enter` save the current field and move to the next; a failed validation
+      keeps the editor open, and `Enter` on the last field ends the session.
+      A first-time task stays a draft (with its Delete/Complete actions hidden)
+      until that whole field session ends.
 - [x] Rename sheets select the whole name when they open, so typing replaces
       it and one Backspace clears it. Clicks and drags inside sheet fields
       place the caret or select a range with the mouse.
@@ -210,7 +214,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       command; dropping a project where it already sits does nothing
 - [x] Project dashboard with progress, status, review info and project type
 - [x] New project/folder/tag/perspective modals (`⇧⌘N`, `⌥⌘N`,
-      `⌃⌘N`, `⇧⌘P`)
+      `⌃⌘N`, `⇧⌘P`). The New Project sheet carries a Review every (days)
+      field pre-filled from the library default, so each project can keep its
+      own cadence.
 - [x] Rich custom-perspective editor laid out like settings: labelled filter
       and layout rows that each open a menu of every value, a live match count,
       an explicit Clear filters, and unknown CLI conditions kept and counted
@@ -305,7 +311,7 @@ shortcut set.
 
 ### Delayed tooltips for icon-only controls
 
-- One reusable tooltip component that stays hidden for roughly five seconds
+- One reusable tooltip component that stays hidden for three seconds
   after hover begins. Clicking the button mutes its tooltip until the pointer
   leaves; hovering again later shows it normally.
 - Applied to all icon-only controls: sidebar pencil and ×, completion circles,

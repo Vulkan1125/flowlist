@@ -184,6 +184,13 @@ makes room for the actions, and a long name fades at that edge instead of
 ending in an ellipsis. The same actions keep their keyboard routes (`⌘R` to
 rename, `⌘⌫` to delete, `dd` in vim mode) and their tooltips.
 
+Inside the inspector's inline fields, `Tab` and `Enter` save the current value
+and move to the next field; a validation error keeps that field open, and
+`Enter` on the last field ends the session. A first-time task stays a draft
+until the session ends, so its Delete and Complete actions do not appear while
+the user is still filling it in. Clicking away from a field or opening a sheet
+also ends the session.
+
 A rename sheet opens with the whole name selected. Typing replaces it, one
 `Backspace` or `Delete` clears it, and the arrow keys or a click place the
 caret. Dragging inside any sheet text field selects a range, and `⌘A`, `⌘C`
@@ -191,7 +198,7 @@ and `⌘X` work as usual.
 
 ## Tooltip coverage
 
-Tooltips stay hidden for roughly five seconds after hover begins, and clicking
+Tooltips stay hidden for three seconds after hover begins, and clicking
 a button mutes its tooltip until the pointer leaves the button. They are
 attached to every icon-only control:
 

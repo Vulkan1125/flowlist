@@ -1079,6 +1079,59 @@ fn priorities_filter_and_route_to_the_sidebar_query() {
 }
 
 #[test]
+fn each_project_keeps_its_own_review_cadence() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let today = local_date(Utc::now());
+
+    let mut weekly = NewProject::new("Weekly");
+    weekly.review_interval_days = Some(7);
+    let weekly = store
+        .execute(Command::CreateProject(weekly))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("created id");
+    let weekly = store.db().resolve_project(&weekly).unwrap();
+
+    let mut monthly = NewProject::new("Monthly");
+    monthly.review_interval_days = Some(30);
+    let monthly = store
+        .execute(Command::CreateProject(monthly))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("created id");
+    let monthly = store.db().resolve_project(&monthly).unwrap();
+
+    assert_eq!(store.db().projects[&weekly].review_interval_days, 7);
+    assert_eq!(store.db().projects[&monthly].review_interval_days, 30);
+    assert_eq!(
+        store.db().projects[&weekly].next_review,
+        today + chrono::Duration::days(7)
+    );
+    assert_eq!(
+        store.db().projects[&monthly].next_review,
+        today + chrono::Duration::days(30)
+    );
+
+    // Changing one project's cadence leaves the other alone.
+    store
+        .execute(Command::UpdateProject {
+            id: weekly.clone(),
+            patch: ProjectPatch {
+                review_interval_days: Some(14),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert_eq!(store.db().projects[&weekly].review_interval_days, 14);
+    assert_eq!(store.db().projects[&monthly].review_interval_days, 30);
+}
+
+#[test]
 fn project_kinds_round_trip_and_legacy_sequential_still_blocks() {
     use flowlist_core::model::{ProjectKind, ProjectStatus};
 

@@ -533,11 +533,11 @@ struct TipView {
     shown: bool,
 }
 
-/// A tooltip waits before appearing, and a click keeps it quiet until the
-/// pointer leaves the button. GPUI's built-in delay is half a second, which
-/// reads as "immediately" in a dense toolbar, so the view itself stays empty
-/// for the first stretch and only then draws its label.
-const TIP_DELAY: Duration = Duration::from_millis(4_500);
+/// A tooltip waits three seconds before appearing, and a click keeps it quiet
+/// until the pointer leaves the button. GPUI's built-in delay is half a
+/// second, which reads as "immediately" in a dense toolbar, so the view itself
+/// stays empty for the first stretch and only then draws its label.
+const TIP_DELAY: Duration = Duration::from_millis(3_000);
 
 impl TipView {
     fn new(label: SharedString, theme: Theme, window: &Window, cx: &mut Context<Self>) -> Self {

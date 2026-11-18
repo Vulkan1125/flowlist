@@ -4,6 +4,14 @@
 
 ### Interface
 
+- The inspector's inline fields now save on `Tab` and `Enter` and move to the
+  next field. A validation error keeps the current field open, and `Enter` on
+  the last field finishes editing. A first-time task stays a draft until the
+  whole session ends, so Delete and Complete no longer appear as soon as the
+  title is saved.
+- The New Project sheet has a Review every (days) field, pre-filled from the
+  library default, so each project can keep its own review cadence.
+- Icon tooltips now wait three seconds instead of about five.
 - Sidebar tags now sort by live task count, busiest first, then by name
   ignoring case. Nested tags follow the same order inside their parent, and
   completed tasks no longer lift a tag up the list.

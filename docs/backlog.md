@@ -11,16 +11,65 @@ landed and verified.
 > `flowlist.md` supersedes the unreadable Things 3 database. Keep both files in
 > sync when work lands; do not treat silence as "done".
 
+## Roadmap
+
+The four phases are worked in order. Detail for each item lives in the sections
+below; this list is the current map.
+
+### Phase 1 — Friction fixes
+
+- [x] Inspector fields save on `Tab` and `Enter`, then move to the next field;
+      validation failures keep the editor open, and `Enter` on the last field
+      ends the session. A first-time task keeps its draft state (and hides the
+      Delete/Complete actions) until the whole field session ends.
+- [x] Per-project review interval is editable in the New Project sheet, with
+      the library default pre-filled.
+- [x] Nested folders verified end to end: `folder add 'Work/Client/BigCo'`,
+      `project add --folder`, the sidebar tree, indentation, and folder counts.
+- [x] Toast self-dismissal verified live: it retires on its own, on click, and
+      when a newer toast replaces it.
+- [x] Tooltips now wait three seconds instead of about five.
+
+### Phase 2 — Safety and containment
+
+- [ ] **Attachment website links** — http(s) attachments alongside file paths,
+      with inspector, row badge and open behaviour.
+- [ ] **Folder delete cascade** — deleting a folder also deletes the projects
+      inside it, after a clear warning, as one undoable step.
+
+### Phase 3 — Recurring task series
+
+- [ ] **Auto-incrementing repeat titles** — an optional number in the title
+      increments on completion, with an end date or “forever”.
+- [ ] **Series-aware deletion** — deleting a recurring task asks whether to
+      remove this occurrence or the whole series.
+
+### Phase 4 — Larger product bets
+
+- [ ] **Things 3-style quick capture popup** — a small floating capture window
+      that leaves the current workspace alone.
+- [ ] **Calendar perspective** — a real month/day/agenda view with
+      drag-to-reschedule.
+- [ ] **Visual design pass** — hierarchy, spacing, motion, hover/focus and the
+      glass edges, verified live in every theme.
+
 ## Interaction polish
 
-- [ ] **Toast self-dismissal** — verify in a running window that a toast
-      disappears on its own after a few seconds, on click, and when another
-      toast replaces it. The timer exists; this is a visual confirmation, not a
-      new feature.
-- [?] **`o` view switch** — the pending note asked for a view switch on `o`,
-      but the current grammar uses `o`/`O` to add a task below/above. Decide
-      which wins, keep the other on an unused key, and update the help card,
-      README and `docs/features.md` together. Do not silently keep both.
+- [x] **Toast self-dismissal** — verified in a running window: a toast retires
+      on its own after about 2.6 seconds, on click, and when a newer toast
+      replaces it. The replacement restarts the timer.
+- [x] **Inspector Tab / Enter** — `Tab` and `Enter` save the current field and
+      move to the next one. Validation keeps the field open on error, and
+      `Enter` on the last field finishes the session. Fields no longer save the
+      whole task and kick the focus back to Content.
+- [x] **Per-project review interval** — the New Project sheet carries a Review
+      every (days) field, pre-filled from `Settings.default_review_days`, and
+      `CreateProject` stores it per project. The inspector already shows each
+      project's cadence.
+- [x] **Nested folders** — `folder add 'Work/Client/BigCo'` and
+      `project add --folder 'Work/Client/BigCo'` round-trip through the CLI,
+      and the GUI indents folders and projects one step per level. Verified in
+      a live window at three levels.
 - [x] **Project completion tick** — a sidebar project with tasks but no open
       ones shows a tick instead of 0, and any open task restores the count.
       A new project keeps its 0 until it has a task.
@@ -128,9 +177,9 @@ landed and verified.
       time.
 - [x] Project creation sheets omit the corner close control because the footer
       already offers Cancel.
-- [x] Tooltips stay hidden for about five seconds, and a click mutes the
-      button's tooltip until the pointer leaves. Hovering again later restores
-      the normal behaviour.
+- [x] Tooltips stay hidden for three seconds, and a click mutes the button's
+      tooltip until the pointer leaves. Hovering again later restores the
+      normal behaviour.
 - [x] Trash has a **Select all** button and `⌘A`, so the whole bin can be
       restored or purged in one action.
 - [x] The **Add task** action moved to the title bar as a labelled plus button

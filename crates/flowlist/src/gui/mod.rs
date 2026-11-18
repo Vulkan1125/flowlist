@@ -918,6 +918,9 @@ impl FlowlistApp {
         self.selected.clear();
         self.anchor = None;
         self.search.clear();
+        self.editing = None;
+        self.field_error = None;
+        self.draft_task = None;
         self.focus = FocusArea::Content;
         self.save_session();
     }
@@ -1800,6 +1803,9 @@ impl FlowlistApp {
         self.suggestion_index = 0;
         self.suggestion_engaged = false;
         self.commit_field(cx);
+        // The suggestion was accepted, so this field session is over. A
+        // first-time task now shows its inspector actions.
+        self.draft_task = None;
     }
 
     fn choose_tag_suggestion(&mut self, path: String, cx: &mut Context<Self>) {
@@ -2086,11 +2092,6 @@ impl FlowlistApp {
     }
 
     fn begin_edit(&mut self, field: EditField, cx: &mut Context<Self>) {
-        // Leaving the title editor ends the new-task draft even if the user
-        // clicked straight into another field instead of pressing Return.
-        if self.editing == Some(EditField::Title) && field != EditField::Title {
-            self.draft_task = None;
-        }
         let Some(id) = self.selected_one() else {
             self.toast = Some("Select a task first".to_string());
             cx.notify();
@@ -2140,17 +2141,20 @@ impl FlowlistApp {
         cx.notify();
     }
 
-    fn commit_field(&mut self, cx: &mut Context<Self>) {
+    /// Save the open field. Returns `false` when validation kept the editor
+    /// open (an empty title, an unparseable date, or a project that needs
+    /// confirmation), so callers can avoid advancing to the next field.
+    fn commit_field(&mut self, cx: &mut Context<Self>) -> bool {
         let Some(field) = self.editing else {
             self.focus = FocusArea::Content;
             cx.notify();
-            return;
+            return false;
         };
         let Some(id) = self.selected_one() else {
             self.editing = None;
             self.focus = FocusArea::Content;
             cx.notify();
-            return;
+            return false;
         };
         let raw = self.field.text().to_string();
         let value = raw.trim().to_string();
@@ -2160,7 +2164,7 @@ impl FlowlistApp {
                 if value.is_empty() {
                     self.field_error = Some("A task needs a title".to_string());
                     cx.notify();
-                    return;
+                    return false;
                 }
                 patch.title = Some(value);
             }
@@ -2189,7 +2193,7 @@ impl FlowlistApp {
                             },
                             cx,
                         );
-                        return;
+                        return false;
                     }
                     patch.project_path = Some(Some(value));
                 }
@@ -2203,7 +2207,7 @@ impl FlowlistApp {
                         Err(error) => {
                             self.field_error = Some(error.to_string());
                             cx.notify();
-                            return;
+                            return false;
                         }
                     }
                 };
@@ -2222,7 +2226,7 @@ impl FlowlistApp {
                         Err(error) => {
                             self.field_error = Some(error.to_string());
                             cx.notify();
-                            return;
+                            return false;
                         }
                     }
                 };
@@ -2237,7 +2241,7 @@ impl FlowlistApp {
                         Err(error) => {
                             self.field_error = Some(error.to_string());
                             cx.notify();
-                            return;
+                            return false;
                         }
                     }
                 };
@@ -2247,9 +2251,9 @@ impl FlowlistApp {
         self.execute(Command::UpdateTask { id, patch });
         self.editing = None;
         self.field_error = None;
-        self.draft_task = None;
         self.focus = FocusArea::Content;
         cx.notify();
+        true
     }
 
     fn add_tag_from_buffer(&mut self, cx: &mut Context<Self>) {
@@ -2588,6 +2592,11 @@ impl FlowlistApp {
         self.priority_menu_open = false;
         self.sidebar_menu = None;
         self.focus = FocusArea::Modal;
+        // A sheet belongs to the window rather than a field session, so the
+        // inspector stops editing and a first-time task stops being a draft.
+        self.editing = None;
+        self.field_error = None;
+        self.draft_task = None;
         cx.notify();
     }
 
@@ -2682,6 +2691,7 @@ impl FlowlistApp {
             modals::Modal::NewProject {
                 name,
                 notes,
+                review_days,
                 kind,
                 icon,
                 ..
@@ -2690,6 +2700,18 @@ impl FlowlistApp {
                 if name.is_empty() {
                     return Err("A project needs a name".to_string());
                 }
+                let review_interval_days = if review_days.text().trim().is_empty() {
+                    None
+                } else {
+                    Some(
+                        review_days
+                            .text()
+                            .trim()
+                            .parse::<u32>()
+                            .map_err(|_| "Review days must be a whole number".to_string())?
+                            .max(1),
+                    )
+                };
                 let db = self.store.db();
                 let folder = match &self.view {
                     View::Folder(id) => Some(id.clone()),
@@ -2703,6 +2725,7 @@ impl FlowlistApp {
                 new_project.notes = notes.text().to_string();
                 new_project.kind = *kind;
                 new_project.icon = *icon;
+                new_project.review_interval_days = review_interval_days;
                 new_project.sequential = *kind == ProjectKind::Sequential;
                 new_project.folder = folder;
                 new_project.position = ContainerPosition::End;
@@ -3228,7 +3251,7 @@ impl FlowlistApp {
                         return;
                     }
                     BufferKey::Tab => {
-                        self.tab_focus(mods.shift, cx);
+                        self.tab_focus(mods.shift, true, cx);
                         return;
                     }
                     BufferKey::Ignored => {}
@@ -4070,7 +4093,7 @@ impl FlowlistApp {
                 self.focus = FocusArea::Content;
                 cx.notify();
             }
-            FocusArea::Field => self.commit_field(cx),
+            FocusArea::Field => self.tab_focus(false, false, cx),
             FocusArea::TagInput => self.add_tag_from_buffer(cx),
             FocusArea::Checklist => self.commit_checklist(cx),
             FocusArea::Modal => self.commit_modal(cx),
@@ -4108,20 +4131,38 @@ impl FlowlistApp {
         cx.notify();
     }
 
-    fn tab_focus(&mut self, backwards: bool, cx: &mut Context<Self>) {
+    fn tab_focus(&mut self, backwards: bool, wrap: bool, cx: &mut Context<Self>) {
         match self.focus {
             FocusArea::Field => {
-                let next = self.editing.map(|field| {
+                // Save first; only move on when validation accepted the value.
+                // A failed field (empty title, bad date, project confirm)
+                // keeps the editor open on the same field so the error stays
+                // visible instead of being replaced by the next field.
+                let current = self.editing;
+                let next = current.map(|field| {
                     if backwards {
                         field.previous()
                     } else {
                         field.next()
                     }
                 });
-                self.commit_field(cx);
-                if let Some(next) = next {
-                    self.begin_edit(next, cx);
+                if !self.commit_field(cx) {
+                    return;
                 }
+                let Some(next) = next else {
+                    return;
+                };
+                // Enter on the last field finishes editing. Tab keeps cycling
+                // through the fields, so the keyboard never traps the focus.
+                if !wrap && !backwards && current == Some(EditField::Repeat) {
+                    // The first-time task stops being a draft only when the
+                    // whole field session ends, not when its title is saved,
+                    // so Delete/Complete stay out of the way while the user
+                    // is still filling it in.
+                    self.draft_task = None;
+                    return;
+                }
+                self.begin_edit(next, cx);
             }
             FocusArea::TagInput => {
                 self.focus = FocusArea::Content;
@@ -4559,6 +4600,18 @@ impl FlowlistApp {
         // Inserted after the macro: the full field list is already at the
         // json! recursion limit, so new debug fields go in one at a time.
         state["project_badges"] = serde_json::json!(project_badges);
+        state["toast"] = serde_json::json!(self.toast);
+        state["modal_fields"] = serde_json::json!(match &self.modal {
+            Some(modal) => (0..modal.field_count())
+                .map(|index| {
+                    serde_json::json!({
+                        "label": modal.field_label(index),
+                        "text": modal.field(index).map(|buffer| buffer.text().to_string()),
+                    })
+                })
+                .collect::<Vec<_>>(),
+            None => Vec::new(),
+        });
         state["archive_projects"] = serde_json::json!(
             query::archived_projects(self.store.db())
                 .into_iter()

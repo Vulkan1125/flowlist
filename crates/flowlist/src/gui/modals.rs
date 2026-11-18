@@ -35,6 +35,9 @@ pub enum Modal {
     NewProject {
         name: TextBuffer,
         notes: TextBuffer,
+        /// Review cadence for this project, in days. Starts at the library
+        /// default and can be changed per project.
+        review_days: TextBuffer,
         kind: ProjectKind,
         icon: ProjectIcon,
         /// The icon grid stays folded away until the current icon is clicked.
@@ -169,10 +172,11 @@ impl Modal {
         Modal::DeleteFolder { id, name }
     }
 
-    pub fn new_project(_app: &FlowlistApp) -> Self {
+    pub fn new_project(app: &FlowlistApp) -> Self {
         Modal::NewProject {
             name: TextBuffer::empty(),
             notes: TextBuffer::empty(),
+            review_days: TextBuffer::new(app.store.db().settings.default_review_days.to_string()),
             kind: ProjectKind::Parallel,
             icon: ProjectIcon::default(),
             icon_open: false,
@@ -307,7 +311,7 @@ impl Modal {
     pub fn field_count(&self) -> usize {
         match self {
             Modal::Rename { .. } => 1,
-            Modal::NewProject { .. } => 2,
+            Modal::NewProject { .. } => 3,
             Modal::CreateProject { .. } => 0,
             Modal::DeleteProject { .. } => 0,
             Modal::DeleteFolder { .. } => 0,
@@ -323,9 +327,15 @@ impl Modal {
     pub fn field(&self, index: usize) -> Option<&TextBuffer> {
         match self {
             Modal::Rename { name, .. } => (index == 0).then_some(name),
-            Modal::NewProject { name, notes, .. } => match index {
+            Modal::NewProject {
+                name,
+                notes,
+                review_days,
+                ..
+            } => match index {
                 0 => Some(name),
                 1 => Some(notes),
+                2 => Some(review_days),
                 _ => None,
             },
             Modal::CreateProject { .. } => None,
@@ -361,9 +371,15 @@ impl Modal {
     pub fn field_mut(&mut self, index: usize) -> Option<&mut TextBuffer> {
         match self {
             Modal::Rename { name, .. } => (index == 0).then_some(name),
-            Modal::NewProject { name, notes, .. } => match index {
+            Modal::NewProject {
+                name,
+                notes,
+                review_days,
+                ..
+            } => match index {
                 0 => Some(name),
                 1 => Some(notes),
+                2 => Some(review_days),
                 _ => None,
             },
             Modal::CreateProject { .. } => None,
@@ -402,6 +418,7 @@ impl Modal {
             Modal::NewProject { .. } => match index {
                 0 => "Name",
                 1 => "Notes",
+                2 => "Review every (days)",
                 _ => "",
             },
             Modal::CreateProject { .. } => "",

@@ -46,6 +46,8 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "draft": false,
   "suggestions": 0,
   "window": [1254.0, 1404.0],
+  "toast": null,
+  "modal_fields": [],
   "theme": "catppuccin",
   "appearance": "light",
   "blur": "light",
@@ -75,6 +77,10 @@ to the box where the row's icon starts, plus `empty:<folder>` for an empty
 folder's note, which makes indentation assertable. `sidebar_drag_target` is
 the row a dragged project is currently over (`folder:<id>`, `library`, or
 null), so a split drag can check the highlight before releasing the mouse.
+`modal_fields` lists every field in the open sheet with its label and current
+text, which lets a probe check the New Project review default and the result of
+`Tab` between fields. `toast` carries the live toast message, or null once the
+timer or a click clears it.
 `collapsed` lists the tree keys (`folder:<id>`, `tag:<id>`) the user has
 folded, so a probe can assert a folder row's open/close click without relying
 on pixels.
