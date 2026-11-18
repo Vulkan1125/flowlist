@@ -27,6 +27,14 @@ pub enum EntityRef {
     Perspective(flowlist_core::ids::PerspectiveId),
 }
 
+/// What an attachment link sheet is attached to. Keeping the typed id means a
+/// link can never land on the wrong task or project.
+#[derive(Clone, Debug)]
+pub enum AttachmentTarget {
+    Task(TaskId),
+    Project(ProjectId),
+}
+
 pub enum Modal {
     Rename {
         entity: EntityRef,
@@ -60,6 +68,13 @@ pub enum Modal {
     DeleteFolder {
         id: FolderId,
         name: String,
+    },
+    /// Adding an http(s) link to a task or project. Links share the attachment
+    /// list with file paths, so the row badge and the Attachments view already
+    /// include them.
+    AttachLink {
+        target: AttachmentTarget,
+        url: TextBuffer,
     },
     NewFolder {
         name: TextBuffer,
@@ -183,6 +198,13 @@ impl Modal {
         }
     }
 
+    pub fn attach_link(target: AttachmentTarget) -> Self {
+        Modal::AttachLink {
+            target,
+            url: TextBuffer::empty(),
+        }
+    }
+
     pub fn new_folder(_app: &FlowlistApp) -> Self {
         Modal::NewFolder {
             name: TextBuffer::empty(),
@@ -250,6 +272,7 @@ impl Modal {
             Modal::CreateProject { .. } => "Create project",
             Modal::DeleteProject { .. } => "Delete project",
             Modal::DeleteFolder { .. } => "Delete folder",
+            Modal::AttachLink { .. } => "Attach link",
             Modal::NewFolder { .. } => "New folder",
             Modal::NewTag { .. } => "New tag",
             Modal::Perspective { .. } => "Perspective",
@@ -274,7 +297,10 @@ impl Modal {
                 "Its tasks move to Trash. Undo restores the project and its tasks."
             }
             Modal::DeleteFolder { .. } => {
-                "Its projects move up to its parent. Undo restores the folder."
+                "Its projects and their tasks move to Trash with it. Undo restores everything."
+            }
+            Modal::AttachLink { .. } => {
+                "Paste an http(s) address; it opens in your browser. Undo removes it."
             }
             Modal::NewFolder { .. } => "Folders group projects. They can be nested.",
             Modal::NewTag { .. } => "Tags are contexts: places, tools or people.",
@@ -304,6 +330,7 @@ impl Modal {
             Modal::CreateProject { .. } => "Create",
             Modal::DeleteProject { .. } => "Delete",
             Modal::DeleteFolder { .. } => "Delete",
+            Modal::AttachLink { .. } => "Attach",
             _ => "Save",
         }
     }
@@ -315,6 +342,7 @@ impl Modal {
             Modal::CreateProject { .. } => 0,
             Modal::DeleteProject { .. } => 0,
             Modal::DeleteFolder { .. } => 0,
+            Modal::AttachLink { .. } => 1,
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
             Modal::Perspective { .. } => 1,
             Modal::Import { .. } => 1,
@@ -341,6 +369,7 @@ impl Modal {
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
+            Modal::AttachLink { url, .. } => (index == 0).then_some(url),
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&form.name),
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -385,6 +414,7 @@ impl Modal {
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
+            Modal::AttachLink { url, .. } => (index == 0).then_some(url),
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&mut form.name),
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -424,6 +454,7 @@ impl Modal {
             Modal::CreateProject { .. } => "",
             Modal::DeleteProject { .. } => "",
             Modal::DeleteFolder { .. } => "",
+            Modal::AttachLink { .. } => "Address",
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
             Modal::Perspective { .. } => "Name",
             Modal::Import { .. } => "Library text",
@@ -560,7 +591,7 @@ impl FlowlistApp {
                         .child(path.clone()),
                 );
             }
-            if let Modal::DeleteProject { name, .. } | Modal::DeleteFolder { name, .. } = modal {
+            if let Modal::DeleteProject { name, .. } = modal {
                 body = body.child(
                     div()
                         .p_2()
@@ -572,6 +603,37 @@ impl FlowlistApp {
                         .font_weight(gpui::FontWeight::SEMIBOLD)
                         .text_color(theme.text)
                         .child(name.clone()),
+                );
+            }
+            if let Modal::DeleteFolder { id, name } = modal {
+                // Name the folder and say how much goes with it, so the
+                // cascade is never a surprise.
+                let projects = self.store.db().project_count(id);
+                let detail = match projects {
+                    0 => "It has no projects inside.".to_string(),
+                    1 => "Its 1 project, and every task in it, moves to Trash too.".to_string(),
+                    count => {
+                        format!("Its {count} projects, and every task in them, move to Trash too.")
+                    }
+                };
+                body = body.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.danger)
+                        .bg(theme.field)
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(theme.text)
+                                .child(name.clone()),
+                        )
+                        .child(div().text_xs().text_color(theme.text_faint).child(detail)),
                 );
             }
             for index in 0..field_count {
@@ -955,7 +1017,7 @@ impl FlowlistApp {
 
     /// Record where a perspective control painted so its menu can be a root
     /// overlay and a GUI probe can click the control or one of its options.
-    fn view_probe(
+    pub(super) fn view_probe(
         &self,
         key: String,
     ) -> impl Fn(Vec<Bounds<gpui::Pixels>>, &mut Window, &mut gpui::App) + 'static {

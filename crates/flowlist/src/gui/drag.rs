@@ -2,7 +2,7 @@
 
 use gpui::{App, Context, IntoElement, Pixels, Point, Render, Window, div, prelude::*, px};
 
-use flowlist_core::ids::{ProjectId, TaskId};
+use flowlist_core::ids::{FolderId, ProjectId, TaskId};
 
 use super::icons::{self, Icon};
 use super::theme::Theme;
@@ -41,20 +41,38 @@ impl DragProject {
     }
 }
 
+/// A folder row being dragged onto another folder, or onto the Library heading
+/// to move it back to the root. Folders can nest, so any folder is a target
+/// unless it sits inside the dragged one.
+#[derive(Clone, Debug)]
+pub struct DragFolder {
+    pub id: FolderId,
+    pub label: String,
+}
+
+impl DragFolder {
+    pub fn folder(id: FolderId, label: impl Into<String>) -> Self {
+        Self {
+            id,
+            label: label.into(),
+        }
+    }
+}
+
 pub struct DragGhost {
     label: String,
     position: Point<Pixels>,
     theme: Theme,
-    tag: bool,
+    icon: Icon,
 }
 
 impl DragGhost {
-    pub fn new(label: String, tag: bool, position: Point<Pixels>, theme: Theme) -> Self {
+    pub fn new(label: String, icon: Icon, position: Point<Pixels>, theme: Theme) -> Self {
         Self {
             label,
             position,
             theme,
-            tag,
+            icon,
         }
     }
 }
@@ -81,11 +99,7 @@ impl Render for DragGhost {
                     .text_color(self.theme.text)
                     .text_sm()
                     .shadow_md()
-                    .child(icons::icon(
-                        if self.tag { Icon::Tag } else { Icon::Project },
-                        13.0,
-                        self.theme.text_dim,
-                    ))
+                    .child(icons::icon(self.icon, 13.0, self.theme.text_dim))
                     .child(
                         div()
                             .min_w_0()
@@ -106,8 +120,12 @@ pub fn ghost(
     theme: Theme,
 ) -> gpui::Entity<DragGhost> {
     let label = payload.label.clone();
-    let tag = payload.tag;
-    cx.new(|_| DragGhost::new(label, tag, position, theme))
+    let icon = if payload.tag {
+        Icon::Tag
+    } else {
+        Icon::Project
+    };
+    cx.new(|_| DragGhost::new(label, icon, position, theme))
 }
 
 /// Constructor used by a project row's `.on_drag`.
@@ -119,5 +137,17 @@ pub fn project_ghost(
     theme: Theme,
 ) -> gpui::Entity<DragGhost> {
     let label = payload.label.clone();
-    cx.new(|_| DragGhost::new(label, false, position, theme))
+    cx.new(|_| DragGhost::new(label, Icon::Project, position, theme))
+}
+
+/// Constructor used by a folder row's `.on_drag`.
+pub fn folder_ghost(
+    payload: &DragFolder,
+    position: Point<Pixels>,
+    _window: &mut Window,
+    cx: &mut App,
+    theme: Theme,
+) -> gpui::Entity<DragGhost> {
+    let label = payload.label.clone();
+    cx.new(|_| DragGhost::new(label, Icon::Folder, position, theme))
 }

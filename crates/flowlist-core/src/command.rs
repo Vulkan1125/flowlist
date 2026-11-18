@@ -1075,42 +1075,10 @@ impl Command {
             }
             Command::DeleteProject { id } => {
                 db.project(&id)?;
-                let roots: Vec<TaskId> = db
-                    .tasks
-                    .values()
-                    .filter(|task| task.project.as_ref() == Some(&id) && task.parent.is_none())
-                    .map(|task| task.id.clone())
-                    .collect();
-                let mut trashed: BTreeSet<TaskId> = BTreeSet::new();
-                for root in &roots {
-                    for descendant in db.task_subtree(root) {
-                        trashed.insert(descendant);
-                    }
-                }
-                for task_id in &trashed {
-                    if let Some(task) = db.tasks.get_mut(task_id) {
-                        task.trashed_at = Some(at);
-                        task.modified_at = at;
-                    }
-                }
-                // The project's ordering list disappears with it. Keep the
-                // trashed roots addressable from the Inbox so validation and
-                // an Undo can both find them.
-                for root in roots {
-                    if let Some(task) = db.tasks.get_mut(&root) {
-                        task.project = None;
-                    }
-                    if !db.inbox_order.contains(&root) {
-                        db.inbox_order.push(root);
-                    }
-                }
-                db.detach_container(&ContainerId::Project(id.clone()));
-                db.projects.remove(&id);
+                let trashed = trash_project(db, &id, at);
                 db.touch();
-                outcome.message = Some(format!(
-                    "Project deleted; {} task(s) moved to Trash",
-                    trashed.len()
-                ));
+                outcome.message =
+                    Some(format!("Project deleted; {trashed} task(s) moved to Trash"));
             }
             Command::CreateFolder {
                 name,
@@ -1164,16 +1132,35 @@ impl Command {
                 outcome.affected.push(id.to_string());
             }
             Command::DeleteFolder { id } => {
-                let folder = db.folder(&id)?.clone();
-                let parent = folder.parent.clone();
-                for child in folder.child_order.clone() {
-                    db.detach_container(&child);
-                    db.insert_container(parent.clone(), child, ContainerPosition::End);
+                db.folder(&id)?;
+                // A folder owns everything below it, so deleting one takes its
+                // nested folders and their projects with it. Tasks inside those
+                // projects move to Trash, the same as deleting a project on its
+                // own. The store snapshots before the command runs, so Undo
+                // restores the whole tree and its tasks in one step.
+                let mut folders = db.folder_descendants(&id);
+                folders.push(id.clone());
+                let projects: Vec<ProjectId> = db
+                    .projects
+                    .values()
+                    .filter(|project| {
+                        project
+                            .folder
+                            .as_ref()
+                            .is_some_and(|folder| folders.contains(folder))
+                    })
+                    .map(|project| project.id.clone())
+                    .collect();
+                let mut trashed = 0;
+                for project in &projects {
+                    trashed += trash_project(db, project, at);
                 }
-                db.detach_container(&ContainerId::Folder(id.clone()));
-                db.folders.remove(&id);
+                remove_folder_tree(db, &id);
                 db.touch();
-                outcome.message = Some("Folder deleted; its projects were moved up".to_string());
+                outcome.message = Some(format!(
+                    "Folder deleted; {} project(s) and {trashed} task(s) moved to Trash",
+                    projects.len()
+                ));
             }
             Command::CreateTag {
                 name,
@@ -1417,6 +1404,60 @@ impl Command {
         }
         Ok(outcome)
     }
+}
+
+/// Remove a folder and every folder nested inside it, children first so each
+/// detach can still read its parent's child list.
+fn remove_folder_tree(db: &mut Db, id: &FolderId) {
+    let children = db
+        .folders
+        .get(id)
+        .map(|folder| folder.child_order.clone())
+        .unwrap_or_default();
+    for child in children {
+        if let ContainerId::Folder(child) = child {
+            remove_folder_tree(db, &child);
+        }
+    }
+    db.detach_container(&ContainerId::Folder(id.clone()));
+    db.folders.remove(id);
+}
+
+/// Move a project's whole task tree to Trash and drop the project itself.
+/// Returns how many tasks were trashed. Deleting one project and the folder
+/// cascade share this so both keep the trashed roots reachable from the Inbox.
+fn trash_project(db: &mut Db, id: &ProjectId, at: DateTime<Utc>) -> usize {
+    let roots: Vec<TaskId> = db
+        .tasks
+        .values()
+        .filter(|task| task.project.as_ref() == Some(id) && task.parent.is_none())
+        .map(|task| task.id.clone())
+        .collect();
+    let mut trashed: BTreeSet<TaskId> = BTreeSet::new();
+    for root in &roots {
+        for descendant in db.task_subtree(root) {
+            trashed.insert(descendant);
+        }
+    }
+    for task_id in &trashed {
+        if let Some(task) = db.tasks.get_mut(task_id) {
+            task.trashed_at = Some(at);
+            task.modified_at = at;
+        }
+    }
+    // The project's ordering list disappears with it. Keep the trashed roots
+    // addressable from the Inbox so validation and an Undo can both find them.
+    for root in roots {
+        if let Some(task) = db.tasks.get_mut(&root) {
+            task.project = None;
+        }
+        if !db.inbox_order.contains(&root) {
+            db.inbox_order.push(root);
+        }
+    }
+    db.detach_container(&ContainerId::Project(id.clone()));
+    db.projects.remove(id);
+    trashed.len()
 }
 
 /// Attachment paths are user input: trim them and drop empty lines so a blank

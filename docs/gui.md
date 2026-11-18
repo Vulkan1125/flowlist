@@ -91,12 +91,15 @@ checklist steps. In the inspector, `Tab` and `Enter` save the current field and
 move to the next one; a validation error keeps that field open, and `Enter` on
 the last field ends the session. A first-time task stays a draft until then, so
 its Delete and Complete actions stay hidden while you are still filling it in.
+Attachments take local file paths and http(s) links side by side: **Attach
+file…** opens the macOS picker and **Add link…** takes a pasted address.
 Checklist steps are lightweight and never appear as tasks; completing a
 repeating task copies the checklist with every step unchecked.
 
-Drag a task onto a project, tag, parent or sibling position. Drag a project
-onto a folder, onto the LIBRARY heading, or onto empty space under the tree to
-return it to the root. Drops are undoable.
+Drag a task onto a project, tag, parent or sibling position. Drag a project or
+a folder onto a folder, onto the LIBRARY heading, or onto empty space under the
+tree to return it to the root. A folder nests inside another folder but never
+inside itself or its own subtree. Drops are undoable.
 
 ## Sidebar
 

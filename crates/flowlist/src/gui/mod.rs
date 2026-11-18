@@ -47,7 +47,7 @@ use flowlist_core::store::Store;
 use flowlist_core::time::{Stamp, format_duration, local_date, now};
 use flowlist_core::{export, taskpaper};
 
-use drag::{DragProject, DragTask};
+use drag::{DragFolder, DragProject, DragTask};
 use icons::Icon;
 
 pub use session::{Session, View};
@@ -1263,6 +1263,31 @@ impl FlowlistApp {
         .detach();
     }
 
+    /// Open the small link sheet for the selected task, or for the project
+    /// whose inspector is showing. The sheet's single field takes an http(s)
+    /// address and Enter attaches it.
+    fn attach_link(&mut self, cx: &mut Context<Self>) {
+        let task = self.selected_one();
+        let project = if task.is_none() {
+            match &self.view {
+                View::Project(id) => Some(id.clone()),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let target = match (task, project) {
+            (Some(id), _) => modals::AttachmentTarget::Task(id),
+            (None, Some(id)) => modals::AttachmentTarget::Project(id),
+            _ => {
+                self.toast = Some("Select a task or project first".to_string());
+                cx.notify();
+                return;
+            }
+        };
+        self.open_modal(modals::Modal::attach_link(target), cx);
+    }
+
     fn add_attachments(
         &mut self,
         task: Option<TaskId>,
@@ -2420,8 +2445,9 @@ impl FlowlistApp {
         }
     }
 
-    /// Remember which sidebar row a dragged project is over. The folder row,
-    /// LIBRARY heading and the empty sidebar area paint themselves from this.
+    /// Remember which sidebar row a dragged project or folder is over. The
+    /// folder row, LIBRARY heading and the empty sidebar area paint themselves
+    /// from this.
     fn set_drag_target(&mut self, target: Option<String>, cx: &mut Context<Self>) {
         if self.sidebar_drag_target != target {
             self.sidebar_drag_target = target;
@@ -2477,6 +2503,67 @@ impl FlowlistApp {
             .is_some_and(|project| project.folder.is_none());
         if !at_root {
             self.execute(Command::MoveProject {
+                id: payload.id.clone(),
+                placement: ContainerPlacement {
+                    parent: None,
+                    position: ContainerPosition::End,
+                },
+            });
+        }
+        self.sidebar_drag_target = None;
+        cx.notify();
+        self.repaint_after_drop(cx);
+    }
+
+    /// Whether a folder can be dropped into `target`: never onto itself, and
+    /// never inside its own subtree, since that would detach the tree.
+    fn folder_can_hold(&self, dragged: &FolderId, target: &FolderId) -> bool {
+        dragged != target && !self.store.db().folder_descendants(dragged).contains(target)
+    }
+
+    /// Nest a dragged folder inside another folder. Dropping it where it
+    /// already sits is a no-op, so it adds no history entry.
+    fn drop_folder_on_folder(
+        &mut self,
+        target: FolderId,
+        payload: &DragFolder,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.folder_can_hold(&payload.id, &target) {
+            self.sidebar_drag_target = None;
+            cx.notify();
+            return;
+        }
+        let already_there = self
+            .store
+            .db()
+            .folders
+            .get(&payload.id)
+            .is_some_and(|folder| folder.parent.as_ref() == Some(&target));
+        if !already_there {
+            self.execute(Command::MoveFolder {
+                id: payload.id.clone(),
+                placement: ContainerPlacement {
+                    parent: Some(target),
+                    position: ContainerPosition::End,
+                },
+            });
+        }
+        self.sidebar_drag_target = None;
+        cx.notify();
+        self.repaint_after_drop(cx);
+    }
+
+    /// Move a dragged folder back to the Library root.
+    fn drop_folder_on_library(&mut self, payload: &DragFolder, cx: &mut Context<Self>) {
+        let at_root = self
+            .store
+            .db()
+            .folders
+            .get(&payload.id)
+            .is_some_and(|folder| folder.parent.is_none());
+        if !at_root {
+            self.execute(Command::MoveFolder {
                 id: payload.id.clone(),
                 placement: ContainerPlacement {
                     parent: None,
@@ -2780,6 +2867,60 @@ impl FlowlistApp {
                     parent,
                     position: ContainerPosition::End,
                 });
+            }
+            modals::Modal::AttachLink { target, url } => {
+                let Some(link) = flowlist_core::model::attachment::normalize_web_link(url.text())
+                else {
+                    return Err("Links start with http:// or https://".to_string());
+                };
+                match target {
+                    modals::AttachmentTarget::Task(id) => {
+                        let Some(mut attachments) = self
+                            .store
+                            .db()
+                            .tasks
+                            .get(id)
+                            .map(|task| task.attachments.clone())
+                        else {
+                            return Err("That task no longer exists".to_string());
+                        };
+                        if attachments.contains(&link) {
+                            self.toast = Some("That link is already attached".to_string());
+                            return Ok(());
+                        }
+                        attachments.push(link);
+                        self.execute(Command::UpdateTask {
+                            id: id.clone(),
+                            patch: TaskPatch {
+                                attachments: Some(attachments),
+                                ..Default::default()
+                            },
+                        });
+                    }
+                    modals::AttachmentTarget::Project(id) => {
+                        let Some(mut attachments) = self
+                            .store
+                            .db()
+                            .projects
+                            .get(id)
+                            .map(|project| project.attachments.clone())
+                        else {
+                            return Err("That project no longer exists".to_string());
+                        };
+                        if attachments.contains(&link) {
+                            self.toast = Some("That link is already attached".to_string());
+                            return Ok(());
+                        }
+                        attachments.push(link);
+                        self.execute(Command::UpdateProject {
+                            id: id.clone(),
+                            patch: ProjectPatch {
+                                attachments: Some(attachments),
+                                ..Default::default()
+                            },
+                        });
+                    }
+                }
             }
             modals::Modal::NewTag { name } => {
                 let name = name.text().trim().to_string();

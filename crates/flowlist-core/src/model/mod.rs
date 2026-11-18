@@ -1,5 +1,6 @@
 //! Entity definitions.
 
+pub mod attachment;
 pub mod folder;
 pub mod perspective;
 pub mod project;

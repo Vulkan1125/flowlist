@@ -144,7 +144,7 @@ pub struct AddArgs {
     /// Make this a subtask of an existing task.
     #[arg(long)]
     pub parent: Option<String>,
-    /// Attach a file path; repeat for several attachments.
+    /// Attach a file path or http(s) link; repeat for several attachments.
     #[arg(long = "attach")]
     pub attachments: Vec<String>,
 }
@@ -169,7 +169,7 @@ pub struct ListArgs {
     /// List tasks changed recently (the Changed perspective).
     #[arg(long)]
     pub changed: bool,
-    /// List tasks that have file attachments.
+    /// List tasks that have attachments (files or links).
     #[arg(long)]
     pub attachments: bool,
     /// List the tasks of finished and dropped projects.
@@ -248,7 +248,7 @@ pub struct EditArgs {
     /// low | medium | high; `none` clears it.
     #[arg(long)]
     pub priority: Option<String>,
-    /// Attach a file path; repeat for several attachments.
+    /// Attach a file path or http(s) link; repeat for several attachments.
     #[arg(long = "attach")]
     pub attachments: Vec<String>,
     /// Remove every attachment.
@@ -481,7 +481,7 @@ pub struct ProjectAddArgs {
     /// project | folder | star | briefcase | home | heart | book | code | rocket | coffee
     #[arg(long)]
     pub icon: Option<String>,
-    /// Attach a file path; repeat for several attachments.
+    /// Attach a file path or http(s) link; repeat for several attachments.
     #[arg(long = "attach")]
     pub attachments: Vec<String>,
 }
@@ -513,7 +513,7 @@ pub struct ProjectEditArgs {
     /// project | folder | star | briefcase | home | heart | book | code | rocket | coffee
     #[arg(long)]
     pub icon: Option<String>,
-    /// Attach a file path; repeat for several attachments.
+    /// Attach a file path or http(s) link; repeat for several attachments.
     #[arg(long = "attach")]
     pub attachments: Vec<String>,
     /// Remove every attachment.
@@ -538,7 +538,7 @@ pub enum FolderCommand {
         id: String,
         name: String,
     },
-    /// Delete a folder; its projects move up a level.
+    /// Delete a folder, its nested folders and their projects; tasks move to Trash.
     #[command(alias = "rm")]
     Remove {
         id: String,

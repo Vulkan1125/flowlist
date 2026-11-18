@@ -1732,3 +1732,124 @@ fn today_gathers_overdue_and_the_current_day() {
     );
     assert_eq!(builtin.len(), 2);
 }
+
+#[test]
+fn attachment_links_sit_alongside_file_paths() {
+    use flowlist_core::model::BuiltinPerspective;
+    use flowlist_core::model::attachment;
+    use flowlist_core::query;
+
+    assert!(attachment::is_web_link("https://example.com/brief"));
+    assert!(attachment::is_web_link("HTTP://example.com"));
+    assert!(!attachment::is_web_link("/tmp/brief.pdf"));
+    assert!(!attachment::is_web_link("https://"));
+    assert_eq!(
+        attachment::attachment_name("https://www.example.com/brief/"),
+        "example.com/brief"
+    );
+    assert_eq!(attachment::attachment_name("/tmp/brief.pdf"), "brief.pdf");
+    assert_eq!(
+        attachment::normalize_web_link("example.com/brief"),
+        Some("https://example.com/brief".to_string())
+    );
+    assert_eq!(
+        attachment::normalize_web_link("https://example.com"),
+        Some("https://example.com".to_string())
+    );
+    assert_eq!(attachment::normalize_web_link("two words"), None);
+    assert_eq!(attachment::normalize_web_link("https://"), None);
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let id = add(&mut store, "Read the brief");
+    let task_id = store.db().resolve_task(&id).unwrap();
+    store
+        .execute(Command::UpdateTask {
+            id: task_id.clone(),
+            patch: TaskPatch {
+                attachments: Some(vec![
+                    "/tmp/brief.pdf".into(),
+                    "https://example.com/brief".into(),
+                ]),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert_eq!(
+        store.db().tasks[&task_id].attachments,
+        vec!["/tmp/brief.pdf", "https://example.com/brief"]
+    );
+
+    // The Attachments perspective counts links the same as files.
+    let groups = query::view(store.db(), BuiltinPerspective::Attachments, Utc::now());
+    let ids: Vec<_> = groups
+        .iter()
+        .flat_map(|group| group.rows.iter().map(|row| row.id.clone()))
+        .collect();
+    assert_eq!(ids, vec![task_id]);
+}
+
+#[test]
+fn deleting_a_folder_takes_its_projects_and_tasks() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let work = add_folder_in(&mut store, "Work", None);
+    let client = add_folder_in(&mut store, "Client", Some(&work));
+    let bigco = add_folder_in(&mut store, "BigCo", Some(&client));
+    let top = add_project_in(&mut store, "Top", Some(&work));
+    let nested = add_project_in(&mut store, "Nested", Some(&bigco));
+    let outside = add_project_in(&mut store, "Outside", None);
+    assert_eq!(store.db().project_count(&work), 2);
+
+    let mut nested_task = NewTask::new("Nested task");
+    nested_task.project = Some(nested.clone());
+    let nested_task = store
+        .execute(Command::CreateTask(nested_task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let nested_task = store.db().resolve_task(&nested_task).unwrap();
+    let outside_task = add_task(&mut store, "Outside task");
+
+    store
+        .execute(Command::DeleteFolder { id: work.clone() })
+        .unwrap();
+
+    assert!(!store.db().folders.contains_key(&work));
+    assert!(!store.db().folders.contains_key(&client));
+    assert!(!store.db().folders.contains_key(&bigco));
+    assert!(!store.db().projects.contains_key(&top));
+    assert!(!store.db().projects.contains_key(&nested));
+    assert!(store.db().projects.contains_key(&outside));
+    assert!(store.db().tasks[&nested_task].is_trashed());
+    assert!(!store.db().tasks[&outside_task].is_trashed());
+
+    // One Undo brings back every folder, project and task together.
+    store.undo().unwrap();
+    assert!(store.db().folders.contains_key(&work));
+    assert!(store.db().folders.contains_key(&client));
+    assert!(store.db().folders.contains_key(&bigco));
+    assert_eq!(store.db().project_count(&work), 2);
+    assert!(!store.db().tasks[&nested_task].is_trashed());
+    assert_eq!(store.db().projects[&nested].folder, Some(bigco));
+}
+
+#[test]
+fn deleting_a_folder_without_projects_still_removes_its_tree() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let work = add_folder_in(&mut store, "Work", None);
+    let client = add_folder_in(&mut store, "Client", Some(&work));
+    store
+        .execute(Command::DeleteFolder { id: work.clone() })
+        .unwrap();
+    assert!(store.db().folders.is_empty());
+    assert!(store.db().root.is_empty());
+
+    store.undo().unwrap();
+    assert!(store.db().folders.contains_key(&work));
+    assert!(store.db().folders.contains_key(&client));
+    assert_eq!(store.db().folders[&client].parent, Some(work));
+}

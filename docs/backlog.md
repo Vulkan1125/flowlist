@@ -32,10 +32,15 @@ below; this list is the current map.
 
 ### Phase 2 — Safety and containment
 
-- [ ] **Attachment website links** — http(s) attachments alongside file paths,
-      with inspector, row badge and open behaviour.
-- [ ] **Folder delete cascade** — deleting a folder also deletes the projects
-      inside it, after a clear warning, as one undoable step.
+- [x] **Attachment website links** — http(s) attachments sit beside file paths,
+      with the inspector's Add link… sheet, a link-aware row badge, the shared
+      Attachments view, and `--attach` / MCP fields accepting links.
+- [x] **Folder delete cascade** — deleting a folder takes its nested folders,
+      their projects and tasks to Trash, after a sheet that names the folder
+      and counts its projects, as one undoable step.
+- [x] **Folder dragging** — folder rows drag like project rows: drop on a
+      folder to nest, on LIBRARY or the empty rail to return to the root, with
+      self/descendant drops rejected and one undoable move.
 
 ### Phase 3 — Recurring task series
 

@@ -192,8 +192,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       and Back returns to the calendar. Done (or Enter) writes the timed stamp.
 - [x] Inspector with checklist add/toggle/rename/reorder/delete and progress
 - [x] Task subtitle type chips (parallel/sequential action groups)
-- [x] Attachments in the task and project inspectors: add paths, open,
-      remove, plus a paperclip count badge on rows
+- [x] Attachments in the task and project inspectors: add file paths and
+      website links, open either, remove, plus a paperclip (or link) count
+      badge on rows and the shared Attachments perspective
 - [x] Convert a task and its subtasks into a project in one undo step
 - [x] Project icon picker collapsed behind the current icon button in the
       inspector and New Project sheet, with the chosen icon in the sidebar
@@ -228,9 +229,14 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Nearby ranks tasks by the distance between the library and tag locations
 - [x] Delete folder/tag/perspective/project from the sidebar (`⌘⌫` or `dd`);
       deleting a project moves its tasks to Trash and is undoable
-- [x] Deleting a folder asks first: its projects move up to the parent, the
-      sheet names the folder, and Undo restores it. The × button, the
+- [x] Deleting a folder asks first: nested folders, their projects and every
+      task inside move to Trash with it, the sheet names the folder and counts
+      its projects, and one Undo restores the whole tree. The × button, the
       right-click menu and the sidebar's `⌘⌫` / `dd` share the confirmation.
+- [x] Folder rows drag like projects: drop one on another folder to nest it,
+      or on the LIBRARY heading or empty rail space to move it back to the
+      root. A folder cannot be dropped into itself or its own subtree, and a
+      drop is one undoable move.
 - [x] Project status management (active/on hold/done/dropped)
 - [x] Import modal (JSON or TaskPaper, merge or replace)
 - [x] TaskPaper clipboard export (`⇧⌘E`)

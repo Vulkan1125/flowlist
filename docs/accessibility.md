@@ -167,8 +167,9 @@ Restore and Delete forever buttons. Deleting keeps the next row selected.
 The × on a sidebar project opens a Delete project sheet that names the project
 and explains that its tasks move to Trash. Enter confirms, Esc cancels, and
 `⌘Z` still restores everything in one step. The × on a folder, its right-click
-menu and `⌘⌫` / `dd` open the same kind of sheet, explaining that its projects
-move up a level.
+menu and `⌘⌫` / `dd` open the same kind of sheet, explaining that its nested
+folders, projects and their tasks move to Trash with it and that one Undo
+restores the tree.
 
 The Archive is a project surface rather than a task list. Finished and dropped
 projects sit in collapsible folder sections under `Library` or their folder

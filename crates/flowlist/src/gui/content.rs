@@ -1482,6 +1482,13 @@ impl FlowlistApp {
         let expanded = self.is_open(&format!("task:{id}"), true);
         let estimate = task.estimate_min;
         let attachment_count = task.attachments.len();
+        // A task whose attachments are all links reads better with a chain
+        // than a paperclip; a mixed list keeps the paperclip as the umbrella.
+        let attachment_links = attachment_count > 0
+            && task
+                .attachments
+                .iter()
+                .all(|value| flowlist_core::model::attachment::is_web_link(value));
         let (checklist_done, checklist_total) = task.checklist_progress();
         let due = task.due;
         let defer = task.defer;
@@ -1727,11 +1734,24 @@ impl FlowlistApp {
                                     cx,
                                     theme,
                                     format!(
-                                        "{attachment_count} attachment{}",
+                                        "{attachment_count} {}{}",
+                                        if attachment_links {
+                                            "link"
+                                        } else {
+                                            "attachment"
+                                        },
                                         if attachment_count == 1 { "" } else { "s" }
                                     ),
                                 )
-                                .child(icons::icon(Icon::Paperclip, 11.0, theme.text_faint))
+                                .child(icons::icon(
+                                    if attachment_links {
+                                        Icon::Link
+                                    } else {
+                                        Icon::Paperclip
+                                    },
+                                    11.0,
+                                    theme.text_faint,
+                                ))
                                 .child(attachment_count.to_string()),
                         )
                     })

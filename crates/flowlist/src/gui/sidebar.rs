@@ -8,7 +8,7 @@ use gpui::{
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId};
 use flowlist_core::model::{BuiltinPerspective, Priority, ProjectStatus};
 
-use super::drag::{DragProject, DragTask};
+use super::drag::{DragFolder, DragProject, DragTask};
 use super::icons::{self, Icon};
 use super::modals;
 use super::widgets::TipExt;
@@ -1038,8 +1038,12 @@ impl FlowlistApp {
             )
             // Capture-phase drag handlers run shallowest-first, so the rail
             // clears the highlight and each row below sets it again. Typing the
-            // listener to DragProject means task drags never touch this state.
+            // listeners to the project and folder payloads means task drags
+            // never touch this state.
             .on_drag_move::<DragProject>(cx.listener(|this, _, _, cx| {
+                this.set_drag_target(None, cx);
+            }))
+            .on_drag_move::<DragFolder>(cx.listener(|this, _, _, cx| {
                 this.set_drag_target(None, cx);
             }));
 
@@ -1082,7 +1086,17 @@ impl FlowlistApp {
             ))
             .on_drop::<DragProject>(
                 cx.listener(|this, payload: &DragProject, _, cx| this.drop_on_library(payload, cx)),
-            );
+            )
+            .on_drag_move::<DragFolder>(cx.listener(
+                |this, event: &DragMoveEvent<DragFolder>, _, cx| {
+                    if event.bounds.contains(&event.event.position) {
+                        this.set_drag_target(Some("library".to_string()), cx);
+                    }
+                },
+            ))
+            .on_drop::<DragFolder>(cx.listener(|this, payload: &DragFolder, _, cx| {
+                this.drop_folder_on_library(payload, cx)
+            }));
 
         let custom: Vec<PerspectiveRow> = self
             .store
@@ -1131,6 +1145,16 @@ impl FlowlistApp {
                     ))
                     .on_drop::<DragProject>(cx.listener(|this, payload: &DragProject, _, cx| {
                         this.drop_on_library(payload, cx)
+                    }))
+                    .on_drag_move::<DragFolder>(cx.listener(
+                        |this, event: &DragMoveEvent<DragFolder>, _, cx| {
+                            if event.bounds.contains(&event.event.position) {
+                                this.set_drag_target(Some("library".to_string()), cx);
+                            }
+                        },
+                    ))
+                    .on_drop::<DragFolder>(cx.listener(|this, payload: &DragFolder, _, cx| {
+                        this.drop_folder_on_library(payload, cx)
                     }))
                     .child(
                         div()
@@ -1536,6 +1560,11 @@ impl FlowlistApp {
                     let hovered = self.row_hovered(&SidebarTarget::Folder(target_id.clone()));
                     let hover_id = id.clone();
                     let move_key = key.clone();
+                    let folder_move_key = key.clone();
+                    let folder_move_target = id.clone();
+                    let drag_folder_id = id.clone();
+                    let drag_folder_label = name.clone();
+                    let drag_theme = self.theme;
                     let drop_here = self.sidebar_drag_target.as_deref() == Some(key.as_str());
                     let mut row = div()
                         .id(super::sid(format!("sidebar-folder:{id}")))
@@ -1557,6 +1586,20 @@ impl FlowlistApp {
                             move |this, event: &DragMoveEvent<DragProject>, _, cx| {
                                 if event.bounds.contains(&event.event.position) {
                                     this.set_drag_target(Some(move_key.clone()), cx);
+                                }
+                            },
+                        ))
+                        // A folder lands on another folder to nest, but never
+                        // on itself or on one of its own children.
+                        .on_drag_move::<DragFolder>(cx.listener(
+                            move |this, event: &DragMoveEvent<DragFolder>, _, cx| {
+                                if event.bounds.contains(&event.event.position) {
+                                    let dragged = event.drag(cx).id.clone();
+                                    if this.folder_can_hold(&dragged, &folder_move_target) {
+                                        this.set_drag_target(Some(folder_move_key.clone()), cx);
+                                    } else {
+                                        this.set_drag_target(None, cx);
+                                    }
                                 }
                             },
                         ))
@@ -1633,6 +1676,12 @@ impl FlowlistApp {
                                 widgets::count(self.theme, count),
                             ))
                         })
+                        .on_drag(
+                            DragFolder::folder(drag_folder_id.clone(), drag_folder_label.clone()),
+                            move |payload, position, window, cx| {
+                                super::drag::folder_ghost(payload, position, window, cx, drag_theme)
+                            },
+                        )
                         .on_mouse_down(
                             MouseButton::Right,
                             cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
@@ -1652,6 +1701,7 @@ impl FlowlistApp {
                     let anchor_boxes = self.sidebar_row_boxes.clone();
                     let anchor_key = format!("folder:{id}");
                     let drop_folder = id.clone();
+                    let drop_folder_onto = id.clone();
                     rows.push(
                         div()
                             .on_children_prepainted(move |bounds, _, _| {
@@ -1670,6 +1720,15 @@ impl FlowlistApp {
                             .on_drop::<DragProject>(cx.listener(
                                 move |this, payload: &DragProject, _, cx| {
                                     this.drop_on_folder(drop_folder.clone(), payload, cx)
+                                },
+                            ))
+                            .on_drop::<DragFolder>(cx.listener(
+                                move |this, payload: &DragFolder, _, cx| {
+                                    this.drop_folder_on_folder(
+                                        drop_folder_onto.clone(),
+                                        payload,
+                                        cx,
+                                    )
                                 },
                             ))
                             .child(row)
@@ -1727,6 +1786,13 @@ impl FlowlistApp {
                         // scroller's Library target for one row.
                         .on_drag_move::<DragProject>(cx.listener(
                             |this, event: &DragMoveEvent<DragProject>, _, cx| {
+                                if event.bounds.contains(&event.event.position) {
+                                    this.set_drag_target(None, cx);
+                                }
+                            },
+                        ))
+                        .on_drag_move::<DragFolder>(cx.listener(
+                            |this, event: &DragMoveEvent<DragFolder>, _, cx| {
                                 if event.bounds.contains(&event.event.position) {
                                     this.set_drag_target(None, cx);
                                 }
@@ -1801,6 +1867,9 @@ impl FlowlistApp {
                             this.drop_on_project(drop_id.clone(), payload, cx)
                         }))
                         .on_drop::<DragProject>(cx.listener(|_, _: &DragProject, _, cx| {
+                            cx.stop_propagation();
+                        }))
+                        .on_drop::<DragFolder>(cx.listener(|_, _: &DragFolder, _, cx| {
                             cx.stop_propagation();
                         }))
                         .on_mouse_down(

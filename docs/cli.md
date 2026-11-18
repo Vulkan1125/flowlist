@@ -50,7 +50,7 @@ flowlist add [OPTIONS] [TEXT]...
 
 Useful flags: `-p/--project`, `-t/--tag` (repeatable), `--due`, `--defer`,
 `--estimate`, `--repeat`, `--note`, `--flag`, `--parent` and `--attach`
-(repeatable; stores a reference to a local file).
+(repeatable; stores a reference to a local file path or an http(s) link).
 
 ### `list`
 
@@ -70,7 +70,7 @@ Choose a view or filter:
 | `--completed` | completed tasks |
 | `--trash` | tasks currently in Trash |
 | `--changed` | tasks edited within the Changed window |
-| `--attachments` | open tasks that have file attachments |
+| `--attachments` | open tasks that have attachments (files or links) |
 | `--archive` | tasks in finished and dropped projects |
 | `--available` | only available tasks |
 | `--priority high\|medium\|low` | only tasks with that priority |
@@ -176,12 +176,13 @@ flowlist project review <ID> [--on DATE]
 flowlist folder add <PATH>
 flowlist folder list
 flowlist folder rename <ID> <NAME>
-flowlist folder remove <ID>      # child projects move up one level
+flowlist folder remove <ID>      # nested folders and projects go too; tasks move to Trash
 ```
 
 Project icons: `project`, `folder`, `star`, `briefcase`, `home`, `heart`,
 `book`, `code`, `rocket`, `coffee`. Like task attachments, project attachments
-store a path to a local file; the file is never copied into the library.
+store a local file path or an http(s) link; files are never copied into the
+library.
 
 ## Tags
 

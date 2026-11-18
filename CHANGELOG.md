@@ -12,6 +12,17 @@
 - The New Project sheet has a Review every (days) field, pre-filled from the
   library default, so each project can keep its own review cadence.
 - Icon tooltips now wait three seconds instead of about five.
+- Attachments now accept http(s) website links next to file paths. The
+  inspector's **Add link…** button takes a pasted address, a link row uses the
+  chain icon, and a task whose attachments are all links shows a link badge
+  instead of the paperclip. `--attach` and the MCP attachment fields take
+  links too.
+- Deleting a folder now takes its nested folders, their projects and every
+  task inside to Trash as one undoable step. The sheet names the folder and
+  says how many projects go with it.
+- Folder rows drag like project rows. Drop one on another folder to nest it,
+  or on the LIBRARY heading or empty rail space to move it back to the root;
+  a folder never lands inside itself or its own subtree.
 - Sidebar tags now sort by live task count, busiest first, then by name
   ignoring case. Nested tags follow the same order inside their parent, and
   completed tasks no longer lift a tag up the list.

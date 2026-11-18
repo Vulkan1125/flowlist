@@ -1817,10 +1817,8 @@ impl FlowlistApp {
         let theme = self.theme;
         let mut rows = div().flex().flex_col().gap_1();
         for (index, path) in attachments.iter().enumerate() {
-            let name = std::path::Path::new(path)
-                .file_name()
-                .map(|name| name.to_string_lossy().to_string())
-                .unwrap_or_else(|| path.clone());
+            let link = flowlist_core::model::attachment::is_web_link(path);
+            let name = flowlist_core::model::attachment::attachment_name(path);
             let open_path = path.clone();
             let remove_path = path.clone();
             rows = rows.child(
@@ -1833,7 +1831,11 @@ impl FlowlistApp {
                     .px_2()
                     .rounded_md()
                     .bg(theme.raised)
-                    .child(icons::icon(Icon::Book, 12.0, theme.text_faint))
+                    .child(icons::icon(
+                        if link { Icon::Link } else { Icon::Book },
+                        12.0,
+                        theme.text_faint,
+                    ))
                     .child(
                         div()
                             .id(super::sid(format!("attachment-name:{index}")))
@@ -1851,7 +1853,16 @@ impl FlowlistApp {
                             .text_xs()
                             .text_color(theme.accent)
                             .cursor_pointer()
-                            .flow_tip(self, cx, theme, "Open this file")
+                            .flow_tip(
+                                self,
+                                cx,
+                                theme,
+                                if link {
+                                    "Open this link in the browser"
+                                } else {
+                                    "Open this file"
+                                },
+                            )
                             .child("open")
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.open_attachment(open_path.clone());
@@ -1873,13 +1884,17 @@ impl FlowlistApp {
                     ),
             );
         }
-        let field = div()
-            .id("field:attachments")
+        let file_button = div()
+            .id("attach-file")
             .h(px(26.))
             .px_2()
             .flex()
             .items_center()
+            .justify_center()
             .gap_1()
+            .min_w_0()
+            .overflow_hidden()
+            .whitespace_nowrap()
             .rounded_md()
             .border_1()
             .border_color(theme.border_soft)
@@ -1894,7 +1909,44 @@ impl FlowlistApp {
             } else {
                 "Attach another file…"
             })
-            .on_click(cx.listener(|this, _, _, cx| this.pick_attachments(cx)))
+            .on_click(cx.listener(|this, _, _, cx| this.pick_attachments(cx)));
+        let link_button = div()
+            .id("attach-link")
+            .h(px(26.))
+            .px_2()
+            .flex()
+            .items_center()
+            .justify_center()
+            .gap_1()
+            .flex_shrink_0()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border_soft)
+            .text_xs()
+            .text_color(theme.text_dim)
+            .cursor_pointer()
+            .flow_tip(self, cx, theme, "Attach a website link")
+            .hover(|style| style.bg(theme.hover))
+            .child(icons::icon(Icon::Link, 12.0, theme.text_faint))
+            .child("Add link…")
+            .on_click(cx.listener(|this, _, _, cx| this.attach_link(cx)));
+        let field = div()
+            .id("field:attachments")
+            .flex()
+            .items_center()
+            .gap_1()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .on_children_prepainted(self.view_probe("attach-file".to_string()))
+                    .child(file_button),
+            )
+            .child(
+                div()
+                    .on_children_prepainted(self.view_probe("attach-link".to_string()))
+                    .child(link_button),
+            )
             .into_any_element();
         div()
             .flex()
