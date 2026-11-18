@@ -626,8 +626,10 @@ impl Render for QuickCapture {
             .rounded_none()
             .overflow_hidden()
             .border_1()
-            .border_color(theme.border_soft)
-            .bg(theme.glass_fill(90.))
+            .border_color(theme.border)
+            // The same vertical glass wash as the sidebar and inspector, so the
+            // panel belongs to the window rather than floating on its own tint.
+            .bg(theme.glass_fill(180.))
             .text_color(theme.text)
             .font_family("SF Pro Text")
             .track_focus(&self.focus_handle)
@@ -640,14 +642,6 @@ impl Render for QuickCapture {
                     cx.notify();
                 }),
             )
-            // A breath of accent at the top keeps the glass from reading flat.
-            .child(div().absolute().top_0().left_0().right_0().h(px(78.)).bg(
-                gpui::linear_gradient(
-                    90.,
-                    gpui::linear_color_stop(theme.accent.opacity(0.10), 0.0),
-                    gpui::linear_color_stop(theme.accent.opacity(0.0), 1.0),
-                ),
-            ))
             // The grab handle also marks the window's drag band.
             .child(
                 div().flex().justify_center().pt(px(8.)).child(
