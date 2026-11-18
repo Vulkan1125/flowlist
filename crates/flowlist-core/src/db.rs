@@ -446,22 +446,26 @@ impl Db {
         self.tasks_in_project(project, false).len()
     }
 
-    /// Open projects inside a folder, matching what the sidebar shows. Closed
-    /// projects stay in the library but are hidden from the rail.
-    pub fn folder_open_project_count(&self, folder: &FolderId) -> usize {
+    /// Projects inside a folder that still want attention, matching the
+    /// sidebar. Closed projects stay in the library but are hidden from the
+    /// rail, and a project showing a tick (tasks, but none left open) no longer
+    /// counts as active, so a folder badge reports live work rather than how
+    /// many projects happen to live under it.
+    pub fn folder_active_project_count(&self, folder: &FolderId) -> usize {
         let mut count = 0;
         for child in self.container_children(Some(folder.clone())) {
             match child {
                 ContainerId::Project(id) => {
                     if self
                         .projects
-                        .get(&id)
+                        .get(id)
                         .is_some_and(|project| project.status.is_open())
+                        && !self.project_is_ticked(id)
                     {
                         count += 1;
                     }
                 }
-                ContainerId::Folder(id) => count += self.folder_open_project_count(id),
+                ContainerId::Folder(id) => count += self.folder_active_project_count(id),
             }
         }
         count
@@ -474,6 +478,13 @@ impl Db {
             .filter(|id| self.tasks.get(*id).is_some_and(|task| task.completed))
             .count();
         (done, all.len())
+    }
+
+    /// True when the project has tasks but none left open, which is exactly
+    /// when the sidebar replaces its number with a tick.
+    pub fn project_is_ticked(&self, project: &ProjectId) -> bool {
+        let (done, total) = self.project_progress(project);
+        total > 0 && done == total
     }
 
     // ------------------------------------------------------------- containers
@@ -742,6 +753,29 @@ impl Db {
                 !task.completed && !task.is_trashed() && task.tags.iter().any(|t| ids.contains(t))
             })
             .count()
+    }
+
+    /// Tags in sidebar order: busiest first, then case-insensitive name, with
+    /// the id as a stable tie-break. `parent` selects a level of the tree.
+    pub fn tags_sorted_by_usage(&self, parent: Option<&TagId>) -> Vec<TagId> {
+        let mut tags = match parent {
+            Some(tag) => self.tag_children(tag).to_vec(),
+            None => self.tag_roots().to_vec(),
+        };
+        tags.sort_by(|a, b| {
+            self.tag_usage_count(b, true)
+                .cmp(&self.tag_usage_count(a, true))
+                .then_with(|| self.tag_name_key(a).cmp(&self.tag_name_key(b)))
+                .then_with(|| a.cmp(b))
+        });
+        tags
+    }
+
+    fn tag_name_key(&self, tag: &TagId) -> String {
+        self.tags
+            .get(tag)
+            .map(|tag| tag.name.to_lowercase())
+            .unwrap_or_default()
     }
 
     pub fn ensure_tag_path(&mut self, path: &str, create: bool) -> Result<TagId> {

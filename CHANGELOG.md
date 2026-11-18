@@ -4,6 +4,12 @@
 
 ### Interface
 
+- Sidebar tags now sort by live task count, busiest first, then by name
+  ignoring case. Nested tags follow the same order inside their parent, and
+  completed tasks no longer lift a tag up the list.
+- A folder's count now reports live projects instead of everything filed under
+  it. A project whose tasks are all ticked, or a closed project, no longer
+  inflates the badge; nested folders roll their live projects up.
 - The title bar now has back and forward arrows beside the app name, with
   `⌘[` and `⌘]` as their keyboard routes. They walk the views the window
   came through, so Archive → project → back returns to the Archive; a new view

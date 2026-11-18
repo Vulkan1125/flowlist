@@ -156,9 +156,12 @@ impl FlowlistApp {
             .child(element)
     }
 
-    /// Wrap a count badge so the test state can report which rows show numbers.
-    fn count_box(&self, key: String, element: impl IntoElement) -> impl IntoElement {
+    /// Wrap a count badge so the test state can report which rows show numbers
+    /// and what those numbers are.
+    fn count_box(&self, key: String, value: usize, element: impl IntoElement) -> impl IntoElement {
         let boxes = self.sidebar_count_boxes.clone();
+        let values = self.sidebar_count_values.clone();
+        values.borrow_mut().insert(key.clone(), value);
         div()
             .on_children_prepainted(move |bounds, _, _| {
                 if let Some(bounds) = bounds.first() {
@@ -408,10 +411,7 @@ impl FlowlistApp {
 
     fn tag_targets(&self, parent: Option<TagId>, out: &mut Vec<SidebarTarget>) {
         let db = self.store.db();
-        let tags = match &parent {
-            Some(tag) => db.tag_children(tag).to_vec(),
-            None => db.tag_roots().to_vec(),
-        };
+        let tags = db.tags_sorted_by_usage(parent.as_ref());
         for tag in tags {
             let open = self.is_open(&format!("tag:{tag}"), true);
             let child_parent = tag.clone();
@@ -1345,6 +1345,7 @@ impl FlowlistApp {
             .when(show_count && count > 0, |this| {
                 this.child(self.count_box(
                     format!("builtin:{}", perspective.slug()),
+                    count,
                     widgets::count(theme, count),
                 ))
             })
@@ -1400,6 +1401,7 @@ impl FlowlistApp {
             .when(show_count && count > 0, |this| {
                 this.child(self.count_box(
                     format!("priority:{}", priority.slug()),
+                    count,
                     widgets::count(theme, count),
                 ))
             })
@@ -1522,7 +1524,7 @@ impl FlowlistApp {
                     // deliberate act and the in-session tree remembers it.
                     let open = self.is_open(&key, false);
                     let name = db.folder_path(&id);
-                    let count = db.folder_open_project_count(&id);
+                    let count = db.folder_active_project_count(&id);
                     let view_id = id.clone();
                     let target_id = id.clone();
                     let toggle_key = key.clone();
@@ -1627,6 +1629,7 @@ impl FlowlistApp {
                         .when(show_counts && count > 0, |this| {
                             this.child(self.count_box(
                                 format!("folder:{id}"),
+                                count,
                                 widgets::count(self.theme, count),
                             ))
                         })
@@ -1867,10 +1870,7 @@ impl FlowlistApp {
     fn tag_rows(&self, parent: Option<TagId>, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let db = self.store.db();
         let show_counts = db.settings.sidebar.counts_tags;
-        let tags = match &parent {
-            Some(tag) => db.tag_children(tag).to_vec(),
-            None => db.tag_roots().to_vec(),
-        };
+        let tags = db.tags_sorted_by_usage(parent.as_ref());
         let mut rows = Vec::new();
         for tag in tags {
             let Some(entity) = db.tags.get(&tag) else {
@@ -2001,9 +2001,11 @@ impl FlowlistApp {
                     ))
                 })
                 .when(show_counts && usage > 0, |this| {
-                    this.child(
-                        self.count_box(format!("tag:{tag}"), widgets::count(self.theme, usage)),
-                    )
+                    this.child(self.count_box(
+                        format!("tag:{tag}"),
+                        usage,
+                        widgets::count(self.theme, usage),
+                    ))
                 })
                 .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
                     this.drop_on_tag(drop_id.clone(), payload, cx)
@@ -2024,7 +2026,7 @@ impl FlowlistApp {
             if active {
                 row = row.bg(self.theme.selection);
             }
-            rows.push(row.into_any_element());
+            rows.push(self.row_box(key, row).into_any_element());
             if open && children {
                 rows.extend(self.tag_rows(Some(tag), cx));
             }

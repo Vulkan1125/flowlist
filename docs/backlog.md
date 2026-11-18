@@ -160,6 +160,17 @@ landed and verified.
 - [x] The Priority filter is stored per view; sidebar priority rows no longer
       leave their filter on the next perspective.
 - [x] Sidebar badges and the status bar exclude tasks in Trash.
+- [x] Sidebar tags sort by live usage, then case-insensitive name, with the id
+      as a stable tie-break; children follow the same order in their parent.
+- [x] Folder badges count only open projects that still have work left, so a
+      project showing a tick or a closed project no longer inflates the count.
+      Nested folders roll their live projects into the parent's badge.
+- [x] Rail sections fold from their headings, folders launch folded, the title
+      bar walks view history with back/forward arrows, and Archive rows can be
+      deleted with confirmation and Undo.
+- [x] Settings has a Sidebar group for section visibility and count badges;
+      counts default quiet outside the Library, while Today always shows its
+      day count.
 
 ## OmniFocus gap research (first pass, November 2026)
 

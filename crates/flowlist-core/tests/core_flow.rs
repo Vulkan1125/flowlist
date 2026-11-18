@@ -6,8 +6,8 @@ use flowlist_core::command::{
     TaskPlacement,
 };
 use flowlist_core::db::{ContainerPosition, Position};
-use flowlist_core::ids::TagId;
-use flowlist_core::model::{RepeatMode, RepeatRule, TagStatus, Task};
+use flowlist_core::ids::{FolderId, ProjectId, TagId, TaskId};
+use flowlist_core::model::{ProjectStatus, RepeatMode, RepeatRule, TagStatus, Task};
 use flowlist_core::paths::DataPaths;
 use flowlist_core::store::Store;
 use flowlist_core::time::Stamp;
@@ -28,6 +28,56 @@ fn add(store: &mut Store, title: &str) -> String {
         .first()
         .cloned()
         .expect("command reports created id")
+}
+
+fn add_task(store: &mut Store, title: &str) -> TaskId {
+    let id = add(store, title);
+    store.db().resolve_task(&id).unwrap()
+}
+
+fn add_project_in(store: &mut Store, name: &str, folder: Option<&FolderId>) -> ProjectId {
+    let mut project = NewProject::new(name);
+    project.folder = folder.cloned();
+    let id = store
+        .execute(Command::CreateProject(project))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("command reports created id");
+    store.db().resolve_project(&id).unwrap()
+}
+
+fn add_folder_in(store: &mut Store, name: &str, parent: Option<&FolderId>) -> FolderId {
+    let id = store
+        .execute(Command::CreateFolder {
+            name: name.into(),
+            parent: parent.cloned(),
+            position: ContainerPosition::End,
+        })
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("command reports created id");
+    store.db().resolve_folder(&id).unwrap()
+}
+
+fn add_tag_in(store: &mut Store, name: &str, parent: Option<&TagId>) -> TagId {
+    let id = store
+        .execute(Command::CreateTag {
+            name: name.into(),
+            parent: parent.cloned(),
+            status: TagStatus::Available,
+            location: None,
+            position: Position::End,
+        })
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("command reports created id");
+    store.db().resolve_tag(&id).unwrap()
 }
 
 #[test]
@@ -632,6 +682,158 @@ fn sidebar_settings_are_quiet_by_default_and_persisted() {
     // GUI, CLI and MCP share the value through the data file.
     let reopened = Store::open(paths).unwrap();
     assert_eq!(reopened.db().settings.sidebar, quiet);
+}
+
+#[test]
+fn sidebar_tags_sort_by_usage_then_name() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let mango = add_tag_in(&mut store, "Mango", None);
+    let apple = add_tag_in(&mut store, "apple", None);
+    let zebra = add_tag_in(&mut store, "Zebra", None);
+    let _banana = add_tag_in(&mut store, "Banana", None);
+
+    let first = add_task(&mut store, "First");
+    let second = add_task(&mut store, "Second");
+    let third = add_task(&mut store, "Third");
+    store
+        .execute(Command::SetTaskTags {
+            ids: vec![first, second],
+            add: vec![mango.clone()],
+            remove: Vec::new(),
+        })
+        .unwrap();
+    // A completed task is not live usage, so Mango stays at two.
+    let finished = add_task(&mut store, "Finished");
+    store
+        .execute(Command::SetTaskTags {
+            ids: vec![finished.clone()],
+            add: vec![mango.clone()],
+            remove: Vec::new(),
+        })
+        .unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![finished],
+            completed: true,
+        })
+        .unwrap();
+    store
+        .execute(Command::SetTaskTags {
+            ids: vec![third],
+            add: vec![apple.clone()],
+            remove: Vec::new(),
+        })
+        .unwrap();
+    let fourth = add_task(&mut store, "Fourth");
+    store
+        .execute(Command::SetTaskTags {
+            ids: vec![fourth],
+            add: vec![zebra.clone()],
+            remove: Vec::new(),
+        })
+        .unwrap();
+
+    let ids = store.db().tags_sorted_by_usage(None);
+    let order: Vec<String> = ids
+        .iter()
+        .map(|id| store.db().tags[id].name.clone())
+        .collect();
+    assert_eq!(order, ["Mango", "apple", "Zebra", "Banana"]);
+
+    // Children follow the same rule inside their parent.
+    let beta = add_tag_in(&mut store, "Beta", Some(&mango));
+    let alpha = add_tag_in(&mut store, "Alpha", Some(&mango));
+    let child_task = add_task(&mut store, "Child work");
+    store
+        .execute(Command::SetTaskTags {
+            ids: vec![child_task],
+            add: vec![beta.clone()],
+            remove: Vec::new(),
+        })
+        .unwrap();
+    let children = store.db().tags_sorted_by_usage(Some(&mango));
+    let child_names: Vec<String> = children
+        .iter()
+        .map(|id| store.db().tags[id].name.clone())
+        .collect();
+    assert_eq!(child_names, ["Beta", "Alpha"]);
+    assert!(children.contains(&alpha));
+}
+
+#[test]
+fn folder_badge_counts_only_open_projects_with_work_left() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let folder = add_folder_in(&mut store, "Work", None);
+    let live = add_project_in(&mut store, "Live", Some(&folder));
+    let live_task = add_task(&mut store, "Ship it");
+    store
+        .execute(Command::MoveTasks {
+            ids: vec![live_task],
+            placement: TaskPlacement::Project {
+                project: live.clone(),
+                position: Position::End,
+            },
+        })
+        .unwrap();
+    assert_eq!(store.db().folder_active_project_count(&folder), 1);
+    assert!(!store.db().project_is_ticked(&live));
+
+    // A project with tasks but nothing left open shows a tick, so it stops
+    // inflating the folder badge.
+    let finished = add_project_in(&mut store, "Finished", Some(&folder));
+    let done_task = add_task(&mut store, "Last task");
+    store
+        .execute(Command::MoveTasks {
+            ids: vec![done_task.clone()],
+            placement: TaskPlacement::Project {
+                project: finished.clone(),
+                position: Position::End,
+            },
+        })
+        .unwrap();
+    assert_eq!(store.db().folder_active_project_count(&folder), 2);
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![done_task],
+            completed: true,
+        })
+        .unwrap();
+    assert!(store.db().project_is_ticked(&finished));
+    assert_eq!(store.db().folder_active_project_count(&folder), 1);
+
+    // An empty project is not ticked, and a closed project is hidden from the
+    // rail entirely, so only the first counts.
+    let fresh = add_project_in(&mut store, "Fresh", Some(&folder));
+    assert_eq!(store.db().folder_active_project_count(&folder), 2);
+    let archived = add_project_in(&mut store, "Archived", Some(&folder));
+    store
+        .execute(Command::SetProjectStatus {
+            id: archived,
+            status: ProjectStatus::Done,
+        })
+        .unwrap();
+    assert_eq!(store.db().folder_active_project_count(&folder), 2);
+
+    // Nested folders roll their live projects into the parent's badge.
+    let nested = add_folder_in(&mut store, "Client", Some(&folder));
+    let nested_live = add_project_in(&mut store, "Nested live", Some(&nested));
+    let nested_task = add_task(&mut store, "Nested work");
+    store
+        .execute(Command::MoveTasks {
+            ids: vec![nested_task],
+            placement: TaskPlacement::Project {
+                project: nested_live,
+                position: Position::End,
+            },
+        })
+        .unwrap();
+    assert_eq!(store.db().folder_active_project_count(&folder), 3);
+    assert_eq!(store.db().folder_active_project_count(&nested), 1);
+    assert!(!store.db().project_is_ticked(&fresh));
 }
 
 #[test]

@@ -55,14 +55,30 @@ tasks. `create_project` and `update_project` accept the same `attachments` and
 | `complete_task` | complete or reopen; repeating tasks spawn the next occurrence |
 | `delete_task` | delete a task and its subtasks |
 | `move_task` | move to the inbox, a project or another task |
+| `convert_task_to_project` | turn a task and its top-level subtasks into a project |
 | `set_task_tags` | add or remove tag paths |
 | `list_tasks` | list by built-in view or filter |
 
 `list_tasks` accepts `view` (`inbox`, `today`, `projects`, `forecast`, `flagged`,
-`tags`, `completed`, `archive`, `changed`, `attachments`, `nearby`, `review`),
-`project`,
-`tag`, `folder`, `search`, `filter`, `sort`, `group`, `limit` and
-`include_completed`.
+`tags`, `completed`, `archive`, `changed`, `attachments`, `nearby`, `review`,
+`trash` or `custom` with `perspective`), plus `project`, `folder`, `tags`
+(an array; all must match), `search`, `available`, `flagged`, `inbox`,
+`completed`, `priority`, `due`, `sort`, `group`, `show_completed` and `limit`.
+`view=review` returns the review queue as projects. A built-in view without
+`limit` returns every matching task, grouped the way the GUI shows it.
+
+### Trash
+
+| Tool | Purpose |
+| --- | --- |
+| `list_trash` | list tasks currently in Trash |
+| `restore_tasks` | restore tasks and their subtrees |
+| `purge_tasks` | permanently delete tasks from Trash |
+| `empty_trash` | permanently delete every trashed task |
+
+`delete_task` is a soft delete. Trash follows the library's
+`trash_retention_days` setting; restoring or purging is recorded in undo history
+just like the GUI buttons and `flowlist trash`.
 
 ### Checklist items
 
@@ -86,6 +102,7 @@ unchecked.
 | `create_project` | create a project, optionally under a folder path |
 | `update_project` | rename, move, date, review interval or notes |
 | `set_project_status` | `active`, `on-hold`, `done`, `dropped` |
+| `delete_project` | delete a project and move its tasks to Trash |
 | `list_tags` | tags with usage counts |
 | `create_tag` | create a nested tag path |
 | `delete_tag` | delete a tag and remove it from tasks |

@@ -239,6 +239,7 @@ reload when another process writes. Schema migrations run on open, and
 
 - [CLI reference](docs/cli.md)
 - [MCP tools](docs/mcp.md)
+- [GUI guide](docs/gui.md)
 - [Architecture](docs/architecture.md)
 - [Feature checklist](docs/features.md)
 - [Checklists](docs/checklists.md)
@@ -246,6 +247,11 @@ reload when another process writes. Schema migrations run on open, and
 - [Performance](docs/performance.md)
 - [Accessibility](docs/accessibility.md)
 - [GUI smoke test](docs/gui-automation.md)
+- [Backlog](docs/backlog.md)
+
+The GitHub wiki is generated from these pages. After creating the first wiki
+page in the GitHub web UI, run `scripts/publish-wiki.sh` to publish the full
+tree.
 
 ## Development
 

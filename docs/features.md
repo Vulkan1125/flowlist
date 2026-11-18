@@ -128,6 +128,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       as perspectives, aligned with the folder icon and the name. Once a
       project has work but nothing open, that count becomes a tick; a new
       project keeps its 0 until it has a task.
+- [x] Sidebar tags sort by live work, busiest first, then name ignoring case
+      with the id as a stable tie-break. Nested tags follow the same rule inside
+      their parent, and completed tasks do not lift a tag up the list.
 - [x] Sidebar folders indent what they contain: subfolders and projects step
       right once per nesting level, and an empty folder shows “Empty” aligned
       with the names. Root-level projects keep their usual position. Folders
@@ -135,6 +138,10 @@ working domain and GUI. This page tracks what is implemented and verified.
       it and unfolds its tree, clicking the same open folder again folds the
       tree without leaving the folder view, and a third click unfolds it. The
       chevron keeps toggling just the tree.
+- [x] A folder's badge counts the projects under it that still want work: an
+      open project whose tasks are all ticked, or a closed project, no longer
+      inflates the number. Nested folders roll their live projects into their
+      parent's badge, so the count reflects active work at any depth.
 - [x] Rail sections fold from their headings. Perspectives stay as the fixed
       backbone, while Priorities, Library, Saved and Tags collapse without
       touching the view. The heading's chevron sits at the right edge and

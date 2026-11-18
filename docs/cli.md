@@ -68,10 +68,12 @@ Choose a view or filter:
 | `--forecast` | forecast buckets |
 | `--review` | projects due for review |
 | `--completed` | completed tasks |
+| `--trash` | tasks currently in Trash |
 | `--changed` | tasks edited within the Changed window |
 | `--attachments` | open tasks that have file attachments |
 | `--archive` | tasks in finished and dropped projects |
 | `--available` | only available tasks |
+| `--priority high\|medium\|low` | only tasks with that priority |
 | `-t/--tag <PATH>` | tasks with a tag |
 | `-p/--project <PATH>` | tasks in a project |
 | `--folder <PATH>` | tasks in a folder tree |
@@ -87,7 +89,7 @@ Choose a view or filter:
 
 ```sh
 flowlist done <ID>... [--undo]
-flowlist remove <ID>...
+flowlist remove <ID>...          # move to Trash
 flowlist edit <ID> [--title ...] [--notes ...] [--due ...] [--defer ...] \
   [--estimate ...] [--flag|--unflag] [--repeat ...] [--project ...] \
   [--parent ...] [--sequential] [--priority ...] \
@@ -95,6 +97,22 @@ flowlist edit <ID> [--title ...] [--notes ...] [--due ...] [--defer ...] \
 ```
 
 Use `none` to clear dates, estimates, repeat rules, projects or parents.
+
+### Trash
+
+Deleting a task moves it and its subtasks to Trash, where it stays until it is
+restored, purged, or removed by the retention policy in Settings.
+
+```sh
+flowlist list --trash
+flowlist trash --restore <ID>...
+flowlist trash --delete <ID>...   # delete forever
+flowlist trash --empty            # empty the whole bin
+```
+
+`trash_retention_days` in the library settings controls automatic emptying; `0`
+keeps trashed tasks forever. Both restoring and purging are undoable until the
+library is compacted.
 
 ### `mv`
 
@@ -152,6 +170,7 @@ flowlist project edit <ID> [--name ...] [--note ...] [--folder <PATH>|none] \
   [--due ...] [--defer ...] [--review-days N] [--next-review DATE] \
   [--sequential] [--icon <ICON>]
 flowlist project status <ID> active|on-hold|done|dropped
+flowlist project delete <ID>      # tasks move to Trash; undo restores both
 flowlist project review <ID> [--on DATE]
 
 flowlist folder add <PATH>
@@ -214,6 +233,31 @@ flowlist where
 `search` covers tasks (including checklist titles), projects, folders, tags and
 perspectives. `stats` prints open/available/flagged/due counts plus project,
 tag and folder totals.
+
+## Output and automation
+
+Every command accepts `--json` (before or after the subcommand) and prints one
+JSON value. Ids are full ULIDs, and every object also carries the short
+eight-character `short_id` shown in human output; both forms work wherever a
+command takes an `<ID>`.
+
+- `add` returns the created task.
+- `list` returns `{ "groups": [...], "count": N }`, preserving the view's
+  sections and task order.
+- `stats` returns flat counters such as `open_tasks`, `available`,
+  `projects_due_review` and `trashed_tasks`.
+- Mutations return the affected entity or a small result object and are always
+  recorded in the same undo history the GUI uses.
+
+A script can therefore read a task, edit it, and undo the change without
+touching the data file:
+
+```sh
+id=$(flowlist add 'Ship the release' --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+flowlist edit "$id" --due tomorrow --priority high --json
+flowlist done "$id" --json
+flowlist undo --json
+```
 
 ## Import, export and repair
 

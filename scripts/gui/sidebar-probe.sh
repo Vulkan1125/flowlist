@@ -19,10 +19,17 @@ state=$tmp/state.json
 folder=$("$bin" --data-dir "$lib" folder add 'Work' --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 project=$("$bin" --data-dir "$lib" project add 'Client handoff' --folder 'Work' --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 tag=$("$bin" --data-dir "$lib" tag add 'Focus' --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+busy_tag=$("$bin" --data-dir "$lib" tag add 'Busy' --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 "$bin" --data-dir "$lib" add 'Draft the notes' --project 'Client handoff' --tag 'Focus' >/dev/null
+"$bin" --data-dir "$lib" add 'Busy one' --tag 'Busy' >/dev/null
+"$bin" --data-dir "$lib" add 'Busy two' --tag 'Busy' >/dev/null
+# A project whose work is all ticked should not inflate the folder badge.
+ticked=$("$bin" --data-dir "$lib" project add 'Ticked off' --folder 'Work' --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+ticked_task=$("$bin" --data-dir "$lib" add 'Finished work' --project 'Ticked off' --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+"$bin" --data-dir "$lib" done "$ticked_task" >/dev/null
 "$bin" --data-dir "$lib" add 'Inbox note' >/dev/null
 "$bin" --data-dir "$lib" add 'Due today' due:today >/dev/null
-echo "folder=$folder project=$project tag=$tag"
+echo "folder=$folder project=$project ticked=$ticked tag=$tag busy_tag=$busy_tag"
 
 launch() {
   rm -f "$state"
@@ -73,6 +80,44 @@ PY
     sleep 0.1
   done
   echo "FAIL: $map box '$key' never painted" >&2
+  exit 1
+}
+wait_count() {
+  for _ in $(seq 1 60); do
+    if python3 - "$state" "$1" "$2" <<'PY'
+import json, sys
+try:
+    value = json.load(open(sys.argv[1])).get("sidebar_count_values", {})
+except (OSError, ValueError):
+    value = {}
+sys.exit(0 if str(value.get(sys.argv[2])) == sys.argv[3] else 1)
+PY
+    then
+      return 0
+    fi
+    sleep 0.15
+  done
+  echo "FAIL: count '$1' is not $2" >&2
+  exit 1
+}
+wait_above() {
+  for _ in $(seq 1 60); do
+    if python3 - "$state" "$1" "$2" "$3" <<'PY'
+import json, sys
+try:
+    boxes = json.load(open(sys.argv[1])).get(sys.argv[2], {})
+except (OSError, ValueError):
+    boxes = {}
+upper = boxes.get(sys.argv[3])
+lower = boxes.get(sys.argv[4])
+sys.exit(0 if upper and lower and upper[1] < lower[1] else 1)
+PY
+    then
+      return 0
+    fi
+    sleep 0.15
+  done
+  echo "FAIL: '$2' does not sit above '$3' in $1" >&2
   exit 1
 }
 wait_no_map() {
@@ -210,14 +255,21 @@ wait_flag can_go_forward false
 wait_map sidebar_counts "builtin:today"
 wait_no_map sidebar_counts "builtin:inbox"
 wait_no_map sidebar_sections "perspectives"
-echo "1. Folders launch folded and counts stay quiet by default"
+# The busier tag sits above the quieter one, and a fully ticked project no
+# longer inflates its folder's badge.
+wait_map sidebar_rows "tag:${busy_tag}"
+wait_above sidebar_rows "tag:${busy_tag}" "tag:${tag}"
+wait_count "folder:${folder}" 1
+echo "1. Folders launch folded, counts stay quiet, tags sort by usage and ticked projects stay out of the folder badge"
 
 # Clicking the folder opens its view and unfolds the tree in one gesture.
 click_map sidebar_rows "folder:${folder}"
 wait_value view "folder:${folder}"
 wait_has expanded "folder:${folder}"
 wait_has sidebar_visible "project:${project}"
-echo "2. Opening a folder shows the projects inside it"
+wait_has sidebar_visible "project:${ticked}"
+wait_count "folder:${folder}" 1
+echo "2. Opening a folder shows the projects inside it, including the ticked one"
 
 # A second click folds the tree again.
 click_map sidebar_rows "folder:${folder}"

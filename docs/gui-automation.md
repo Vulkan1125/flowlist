@@ -67,9 +67,10 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
 ```
 
 `sidebar_rows` maps each painted sidebar row (`project:<id>`, `folder:<id>`,
-`custom:<id>`, `library`, …) to its window-space box, so a probe can drag a
-project onto a folder, or open a saved perspective's editor, without
-hard-coding sidebar offsets. `sidebar_names` maps the same rows
+`tag:<id>`, `custom:<id>`, `library`, …) to its window-space box, so a probe
+can drag a project onto a folder, open a saved perspective's editor, or assert
+the order tags sort into, without hard-coding sidebar offsets. `sidebar_names`
+maps the same rows
 to the box where the row's icon starts, plus `empty:<folder>` for an empty
 folder's note, which makes indentation assertable. `sidebar_drag_target` is
 the row a dragged project is currently over (`folder:<id>`, `library`, or
@@ -86,8 +87,11 @@ tree keys explicitly opened and `sidebar_settings` mirrors the persisted
 in the Settings sheet to a box, and `modal_sidebar` reports the sheet's
 unsaved copy, so a probe can click a toggle and check it before Save.
 `sidebar_counts` maps each count badge actually painted (`builtin:<slug>`,
-`priority:<slug>`, `folder:<id>`, `tag:<id>`) to its box; Today's badge is
-always present, which makes the quiet count defaults assertable.
+`priority:<slug>`, `folder:<id>`, `tag:<id>`) to its box, and
+`sidebar_count_values` reports the number inside each badge. Today's badge is
+always present, which makes the quiet count defaults assertable, while the
+folder value proves a badge counts live projects rather than every project
+under the folder.
 `history` is the view trail and `history_index` the current entry;
 `history_rows` maps the header arrows (`history-back`, `history-forward`) to
 boxes, and `can_go_back` / `can_go_forward` report whether a valid view lies
@@ -199,8 +203,9 @@ library:
 - `scripts/gui/archive-probe.sh` checks Archive grouping, Reopen, Delete with
   its confirmation sheet, Undo, row opening and the empty state.
 - `scripts/gui/sidebar-probe.sh` checks folded-on-launch folders, section
-  headings, title-bar history, Settings visibility and count choices, and
-  that those choices survive a relaunch.
+  headings, tag ordering by usage, the live-project folder badge, title-bar
+  history, Settings visibility and count choices, and that those choices
+  survive a relaunch.
 
 Both build the release binary first (`cargo build --release`) and compile the
 Swift helpers themselves.

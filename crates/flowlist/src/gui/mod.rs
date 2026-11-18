@@ -307,6 +307,9 @@ pub struct FlowlistApp {
     /// Sidebar count badges keyed by row, so a probe can see which numbers a
     /// given Settings choice actually paints.
     sidebar_count_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// The number painted in each badge, so a probe can assert what a folder
+    /// or tag row actually counts, not just that it painted something.
+    sidebar_count_values: Rc<RefCell<BTreeMap<String, usize>>>,
     /// Which list the window is showing, and the views it came through. The
     /// history stores session keys so a deleted project can be skipped when
     /// stepping back instead of bringing the app down.
@@ -527,6 +530,7 @@ impl FlowlistApp {
             settings_toggle_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             sidebar_section_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             sidebar_count_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            sidebar_count_values: Rc::new(RefCell::new(BTreeMap::new())),
             view_history: vec![initial_view],
             view_history_index: 0,
             sidebar_drag_target: None,
@@ -4642,6 +4646,8 @@ impl FlowlistApp {
             serde_json::json!(self.settings_toggle_boxes.borrow().clone());
         state["sidebar_sections"] = serde_json::json!(self.sidebar_section_boxes.borrow().clone());
         state["sidebar_counts"] = serde_json::json!(self.sidebar_count_boxes.borrow().clone());
+        state["sidebar_count_values"] =
+            serde_json::json!(self.sidebar_count_values.borrow().clone());
         state["sidebar_visible"] = serde_json::json!(
             self.sidebar_targets()
                 .iter()
