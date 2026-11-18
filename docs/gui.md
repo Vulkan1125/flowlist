@@ -70,9 +70,28 @@ rows that are currently actionable.
 
 ## Capture and editing
 
-`⌃⌥Space` is the system-wide capture hotkey. It activates Flowlist, falls back
-to Inbox when the current view has no capture bar, focuses the field and
-selects any previous text. `n` or `⌘N` starts capture inside the app.
+`⌃⌥Space` is the system-wide capture hotkey. It opens a small floating panel
+over the current app instead of bringing the whole window forward, so the main
+window keeps its view, selection and scroll. `n` or `⌘N` starts capture inside
+the app, and the title-bar plus opens the same panel from any view.
+
+The panel is a square-cornered card in the middle of the screen, so it reads as
+a single surface rather than a second app window. It parses as you type: the top line is the title, a row of chips previews
+the project, tags, flag, due/defer dates, estimate and repeat rule, and the
+footer says where the task will land. With no `::Project` marker it files into
+the view you were last in when that view has a project, tag, priority, flag or
+forecast default; otherwise it goes to Inbox.
+
+| Key | What it does |
+| --- | --- |
+| `Enter` | File the task and close the panel |
+| `⇧Enter` | File the task and stay open, ready for the next thought |
+| `⌘Enter` | File the task, close the panel and select it in the main window |
+| `Esc` or `⌘W` | Close without filing |
+
+Every capture goes through the same command and store layer as `flowlist add`,
+so one `⌘Z` in the main window reverses it. Reopening the hotkey reuses the same
+panel and selects any text left in the field.
 
 Capture uses the same quick-entry parser as `flowlist add`:
 

@@ -12,6 +12,7 @@ mod icons;
 mod inspector;
 mod modals;
 mod perspective;
+mod quick_capture;
 mod session;
 mod sidebar;
 mod text;
@@ -161,7 +162,7 @@ impl DateField {
     }
 }
 
-enum BufferKey {
+pub(super) enum BufferKey {
     Ignored,
     Changed,
     Submit,
@@ -1659,6 +1660,52 @@ impl FlowlistApp {
     /// front. Bring Flowlist forward, leave any perspective that has no
     /// capture bar, and put the caret in capture with the old text selected so
     /// typing starts a fresh task without losing what was there.
+    /// Open the small floating capture panel. The in-window bar stays as the
+    /// fallback when the platform cannot open a second window.
+    pub(super) fn open_quick_capture(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let theme = self.theme;
+        let defaults = self.capture_defaults();
+        if let Err(error) = quick_capture::show(cx, self.store.paths().clone(), theme, defaults) {
+            self.toast = Some(format!("Could not open quick capture: {error}"));
+            self.focus_capture(window, cx);
+        }
+    }
+
+    /// What the capture panel should file under, mirroring the in-window bar.
+    pub(super) fn capture_defaults(&self) -> quick_capture::CaptureDefaults {
+        let mut defaults = quick_capture::CaptureDefaults::inbox();
+        match &self.view {
+            View::Project(id) => defaults.project = Some(id.clone()),
+            View::Tag(id) => defaults.tag = Some(id.clone()),
+            View::Priority(priority) => defaults.priority = Some(*priority),
+            View::Builtin(BuiltinPerspective::Flagged) => defaults.flagged = true,
+            View::Builtin(BuiltinPerspective::Forecast) => {
+                defaults.due = Some(Stamp::date_only(local_date(now())));
+            }
+            _ => {}
+        }
+        defaults
+    }
+
+    /// Select a just-captured task in the main window. `⌘⏎` in the capture
+    /// panel calls this after the task has been filed.
+    pub(super) fn reveal_task(&mut self, id: TaskId, cx: &mut Context<Self>) {
+        let project = self
+            .store
+            .db()
+            .tasks
+            .get(&id)
+            .and_then(|task| task.project.clone());
+        let view = project
+            .map(View::Project)
+            .unwrap_or(View::Builtin(BuiltinPerspective::Inbox));
+        self.set_view(view);
+        self.select_only(id);
+        self.focus = FocusArea::Content;
+        self.save_session();
+        cx.notify();
+    }
+
     fn focus_capture(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.view.shows_capture() {
             self.open_view(View::Builtin(BuiltinPerspective::Inbox), cx);
@@ -3116,6 +3163,14 @@ impl FlowlistApp {
         let stroke = &event.keystroke;
         let mods = stroke.modifiers;
 
+        // The Carbon shortcut normally opens the floating panel before this
+        // handler runs. Keeping the same chord here means the panel still opens
+        // when global registration is unavailable.
+        if mods.control && mods.alt && stroke.key == "space" {
+            self.open_quick_capture(window, cx);
+            return;
+        }
+
         if self.focus == FocusArea::Modal {
             if mods.platform {
                 if stroke.key == "w" || stroke.key == "q" {
@@ -4378,7 +4433,7 @@ impl FlowlistApp {
     }
 }
 
-fn handle_buffer_key(
+pub(super) fn handle_buffer_key(
     buffer: &mut text::TextBuffer,
     stroke: &Keystroke,
     paste: Option<&str>,
@@ -5167,9 +5222,9 @@ impl FlowlistApp {
                                 "Add task",
                                 true,
                             ))
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.focus_capture(window, cx)),
-                            ),
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_quick_capture(window, cx)
+                            })),
                     )
                     .child(
                         div()
@@ -5708,16 +5763,33 @@ pub fn run(paths: DataPaths) -> Result<()> {
                 }
             };
             // A Carbon hotkey wakes the app even while another app is in
-            // front. The callback only signals this foreground stream.
+            // front. The callback only signals this foreground stream, which
+            // opens (or re-focuses) the small floating capture panel.
             if let Some(mut presses) = hotkey::register() {
                 use futures::StreamExt as _;
+                let paths = paths.clone();
                 cx.spawn(async move |cx| {
                     while presses.next().await.is_some() {
-                        let updated = window.update(cx, |app, window, cx| {
-                            app.focus_capture(window, cx);
+                        let opened = cx.update(|cx| {
+                            let (theme, defaults) = window
+                                .read_with(cx, |app, _| (app.theme, app.capture_defaults()))
+                                .unwrap_or_else(|_| {
+                                    (
+                                        quick_capture::stored_theme(&paths),
+                                        quick_capture::CaptureDefaults::inbox(),
+                                    )
+                                });
+                            quick_capture::show(cx, paths.clone(), theme, defaults)
                         });
-                        if updated.is_err() {
-                            break;
+                        match opened {
+                            Ok(Ok(())) => {}
+                            Ok(Err(error)) => {
+                                eprintln!("flowlist: could not open quick capture: {error}");
+                                let _ = window.update(cx, |app, window, cx| {
+                                    app.focus_capture(window, cx);
+                                });
+                            }
+                            Err(_) => break,
                         }
                     }
                 })

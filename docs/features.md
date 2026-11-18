@@ -209,9 +209,12 @@ working domain and GUI. This page tracks what is implemented and verified.
       `Parent / Child` paths, `↑`/`↓` to highlight, `Tab` or click to accept.
       The project list opens only after typing; an unknown path asks before
       creating the project
-- [x] System-wide capture (`⌃⌥Space`) works while another app is in front;
-      Flowlist comes forward with capture focused and switches to Inbox from
-      perspectives that have no capture bar
+- [x] Things 3-style quick capture (`⌃⌥Space`): a small square-cornered
+      floating panel opens in the middle of the screen over whatever is in front, without moving the main window's view,
+      selection or scroll. It previews the parsed title and destination, files
+      into the current project/tag/priority when the view has one, closes on
+      `Enter`, stays open on `⇧⏎`, reveals the new task on `⌘⏎`, and every
+      capture is undoable from the main window
 - [x] Task progress badge for checklists
 - [x] Drag/drop tasks into projects, tags, parents and sibling positions
 - [x] Drag/drop projects into folders; drop one on the LIBRARY heading or on

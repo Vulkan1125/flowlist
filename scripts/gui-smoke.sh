@@ -8,7 +8,7 @@
 #   1. open the sidebar "New project" sheet, type a name and create it;
 #   2. open a saved perspective with its hover pencil;
 #   3. press the system-wide capture shortcut while Finder is in front and
-#      confirm Flowlist comes back with the caret in capture.
+#      confirm the floating capture panel opens.
 #
 # The app writes FLOWLIST_TEST_STATE (view, open modal, selection, window size)
 # so the test can wait for state instead of guessing from pixels. If macOS,
@@ -190,19 +190,24 @@ fi
 
 # 3. Control+Option+Space is the system-wide capture shortcut. Finder takes
 #    the foreground first, so this proves the hotkey works while another app
-#    owns the menu bar. A synthetic press needs the same Accessibility
-#    permission as the mouse clicks above.
+#    owns the menu bar. The panel writes its own state next to the main one.
 open -a Finder
 sleep 1
 "$helpers/flowctl" key 49 ctrlalt
-focus=""
+opened=""
 for _ in $(seq 1 40); do
-	focus=$(focus_area)
-	[ "$focus" = "Capture" ] && break
+	opened=$(python3 -c '
+import json, sys
+try:
+    print(json.load(open(sys.argv[1])).get("open"))
+except (OSError, ValueError):
+    print("")
+' "$tmp/capture.json")
+	[ "$opened" = "True" ] && break
 	sleep 0.15
 done
-if [ "$focus" != "Capture" ]; then
-	echo "FAIL: the capture hotkey did not focus the capture bar" >&2
+if [ "$opened" != "True" ]; then
+	echo "FAIL: the capture hotkey did not open the floating panel" >&2
 	exit 1
 fi
 

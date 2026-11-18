@@ -55,8 +55,12 @@ below; this list is the current map.
 
 ### Phase 4 — Larger product bets
 
-- [ ] **Things 3-style quick capture popup** — a small floating capture window
-      that leaves the current workspace alone.
+- [x] **Things 3-style quick capture popup** — `⌃⌥Space` opens a square
+      620×186 floating panel in the middle of the screen. The main window keeps its view,
+      selection and scroll. The panel previews the parsed title and destination
+      chips, files through `Store::execute`, reuses itself with the old text
+      selected, and supports `Enter`, `⇧⏎`, `⌘⏎` and `Esc`. Covered by
+      `scripts/gui/phase4-probe.sh`.
 - [ ] **Calendar perspective** — a real month/day/agenda view with
       drag-to-reschedule.
 - [ ] **Visual design pass** — hierarchy, spacing, motion, hover/focus and the
@@ -139,11 +143,9 @@ below; this list is the current map.
       navigation. The Forecast month calendar is a first step, not the whole
       calendar.
 - [x] **Background capture** — `⌃⌥Space` is registered with Carbon's
-      `RegisterEventHotKey`, so it fires while another app is in front.
-      Flowlist activates, falls back to Inbox when the current view has no
-      capture bar, and focuses capture with any previous text selected. It
-      hands off to the same quick-entry parser and command layer. A separate
-      menu-bar capture window is still open.
+      `RegisterEventHotKey`, so it fires while another app is in front. It
+      opens the floating quick-capture panel and hands off to the same
+      quick-entry parser and command layer. See Phase 4.
 
 ## Research and design
 

@@ -4,6 +4,12 @@
 
 ### Interface
 
+- `⌃⌥Space` now opens a Things 3-style floating capture panel in the middle
+  of the screen instead of bringing the whole window forward. The panel is a
+  square-cornered card. The panel previews the parsed title and
+  destination, files into the current project/tag/priority when the view has
+  one, closes on `Enter`, stays open on `⇧⏎`, selects the new task on `⌘⏎`,
+  and every capture is undoable from the main window.
 - The inspector's inline fields now save on `Tab` and `Enter` and move to the
   next field. A validation error keeps the current field open, and `Enter` on
   the last field finishes editing. A first-time task stays a draft until the

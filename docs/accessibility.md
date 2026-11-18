@@ -23,6 +23,26 @@ them, so the keyboard routes below are the primary way to reach them.
 | Moon / sun | Switch to dark/light mode (⌘T) | `⌘T`, or `t` in vim mode |
 | Info (i) | Toggle inspector (i) | `i` or `⌘I` |
 
+### Quick capture panel
+
+`⌃⌥Space` opens the floating capture panel from any app. The title field has
+keyboard focus as soon as the panel opens, and `Esc` always closes it without
+filing. Inside the panel:
+
+| Key | Action |
+| --- | --- |
+| `Enter` | Add the task and close |
+| `⇧Enter` | Add the task and keep capturing |
+| `⌘Enter` | Add the task and select it in the main window |
+| `Esc`, `⌘W` | Close without adding |
+| `⌘A`, `⌘C`, `⌘X`, `⌘V` | Select all, copy, cut and paste in the field |
+
+The panel names its destination in the footer and previews the parsed title,
+project, tags, dates, estimate and repeat rule as chips, so the result of a
+marker is visible before `Enter` files it. Nothing in the main window moves
+while the panel is open, and a completed capture can be undone with `⌘Z`.
+The title-bar plus button has the same tooltip and keyboard route.
+
 The title bar holds the search field, centered on the content pane, so the
 content header keeps only the view title and Sort/Group/Filter chips on one
 row, with the subtitle below. While a chip menu or a sheet is open it owns
