@@ -14,7 +14,9 @@ pub use perspective::{
     BuiltinPerspective, Condition, DueWindow, FilterNode, GroupBy, Perspective, SortBy, TaskStatus,
 };
 pub use project::{Project, ProjectIcon, ProjectKind, ProjectStatus};
-pub use repeat::{RepeatEnd, RepeatMode, RepeatOutcome, RepeatRule, RepeatSchedule};
+pub use repeat::{
+    RepeatEnd, RepeatMode, RepeatOutcome, RepeatRule, RepeatSchedule, increment_repeat_title,
+};
 pub use settings::{Settings, SidebarOptions};
 pub use tag::{Geo, Tag, TagStatus};
 pub use task::ChecklistItem;

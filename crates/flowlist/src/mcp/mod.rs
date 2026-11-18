@@ -343,10 +343,17 @@ impl Server {
 
     fn tool_delete_task(&mut self, args: &Value) -> Result<Value> {
         let id = self.store.db().resolve_task(&require_string(args, "id")?)?;
-        self.store.execute(CoreCommand::DeleteTasks {
-            ids: vec![id.clone()],
-        })?;
-        Ok(json!({"deleted": id.to_string()}))
+        let series = bool_arg(args, "series").unwrap_or(false);
+        if series {
+            self.store.execute(CoreCommand::DeleteTaskSeries {
+                ids: vec![id.clone()],
+            })?;
+        } else {
+            self.store.execute(CoreCommand::DeleteTasks {
+                ids: vec![id.clone()],
+            })?;
+        }
+        Ok(json!({"deleted": id.to_string(), "series": series}))
     }
 
     fn tool_list_trash(&mut self, _args: &Value) -> Result<Value> {
@@ -1325,8 +1332,14 @@ fn tool_definitions() -> Vec<Value> {
         ),
         tool(
             "delete_task",
-            "Move a task and all of its subtasks to Trash. Use purge_tasks to delete permanently.",
-            schema(json!({"id": s("Task id or prefix")}), &["id"]),
+            "Move a task and all of its subtasks to Trash. Set series to move every occurrence of a repeating task too. Use purge_tasks to delete permanently.",
+            schema(
+                json!({
+                    "id": s("Task id or prefix"),
+                    "series": b("Move the whole repeating series to Trash"),
+                }),
+                &["id"],
+            ),
         ),
         tool(
             "list_trash",

@@ -1448,6 +1448,26 @@ impl FlowlistApp {
         // Deleting from Trash is permanent; everywhere else the task moves to
         // Trash first.
         let in_trash = self.view == View::Builtin(BuiltinPerspective::Trash);
+        // A repeating task has more than one occurrence, so ask before the
+        // whole chain disappears. Trash keeps its existing permanent-delete
+        // behaviour because the series was already broken there.
+        let repeating_title = if in_trash {
+            None
+        } else {
+            ids.iter().find_map(|id| {
+                self.store
+                    .db()
+                    .tasks
+                    .get(id)
+                    .filter(|task| task.repeat.is_some())
+                    .map(|task| task.title.clone())
+            })
+        };
+        if let Some(title) = repeating_title {
+            let modal = modals::Modal::delete_task(self, ids, title);
+            self.open_modal(modal, cx);
+            return;
+        }
         let visible_before = self.visible_ids();
         let cursor = self
             .selected
@@ -2853,6 +2873,23 @@ impl FlowlistApp {
                 }
                 self.save_session();
             }
+            modals::Modal::DeleteTask { ids, whole, .. } => {
+                let saved = self.execute(if *whole {
+                    Command::DeleteTaskSeries { ids: ids.clone() }
+                } else {
+                    Command::DeleteTasks { ids: ids.clone() }
+                });
+                if saved.is_none() {
+                    return Ok(());
+                }
+                self.selected.clear();
+                self.anchor = None;
+                self.toast = Some(if *whole {
+                    "Moved the repeating series to Trash · ⌘Z to undo".to_string()
+                } else {
+                    format!("Moved {} occurrence(s) to Trash · ⌘Z to undo", ids.len())
+                });
+            }
             modals::Modal::NewFolder { name } => {
                 let name = name.text().trim().to_string();
                 if name.is_empty() {
@@ -3173,6 +3210,28 @@ impl FlowlistApp {
                 }
                 cx.notify();
                 return;
+            }
+            // The series-delete sheet is a two-choice switch rather than a
+            // text field, so Tab and the arrow keys flip the choice.
+            if matches!(self.modal, Some(modals::Modal::DeleteTask { .. })) {
+                match stroke.key.as_str() {
+                    "tab" | "left" | "right" | "up" | "down" => {
+                        if let Some(modals::Modal::DeleteTask { whole, .. }) = &mut self.modal {
+                            *whole = !*whole;
+                        }
+                        cx.notify();
+                        return;
+                    }
+                    "escape" => {
+                        self.close_modal(cx);
+                        return;
+                    }
+                    "enter" | "return" => {
+                        self.commit_modal(cx);
+                        return;
+                    }
+                    _ => {}
+                }
             }
             if let Some(buffer) = self.active_buffer_mut() {
                 match handle_buffer_key(buffer, stroke, paste.as_deref()) {
@@ -4737,6 +4796,10 @@ impl FlowlistApp {
                 }
                 _ => None,
             },
+        });
+        state["delete_series"] = serde_json::json!(match &self.modal {
+            Some(modals::Modal::DeleteTask { whole, .. }) => Some(*whole),
+            _ => None,
         });
         // Inserted after the macro: the full field list is already at the
         // json! recursion limit, so new debug fields go in one at a time.

@@ -1547,7 +1547,13 @@ impl FlowlistApp {
                     // Folders start folded on every launch; opening one is a
                     // deliberate act and the in-session tree remembers it.
                     let open = self.is_open(&key, false);
-                    let name = db.folder_path(&id);
+                    // The tree's indentation already carries the path, so a
+                    // row shows its own name rather than "Parent / Child".
+                    let name = db
+                        .folders
+                        .get(&id)
+                        .map(|folder| folder.name.clone())
+                        .unwrap_or_default();
                     let count = db.folder_active_project_count(&id);
                     let view_id = id.clone();
                     let target_id = id.clone();

@@ -69,6 +69,14 @@ pub enum Modal {
         id: FolderId,
         name: String,
     },
+    /// Deleting a repeating task asks whether just this occurrence or the
+    /// whole series goes to Trash. The sheet defaults to the safe choice.
+    DeleteTask {
+        ids: Vec<TaskId>,
+        title: String,
+        occurrences: usize,
+        whole: bool,
+    },
     /// Adding an http(s) link to a task or project. Links share the attachment
     /// list with file paths, so the row badge and the Attachments view already
     /// include them.
@@ -198,6 +206,21 @@ impl Modal {
         }
     }
 
+    pub fn delete_task(app: &FlowlistApp, ids: Vec<TaskId>, title: String) -> Self {
+        let occurrences = ids
+            .iter()
+            .map(|id| app.store.db().series_task_ids(id).len())
+            .max()
+            .unwrap_or(1)
+            .max(1);
+        Modal::DeleteTask {
+            ids,
+            title,
+            occurrences,
+            whole: false,
+        }
+    }
+
     pub fn attach_link(target: AttachmentTarget) -> Self {
         Modal::AttachLink {
             target,
@@ -272,6 +295,7 @@ impl Modal {
             Modal::CreateProject { .. } => "Create project",
             Modal::DeleteProject { .. } => "Delete project",
             Modal::DeleteFolder { .. } => "Delete folder",
+            Modal::DeleteTask { .. } => "Delete repeating task",
             Modal::AttachLink { .. } => "Attach link",
             Modal::NewFolder { .. } => "New folder",
             Modal::NewTag { .. } => "New tag",
@@ -298,6 +322,9 @@ impl Modal {
             }
             Modal::DeleteFolder { .. } => {
                 "Its projects and their tasks move to Trash with it. Undo restores everything."
+            }
+            Modal::DeleteTask { .. } => {
+                "This task repeats. Trash this occurrence, or the whole series; Undo restores everything."
             }
             Modal::AttachLink { .. } => {
                 "Paste an http(s) address; it opens in your browser. Undo removes it."
@@ -330,6 +357,7 @@ impl Modal {
             Modal::CreateProject { .. } => "Create",
             Modal::DeleteProject { .. } => "Delete",
             Modal::DeleteFolder { .. } => "Delete",
+            Modal::DeleteTask { .. } => "Delete",
             Modal::AttachLink { .. } => "Attach",
             _ => "Save",
         }
@@ -342,6 +370,7 @@ impl Modal {
             Modal::CreateProject { .. } => 0,
             Modal::DeleteProject { .. } => 0,
             Modal::DeleteFolder { .. } => 0,
+            Modal::DeleteTask { .. } => 0,
             Modal::AttachLink { .. } => 1,
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
             Modal::Perspective { .. } => 1,
@@ -369,6 +398,7 @@ impl Modal {
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
+            Modal::DeleteTask { .. } => None,
             Modal::AttachLink { url, .. } => (index == 0).then_some(url),
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&form.name),
@@ -414,6 +444,7 @@ impl Modal {
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
+            Modal::DeleteTask { .. } => None,
             Modal::AttachLink { url, .. } => (index == 0).then_some(url),
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&mut form.name),
@@ -454,6 +485,7 @@ impl Modal {
             Modal::CreateProject { .. } => "",
             Modal::DeleteProject { .. } => "",
             Modal::DeleteFolder { .. } => "",
+            Modal::DeleteTask { .. } => "",
             Modal::AttachLink { .. } => "Address",
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
             Modal::Perspective { .. } => "Name",
@@ -487,6 +519,7 @@ impl Modal {
     fn width(&self) -> f32 {
         match self {
             Modal::Import { .. } | Modal::Help => 620.0,
+            Modal::DeleteTask { .. } => 500.0,
             Modal::Perspective { .. } => 680.0,
             Modal::Settings { .. } => 580.0,
             _ => 460.0,
@@ -636,6 +669,72 @@ impl FlowlistApp {
                         .child(div().text_xs().text_color(theme.text_faint).child(detail)),
                 );
             }
+            if let Modal::DeleteTask {
+                title,
+                occurrences,
+                whole,
+                ..
+            } = modal
+            {
+                let title = title.clone();
+                let whole = *whole;
+                let occurrences = *occurrences;
+                body = body.child(
+                    div()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.danger)
+                        .bg(theme.field)
+                        .text_sm()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.text)
+                        .child(title),
+                );
+                // Two chips behave like a segmented control. Tab and the arrow
+                // keys flip them, so the choice never needs the mouse.
+                let chip = |label: &'static str, active: bool, key: &'static str| {
+                    div().id(key).child(
+                        div()
+                            .on_children_prepainted(self.view_probe(key.to_string()))
+                            .child(widgets::toggle_chip(theme, label, active)),
+                    )
+                };
+                body = body.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            chip("This occurrence", !whole, "delete-occurrence").on_click(
+                                cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::DeleteTask { whole, .. }) = &mut this.modal {
+                                        *whole = false;
+                                    }
+                                    cx.notify();
+                                }),
+                            ),
+                        )
+                        .child(
+                            chip("Whole series", whole, "delete-series").on_click(cx.listener(
+                                |this, _, _, cx| {
+                                    if let Some(Modal::DeleteTask { whole, .. }) = &mut this.modal {
+                                        *whole = true;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
+                        ),
+                );
+                body = body.child(div().text_xs().text_color(theme.text_faint).child(
+                    match occurrences {
+                        1 => "This is the only occurrence in the series.".to_string(),
+                        count => {
+                            format!("The series has {count} occurrences, including this one.")
+                        }
+                    },
+                ));
+            }
             for index in 0..field_count {
                 body = body.child(self.render_modal_field(index, cx));
             }
@@ -676,16 +775,15 @@ impl FlowlistApp {
                     .items_center()
                     .justify_between()
                     .pt_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child(if field_count > 0 {
-                                "Esc close · ⇥ next field"
-                            } else {
-                                "Esc close"
-                            }),
-                    )
+                    .child(div().text_xs().text_color(theme.text_faint).child(
+                        if matches!(modal, Modal::DeleteTask { .. }) {
+                            "Esc close · ⇥ switch choice"
+                        } else if field_count > 0 {
+                            "Esc close · ⇥ next field"
+                        } else {
+                            "Esc close"
+                        },
+                    ))
                     .child(
                         div()
                             .flex()

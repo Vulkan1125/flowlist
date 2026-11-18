@@ -54,6 +54,7 @@ pub fn task_value(db: &Db, id: &TaskId) -> Value {
         "completed": task.completed,
         "completed_at": task.completed_at.map(|at| at.to_rfc3339()),
         "repeat": task.repeat.as_ref().map(|rule| rule.description()),
+        "repeat_series": task.repeat_series.as_ref().map(|id| id.to_string()),
         "sequential": task.sequential,
         "attachments": task.attachments,
         "availability": status.label(),

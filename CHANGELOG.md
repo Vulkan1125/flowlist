@@ -12,6 +12,15 @@
 - The New Project sheet has a Review every (days) field, pre-filled from the
   library default, so each project can keep its own review cadence.
 - Icon tooltips now wait three seconds instead of about five.
+- Nested folder rows show just the folder's own name; indentation carries the
+  path instead of printing `Parent / Child` on every row.
+- Completing a repeating task now increments the last number in its title, so
+  “Week 3 review” spawns “Week 4 review”. The rule's end date or count still
+  stops the series.
+- Deleting a repeating task asks whether to trash just this occurrence or the
+  whole series. The sheet defaults to this occurrence, Tab or the arrow keys
+  switch choices, and one Undo restores every trashed occurrence. `remove
+  --series` and the MCP `delete_task` tool's `series` flag do the same.
 - Attachments now accept http(s) website links next to file paths. The
   inspector's **Add link…** button takes a pasted address, a link row uses the
   chain icon, and a task whose attachments are all links shows a link badge

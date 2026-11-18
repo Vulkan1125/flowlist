@@ -99,6 +99,11 @@ pub struct Task {
     pub completed_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub repeat: Option<RepeatRule>,
+    /// The first occurrence of a repeating series. Every occurrence carries the
+    /// same value, so the whole chain can be found when deleting a series. A
+    /// task that predates series tracking is treated as its own series.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repeat_series: Option<TaskId>,
     /// When true, children are worked through in order.
     #[serde(default)]
     pub sequential: bool,
@@ -137,6 +142,7 @@ impl Task {
             completed: false,
             completed_at: None,
             repeat: None,
+            repeat_series: None,
             sequential: false,
             attachments: Vec::new(),
             trashed_at: None,

@@ -282,6 +282,9 @@ pub struct TrashArgs {
 pub struct RemoveArgs {
     #[arg(value_name = "ID", required = true)]
     pub ids: Vec<String>,
+    /// Move the whole repeating series to Trash, not just this occurrence.
+    #[arg(long)]
+    pub series: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -1195,12 +1198,18 @@ fn cmd_remove(cli: &Cli, args: RemoveArgs, paint: &Paint) -> Result<()> {
     let mut store = open_store(cli)?;
     let ids = resolve_tasks(store.db(), &args.ids)?;
     let count = ids.len();
-    store.execute(CoreCommand::DeleteTasks { ids })?;
+    if args.series {
+        store.execute(CoreCommand::DeleteTaskSeries { ids })?;
+    } else {
+        store.execute(CoreCommand::DeleteTasks { ids })?;
+    }
     if cli.json {
         println!(
             "{}",
-            serde_json::to_string_pretty(&json!({"deleted": count}))?
+            serde_json::to_string_pretty(&json!({"deleted": count, "series": args.series}))?
         );
+    } else if args.series {
+        println!("{} {} repeating series to Trash", paint.red("Moved"), count);
     } else {
         println!("{} {} task(s) to Trash", paint.red("Moved"), count);
     }

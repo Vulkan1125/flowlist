@@ -354,6 +354,29 @@ impl Db {
         }
     }
 
+    /// Every task that belongs to the same repeating series as `task_id`,
+    /// including the task itself. A task without a recorded series is its own
+    /// series, so older libraries keep working.
+    pub fn series_task_ids(&self, task_id: &TaskId) -> Vec<TaskId> {
+        let Some(task) = self.tasks.get(task_id) else {
+            return Vec::new();
+        };
+        let series = task
+            .repeat_series
+            .clone()
+            .unwrap_or_else(|| task.id.clone());
+        let mut ids: Vec<TaskId> = self
+            .tasks
+            .values()
+            .filter(|candidate| {
+                candidate.id == series || candidate.repeat_series.as_ref() == Some(&series)
+            })
+            .map(|candidate| candidate.id.clone())
+            .collect();
+        ids.sort_by_key(|id| self.tasks[id].created_at);
+        ids
+    }
+
     pub fn task_ancestors(&self, task_id: &TaskId) -> Vec<TaskId> {
         let mut out = Vec::new();
         let mut current = self.tasks.get(task_id).and_then(|task| task.parent.clone());

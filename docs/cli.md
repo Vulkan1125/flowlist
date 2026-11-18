@@ -89,7 +89,7 @@ Choose a view or filter:
 
 ```sh
 flowlist done <ID>... [--undo]
-flowlist remove <ID>...          # move to Trash
+flowlist remove <ID>... [--series]   # move to Trash; --series takes the chain
 flowlist edit <ID> [--title ...] [--notes ...] [--due ...] [--defer ...] \
   [--estimate ...] [--flag|--unflag] [--repeat ...] [--project ...] \
   [--parent ...] [--sequential] [--priority ...] \
@@ -97,6 +97,9 @@ flowlist edit <ID> [--title ...] [--notes ...] [--due ...] [--defer ...] \
 ```
 
 Use `none` to clear dates, estimates, repeat rules, projects or parents.
+Completing a repeating task increments the last number in its title, so
+`Week 3 review` spawns `Week 4 review`; `--series` on `remove` moves every
+occurrence of that chain to Trash instead of only the named one.
 
 ### Trash
 

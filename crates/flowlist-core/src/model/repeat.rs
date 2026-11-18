@@ -211,6 +211,43 @@ fn with_time_from(stamp: Stamp, sample: Stamp) -> Stamp {
     }
 }
 
+/// The title for a task's next occurrence. The last number in the title is
+/// incremented, so “Week 3 review” becomes “Week 4 review” and “Invoice 007”
+/// becomes “Invoice 008”; a title without a number is copied unchanged.
+pub fn increment_repeat_title(title: &str) -> String {
+    let chars: Vec<char> = title.chars().collect();
+    let mut end = None;
+    let mut start = None;
+    for (index, ch) in chars.iter().enumerate().rev() {
+        if ch.is_ascii_digit() {
+            if end.is_none() {
+                end = Some(index + 1);
+            }
+            start = Some(index);
+        } else if end.is_some() {
+            break;
+        }
+    }
+    let (Some(start), Some(end)) = (start, end) else {
+        return title.to_string();
+    };
+    let digits: String = chars[start..end].iter().collect();
+    let Ok(value) = digits.parse::<u64>() else {
+        return title.to_string();
+    };
+    let next = value.saturating_add(1);
+    // Keep zero padding so “Sprint 007” becomes “Sprint 008”, not “Sprint 8”.
+    let replacement = if digits.len() > 1 && digits.starts_with('0') {
+        format!("{next:0width$}", width = digits.len())
+    } else {
+        next.to_string()
+    };
+    let mut out: String = chars[..start].iter().collect();
+    out.push_str(&replacement);
+    out.extend(chars[end..].iter());
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,5 +310,17 @@ mod tests {
                 .is_none()
         );
         let _ = Utc.timestamp_opt(0, 0);
+    }
+
+    #[test]
+    fn repeat_titles_increment_their_last_number() {
+        assert_eq!(increment_repeat_title("Week 3 review"), "Week 4 review");
+        assert_eq!(increment_repeat_title("Invoice 007"), "Invoice 008");
+        assert_eq!(increment_repeat_title("Day 9"), "Day 10");
+        assert_eq!(
+            increment_repeat_title("Nothing numbered"),
+            "Nothing numbered"
+        );
+        assert_eq!(increment_repeat_title("Version 1.4"), "Version 1.5");
     }
 }

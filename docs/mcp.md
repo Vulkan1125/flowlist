@@ -54,7 +54,7 @@ tasks. `create_project` and `update_project` accept the same `attachments` and
 | `get_task` | fetch one task by id or unique prefix |
 | `update_task` | change fields; omit to keep, send `null`/`"none"` to clear |
 | `complete_task` | complete or reopen; repeating tasks spawn the next occurrence |
-| `delete_task` | delete a task and its subtasks |
+| `delete_task` | delete a task and its subtasks; `series: true` takes the whole repeating chain |
 | `move_task` | move to the inbox, a project or another task |
 | `convert_task_to_project` | turn a task and its top-level subtasks into a project |
 | `set_task_tags` | add or remove tag paths |
@@ -76,6 +76,11 @@ tasks. `create_project` and `update_project` accept the same `attachments` and
 | `restore_tasks` | restore tasks and their subtrees |
 | `purge_tasks` | permanently delete tasks from Trash |
 | `empty_trash` | permanently delete every trashed task |
+
+Completing a repeating task increments the last number in its title and
+spawns the next occurrence with the same series id. Passing `series: true` to
+`delete_task` moves every occurrence in that chain to Trash in one undoable
+step.
 
 `delete_task` is a soft delete. Trash follows the library's
 `trash_retention_days` setting; restoring or purging is recorded in undo history

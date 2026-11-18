@@ -10,7 +10,7 @@ use crate::error::{Error, Result};
 use crate::ids::{ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use crate::model::{
     ChecklistItem, Folder, Geo, Perspective, Priority, Project, ProjectIcon, ProjectKind,
-    ProjectStatus, RepeatRule, Tag, TagStatus, Task,
+    ProjectStatus, RepeatRule, Tag, TagStatus, Task, increment_repeat_title,
 };
 use crate::time::{Stamp, local_date, now};
 
@@ -219,6 +219,10 @@ pub enum Command {
     DeleteTasks {
         ids: Vec<TaskId>,
     },
+    /// Move a task and every occurrence in its repeating series to Trash.
+    DeleteTaskSeries {
+        ids: Vec<TaskId>,
+    },
     MoveTasks {
         ids: Vec<TaskId>,
         placement: TaskPlacement,
@@ -387,6 +391,9 @@ impl Command {
                 }
             }
             Command::DeleteTasks { ids } => format!("Move {} task(s) to Trash", ids.len()),
+            Command::DeleteTaskSeries { ids } => {
+                format!("Move {} repeating series to Trash", ids.len())
+            }
             Command::MoveTasks { ids, .. } => format!("Move {} task(s)", ids.len()),
             Command::SetTaskTags { ids, .. } => format!("Tag {} task(s)", ids.len()),
             Command::SetTaskFlag { ids, flagged } => {
@@ -515,6 +522,9 @@ impl Command {
                 task.priority = new_task.priority;
                 task.attachments = new_task.attachments;
                 task.repeat = new_task.repeat;
+                if task.repeat.is_some() {
+                    task.repeat_series = Some(task.id.clone());
+                }
                 task.sequential = new_task.sequential;
                 task.modified_at = at;
                 let id = task.id.clone();
@@ -579,6 +589,13 @@ impl Command {
                     if let Some(repeat) = patch.repeat {
                         task.repeat = repeat;
                     }
+                    // The first occurrence owns the series id; every spawned
+                    // occurrence inherits it so it can be found later.
+                    if task.repeat.is_some() && task.repeat_series.is_none() {
+                        task.repeat_series = Some(task.id.clone());
+                    } else if task.repeat.is_none() {
+                        task.repeat_series = None;
+                    }
                     if let Some(sequential) = patch.sequential {
                         task.sequential = sequential;
                     }
@@ -630,6 +647,10 @@ impl Command {
                     let parent = task.parent.clone();
                     let tags = task.tags.clone();
                     let title = task.title.clone();
+                    let series = task
+                        .repeat_series
+                        .clone()
+                        .unwrap_or_else(|| task.id.clone());
                     let notes = task.notes.clone();
                     let estimate = task.estimate_min;
                     let flagged = task.flagged;
@@ -638,12 +659,16 @@ impl Command {
                         let task = db.task_mut(&id)?;
                         task.completed = completed;
                         task.completed_at = completed.then_some(at);
+                        if task.repeat.is_some() {
+                            task.repeat_series = Some(series.clone());
+                        }
                         task.modified_at = at;
                     }
                     if completed {
                         if let Some(rule) = repeat {
                             if let Some(next) = rule.next_occurrence(due, defer, at) {
-                                let mut spawned = Task::new(title);
+                                let mut spawned = Task::new(increment_repeat_title(&title));
+                                spawned.repeat_series = Some(series.clone());
                                 spawned.notes = notes;
                                 spawned.project = project;
                                 spawned.parent = parent;
@@ -688,21 +713,28 @@ impl Command {
                 db.touch();
             }
             Command::DeleteTasks { ids } => {
-                let mut trashed: BTreeSet<TaskId> = BTreeSet::new();
-                for id in ids {
-                    if db.tasks.contains_key(&id) {
-                        for descendant in db.task_subtree(&id) {
-                            trashed.insert(descendant);
+                let trashed = trash_tasks(db, &ids, at);
+                outcome.message = Some(format!("Moved {} task(s) to Trash", trashed.len()));
+                db.touch();
+            }
+            Command::DeleteTaskSeries { ids } => {
+                let mut members: Vec<TaskId> = Vec::new();
+                for id in &ids {
+                    for member in db.series_task_ids(id) {
+                        let already_trashed = db
+                            .tasks
+                            .get(&member)
+                            .is_some_and(|task| task.trashed_at.is_some());
+                        if !already_trashed && !members.contains(&member) {
+                            members.push(member);
                         }
                     }
                 }
-                for id in &trashed {
-                    if let Some(task) = db.tasks.get_mut(id) {
-                        task.trashed_at = Some(at);
-                        task.modified_at = at;
-                    }
-                }
-                outcome.message = Some(format!("Moved {} task(s) to Trash", trashed.len()));
+                let trashed = trash_tasks(db, &members, at);
+                outcome.message = Some(format!(
+                    "Moved {} task(s) in the series to Trash",
+                    trashed.len()
+                ));
                 db.touch();
             }
             Command::RestoreTasks { ids } => {
@@ -1421,6 +1453,26 @@ fn remove_folder_tree(db: &mut Db, id: &FolderId) {
     }
     db.detach_container(&ContainerId::Folder(id.clone()));
     db.folders.remove(id);
+}
+
+/// Move the given tasks and every task below them to Trash. Both plain
+/// deletion and whole-series deletion use this so their snapshot is identical.
+fn trash_tasks(db: &mut Db, ids: &[TaskId], at: DateTime<Utc>) -> BTreeSet<TaskId> {
+    let mut trashed: BTreeSet<TaskId> = BTreeSet::new();
+    for id in ids {
+        if db.tasks.contains_key(id) {
+            for descendant in db.task_subtree(id) {
+                trashed.insert(descendant);
+            }
+        }
+    }
+    for id in &trashed {
+        if let Some(task) = db.tasks.get_mut(id) {
+            task.trashed_at = Some(at);
+            task.modified_at = at;
+        }
+    }
+    trashed
 }
 
 /// Move a project's whole task tree to Trash and drop the project itself.

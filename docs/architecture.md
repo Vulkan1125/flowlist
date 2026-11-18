@@ -78,8 +78,11 @@ sessions and survives a restart.
 
 Repeat rules are applied inside `CompleteTasks`. The next occurrence is computed
 from due/defer dates and the repeat mode/schedule, then a new task is inserted
-after the completed one. Its checklist is copied with every item unchecked and
-its repeat counter advanced.
+after the completed one. Its checklist is copied with every item unchecked, its
+repeat counter advanced, and the last number in its title incremented. Every
+occurrence carries the first task's id in `repeat_series`, so `DeleteTaskSeries`
+can find the whole chain and trash it in one snapshot; a task without a
+recorded series is treated as its own series.
 
 Checklist commands are deliberately separate from task commands: they edit
 `Task::checklist` in place, participate in undo, and never create rows in

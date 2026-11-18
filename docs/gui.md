@@ -94,7 +94,11 @@ its Delete and Complete actions stay hidden while you are still filling it in.
 Attachments take local file paths and http(s) links side by side: **Attach
 file…** opens the macOS picker and **Add link…** takes a pasted address.
 Checklist steps are lightweight and never appear as tasks; completing a
-repeating task copies the checklist with every step unchecked.
+repeating task copies the checklist with every step unchecked. The last number
+in a repeating title moves on with each occurrence, so “Week 3 review” spawns
+“Week 4 review”. Deleting a repeating task opens a sheet with a **This
+occurrence** / **Whole series** choice; `Tab` or the arrow keys flip it, `Enter`
+confirms, `Esc` cancels, and one Undo restores everything.
 
 Drag a task onto a project, tag, parent or sibling position. Drag a project or
 a folder onto a folder, onto the LIBRARY heading, or onto empty space under the
@@ -106,8 +110,9 @@ inside itself or its own subtree. Drops are undoable.
 Folders launch **folded**, so a fresh window is quiet. Clicking a folder opens
 its view and unfolds its tree; clicking the same open folder again folds the
 tree without leaving the view. The chevron toggles just the tree. Nested
-folders and projects indent one step per level, and an empty folder says
-“Empty” aligned with the names.
+folders and projects indent one step per level and each row shows only its own
+name, so indentation carries the path instead of repeating `Parent / Child`.
+An empty folder says “Empty” aligned with the names.
 
 Folder badges count **active projects**, not everything filed under the folder:
 a project whose tasks are all ticked, or a closed project, does not inflate the

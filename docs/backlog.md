@@ -44,10 +44,14 @@ below; this list is the current map.
 
 ### Phase 3 — Recurring task series
 
-- [ ] **Auto-incrementing repeat titles** — an optional number in the title
-      increments on completion, with an end date or “forever”.
-- [ ] **Series-aware deletion** — deleting a recurring task asks whether to
-      remove this occurrence or the whole series.
+- [x] **Auto-incrementing repeat titles** — the last number in the title
+      increments on completion, with the rule's end date or count stopping the
+      series; a title without a number is copied unchanged.
+- [x] **Series-aware deletion** — deleting a recurring task asks whether to
+      remove this occurrence or every occurrence in the series. The default is
+      this occurrence, Tab or the arrow keys switch the choice, and one Undo
+      restores the whole chain. `remove --series` and MCP `delete_task` with
+      `series: true` expose the same behaviour.
 
 ### Phase 4 — Larger product bets
 

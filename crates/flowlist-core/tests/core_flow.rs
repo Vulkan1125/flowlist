@@ -149,6 +149,100 @@ fn repeated_task_spawns_the_next_occurrence() {
 }
 
 #[test]
+fn repeat_titles_increment_on_completion() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let mut new_task = NewTask::new("Week 1 review");
+    new_task.due = Some(Stamp::date_only(local_date(Utc::now())));
+    new_task.repeat = Some(RepeatRule::new(
+        RepeatMode::DueAgain,
+        1,
+        IntervalUnit::Weeks,
+    ));
+    let id = store
+        .execute(Command::CreateTask(new_task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let task_id = store.db().resolve_task(&id).unwrap();
+    let series = store.db().tasks[&task_id].repeat_series.clone();
+    assert_eq!(series, Some(task_id.clone()));
+
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![task_id.clone()],
+            completed: true,
+        })
+        .unwrap();
+
+    let next = store
+        .db()
+        .tasks
+        .values()
+        .find(|task| task.id != task_id)
+        .expect("next occurrence exists");
+    assert_eq!(next.title, "Week 2 review");
+    assert_eq!(next.repeat_series, Some(task_id));
+}
+
+#[test]
+fn deleting_a_series_trashes_every_occurrence() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let mut new_task = NewTask::new("Day 1");
+    new_task.due = Some(Stamp::date_only(local_date(Utc::now())));
+    new_task.repeat = Some(RepeatRule::new(RepeatMode::DueAgain, 1, IntervalUnit::Days));
+    let id = store
+        .execute(Command::CreateTask(new_task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let task_id = store.db().resolve_task(&id).unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![task_id.clone()],
+            completed: true,
+        })
+        .unwrap();
+    let next_id = store
+        .db()
+        .tasks
+        .values()
+        .find(|task| task.id != task_id)
+        .expect("next occurrence exists")
+        .id
+        .clone();
+    assert_eq!(store.db().series_task_ids(&next_id).len(), 2);
+
+    store
+        .execute(Command::DeleteTaskSeries {
+            ids: vec![next_id.clone()],
+        })
+        .unwrap();
+    assert_eq!(store.db().tasks.len(), 2);
+    assert!(
+        store
+            .db()
+            .tasks
+            .values()
+            .all(|task| task.trashed_at.is_some()),
+        "every occurrence moves to Trash"
+    );
+
+    store.undo().unwrap();
+    assert!(
+        store
+            .db()
+            .tasks
+            .values()
+            .all(|task| task.trashed_at.is_none()),
+        "one undo restores the whole series"
+    );
+}
+
+#[test]
 fn data_survives_reopening_and_other_stores_reload() {
     let (_dir, paths) = setup();
     let first = {

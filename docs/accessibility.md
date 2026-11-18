@@ -171,6 +171,10 @@ menu and `⌘⌫` / `dd` open the same kind of sheet, explaining that its nested
 folders, projects and their tasks move to Trash with it and that one Undo
 restores the tree.
 
+Deleting a repeating task opens a two-choice sheet. `Tab` and the arrow keys
+move between **This occurrence** and **Whole series**, `Enter` confirms the
+highlighted choice, `Esc` cancels, and `⌘Z` restores every trashed occurrence.
+
 The Archive is a project surface rather than a task list. Finished and dropped
 projects sit in collapsible folder sections under `Library` or their folder
 path, each row opens that project, and a labelled Reopen button shows on every

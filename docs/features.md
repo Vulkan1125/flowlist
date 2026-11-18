@@ -23,6 +23,11 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Restorable Trash with configurable auto-delete
 - [x] Repeat rules: fixed/after-completion, due-again/defer-another, end date,
       end count, completion counter
+- [x] Auto-incrementing repeat titles: the last number in a title moves on
+      with each occurrence (“Week 3” becomes “Week 4”), stopping at the rule's
+      end date or count
+- [x] Series-aware deletion: deleting a repeating task asks whether this
+      occurrence or the whole series goes to Trash, in one undoable step
 - [x] Checklist items with add/edit/reorder/delete and progress counts
 - [x] Checklist copied unchecked when a repeating task spawns
 - [x] JSON persistence with atomic writes, backups and schema migration
@@ -141,7 +146,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] A folder's badge counts the projects under it that still want work: an
       open project whose tasks are all ticked, or a closed project, no longer
       inflates the number. Nested folders roll their live projects into their
-      parent's badge, so the count reflects active work at any depth.
+      parent's badge, so the count reflects active work at any depth. Rows show
+      their own name, with indentation carrying the path.
 - [x] Rail sections fold from their headings. Perspectives stay as the fixed
       backbone, while Priorities, Library, Saved and Tags collapse without
       touching the view. The heading's chevron sits at the right edge and
