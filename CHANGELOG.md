@@ -4,6 +4,9 @@
 
 ### Interface
 
+- A new Plain theme family adds a pure white light palette and a near-black
+  dark palette with a neutral ink accent. It is the first-run default for a
+  library with no saved theme; existing saved themes are untouched.
 - `⌃⌥Space` now opens a Things 3-style floating capture panel in the middle
   of the screen instead of bringing the whole window forward. The panel is a
   compact, square-cornered card that stays above normal windows when another

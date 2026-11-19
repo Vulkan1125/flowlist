@@ -683,7 +683,7 @@ pub fn stored_theme(paths: &DataPaths) -> Theme {
         .and_then(|text| serde_json::from_str::<Session>(&text).ok());
     let (kind, appearance) = session
         .map(|session| session.theme_choice())
-        .unwrap_or((ThemeKind::Paper, Appearance::Light));
+        .unwrap_or((ThemeKind::Plain, Appearance::Light));
     Theme::new(kind, appearance)
 }
 

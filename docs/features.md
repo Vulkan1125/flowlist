@@ -262,12 +262,14 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Session persistence: view, selection, inspector, sort, grouping,
       per-view options, per-view priority filter, First Available, theme,
       follow-system, vim mode and window size
-- [x] Ten theme families — Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula,
-      Tokyo Night, Vesper, Graphite and Midnight — each with a light and a dark
-      palette, chosen in Settings or with the title-bar moon/sun button,
-      `⌘T` / `⇧⌘T` / `⌥⌘T` (`⇧T` in vim mode). Clicking a swatch or appearance
-      chip previews it on the live window; Cancel or Esc puts back the theme
-      the sheet opened with, and Save keeps the new one.
+- [x] Eleven theme families — Plain, Paper, Mist, Catppuccin, Nord, Gruvbox,
+      Dracula, Tokyo Night, Vesper, Graphite and Midnight — each with a light
+      and a dark palette, chosen in Settings or with the title-bar moon/sun
+      button, `⌘T` / `⇧⌘T` / `⌥⌘T` (`⇧T` in vim mode). Plain opens on a pure
+      white reading surface in light mode and a near-black one in dark mode,
+      and is the first-run default. Clicking a swatch or appearance chip
+      previews it on the live window; Cancel or Esc puts back the theme the
+      sheet opened with, and Save keeps the new one.
 - [x] Follow-system appearance: keep the theme family, take light/dark from
       the macOS window appearance. A manual light/dark switch turns this off so
       the chosen mode is not reverted on the next frame.

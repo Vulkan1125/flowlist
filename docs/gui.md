@@ -28,7 +28,8 @@ bar blends into the content so the sidebar is the visual anchor.
 - **Add task** focuses capture from any view, including a view that has no
   inline capture bar.
 - The theme button switches light/dark (`⌘T`); `⇧⌘T` / `⌥⌘T` step through the
-  ten theme families.
+  eleven theme families. Plain, the first-run default, is a pure white or
+  near-black surface with neutral ink.
 - Help (`?`) opens the keyboard and mouse card. Settings (`⌘,`) opens the
   settings sheet.
 

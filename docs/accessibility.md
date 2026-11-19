@@ -252,7 +252,7 @@ not need to discover a tooltip first.
 - Every theme keeps a single accent colour for selection and focus; destructive
   actions use one warm red and are never encoded by colour alone — the close
   icon and the tooltip carry the meaning.
-- The reading surface stays opaque in all ten theme families, in both light and
+- The reading surface stays opaque in all eleven theme families, in both light and
   dark mode. Translucency is limited to the sidebar, inspector, header and
   status bar, so wallpaper contrast never reaches task text.
 - Chrome tint is checked at both gradient stops, and against the blur over a

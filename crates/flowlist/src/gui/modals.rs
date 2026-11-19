@@ -1685,7 +1685,7 @@ impl FlowlistApp {
         }
 
         let mut grid = div().flex().flex_col().gap_2().w_full();
-        for chunk in ThemeKind::ALL.chunks(5) {
+        for chunk in ThemeKind::ALL.chunks(4) {
             let mut row = div().flex().items_start().gap_2().w_full();
             for kind in chunk {
                 row = row.child(
@@ -1698,7 +1698,7 @@ impl FlowlistApp {
                 );
             }
             // Keep the last row aligned with full rows when it is short.
-            for _ in chunk.len()..5 {
+            for _ in chunk.len()..4 {
                 row = row.child(div().flex_1());
             }
             grid = grid.child(row);

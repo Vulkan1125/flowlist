@@ -190,9 +190,10 @@ impl Session {
     /// Sessions from before the family split stored only `"light"` or `"dark"`,
     /// so those two values still map to Paper light and Graphite dark. All
     /// other families fall back to their natural mode when no appearance was
-    /// written.
+    /// written. A library with no saved theme opens in Plain light, the
+    /// first-run default.
     pub fn theme_choice(&self) -> (ThemeKind, Appearance) {
-        let kind = self.theme_kind().unwrap_or(ThemeKind::Paper);
+        let kind = self.theme_kind().unwrap_or(ThemeKind::Plain);
         let legacy = match self.theme.as_deref() {
             Some("light") => Some(Appearance::Light),
             Some("dark") => Some(Appearance::Dark),
@@ -322,7 +323,11 @@ mod tests {
         );
         assert_eq!(
             session(None, None).theme_choice(),
-            (ThemeKind::Paper, Appearance::Light)
+            (ThemeKind::Plain, Appearance::Light)
+        );
+        assert_eq!(
+            session(None, Some("dark")).theme_choice(),
+            (ThemeKind::Plain, Appearance::Dark)
         );
     }
 }

@@ -144,7 +144,7 @@ value directly. `view_form` reports the sheet's current state
 `matches` is the live task count. A fresh sheet has no Clear filters control,
 so poll for `clear` only after a condition is set. `theme_boxes` maps a
 Settings sheet's controls to their boxes: `theme:<slug>` for each family
-swatch (`paper`, `mist`, `catppuccin`, `nord`, `gruvbox`, `dracula`,
+swatch (`plain`, `paper`, `mist`, `catppuccin`, `nord`, `gruvbox`, `dracula`,
 `tokyo-night`, `vesper`, `graphite`, `midnight`) and `appearance:<slug>` for
 the `light` and `dark` chips, so a probe can check the live preview without
 guessing at the grid. If the sheet does not paint another frame on its own, a

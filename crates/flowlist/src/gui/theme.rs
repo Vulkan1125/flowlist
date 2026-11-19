@@ -1,6 +1,6 @@
 //! Colours and metrics for the Flowlist window.
 //!
-//! Ten theme families, each with a light and a dark palette. Every palette
+//! Eleven theme families, each with a light and a dark palette. Every palette
 //! pairs an opaque reading surface with translucent chrome for the blur
 //! backdrop, so macOS can show the desktop through the sidebar and inspector
 //! without putting wallpaper contrast behind task text.
@@ -48,6 +48,7 @@ impl Appearance {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeKind {
+    Plain,
     Paper,
     Mist,
     Catppuccin,
@@ -61,7 +62,8 @@ pub enum ThemeKind {
 }
 
 impl ThemeKind {
-    pub const ALL: [ThemeKind; 10] = [
+    pub const ALL: [ThemeKind; 11] = [
+        ThemeKind::Plain,
         ThemeKind::Paper,
         ThemeKind::Mist,
         ThemeKind::Catppuccin,
@@ -76,6 +78,7 @@ impl ThemeKind {
 
     pub fn slug(self) -> &'static str {
         match self {
+            ThemeKind::Plain => "plain",
             ThemeKind::Paper => "paper",
             ThemeKind::Mist => "mist",
             ThemeKind::Catppuccin => "catppuccin",
@@ -93,6 +96,7 @@ impl ThemeKind {
     /// an upgrade never resets someone's choice.
     pub fn from_slug(value: &str) -> Option<Self> {
         match value {
+            "plain" => Some(ThemeKind::Plain),
             "light" | "paper" => Some(ThemeKind::Paper),
             "dark" | "graphite" => Some(ThemeKind::Graphite),
             "mist" => Some(ThemeKind::Mist),
@@ -109,6 +113,7 @@ impl ThemeKind {
 
     pub fn label(self) -> &'static str {
         match self {
+            ThemeKind::Plain => "Plain",
             ThemeKind::Paper => "Paper",
             ThemeKind::Mist => "Mist",
             ThemeKind::Catppuccin => "Catppuccin",
@@ -124,6 +129,7 @@ impl ThemeKind {
 
     pub fn hint(self) -> &'static str {
         match self {
+            ThemeKind::Plain => "White / ink",
             ThemeKind::Paper => "Warm neutral",
             ThemeKind::Mist => "Cool neutral",
             ThemeKind::Catppuccin => "Latte / Mocha",
@@ -140,7 +146,7 @@ impl ThemeKind {
     /// The mode a family opens in when a session only stores its name.
     pub fn default_appearance(self) -> Appearance {
         match self {
-            ThemeKind::Paper | ThemeKind::Mist => Appearance::Light,
+            ThemeKind::Plain | ThemeKind::Paper | ThemeKind::Mist => Appearance::Light,
             _ => Appearance::Dark,
         }
     }
@@ -259,6 +265,42 @@ impl Colors {
 impl Theme {
     pub fn new(kind: ThemeKind, appearance: Appearance) -> Self {
         let colors = match (kind, appearance) {
+            (ThemeKind::Plain, Appearance::Light) => Colors {
+                bg: 0xFFFFFF,
+                glass: 0xFFFFFFE8,
+                raised: 0xFFFFFFF7,
+                field: 0xF7F7F7D9,
+                hover: 0x0000000D,
+                border: 0xE4E4E4,
+                border_soft: 0xF0F0F0,
+                text: 0x0A0A0A,
+                text_dim: 0x4F4F4F,
+                text_faint: 0x707070,
+                accent: 0x181818,
+                accent_soft: 0x18181824,
+                selection: 0x1818181A,
+                danger: 0xA61B1B,
+                warning: 0x7A5300,
+                success: 0x1F6B3C,
+            },
+            (ThemeKind::Plain, Appearance::Dark) => Colors {
+                bg: 0x0B0B0B,
+                glass: 0x161616E8,
+                raised: 0x1C1C1CF7,
+                field: 0xFFFFFF12,
+                hover: 0xFFFFFF1A,
+                border: 0x333333,
+                border_soft: 0x252525,
+                text: 0xF7F7F7,
+                text_dim: 0xC2C2C2,
+                text_faint: 0x919191,
+                accent: 0xF2F2F2,
+                accent_soft: 0xFFFFFF36,
+                selection: 0xFFFFFF30,
+                danger: 0xF0B4B4,
+                warning: 0xE8C070,
+                success: 0x9BD8AB,
+            },
             (ThemeKind::Paper, Appearance::Light) => Colors {
                 bg: 0xF7F4EE,
                 glass: 0xEFECE4E4,
@@ -712,6 +754,7 @@ mod tests {
     fn legacy_sessions_still_open() {
         assert_eq!(ThemeKind::from_slug("light"), Some(ThemeKind::Paper));
         assert_eq!(ThemeKind::from_slug("dark"), Some(ThemeKind::Graphite));
+        assert_eq!(ThemeKind::from_slug("plain"), Some(ThemeKind::Plain));
         assert_eq!(ThemeKind::from_slug("midnight"), Some(ThemeKind::Midnight));
         assert_eq!(ThemeKind::from_slug("sepia"), None);
     }
@@ -845,14 +888,14 @@ mod tests {
 
     #[test]
     fn cycling_visits_every_family_and_wraps() {
-        let mut kind = ThemeKind::Paper;
+        let mut kind = ThemeKind::Plain;
         let mut seen = Vec::new();
         for _ in 0..ThemeKind::ALL.len() {
             seen.push(kind);
             kind = kind.next();
         }
         assert_eq!(seen, ThemeKind::ALL);
-        assert_eq!(kind, ThemeKind::Paper);
-        assert_eq!(ThemeKind::Paper.previous(), ThemeKind::Midnight);
+        assert_eq!(kind, ThemeKind::Plain);
+        assert_eq!(ThemeKind::Plain.previous(), ThemeKind::Midnight);
     }
 }

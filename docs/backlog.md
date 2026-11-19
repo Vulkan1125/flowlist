@@ -69,6 +69,9 @@ below; this list is the current map.
       drag-to-reschedule, keyboard day/month steps, a fold-away header chip
       and a mouse-resizable height. There is no separate Calendar perspective.
       Covered by `scripts/gui/forecast-probe.sh`.
+- [x] **Plain theme** — a neutral white/near-black family with a monochrome
+      accent, and the first-run default. Both modes meet the same contrast
+      contract as the other families.
 - [ ] **Visual design pass** — hierarchy, spacing, motion, hover/focus and the
       glass edges, verified live in every theme.
 
