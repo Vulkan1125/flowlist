@@ -38,7 +38,7 @@ The sidebar's fixed perspectives are the backbone:
 
 | View | Contents |
 | --- | --- |
-| Inbox | tasks with no project |
+| Inbox | tasks with no project and no due/defer date |
 | Today | due today, deferred to today, and overdue; overdue can be hidden |
 | Projects | open projects and their tasks |
 | Forecast | overdue / today / tomorrow / later, with a collapsible, resizable month calendar |
@@ -70,27 +70,32 @@ rows that are currently actionable.
 
 ## Capture and editing
 
-`⌃⌥Space` is the system-wide capture hotkey. It opens a small floating panel
+`⌃⌥Space` is the system-wide capture hotkey. It opens a compact floating panel
 over the current app instead of bringing the whole window forward, so the main
-window keeps its view, selection and scroll. `n` or `⌘N` starts capture inside
-the app, and the title-bar plus opens the same panel from any view.
+window keeps its view, selection and scroll. The panel stays above normal
+windows when another app comes forward, the way Things' quick entry does.
+`n` or `⌘N` starts capture inside the app, and the title-bar plus opens the same
+panel from any view.
 
 The panel is a square-cornered card in the middle of the screen, so it reads as
-a single surface rather than a second app window. It parses as you type: the top line is the title, a row of chips previews
-the project, tags, flag, due/defer dates, estimate and repeat rule, and the
-footer says where the task will land. With no `::Project` marker it files into
-the view you were last in when that view has a project, tag, priority, flag or
-forecast default; otherwise it goes to Inbox.
+a single surface rather than a second app window. It parses as you type: the top
+line is the title, a row of chips previews the project, tags, flag, due/defer
+dates, estimate and repeat rule, and the footer says where the task will land.
+A plain thought always goes to the Inbox, whatever view was last open. An
+explicit `::Project` files it there, and a `due:` or `defer:` date schedules it
+into Today or Forecast, so a scheduled task leaves the Inbox.
 
 | Key | What it does |
 | --- | --- |
 | `Enter` | File the task and close the panel |
 | `⇧Enter` | File the task and stay open, ready for the next thought |
 | `⌘Enter` | File the task, close the panel and select it in the main window |
-| `Esc` or `⌘W` | Close without filing |
+| `Esc` or `⌘W` | Close without filing and hand focus back to the previous app |
 
 Every capture goes through the same command and store layer as `flowlist add`,
-so one `⌘Z` in the main window reverses it. Reopening the hotkey reuses the same
+so one `⌘Z` in the main window reverses it. A plain `Enter` and `Esc` hand focus
+back to the app that was in front before capture; `⌘Enter` keeps Flowlist in
+front because it reveals the new task. Reopening the hotkey reuses the same
 panel and selects any text left in the field.
 
 Capture uses the same quick-entry parser as `flowlist add`:

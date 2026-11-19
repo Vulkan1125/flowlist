@@ -19,13 +19,12 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use flowlist_core::command::{Command, NewTask};
-use flowlist_core::ids::{ProjectId, TagId, TaskId};
-use flowlist_core::model::Priority;
+use flowlist_core::command::Command;
+use flowlist_core::ids::TaskId;
 use flowlist_core::parse::{QuickEntry, parse_quick};
 use flowlist_core::paths::DataPaths;
 use flowlist_core::store::Store;
-use flowlist_core::time::{Stamp, format_duration, human_date, now};
+use flowlist_core::time::{format_duration, human_date, now};
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, FocusHandle, FontWeight, IntoElement,
     KeyDownEvent, MouseButton, Render, SharedString, Window, WindowBackgroundAppearance,
@@ -40,85 +39,7 @@ use super::theme::{Appearance, Theme, ThemeKind};
 use super::{BufferKey, handle_buffer_key};
 
 const PANEL_WIDTH: f32 = 620.0;
-const PANEL_HEIGHT: f32 = 186.0;
-
-/// What the panel adds when the text itself does not name a destination.
-#[derive(Clone, Default)]
-pub struct CaptureDefaults {
-    pub project: Option<ProjectId>,
-    pub tag: Option<TagId>,
-    pub priority: Option<Priority>,
-    pub flagged: bool,
-    pub due: Option<Stamp>,
-}
-
-impl CaptureDefaults {
-    pub fn inbox() -> Self {
-        Self::default()
-    }
-
-    fn apply(&self, task: &mut NewTask) {
-        if let Some(project) = &self.project {
-            task.project = Some(project.clone());
-            task.project_path = None;
-        }
-        if let Some(tag) = &self.tag
-            && !task.tags.contains(tag)
-        {
-            task.tags.push(tag.clone());
-        }
-        if let Some(priority) = self.priority
-            && task.priority.is_none()
-        {
-            task.priority = Some(priority);
-        }
-        if self.flagged {
-            task.flagged = true;
-        }
-        if let Some(due) = self.due
-            && task.due.is_none()
-        {
-            task.due = Some(due);
-        }
-    }
-
-    fn destination(&self, store: &Store) -> String {
-        if let Some(project) = &self.project
-            && let Some(project) = store.db().projects.get(project)
-        {
-            return project.name.clone();
-        }
-        if let Some(tag) = &self.tag
-            && let Some(tag) = store.db().tags.get(tag)
-        {
-            return format!("#{}", tag.name);
-        }
-        if let Some(priority) = self.priority {
-            return format!("{} priority", priority.label());
-        }
-        if self.flagged {
-            return "Flagged".to_string();
-        }
-        if self.due.is_some() {
-            return "Today".to_string();
-        }
-        "Inbox".to_string()
-    }
-
-    fn icon(&self) -> Icon {
-        if self.project.is_some() {
-            Icon::Project
-        } else if self.tag.is_some() {
-            Icon::Tag
-        } else if self.priority.is_some() || self.flagged {
-            Icon::Flagged
-        } else if self.due.is_some() {
-            Icon::Calendar
-        } else {
-            Icon::Inbox
-        }
-    }
-}
+const PANEL_HEIGHT: f32 = 150.0;
 
 /// The outcome of trying to file the current text.
 enum Commit {
@@ -133,7 +54,9 @@ enum Commit {
 pub struct QuickCapture {
     store: Store,
     theme: Theme,
-    defaults: CaptureDefaults,
+    /// The app that was frontmost before the panel opened, so Esc and a plain
+    /// capture can hand focus back instead of leaving Flowlist in front.
+    previous_app: Option<i32>,
     buffer: TextBuffer,
     focus_handle: FocusHandle,
     error: Option<String>,
@@ -141,16 +64,19 @@ pub struct QuickCapture {
     last_captured: Option<String>,
     test_state_path: Option<PathBuf>,
     test_state_last: Option<String>,
+    /// Set just before the window goes away, so a last frame cannot overwrite
+    /// the `open: false` state with a stale `true`.
+    closing: bool,
     window_active: bool,
     active_window: Option<u64>,
 }
 
 impl QuickCapture {
-    fn new(store: Store, theme: Theme, defaults: CaptureDefaults, cx: &mut Context<Self>) -> Self {
+    fn new(store: Store, theme: Theme, previous_app: Option<i32>, cx: &mut Context<Self>) -> Self {
         Self {
             store,
             theme,
-            defaults,
+            previous_app,
             buffer: TextBuffer::empty(),
             focus_handle: cx.focus_handle(),
             error: None,
@@ -160,6 +86,7 @@ impl QuickCapture {
                 .map(PathBuf::from)
                 .map(|path| path.with_file_name("capture.json")),
             test_state_last: None,
+            closing: false,
             window_active: false,
             active_window: None,
         }
@@ -170,12 +97,13 @@ impl QuickCapture {
     fn reopen(
         &mut self,
         theme: Theme,
-        defaults: CaptureDefaults,
+        previous_app: Option<i32>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.theme = theme;
-        self.defaults = defaults;
+        self.previous_app = previous_app;
+        self.closing = false;
         self.error = None;
         self.flash = None;
         let _ = self.store.reload_if_changed();
@@ -186,7 +114,7 @@ impl QuickCapture {
             // The material follows the palette, exactly like the main window.
         }
         window.defer(cx, |window, cx| {
-            square_corners(window);
+            float_panel(window);
             activate_app();
             cx.activate(true);
             window.activate_window();
@@ -195,20 +123,37 @@ impl QuickCapture {
         cx.notify();
     }
 
+    /// Where the capture will land, for the footer. A plain thought stays in
+    /// the Inbox; an explicit project wins, and a due or defer date schedules
+    /// it into Today or Forecast.
     fn destination(&self, entry: Option<&QuickEntry>) -> String {
-        if let Some(entry) = entry
-            && let Some(path) = &entry.project_path
-        {
+        let Some(entry) = entry else {
+            return "Inbox".to_string();
+        };
+        if let Some(path) = &entry.project_path {
             return path.clone();
         }
-        self.defaults.destination(&self.store)
+        if let Some(due) = entry.due {
+            return human_date(&due, now());
+        }
+        if let Some(defer) = entry.defer {
+            return format!("Defer {}", human_date(&defer, now()));
+        }
+        "Inbox".to_string()
     }
 
     fn destination_icon(&self, entry: Option<&QuickEntry>) -> Icon {
-        if entry.is_some_and(|entry| entry.project_path.is_some()) {
+        let Some(entry) = entry else {
+            return Icon::Inbox;
+        };
+        if entry.project_path.is_some() {
             Icon::Project
+        } else if entry.due.is_some() {
+            Icon::Calendar
+        } else if entry.defer.is_some() {
+            Icon::Clock
         } else {
-            self.defaults.icon()
+            Icon::Inbox
         }
     }
 
@@ -230,8 +175,7 @@ impl QuickCapture {
             self.error = Some("Add a title before the markers".to_string());
             return Commit::Failed;
         }
-        let mut task = entry.into_new_task();
-        self.defaults.apply(&mut task);
+        let task = entry.into_new_task();
         match self.store.execute(Command::CreateTask(task)) {
             Ok(outcome) => {
                 self.error = None;
@@ -253,12 +197,15 @@ impl QuickCapture {
 
     fn capture(&mut self, open_in_main: bool, window: &mut Window, cx: &mut Context<Self>) {
         match self.commit() {
-            Commit::Empty => self.dismiss(window, cx),
+            Commit::Empty => self.dismiss(window, cx, true),
             Commit::Added { id, .. } => {
+                let reveal = open_in_main && id.is_some();
                 if open_in_main && let Some(id) = id {
                     reveal_in_main(id, cx);
                 }
-                self.dismiss(window, cx);
+                // Revealing in Flowlist means the main window should stay in
+                // front; every other exit hands focus back to the old app.
+                self.dismiss(window, cx, !reveal);
             }
             Commit::Failed => cx.notify(),
         }
@@ -277,9 +224,14 @@ impl QuickCapture {
         }
     }
 
-    fn dismiss(&mut self, window: &mut Window, _cx: &mut Context<Self>) {
+    fn dismiss(&mut self, window: &mut Window, _cx: &mut Context<Self>, restore_previous: bool) {
+        self.closing = true;
         self.write_state(false);
+        let previous = self.previous_app.take();
         window.remove_window();
+        if restore_previous && let Some(pid) = previous {
+            restore_app(pid);
+        }
     }
 
     fn write_state(&mut self, open: bool) {
@@ -336,7 +288,7 @@ impl QuickCapture {
             return;
         }
         if stroke.key == "escape" {
-            self.dismiss(window, cx);
+            self.dismiss(window, cx, true);
             return;
         }
 
@@ -363,7 +315,7 @@ impl QuickCapture {
             return;
         }
         if mods.platform && stroke.key == "w" {
-            self.dismiss(window, cx);
+            self.dismiss(window, cx, true);
             return;
         }
 
@@ -374,7 +326,7 @@ impl QuickCapture {
                 cx.notify();
             }
             BufferKey::Submit => self.capture(false, window, cx),
-            BufferKey::Cancel => self.dismiss(window, cx),
+            BufferKey::Cancel => self.dismiss(window, cx, true),
             BufferKey::Tab | BufferKey::Ignored => {}
         }
     }
@@ -616,7 +568,9 @@ impl Render for QuickCapture {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.window_active = window.is_window_active();
         self.active_window = cx.active_window().map(|handle| handle.window_id().as_u64());
-        self.write_state(true);
+        if !self.closing {
+            self.write_state(true);
+        }
         let theme = self.theme;
         div()
             .relative()
@@ -659,14 +613,17 @@ impl Render for QuickCapture {
 }
 
 /// Open or bring forward the capture panel.
-pub fn show(cx: &mut App, paths: DataPaths, theme: Theme, defaults: CaptureDefaults) -> Result<()> {
+pub fn show(cx: &mut App, paths: DataPaths, theme: Theme) -> Result<()> {
+    // Remember who was in front before Flowlist takes over, so a plain capture
+    // or Esc can put them back exactly where they were.
+    let previous_app = frontmost_app();
     // One panel at a time. Reusing it keeps the glass, and the theme, warm.
     for any in cx.windows() {
         if let Some(handle) = any.downcast::<QuickCapture>() {
             activate_app();
             cx.activate(true);
             let updated = handle.update(cx, |view, window, cx| {
-                view.reopen(theme, defaults.clone(), window, cx);
+                view.reopen(theme, previous_app, window, cx);
                 window.activate_window();
             });
             if updated.is_ok() {
@@ -698,7 +655,7 @@ pub fn show(cx: &mut App, paths: DataPaths, theme: Theme, defaults: CaptureDefau
         },
         move |window, cx| {
             let appearance = theme.appearance();
-            let view = cx.new(|cx| QuickCapture::new(store, theme, defaults, cx));
+            let view = cx.new(|cx| QuickCapture::new(store, theme, previous_app, cx));
             let handle = view.read(cx).focus_handle.clone();
             let _ = super::blur::sync(window, appearance);
             window.focus(&handle);
@@ -706,7 +663,7 @@ pub fn show(cx: &mut App, paths: DataPaths, theme: Theme, defaults: CaptureDefau
             // Activating on the next turn, after the window exists, is what
             // makes the panel key instead of merely visible.
             window.defer(cx, |window, cx| {
-                square_corners(window);
+                float_panel(window);
                 activate_app();
                 cx.activate(true);
                 window.activate_window();
@@ -750,12 +707,70 @@ fn activate_app() {
 #[cfg(not(target_os = "macos"))]
 fn activate_app() {}
 
-/// Give the panel square corners. GPUI opens a titled window even when the
-/// titlebar is hidden, and macOS rounds every titled window. Removing the
-/// radius from the window's frame layer keeps the native key handling intact,
-/// which a borderless style mask does not.
+/// The process in front right now, unless it is Flowlist itself.
 #[cfg(target_os = "macos")]
-fn square_corners(window: &Window) {
+fn frontmost_app() -> Option<i32> {
+    use objc::runtime::Object;
+    use objc::{class, msg_send, sel, sel_impl};
+    unsafe {
+        let workspace: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
+        if workspace.is_null() {
+            return None;
+        }
+        let front: *mut Object = msg_send![workspace, frontmostApplication];
+        if front.is_null() {
+            return None;
+        }
+        let pid: i32 = msg_send![front, processIdentifier];
+        let own: *mut Object = msg_send![class!(NSRunningApplication), currentApplication];
+        let own_pid: i32 = if own.is_null() {
+            std::process::id() as i32
+        } else {
+            msg_send![own, processIdentifier]
+        };
+        (pid > 0 && pid != own_pid).then_some(pid)
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn frontmost_app() -> Option<i32> {
+    None
+}
+
+/// Put the app that owned the screen before capture back in front. This is the
+/// Things-style exit: the floating panel disappears and the old window keeps
+/// its focus, so nothing in Flowlist's workspace moves.
+#[cfg(target_os = "macos")]
+fn restore_app(pid: i32) {
+    use objc::runtime::{BOOL, Object};
+    use objc::{class, msg_send, sel, sel_impl};
+    unsafe {
+        let running: *mut Object =
+            msg_send![class!(NSRunningApplication), runningApplicationWithProcessIdentifier: pid];
+        if running.is_null() {
+            return;
+        }
+        let hidden: BOOL = msg_send![running, isHidden];
+        if hidden {
+            let _: () = msg_send![running, unhide];
+        }
+        // NSApplicationActivateIgnoringOtherApps
+        let _: BOOL = msg_send![running, activateWithOptions: 2u64];
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn restore_app(_pid: i32) {}
+
+/// Give the panel square corners and keep it above the work behind it. GPUI
+/// opens a titled window even when the titlebar is hidden, and macOS rounds
+/// every titled window; removing the radius from the window's frame layer
+/// keeps the native key handling intact, which a borderless style mask does
+/// not. `WindowKind::Floating` still maps to the normal window level in GPUI,
+/// so the level is raised here: the panel behaves like Things' quick entry and
+/// stays visible when another app comes forward.
+#[cfg(target_os = "macos")]
+fn float_panel(window: &Window) {
     use objc::runtime::Object;
     use objc::{msg_send, sel, sel_impl};
     use raw_window_handle::RawWindowHandle;
@@ -775,6 +790,10 @@ fn square_corners(window: &Window) {
         if native.is_null() {
             return;
         }
+        // NSFloatingWindowLevel. Normal windows, including every other app's,
+        // sit below it; system panels and alerts still sit above.
+        let _: () = msg_send![native, setLevel: 3i64];
+        let _: () = msg_send![native, setHidesOnDeactivate: false];
         let content: *mut Object = msg_send![native, contentView];
         if content.is_null() {
             return;
@@ -794,7 +813,7 @@ fn square_corners(window: &Window) {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn square_corners(_window: &Window) {}
+fn float_panel(_window: &Window) {}
 
 #[cfg(target_os = "macos")]
 fn app_is_active() -> bool {

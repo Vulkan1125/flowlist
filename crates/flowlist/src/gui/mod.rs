@@ -1681,27 +1681,10 @@ impl FlowlistApp {
     /// fallback when the platform cannot open a second window.
     pub(super) fn open_quick_capture(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let theme = self.theme;
-        let defaults = self.capture_defaults();
-        if let Err(error) = quick_capture::show(cx, self.store.paths().clone(), theme, defaults) {
+        if let Err(error) = quick_capture::show(cx, self.store.paths().clone(), theme) {
             self.toast = Some(format!("Could not open quick capture: {error}"));
             self.focus_capture(window, cx);
         }
-    }
-
-    /// What the capture panel should file under, mirroring the in-window bar.
-    pub(super) fn capture_defaults(&self) -> quick_capture::CaptureDefaults {
-        let mut defaults = quick_capture::CaptureDefaults::inbox();
-        match &self.view {
-            View::Project(id) => defaults.project = Some(id.clone()),
-            View::Tag(id) => defaults.tag = Some(id.clone()),
-            View::Priority(priority) => defaults.priority = Some(*priority),
-            View::Builtin(BuiltinPerspective::Flagged) => defaults.flagged = true,
-            View::Builtin(BuiltinPerspective::Forecast) => {
-                defaults.due = Some(Stamp::date_only(local_date(now())));
-            }
-            _ => {}
-        }
-        defaults
     }
 
     /// Select a just-captured task in the main window. `⌘⏎` in the capture
@@ -4747,7 +4730,7 @@ impl FlowlistApp {
         let db = self.store.db();
         let at = now();
         match perspective {
-            BuiltinPerspective::Inbox => db.inbox_outline(false).len(),
+            BuiltinPerspective::Inbox => db.inbox_unscheduled_outline(false).len(),
             BuiltinPerspective::Today => query::today(db, true, at)
                 .into_iter()
                 .map(|group| group.rows.len())
@@ -5825,15 +5808,10 @@ pub fn run(paths: DataPaths) -> Result<()> {
                 cx.spawn(async move |cx| {
                     while presses.next().await.is_some() {
                         let opened = cx.update(|cx| {
-                            let (theme, defaults) = window
-                                .read_with(cx, |app, _| (app.theme, app.capture_defaults()))
-                                .unwrap_or_else(|_| {
-                                    (
-                                        quick_capture::stored_theme(&paths),
-                                        quick_capture::CaptureDefaults::inbox(),
-                                    )
-                                });
-                            quick_capture::show(cx, paths.clone(), theme, defaults)
+                            let theme = window
+                                .read_with(cx, |app, _| app.theme)
+                                .unwrap_or_else(|_| quick_capture::stored_theme(&paths));
+                            quick_capture::show(cx, paths.clone(), theme)
                         });
                         match opened {
                             Ok(Ok(())) => {}

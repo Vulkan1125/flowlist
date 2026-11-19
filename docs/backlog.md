@@ -55,12 +55,16 @@ below; this list is the current map.
 
 ### Phase 4 — Larger product bets
 
-- [x] **Things 3-style quick capture popup** — `⌃⌥Space` opens a square
-      620×186 floating panel in the middle of the screen. The main window keeps its view,
-      selection and scroll. The panel previews the parsed title and destination
-      chips, files through `Store::execute`, reuses itself with the old text
-      selected, and supports `Enter`, `⇧⏎`, `⌘⏎` and `Esc`. Covered by
-      `scripts/gui/phase4-probe.sh`.
+- [x] **Things 3-style quick capture popup** — `⌃⌥Space` opens a compact
+      620×150 floating panel in the middle of the screen. The main window keeps
+      its view, selection and scroll. The panel previews the parsed title and
+      destination chips, files through `Store::execute`, reuses itself with the
+      old text selected, and supports `Enter`, `⇧⏎`, `⌘⏎` and `Esc`. A plain
+      capture always goes to the Inbox; an explicit project or due/defer date
+      sends it elsewhere, and scheduled tasks leave the Inbox. The panel floats
+      above normal windows when another app is in front, and `Enter`/`Esc` hand
+      focus back to the previous app. Covered by
+      `scripts/gui/phase4-probe.sh` and `scripts/gui/quick-capture-probe.sh`.
 - [x] **Forecast calendar** — the rich month grid lives inside Forecast:
       drag-to-reschedule, keyboard day/month steps, a fold-away header chip
       and a mouse-resizable height. There is no separate Calendar perspective.
@@ -109,6 +113,11 @@ below; this list is the current map.
       banner. Legacy `sequential` files still map to the sequential kind.
 - [x] **Container-type polish** — task subtrees now carry a
       parallel/sequential type, exposed as chips in the inspector.
+- [x] **Inbox means unscheduled** — a root task with no project and no due or
+      defer date is in the Inbox. Adding a date moves it to Today or Forecast,
+      clearing the dates files it back, and the sidebar badge and `stats`
+      counter use the same rule. Quick captures no longer inherit the last
+      view's project, tag, priority or forecast date.
 - [x] **Forecast date selection** — clicking a calendar date shows that day's
       due/deferred tasks; click again or press `\` to clear. `[`/`]` step a day,
       `{`/`}` step a month.
@@ -149,7 +158,9 @@ below; this list is the current map.
 - [x] **Background capture** — `⌃⌥Space` is registered with Carbon's
       `RegisterEventHotKey`, so it fires while another app is in front. It
       opens the floating quick-capture panel and hands off to the same
-      quick-entry parser and command layer. See Phase 4.
+      quick-entry parser and command layer. The panel sits at the floating
+      window level, so it stays above normal windows after focus moves away,
+      and `Enter`/`Esc` hand focus back to the previous app. See Phase 4.
 
 ## Research and design
 

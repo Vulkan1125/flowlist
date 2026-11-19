@@ -457,6 +457,24 @@ impl Db {
         out
     }
 
+    /// Inbox roots that have no schedule, with their subtasks. Scheduling a
+    /// task to a day is how it leaves the Inbox, the way Things 3 files
+    /// scheduled work into Today/Upcoming. Root order is unchanged, so an
+    /// unscheduled task keeps its place when a dated one leaves.
+    pub fn inbox_unscheduled_outline(&self, include_completed: bool) -> Vec<ProjectTaskRow> {
+        let mut out = Vec::new();
+        for task_id in &self.inbox_order {
+            let Some(task) = self.tasks.get(task_id) else {
+                continue;
+            };
+            if task.due.is_some() || task.defer.is_some() {
+                continue;
+            }
+            self.collect_outline(task_id, 0, include_completed, &mut out);
+        }
+        out
+    }
+
     pub fn tasks_in_project(&self, project: &ProjectId, include_completed: bool) -> Vec<TaskId> {
         self.project_outline(project, include_completed)
             .into_iter()

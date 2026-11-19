@@ -12,6 +12,7 @@ mouse and keyboard events instead, and checks the result through:
 cargo build --release
 scripts/gui-smoke.sh
 scripts/gui/forecast-probe.sh
+scripts/gui/quick-capture-probe.sh
 ```
 
 The script skips on non-macOS hosts and when `swiftc` is missing. It needs
@@ -37,6 +38,12 @@ All flows use a temporary library, so the test never touches the real one.
 checks the painted day cells and event pills, folds the grid from the header
 chip, filters the list by a date and clears it, then drags the bottom grip and
 confirms the new height is clamped and persisted.
+
+`scripts/gui/quick-capture-probe.sh` covers the floating capture panel: it
+files a plain thought into the Inbox, files a dated thought into Forecast,
+checks that the dated task left the Inbox, closes with `Enter`, returns focus
+to Finder, confirms the panel keeps layer 3 while Finder is in front, and
+checks that `Esc` closes it without moving the main view.
 
 ## The test-state hook
 
@@ -177,6 +184,12 @@ one a click silenced until the pointer leaves. The file is rewritten only when
 one of those values changes, and the hook is inert unless the variable is set.
 It does not contain task text, notes or the library itself.
 
+The floating capture panel writes `capture.json` beside the main state file
+when the same environment variable is set. Its keys are `open`, `text`,
+`title`, `error`, `destination`, `last_captured`, `flash`, `window_active`,
+`active_window` and `app_active`, so a probe can wait for the panel to take
+focus, check the parsed destination, and confirm that a capture was filed.
+
 ## Why coordinates
 
 The app exposes only its window title and bounds through the macOS
@@ -207,14 +220,23 @@ these clicks can be replaced by named actions without changing the assertions.
 - `scripts/gui/window.swift` prints the live window title, origin and size.
   `window <pid> move <x> <y>` also activates the app and asks the window
   server to move it, which keeps absolute clicks reliable when macOS restores
-  a window partly off screen.
+  a window partly off screen. `window <pid> layers` lists every on-screen
+  window for the process with its layer and rectangle, which is how the
+  capture probe proves the panel sits above normal windows. `window front`
+  prints the frontmost app's process id.
 - Both are compiled into the temporary directory when the smoke test runs.
 
 ## Probes
 
-Two focused probes use the test-state boxes above and run against a temporary
+Focused probes use the test-state boxes above and run against a temporary
 library:
 
+- `scripts/gui/phase4-probe.sh` covers quick capture from several views,
+  Undo, Escape, `⇧⏎`, `⌘⏎`, and the rule that a plain capture always goes to
+  the Inbox.
+- `scripts/gui/quick-capture-probe.sh` covers Inbox versus scheduled capture,
+  focus restoration, and the panel's floating layer.
+- `scripts/gui/forecast-probe.sh` covers the merged Forecast calendar.
 - `scripts/gui/archive-probe.sh` checks Archive grouping, Reopen, Delete with
   its confirmation sheet, Undo, row opening and the empty state.
 - `scripts/gui/sidebar-probe.sh` checks folded-on-launch folders, section

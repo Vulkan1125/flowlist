@@ -39,9 +39,14 @@ filing. Inside the panel:
 
 The panel names its destination in the footer and previews the parsed title,
 project, tags, dates, estimate and repeat rule as chips, so the result of a
-marker is visible before `Enter` files it. Nothing in the main window moves
-while the panel is open, and a completed capture can be undone with `⌘Z`.
-The title-bar plus button has the same tooltip and keyboard route.
+marker is visible before `Enter` files it. A plain capture always files into the
+Inbox; `::Project` files into that project, and `due:` / `defer:` schedules the
+task into Today or Forecast so it leaves the Inbox. The panel stays above normal
+windows when another app comes forward. Nothing in the main window moves while
+the panel is open, and a completed capture can be undone with `⌘Z`. `Enter` and
+`Esc` return focus to the app that was in front before capture; `⌘Enter` keeps
+Flowlist in front because it reveals the task. The title-bar plus button has the
+same tooltip and keyboard route.
 
 The title bar holds the search field, centered on the content pane, so the
 content header keeps only the view title and Sort/Group/Filter chips on one

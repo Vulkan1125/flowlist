@@ -79,8 +79,8 @@ inspector around the task list.
 
 Key behaviour:
 
-- Perspectives: Inbox, Projects, Forecast, Flagged, Review, Tags, Completed,
-  Nearby and custom saved perspectives.
+- Perspectives: Inbox (unscheduled work), Projects, Forecast, Flagged,
+  Review, Tags, Completed, Nearby and custom saved perspectives.
 - Projects and folders form a tree; tags form a nested context tree.
 - Task rows support multi-select, drag/drop into projects, tags, parents and
   sibling positions, inline completion circles and flag toggles.
@@ -102,7 +102,7 @@ Frequently used shortcuts:
 | Shortcut | Action |
 | --- | --- |
 | `n` | quick capture |
-| `⌃⌥Space` | capture from any app; brings Flowlist forward |
+| `⌃⌥Space` | capture from any app in a floating panel; the main window stays put |
 | `/` or `⌘F` | search |
 | `↑` / `↓`, `⇧↑` / `⇧↓` | move / extend selection |
 | `space` | complete or reopen |

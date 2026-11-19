@@ -4,7 +4,7 @@
 # Opens the panel with the global shortcut, pastes a line of quick-entry
 # syntax, and checks that the task lands where it should while the main
 # window's view and selection stay put. Then it covers Esc, Shift+Enter,
-# Command+Enter and the project default.
+# Command+Enter and the rule that a plain capture always goes to the Inbox.
 set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 bin=$root/target/release/flowlist
@@ -23,7 +23,7 @@ capture=$tmp/capture.json
 project=$("$bin" --data-dir "$lib" --json project add 'Errands' | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 echo "project=$project"
 
-# The panel is a 620x186 card centred on the primary display.
+# The panel is a 620x150 card centred on the primary display.
 screen=$(osascript -e 'tell application "Finder" to get bounds of window of desktop' 2>/dev/null || true)
 width=$(printf '%s' "$screen" | tr ',' '\t' | cut -f3)
 height=$(printf '%s' "$screen" | tr ',' '\t' | cut -f4)
@@ -132,7 +132,7 @@ paste() { printf '%s' "$1" | pbcopy; "$helpers/flowctl" key 9 cmd; sleep 0.4; }
 echo "1. Enter captures into the view without moving the workspace"
 view_before=$(value view); selected_before=$(value selected)
 open_panel
-paste 'Buy milk #errands due:tomorrow'
+paste 'Buy milk'
 wait_capture_contains text 'Buy milk'
 expect "live preview names the title" "$(capture_value title)" "Buy milk"
 expect "footer names the destination" "$(capture_value destination)" "Inbox"
@@ -179,7 +179,7 @@ expect "task is selected in the list" \
   "$(value content_rows | python3 -c 'import ast,sys; rows=ast.literal_eval(sys.stdin.read()); print(rows[-1]["title"] if rows else "")')" \
   "reveal me"
 
-echo "6. A project view files a plain capture into that project"
+echo "6. A plain capture ignores the current view and still goes to the Inbox"
 kill "$pid" 2>/dev/null || true
 wait "$pid" 2>/dev/null || true
 pid=""
@@ -197,13 +197,17 @@ window=$("$helpers/window" "$pid" move 40 20 || true)
 wx=$(printf '%s' "$window" | cut -f2); wy=$(printf '%s' "$window" | cut -f3)
 WX=${wx%.*}; WY=${wy%.*}; WX=${WX%,*}; WY=${WY%,*}
 open_panel
-paste 'file into the current project'
-wait_capture_contains text 'file into the current project'
-expect "footer follows the view" "$(capture_value destination)" "Errands"
+paste 'file from project view'
+wait_capture_contains text 'file from project view'
+expect "footer stays on the Inbox" "$(capture_value destination)" "Inbox"
 "$helpers/flowctl" key 36; sleep 0.9
 wait_capture open False
-expect "task is filed in the project" \
-  "$(task_project 'Errands' 'file into the current project')" "$project"
+if ! inbox_titles | grep -q "file from project view"; then
+  echo "FAIL: a plain capture from a project view did not land in the Inbox" >&2
+  exit 1
+fi
+expect "task is not filed in the project" \
+  "$(task_project 'Errands' 'file from project view')" ""
 expect "the main view stayed on the project" "$(value view)" "project:$project"
 
 echo "PHASE 4 PROBE PASSED"

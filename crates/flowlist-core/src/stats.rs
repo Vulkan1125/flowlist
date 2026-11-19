@@ -53,7 +53,11 @@ pub fn compute(db: &Db, at: DateTime<Utc>) -> Stats {
             continue;
         }
         stats.open_tasks += 1;
-        if task.project.is_none() && task.parent.is_none() {
+        if task.project.is_none()
+            && task.parent.is_none()
+            && task.due.is_none()
+            && task.defer.is_none()
+        {
             stats.inbox += 1;
         }
         if task.flagged {

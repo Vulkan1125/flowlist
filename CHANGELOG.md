@@ -6,10 +6,16 @@
 
 - `⌃⌥Space` now opens a Things 3-style floating capture panel in the middle
   of the screen instead of bringing the whole window forward. The panel is a
-  square-cornered card. The panel previews the parsed title and
-  destination, files into the current project/tag/priority when the view has
-  one, closes on `Enter`, stays open on `⇧⏎`, selects the new task on `⌘⏎`,
-  and every capture is undoable from the main window.
+  compact, square-cornered card that stays above normal windows when another
+  app comes forward. It previews the parsed title and destination, always files
+  a plain capture into the Inbox, honours an explicit project or due/defer
+  date (so scheduled tasks leave the Inbox), closes on `Enter`, stays open on
+  `⇧⏎`, selects the new task on `⌘⏎`, and every capture is undoable from the
+  main window. `Enter` and `Esc` hand focus back to the app that was in front
+  before capture.
+- Inbox now means unscheduled: a task with a due or defer date leaves the
+  Inbox for Today or Forecast, and clearing its dates files it back. Captures
+  no longer inherit the last view's project, tag, priority or forecast date.
 - The inspector's inline fields now save on `Tab` and `Enter` and move to the
   next field. A validation error keeps the current field open, and `Enter` on
   the last field finishes editing. A first-time task stays a draft until the

@@ -141,7 +141,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
     match which {
         BuiltinPerspective::Inbox => {
             let rows = db
-                .inbox_outline(false)
+                .inbox_unscheduled_outline(false)
                 .into_iter()
                 .map(|row| row_for(db, &row.task, at))
                 .collect();

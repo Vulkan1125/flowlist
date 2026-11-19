@@ -427,6 +427,75 @@ fn query_views_and_stats_agree() {
 }
 
 #[test]
+fn inbox_holds_only_unscheduled_roots() {
+    use flowlist_core::model::BuiltinPerspective;
+    use flowlist_core::query;
+    use flowlist_core::stats;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let plain = add_task(&mut store, "Plain thought");
+    let dated = add_task(&mut store, "Dated thought");
+    let deferred = add_task(&mut store, "Deferred thought");
+
+    let at = Utc::now();
+    store
+        .execute(Command::UpdateTask {
+            id: dated.clone(),
+            patch: TaskPatch {
+                due: Some(Some(Stamp::date_only(local_date(at)))),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    store
+        .execute(Command::UpdateTask {
+            id: deferred.clone(),
+            patch: TaskPatch {
+                defer: Some(Some(Stamp::date_only(local_date(at)))),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+
+    let titles = |store: &Store| -> Vec<String> {
+        query::view(store.db(), BuiltinPerspective::Inbox, at)
+            .iter()
+            .flat_map(|group| group.rows.iter())
+            .filter_map(|row| store.db().tasks.get(&row.id))
+            .map(|task| task.title.clone())
+            .collect()
+    };
+    assert_eq!(titles(&store), vec!["Plain thought"]);
+    assert_eq!(stats::compute(store.db(), at).inbox, 1);
+    assert_eq!(
+        query::view(store.db(), BuiltinPerspective::Forecast, at)
+            .iter()
+            .flat_map(|group| group.rows.iter().map(|row| row.id.clone()))
+            .filter(|id| id == &dated || id == &deferred)
+            .count(),
+        2
+    );
+
+    // Clearing the schedule files the task back into the Inbox in place.
+    for id in [dated, deferred] {
+        store
+            .execute(Command::UpdateTask {
+                id,
+                patch: TaskPatch {
+                    due: Some(None),
+                    defer: Some(None),
+                    ..Default::default()
+                },
+            })
+            .unwrap();
+    }
+    assert_eq!(titles(&store).len(), 3);
+    assert_eq!(stats::compute(store.db(), at).inbox, 3);
+    let _ = plain;
+}
+
+#[test]
 fn attachments_view_lists_open_tasks_with_files() {
     use flowlist_core::model::BuiltinPerspective;
     use flowlist_core::query;
