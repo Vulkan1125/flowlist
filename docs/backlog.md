@@ -226,12 +226,13 @@ below; this list is the current map.
       to a few letters. Search moved to the title bar as a full field at every
       window width, centered on the content pane with a × to clear the query;
       the title-bar theme icon was removed.
-- [x] Sidebar rows give their full width to the name until hovered. The
-      hovered row alone makes room for the pencil and × and fades its long name
-      at the edge; idle long project, folder, tag, perspective and review-card
-      names end with an ellipsis instead of stopping mid-word. The inspector
-      wraps the full project name so it is never cut off. Library project rows
-      use the perspective-style boxed count and align the name with the icon.
+- [x] Sidebar rows give their full width to the name. Rename, delete, status
+      and tag location live in the right-click menu, which keeps every row
+      uncluttered; long project, folder, tag, perspective and review-card names
+      end with an ellipsis instead of stopping mid-word. The inspector wraps
+      the full project name so it is never cut off. Library project rows use
+      the perspective-style boxed count and align the name with the icon; a
+      finished project's tick paints no chip behind it.
 - [x] Deleting a project from the sidebar asks for confirmation in a sheet
       that names the project; Enter confirms and Esc cancels.
 - [x] Added a title-bar moon/sun button for light/dark, left of the inspector

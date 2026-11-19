@@ -25,9 +25,10 @@ failure.
 1. **New project button.** Clicks `＋ Project` at the bottom of the sidebar,
    waits for the sheet, types a name through the clipboard and creates the
    project. It then checks `flowlist project list --json` for the new name.
-2. **Perspective pencil.** Clicks the pencil on a saved perspective and waits
-   for the rich perspective editor. This is the mouse-only path that has no
-   keyboard equivalent for opening the editor's conditions.
+2. **Perspective context menu.** Right-clicks a saved perspective, chooses
+   "Edit perspective…" and waits for the rich perspective editor. This is the
+   mouse-only path that has no keyboard equivalent for opening the editor's
+   conditions.
 3. **Capture hotkey.** Activates Finder, posts `⌃⌥Space` and waits for
    `focus` to become `Capture`. Because Finder owns the menu bar first, this
    exercises the same background path a real user takes.
@@ -205,8 +206,8 @@ The offsets are:
 | `＋ Project` | `(35, height − 77)` |
 
 If the sidebar footer layout changes, update that row. The saved-perspective
-pencil is no longer a fixed offset: the smoke test reads the row's live box
-from `sidebar_rows` and clicks near its right edge. The script fails loudly
+row is not a fixed offset: the smoke test reads its live box from
+`sidebar_rows`, opens the context menu inside it and clicks the editor item. The script fails loudly
 rather than pretending the flow worked. When GPUI gains an accessibility API,
 these clicks can be replaced by named actions without changing the assertions.
 

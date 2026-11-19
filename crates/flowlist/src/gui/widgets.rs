@@ -527,14 +527,13 @@ pub fn count(theme: Theme, value: usize) -> impl IntoElement {
         .child(value.to_string())
 }
 
-/// The counterpart of `count` for a project with nothing left open: a tick in
-/// the same small chip, so the sidebar keeps its alignment.
+/// The counterpart of `count` for a project with nothing left open: a bare
+/// tick in the count's slot, so the sidebar keeps its alignment without
+/// painting a chip behind it.
 pub fn done_badge(theme: Theme) -> impl IntoElement {
     div()
         .min_w(px(18.))
         .px_1()
-        .rounded_sm()
-        .bg(theme.hover)
         .flex()
         .items_center()
         .justify_center()

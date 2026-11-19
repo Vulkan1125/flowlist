@@ -6,7 +6,7 @@
 # Builds two small Swift/CoreGraphics helpers, starts the release binary on a
 # temporary library, then uses real mouse clicks to:
 #   1. open the sidebar "New project" sheet, type a name and create it;
-#   2. open a saved perspective with its hover pencil;
+#   2. open a saved perspective from the row's right-click menu;
 #   3. press the system-wide capture shortcut while Finder is in front and
 #      confirm the floating capture panel opens.
 #
@@ -143,10 +143,11 @@ if ! "$bin" --data-dir "$lib" project list --json | grep -q '"Smoke project"'; t
 	exit 1
 fi
 
-# 2. Hover pencil on the only saved perspective. The row's live box comes
-#    from the test state, so adding a perspective above it (Today, Archive)
-#    cannot leave this test clicking an old offset. The pencil appears at the
-#    right edge only while the row is hovered.
+# 2. Right-click the only saved perspective and choose "Edit perspective…".
+#    The row's live box comes from the test state, so adding a perspective
+#    above it (Today, Archive) cannot leave this test clicking an old offset.
+#    Row actions live in the context menu, so the menu opens at the pointer
+#    and the second item is the editor.
 read_window
 saved=$(python3 - "$state" <<'PY'
 import json, sys
@@ -167,11 +168,14 @@ fi
 set -- $saved; row_x=$1; row_y=$2; row_w=$3; row_h=$4
 row_mid_y=$((${wy%.*} + row_y + row_h / 2))
 right=$((${wx%.*} + row_x + row_w))
+menu_x=$((right - 40))
 opened=""
-for dx in 38 44 32 50 26 56; do
-	for dy in 0 2 -2 4 -4; do
+for dy in 40 36 44 32 48 28; do
+	for dx in 60 90 40 110; do
 		focus_app
-		"$helpers/flowctl" mouse "$((right - dx))" "$((row_mid_y + dy))"
+		"$helpers/flowctl" rightmouse "$menu_x" "$row_mid_y"
+		sleep 0.4
+		"$helpers/flowctl" mouse "$((menu_x + dx))" "$((row_mid_y + dy))"
 		sleep 0.45
 		if [ "$(modal)" = "Perspective" ]; then
 			opened=1
@@ -182,7 +186,7 @@ for dx in 38 44 32 50 26 56; do
 	done
 done
 if [ "$opened" != 1 ]; then
-	echo "FAIL: the perspective pencil did not open the editor" >&2
+	echo "FAIL: the perspective context menu did not open the editor" >&2
 	exit 1
 fi
 
@@ -211,4 +215,4 @@ if [ "$opened" != "True" ]; then
 	exit 1
 fi
 
-echo "GUI smoke test passed: New project, perspective pencil and capture hotkey"
+echo "GUI smoke test passed: New project, perspective context menu and capture hotkey"

@@ -157,8 +157,9 @@ shows a number, and Today always keeps its day count. The choice is
 library-wide and survives a relaunch.
 
 Every sidebar row has a right-click menu: Open, Rename, Delete, New child,
-project status, tag location, and Empty Trash where it applies. Hovering a row
-reveals its pencil and × without stealing width from the name at rest.
+project status, tag location, and Empty Trash where it applies. That menu is
+the only action surface on a row, so names keep the full width and no pencil
+or × competes with them.
 
 Task rows follow the same rule: the flag control and hover wash appear only
 under the pointer, so an idle list is titles and metadata. Empty views share

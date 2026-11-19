@@ -4,6 +4,9 @@
 
 ### Interface
 
+- Sidebar rows no longer show a pencil or × on hover. Rename, delete, project
+  status and tag location live in the right-click menu, so names keep the full
+  row width. A finished project's tick no longer paints a chip behind it.
 - Visual design pass: task checkboxes stay visible on a white surface, row
   actions wait for hover, every empty view shares one illustrated halo,
   counts read as prose (`1 task`, `6 tasks`), menus, the toast and sheets fade

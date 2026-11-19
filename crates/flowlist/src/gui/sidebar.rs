@@ -93,26 +93,6 @@ fn glyph(perspective: BuiltinPerspective) -> Icon {
 }
 
 impl FlowlistApp {
-    /// True while the pointer rests on this sidebar row. Hover-only actions
-    /// render only then, so an idle row gives its whole width to the name.
-    fn row_hovered(&self, target: &SidebarTarget) -> bool {
-        self.sidebar_hover.as_ref() == Some(target)
-    }
-
-    fn set_row_hover(&mut self, target: SidebarTarget, hovered: bool, cx: &mut Context<Self>) {
-        if hovered {
-            if self.sidebar_hover.as_ref() != Some(&target) {
-                self.sidebar_hover = Some(target);
-                cx.notify();
-            }
-        } else if self.sidebar_hover.as_ref() == Some(&target) {
-            // Only clear when this row still owns the hover, so entering a new
-            // row before leaving the old one cannot wipe the new state.
-            self.sidebar_hover = None;
-            cx.notify();
-        }
-    }
-
     /// Wrap an element so its painted box is recorded for GUI probes. Used on a
     /// row's icon, which marks where the name starts and therefore how deep the
     /// row is nested.
@@ -179,43 +159,27 @@ impl FlowlistApp {
             .child(element)
     }
 
-    /// The name slot. At rest the row width belongs to the name, so long names
-    /// end in an ellipsis. On hover the row makes room for the pencil and the
-    /// ×, and the name fades out at that edge instead of adding dots.
+    /// The name slot. The row width belongs to the name, so long names end
+    /// in an ellipsis. Row actions live in the right-click menu, which leaves
+    /// the full width for names.
     ///
     /// The slot sits a hair above the flex center: the icon and the count box
     /// in these rows center on their own drawing, while a line of text carries
     /// its descender space below the baseline. Without the nudge the name
     /// reads as sitting low next to them.
-    fn row_name(&self, name: impl Into<gpui::SharedString>, hovered: bool) -> impl IntoElement {
-        let name = name.into();
-        if hovered {
-            div()
-                .flex_1()
-                .min_w_0()
-                .relative()
-                .top(px(-2.))
-                .overflow_hidden()
-                .child(div().whitespace_nowrap().child(name))
-                .child(div().absolute().top_0().right_0().h_full().w(px(22.)).bg(
-                    gpui::linear_gradient(
-                        90.,
-                        gpui::linear_color_stop(gpui::transparent_black(), 0.),
-                        gpui::linear_color_stop(self.theme.hover, 1.),
-                    ),
-                ))
-        } else {
-            div()
-                .flex_1()
-                .min_w_0()
-                .relative()
-                .top(px(-2.))
-                .line_clamp(1)
-                .text_ellipsis()
-                .child(name)
-        }
+    fn row_name(&self, name: impl Into<gpui::SharedString>) -> impl IntoElement {
+        div()
+            .flex_1()
+            .min_w_0()
+            .relative()
+            .top(px(-2.))
+            .line_clamp(1)
+            .text_ellipsis()
+            .child(name.into())
     }
 
+    /// The inspector's pencil. Sidebar rows delegate their rename action to the
+    /// right-click menu instead.
     pub(super) fn rename_button(
         &self,
         key: String,
@@ -236,122 +200,6 @@ impl FlowlistApp {
                 cx.stop_propagation();
                 let modal = modals::Modal::rename(this, entity.clone());
                 this.open_modal(modal, cx);
-            }))
-    }
-
-    /// The pencil on a saved perspective opens the full editor rather than a
-    /// bare rename sheet.
-    fn edit_perspective_button(
-        &self,
-        key: String,
-        id: flowlist_core::ids::PerspectiveId,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let theme = self.theme;
-        div()
-            .id(super::sid(key))
-            .px_1()
-            .rounded_sm()
-            .text_color(theme.text_faint)
-            .cursor_pointer()
-            .hover(|style| style.text_color(theme.text).bg(theme.hover))
-            .flow_tip(self, cx, theme, "Edit perspective")
-            .child(icons::icon(Icon::Pencil, 12.0, theme.text_faint))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                cx.stop_propagation();
-                if let Some(modal) = modals::Modal::perspective(this, &id) {
-                    this.open_modal(modal, cx);
-                }
-            }))
-    }
-
-    /// Tags can carry coordinates for the Nearby perspective.
-    fn tag_location_button(
-        &self,
-        key: String,
-        tag: flowlist_core::ids::TagId,
-        located: bool,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let theme = self.theme;
-        div()
-            .id(super::sid(key))
-            .px_1()
-            .rounded_sm()
-            .text_color(if located {
-                theme.success
-            } else {
-                theme.text_faint
-            })
-            .cursor_pointer()
-            .hover(|style| style.text_color(theme.text).bg(theme.hover))
-            .flow_tip(
-                self,
-                cx,
-                theme,
-                if located {
-                    "Change location"
-                } else {
-                    "Set location"
-                },
-            )
-            .child(icons::icon(
-                Icon::Crosshair,
-                12.0,
-                if located {
-                    theme.success
-                } else {
-                    theme.text_faint
-                },
-            ))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                cx.stop_propagation();
-                let modal = modals::Modal::tag_location(this, tag.clone());
-                this.open_modal(modal, cx);
-            }))
-    }
-
-    fn delete_entity_button(
-        &self,
-        key: String,
-        command: flowlist_core::command::Command,
-        view: View,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let theme = self.theme;
-        div()
-            .id(super::sid(key))
-            .px_1()
-            .rounded_sm()
-            .text_color(theme.text_faint)
-            .cursor_pointer()
-            .hover(|style| style.text_color(theme.danger).bg(theme.hover))
-            .flow_tip(self, cx, theme, "Delete")
-            .child(icons::icon(Icon::Close, 12.0, theme.danger))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                cx.stop_propagation();
-                match &command {
-                    flowlist_core::command::Command::DeleteProject { id } => {
-                        // A project takes its whole outline to Trash, so the
-                        // sidebar asks before removing it.
-                        let modal = modals::Modal::delete_project(this, id.clone());
-                        this.open_modal(modal, cx);
-                    }
-                    flowlist_core::command::Command::DeleteFolder { id } => {
-                        // Removing a folder lifts its projects up a level, so
-                        // ask before changing the tree.
-                        let modal = modals::Modal::delete_folder(this, id.clone());
-                        this.open_modal(modal, cx);
-                    }
-                    _ => {
-                        this.execute(command.clone());
-                        if this.view == view {
-                            this.view = View::Builtin(BuiltinPerspective::Inbox);
-                        }
-                        this.save_session();
-                        cx.notify();
-                    }
-                }
             }))
     }
 
@@ -1450,12 +1298,7 @@ impl FlowlistApp {
         let icon_color = if active { theme.accent } else { theme.text_dim };
         let id = row.id.clone();
         let target_id = row.id.clone();
-        let rename_id = row.id.clone();
-        let delete_id = row.id.clone();
-        let delete_view = View::Custom(row.id.clone());
         let cursor = self.sidebar_cursor_is(&SidebarTarget::Custom(target_id.clone()));
-        let hovered = self.row_hovered(&SidebarTarget::Custom(target_id.clone()));
-        let hover_id = id.clone();
         let row_boxes = self.sidebar_row_boxes.clone();
         let row_key = format!("custom:{}", row.id);
         let row = div()
@@ -1472,9 +1315,6 @@ impl FlowlistApp {
             .text_color(if active { theme.accent } else { theme.text_dim })
             .cursor_pointer()
             .hover(|style| style.bg(theme.hover))
-            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                this.set_row_hover(SidebarTarget::Custom(hover_id.clone()), *hovered, cx);
-            }))
             .child(
                 div()
                     .w(px(18.))
@@ -1483,20 +1323,7 @@ impl FlowlistApp {
                     .justify_center()
                     .child(icons::icon(Icon::Perspective, 14.0, icon_color)),
             )
-            .child(self.row_name(row.name, hovered))
-            .when(hovered, |this| {
-                this.child(self.edit_perspective_button(
-                    format!("edit-perspective:{rename_id}"),
-                    rename_id,
-                    cx,
-                ))
-                .child(self.delete_entity_button(
-                    format!("delete-perspective:{delete_id}"),
-                    flowlist_core::command::Command::DeletePerspective { id: delete_id },
-                    delete_view,
-                    cx,
-                ))
-            })
+            .child(self.row_name(row.name))
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
@@ -1557,13 +1384,8 @@ impl FlowlistApp {
                     let view_id = id.clone();
                     let target_id = id.clone();
                     let toggle_key = key.clone();
-                    let rename_id = id.clone();
-                    let delete_id = id.clone();
-                    let delete_view = View::Folder(id.clone());
                     let active = self.view == View::Folder(id.clone());
                     let cursor = self.sidebar_cursor_is(&SidebarTarget::Folder(target_id.clone()));
-                    let hovered = self.row_hovered(&SidebarTarget::Folder(target_id.clone()));
-                    let hover_id = id.clone();
                     let move_key = key.clone();
                     let folder_move_key = key.clone();
                     let folder_move_target = id.clone();
@@ -1609,13 +1431,6 @@ impl FlowlistApp {
                             },
                         ))
                         .when(cursor, |this| this.bg(self.theme.hover))
-                        .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                            this.set_row_hover(
-                                SidebarTarget::Folder(hover_id.clone()),
-                                *hovered,
-                                cx,
-                            );
-                        }))
                         .child(
                             div()
                                 .id(super::sid(format!("folder-toggle:{id}")))
@@ -1660,20 +1475,7 @@ impl FlowlistApp {
                                     )),
                             ),
                         )
-                        .child(self.row_name(name, hovered))
-                        .when(hovered, |this| {
-                            this.child(self.rename_button(
-                                format!("rename-folder:{rename_id}"),
-                                modals::EntityRef::Folder(rename_id),
-                                cx,
-                            ))
-                            .child(self.delete_entity_button(
-                                format!("delete-folder:{delete_id}"),
-                                flowlist_core::command::Command::DeleteFolder { id: delete_id },
-                                delete_view,
-                                cx,
-                            ))
-                        })
+                        .child(self.row_name(name))
                         .when(show_counts && count > 0, |this| {
                             this.child(self.count_box(
                                 format!("folder:{id}"),
@@ -1755,12 +1557,8 @@ impl FlowlistApp {
                     let view_id = id.clone();
                     let target_id = id.clone();
                     let drop_id = id.clone();
-                    let rename_id = id.clone();
-                    let delete_id = id.clone();
                     let active = self.view == View::Project(id.clone());
                     let cursor = self.sidebar_cursor_is(&SidebarTarget::Project(target_id.clone()));
-                    let hovered = self.row_hovered(&SidebarTarget::Project(target_id.clone()));
-                    let hover_id = id.clone();
                     let drag_id = id.clone();
                     let drag_theme = self.theme;
                     let mut row = div()
@@ -1803,13 +1601,6 @@ impl FlowlistApp {
                                 }
                             },
                         ))
-                        .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                            this.set_row_hover(
-                                SidebarTarget::Project(hover_id.clone()),
-                                *hovered,
-                                cx,
-                            );
-                        }))
                         .child(self.measured(
                             format!("project:{id}"),
                             widgets::icon_for_project(
@@ -1822,20 +1613,7 @@ impl FlowlistApp {
                                 },
                             ),
                         ))
-                        .child(self.row_name(project.name.clone(), hovered))
-                        .when(hovered, |this| {
-                            this.child(self.rename_button(
-                                format!("rename-project:{rename_id}"),
-                                modals::EntityRef::Project(rename_id),
-                                cx,
-                            ))
-                            .child(self.delete_entity_button(
-                                format!("delete-project:{delete_id}"),
-                                flowlist_core::command::Command::DeleteProject { id: delete_id },
-                                View::Project(id.clone()),
-                                cx,
-                            ))
-                        })
+                        .child(self.row_name(project.name.clone()))
                         .when(
                             show_counts || project_badge(open, total) == ProjectBadge::Done,
                             |this| {
@@ -1960,15 +1738,10 @@ impl FlowlistApp {
             let view_id = tag.clone();
             let target_id = tag.clone();
             let drop_id = tag.clone();
-            let rename_id = tag.clone();
-            let delete_id = tag.clone();
-            let delete_view = View::Tag(tag.clone());
             let active = self.view == View::Tag(tag.clone());
             let toggle_key = key.clone();
             let depth_pad = if parent.is_some() { 26.0 } else { 18.0 };
             let cursor = self.sidebar_cursor_is(&SidebarTarget::Tag(target_id.clone()));
-            let hovered = self.row_hovered(&SidebarTarget::Tag(target_id.clone()));
-            let hover_id = tag.clone();
             let mut row = div()
                 .id(super::sid(format!("sidebar-tag:{tag}")))
                 .flex()
@@ -1992,9 +1765,6 @@ impl FlowlistApp {
                 })
                 .cursor_pointer()
                 .hover(|style| style.bg(self.theme.hover))
-                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                    this.set_row_hover(SidebarTarget::Tag(hover_id.clone()), *hovered, cx);
-                }))
                 .child(if children {
                     div()
                         .id(super::sid(format!("tag-toggle:{tag}")))
@@ -2039,7 +1809,7 @@ impl FlowlistApp {
                             },
                         )),
                 )
-                .child(self.row_name(name, hovered))
+                .child(self.row_name(name))
                 .when(
                     status != flowlist_core::model::TagStatus::Available,
                     |this| {
@@ -2051,29 +1821,6 @@ impl FlowlistApp {
                         )
                     },
                 )
-                // The crosshair also marks a selected tag, so it stays put on
-                // the active row and only borrows width from hovered rows.
-                .when(hovered || active, |this| {
-                    this.child(self.tag_location_button(
-                        format!("location-tag:{tag}"),
-                        tag.clone(),
-                        located,
-                        cx,
-                    ))
-                })
-                .when(hovered, |this| {
-                    this.child(self.rename_button(
-                        format!("rename-tag:{rename_id}"),
-                        modals::EntityRef::Tag(rename_id),
-                        cx,
-                    ))
-                    .child(self.delete_entity_button(
-                        format!("delete-tag:{delete_id}"),
-                        flowlist_core::command::Command::DeleteTag { id: delete_id },
-                        delete_view,
-                        cx,
-                    ))
-                })
                 .when(show_counts && usage > 0, |this| {
                     this.child(self.count_box(
                         format!("tag:{tag}"),

@@ -453,7 +453,6 @@ pub struct FlowlistApp {
     sidebar_cursor: Option<sidebar::SidebarTarget>,
     /// The sidebar row under the pointer, if any. Hover-only row actions
     /// render only for this row so an idle row spends no width on them.
-    sidebar_hover: Option<sidebar::SidebarTarget>,
     checklist_cursor: Option<usize>,
     focus: FocusArea,
     focus_handle: FocusHandle,
@@ -625,7 +624,6 @@ impl FlowlistApp {
             vim_mode,
             vim: vim::VimState::default(),
             sidebar_cursor: None,
-            sidebar_hover: None,
             checklist_cursor: None,
             focus: FocusArea::Content,
             focus_handle,

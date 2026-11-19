@@ -126,13 +126,14 @@ working domain and GUI. This page tracks what is implemented and verified.
       the title bar at every window width, centered on the content pane, with
       a × that clears the query. The title-bar theme (palette) icon is gone
       while its keyboard shortcuts remain.
-- [x] Sidebar rows give their full width to the name until hovered. Only the
-      hovered row makes room for the pencil and ×, and its long name fades out
-      at the edge without an ellipsis. At rest, long sidebar and review-card
-      names end with an ellipsis, and the inspector wraps the full project name
-      instead of truncating it. Library project rows carry the same boxed count
-      as perspectives, aligned with the folder icon and the name. Once a
-      project has work but nothing open, that count becomes a tick; a new
+- [x] Sidebar rows give their full width to the name. Rename, delete, project
+      status and tag location live in the right-click menu, so no pencil or ×
+      ever competes with the name. Long sidebar and review-card names end with
+      an ellipsis, and the inspector wraps the full project name instead of
+      truncating it. Library project rows carry the same boxed count as
+      perspectives, aligned with the folder icon and the name. Once a project
+      has work but nothing open, that count becomes a bare tick with no chip
+      behind it; a new
       project keeps its 0 until it has a task.
 - [x] Sidebar tags sort by live work, busiest first, then name ignoring case
       with the id as a stable tie-break. Nested tags follow the same rule inside
@@ -234,8 +235,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Rich custom-perspective editor laid out like settings: labelled filter
       and layout rows that each open a menu of every value, a live match count,
       an explicit Clear filters, and unknown CLI conditions kept and counted
-- [x] Rename project/folder/tag/perspective (`⌘R` or hover pencil);
-      hover each sidebar row for its edit and delete buttons
+- [x] Rename project/folder/tag/perspective (`⌘R`, or Rename in the row's
+      right-click menu); the menu also carries delete, status and location
 - [x] Right-click any sidebar row for open/rename/delete, project status,
       tag location, new child items and Empty Trash
 - [x] Tag locations from the sidebar (`⌖`) or `⇧L`, with validation and clear
@@ -294,7 +295,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Cross-process tests spawn the real binary and verify reload in both
       directions
 - [x] `scripts/gui-smoke.sh` drives the mouse-only New project and perspective
-      pencil flows with CoreGraphics events, and `scripts/gui/forecast-probe.sh`
+      context-menu flow with CoreGraphics events, and `scripts/gui/forecast-probe.sh`
       covers the Forecast calendar's fold, day filter and drag-to-resize
 - [x] Accessibility pass: tooltips on every icon-only control, keyboard routes
       for hover-only actions, documented GPUI limitation
@@ -336,7 +337,7 @@ shortcut set.
 - One reusable tooltip component that stays hidden for three seconds
   after hover begins. Clicking the button mutes its tooltip until the pointer
   leaves; hovering again later shows it normally.
-- Applied to all icon-only controls: sidebar pencil and ×, completion circles,
+- Applied to all icon-only controls: completion circles,
   flag toggles, checklist add/toggle/reorder/delete, project status chips,
   disclosure arrows, toolbar and modal close buttons.
 - Tooltips name the action and show its shortcut where one exists, for example

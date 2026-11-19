@@ -7,8 +7,9 @@ current GPUI toolkit limits assistive technology.
 
 ## Keyboard routes for icon-only controls
 
-Hover-only controls (the sidebar pencil and ×) appear when the mouse is over
-them, so the keyboard routes below are the primary way to reach them.
+A task row's flag is a hover-only control, and sidebar rows keep their actions
+in the right-click menu, so the keyboard routes below are the primary way to
+reach them without the mouse.
 
 ### Window header
 
@@ -96,8 +97,8 @@ row, and `Esc` returns to the content list.
 Every sidebar row also has a right-click menu with the actions that apply to
 it: Open, Rename, Delete, New project/subfolder/subtag, project status, tag
 location and Empty Trash. The same actions keep their keyboard routes, and
-`Esc` closes the menu. Hovering a row reveals its pencil and × even when the
-row is the active view.
+`Esc` closes the menu. It is the only place where a sidebar row's rename,
+delete, status and location actions live.
 
 Projects can be dragged onto a folder row to file them, onto the LIBRARY
 heading, or onto empty space under the tree to take them back to the root. The
@@ -206,11 +207,10 @@ straight back in the Archive. The pane is reached from the sidebar like any
 other perspective, and when nothing is left it shows a calm “No finished
 projects” message.
 
-A sidebar row's pencil and × stay hidden until the row is hovered, even when
-the row is selected. While idle the name uses the whole row width; hovering
-makes room for the actions, and a long name fades at that edge instead of
-ending in an ellipsis. The same actions keep their keyboard routes (`⌘R` to
-rename, `⌘⌫` to delete, `dd` in vim mode) and their tooltips.
+A sidebar row's actions live in its right-click menu, so the name always owns
+the full row width and long names end in an ellipsis. Those actions keep their
+keyboard routes (`⌘R` to rename, `⌘⌫` to delete, `dd` in vim mode) and their
+tooltips.
 
 Inside the inspector's inline fields, `Tab` and `Enter` save the current value
 and move to the next field; a validation error keeps that field open, and
@@ -231,7 +231,7 @@ a button mutes its tooltip until the pointer leaves the button. They are
 attached to every icon-only control:
 
 - the labelled Add task button and the six header icon buttons;
-- sidebar pencils, × buttons, disclosure arrows and the `⌖` location button;
+- sidebar disclosure arrows;
 - task completion circles, flags and subtask disclosures;
 - checklist tick boxes, reorder arrows and delete buttons;
 - inspector flag, close, tag-remove, Due/Defer calendar and project-status
