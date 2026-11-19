@@ -169,8 +169,6 @@ pub struct SettingsPatch {
     pub default_review_days: Option<u32>,
     pub show_completed_days: Option<u32>,
     pub week_starts_on: Option<u8>,
-    pub forecast_months: Option<u8>,
-    pub forecast_full_width: Option<bool>,
     pub default_due_time: Option<Option<chrono::NaiveTime>>,
     pub default_defer_time: Option<Option<chrono::NaiveTime>>,
     pub current_location: Option<Option<Geo>>,
@@ -1384,12 +1382,6 @@ impl Command {
                 }
                 if let Some(value) = patch.week_starts_on {
                     settings.week_starts_on = value % 7;
-                }
-                if let Some(value) = patch.forecast_months {
-                    settings.forecast_months = value.min(2);
-                }
-                if let Some(value) = patch.forecast_full_width {
-                    settings.forecast_full_width = value;
                 }
                 if let Some(value) = patch.default_due_time {
                     settings.default_due_time = value;

@@ -285,12 +285,24 @@ pub struct FlowlistApp {
     forecast_month: chrono::NaiveDate,
     /// A clicked calendar date; `None` shows the normal Forecast buckets.
     forecast_date: Option<chrono::NaiveDate>,
-    /// The width the Forecast calendar painted on the last frame, so a GUI
-    /// probe can tell fixed cells from a full-width pane.
+    /// Whether the Forecast month grid is showing. Collapsed, Forecast is a
+    /// plain upcoming list.
+    forecast_calendar_open: bool,
+    /// The height the user dragged the Forecast month grid to. `None` keeps
+    /// the grid at its natural size.
+    forecast_calendar_height: Option<f32>,
+    /// A debounce flag for the session write that follows a calendar resize.
+    forecast_height_dirty: bool,
+    /// Forecast day cells and task chips measured for the GUI probe.
+    forecast_day_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    forecast_chip_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// The box the Forecast calendar painted on the last frame, so a GUI
+    /// probe can confirm the block spans the pane.
     forecast_calendar_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
-    /// The months and width chips, measured so the GUI probe can click them.
-    forecast_months_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
-    forecast_width_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The header chip that folds the Forecast calendar away.
+    forecast_toggle_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The bottom grip that resizes the Forecast calendar.
+    forecast_grip_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// Sidebar row boxes keyed by target, so a GUI probe can drag a project
     /// onto a folder without guessing at coordinates.
     sidebar_row_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
@@ -335,9 +347,6 @@ pub struct FlowlistApp {
     /// The message the content pane painted for an empty list, so a probe can
     /// check the calm Today copy without reading pixels.
     empty_note: Rc<RefCell<Option<String>>>,
-    /// The calendar checker tint painted last frame (packed RGBA), so a probe
-    /// can confirm the backdrop exists and follows the theme.
-    forecast_checker: Cell<Option<u32>>,
     /// Keep the theme family, but let the OS pick light or dark.
     follow_system: bool,
     /// Per-perspective sort/group/filter memory.
@@ -515,6 +524,8 @@ impl FlowlistApp {
         let today = local_date(now());
         let forecast_month =
             chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
+        let forecast_calendar_open = session.forecast_calendar_open.unwrap_or(true);
+        let forecast_calendar_height = session.forecast_calendar_height;
 
         let mut app = Self {
             store,
@@ -522,9 +533,14 @@ impl FlowlistApp {
             view,
             forecast_month,
             forecast_date: None,
+            forecast_calendar_open,
+            forecast_calendar_height,
+            forecast_height_dirty: false,
+            forecast_day_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            forecast_chip_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             forecast_calendar_anchor: Rc::new(Cell::new(None)),
-            forecast_months_anchor: Rc::new(Cell::new(None)),
-            forecast_width_anchor: Rc::new(Cell::new(None)),
+            forecast_toggle_anchor: Rc::new(Cell::new(None)),
+            forecast_grip_anchor: Rc::new(Cell::new(None)),
             sidebar_row_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             sidebar_name_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             history_boxes: Rc::new(RefCell::new(BTreeMap::new())),
@@ -541,7 +557,6 @@ impl FlowlistApp {
             only_available,
             hide_overdue: false,
             empty_note: Rc::new(RefCell::new(None)),
-            forecast_checker: Cell::new(None),
             follow_system,
             view_options,
             sort_menu_open: false,
@@ -653,6 +668,8 @@ impl FlowlistApp {
             priority_filter: self.priority_filter.map(|p| p.slug().to_string()),
             only_available: Some(self.only_available),
             follow_system: Some(self.follow_system),
+            forecast_calendar_open: Some(self.forecast_calendar_open),
+            forecast_calendar_height: self.forecast_calendar_height,
             view_options: {
                 let mut map = self.view_options.clone();
                 map.insert(self.view.key(), self.current_view_options());
@@ -2681,6 +2698,50 @@ impl FlowlistApp {
         self.repaint_after_drop(cx);
     }
 
+    /// Dropping a task on a Forecast day rewrites its due date. A timed task
+    /// keeps its clock time; an all-day date stays all-day.
+    fn drop_on_forecast_day(
+        &mut self,
+        date: chrono::NaiveDate,
+        payload: &DragTask,
+        cx: &mut Context<Self>,
+    ) {
+        if payload.tag {
+            return;
+        }
+        let ids = self.drag_ids(payload);
+        let dues: Vec<(TaskId, Stamp)> = {
+            let db = self.store.db();
+            ids.into_iter()
+                .map(|id| {
+                    let due = db
+                        .tasks
+                        .get(&id)
+                        .and_then(|task| task.due)
+                        .filter(|stamp| stamp.has_time)
+                        .map(|stamp| Stamp::on(date, stamp.local_time()))
+                        .unwrap_or_else(|| Stamp::date_only(date));
+                    (id, due)
+                })
+                .collect()
+        };
+        for (id, due) in dues {
+            self.execute(Command::UpdateTask {
+                id,
+                patch: TaskPatch {
+                    due: Some(Some(due)),
+                    ..Default::default()
+                },
+            });
+        }
+        self.forecast_date = Some(date);
+        self.forecast_month =
+            chrono::NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date);
+        self.toast = Some(format!("Moved to {}", date.format("%b %-d")));
+        cx.notify();
+        self.repaint_after_drop(cx);
+    }
+
     fn drop_on_tag(&mut self, tag: TagId, payload: &DragTask, cx: &mut Context<Self>) {
         let ids = self.drag_ids(payload);
         self.execute(Command::SetTaskTags {
@@ -3784,11 +3845,14 @@ impl FlowlistApp {
                 self.anchor = None;
                 self.save_session();
             }
-            "m" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
-                self.cycle_forecast_months(cx);
+            "-" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
+                self.nudge_forecast_height(-24.0, cx);
             }
-            "w" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
-                self.toggle_forecast_width(cx);
+            "=" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
+                self.nudge_forecast_height(24.0, cx);
+            }
+            "t" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
+                self.forecast_today();
             }
             key if matches!(
                 key,
@@ -4941,12 +5005,11 @@ impl FlowlistApp {
         });
         state["hide_overdue"] = serde_json::json!(self.hide_overdue);
         state["hide_overdue_anchor"] = serde_json::json!(anchor(self.hide_overdue_anchor.get()));
+        state["forecast_calendar_open"] = serde_json::json!(self.forecast_calendar_open);
+        state["forecast_days"] = serde_json::json!(self.forecast_day_boxes.borrow().clone());
+        state["forecast_chips"] = serde_json::json!(self.forecast_chip_boxes.borrow().clone());
+        state["forecast_day"] = serde_json::json!(self.forecast_date.map(|date| date.to_string()));
         state["empty_note"] = serde_json::json!(self.empty_note.borrow().clone());
-        state["forecast_checker"] = serde_json::json!(
-            self.forecast_checker
-                .get()
-                .map(|packed| format!("{:08x}", packed))
-        );
         state["collapsed"] =
             serde_json::json!(self.collapsed_groups.iter().cloned().collect::<Vec<_>>());
         state["can_go_back"] = serde_json::json!(self.can_go_back());
@@ -4968,20 +5031,11 @@ impl FlowlistApp {
         );
         state["expanded"] = serde_json::json!(self.expanded.iter().cloned().collect::<Vec<_>>());
         state["sidebar_settings"] = serde_json::json!(self.store.db().settings.sidebar);
-        let settings = &self.store.db().settings;
-        let window_width = self.window_size.map_or(1254.0, |(width, _)| width);
-        state["forecast_months"] = serde_json::json!(settings.forecast_months.min(2));
-        state["forecast_full_width"] = serde_json::json!(settings.forecast_full_width);
-        state["forecast_month_count"] = serde_json::json!(content::forecast_month_count(
-            window_width,
-            self.show_inspector,
-            settings.forecast_months.min(2),
-        ));
         state["forecast_calendar"] = serde_json::json!(anchor(self.forecast_calendar_anchor.get()));
-        state["forecast_months_anchor"] =
-            serde_json::json!(anchor(self.forecast_months_anchor.get()));
-        state["forecast_width_anchor"] =
-            serde_json::json!(anchor(self.forecast_width_anchor.get()));
+        state["forecast_toggle_anchor"] =
+            serde_json::json!(anchor(self.forecast_toggle_anchor.get()));
+        state["forecast_grip_anchor"] = serde_json::json!(anchor(self.forecast_grip_anchor.get()));
+        state["forecast_calendar_height"] = serde_json::json!(self.forecast_calendar_height);
         state["modal_project_icon"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::NewProject { icon, .. }) => Some(icon.slug()),
             _ => None,

@@ -61,8 +61,10 @@ below; this list is the current map.
       chips, files through `Store::execute`, reuses itself with the old text
       selected, and supports `Enter`, `⇧⏎`, `⌘⏎` and `Esc`. Covered by
       `scripts/gui/phase4-probe.sh`.
-- [ ] **Calendar perspective** — a real month/day/agenda view with
-      drag-to-reschedule.
+- [x] **Forecast calendar** — the rich month grid lives inside Forecast:
+      drag-to-reschedule, keyboard day/month steps, a fold-away header chip
+      and a mouse-resizable height. There is no separate Calendar perspective.
+      Covered by `scripts/gui/forecast-probe.sh`.
 - [ ] **Visual design pass** — hierarchy, spacing, motion, hover/focus and the
       glass edges, verified live in every theme.
 
@@ -117,9 +119,10 @@ below; this list is the current map.
       time on or off at the library default, −/+ step 15 minutes, and `A`,
       `[`/`]`, `{`/`}` do the same from the keyboard. A picked day writes the
       staged time, or a date-only stamp when the row is all-day.
-- [x] **Forecast calendar display** — the calendar header has a Months chip
-      (Auto / 1 / 2, `M`) and a Width chip (fixed cells / full pane, `W`).
-      Both are stored in `Settings`, so the layout survives a relaunch.
+- [x] **Forecast calendar display** — one full-width month, no month-count or
+      width choices. The content header carries a Calendar chip that folds the
+      grid away, and the bottom grip (or `-` / `=`) resizes it; the fold and
+      height live in the session, so the layout survives a relaunch.
 - [x] **Project drag into folders** — project rows drag onto folder rows, or
       onto the LIBRARY heading or empty space under the tree to return to the
       root. The hovered folder or heading highlights during the drag, and a
@@ -138,10 +141,11 @@ below; this list is the current map.
       disagreed with the render default, which made its first click a no-op;
       both now share one default. `za`/`zo`/`zc` fold the selected task, and
       the GUI test state lists the painted rows and disclosure boxes.
-- [ ] **Calendar view** — a dedicated Calendar perspective with a full month
-      grid, day columns or an agenda, drag-to-reschedule and keyboard
-      navigation. The Forecast month calendar is a first step, not the whole
-      calendar.
+- [x] **Calendar view** — the rich month calendar lives inside Forecast now:
+      a full month grid with event pills, drag-to-reschedule, keyboard day and
+      month navigation, a collapsible header chip and a mouse-adjustable
+      height. The duplicate Calendar perspective was removed, so there is one
+      calendar surface rather than two.
 - [x] **Background capture** — `⌃⌥Space` is registered with Carbon's
       `RegisterEventHotKey`, so it fires while another app is in front. It
       opens the floating quick-capture panel and hands off to the same
@@ -212,9 +216,10 @@ below; this list is the current map.
       that names the project; Enter confirms and Esc cancels.
 - [x] Added a title-bar moon/sun button for light/dark, left of the inspector
       toggle. A manual switch turns off follow-system appearance so it sticks.
-- [x] The Forecast calendar shows two consecutive months once the content pane
-      is wide enough, keeping calendar-sized cells on large windows and full
-      screen. Narrow panes keep one month.
+- [x] Forecast and Calendar merged into one perspective: a single full-width
+      month grid with macOS-style separators, event pills, a fold-away chip in
+      the content header and a drag grip for its height. The separate Calendar
+      perspective is gone.
 - [x] Dropdown menus and sheet backdrops occlude the window underneath, so
       choosing an option no longer selects a row behind it.
 - [x] The Priority filter is stored per view; sidebar priority rows no longer

@@ -20,14 +20,6 @@ pub struct Settings {
     /// 0 = Monday ... 6 = Sunday, used by calendar views.
     #[serde(default)]
     pub week_starts_on: u8,
-    /// How many months the Forecast calendar shows: 0 follows the pane width,
-    /// 1 and 2 pin it.
-    #[serde(default)]
-    pub forecast_months: u8,
-    /// When true the Forecast calendar fills the content pane; otherwise it
-    /// keeps calendar-sized cells and centres itself on wide windows.
-    #[serde(default)]
-    pub forecast_full_width: bool,
     /// Time-of-day applied when a due date is entered without a time.
     #[serde(default = "default_due_time")]
     pub default_due_time: Option<NaiveTime>,
@@ -125,8 +117,6 @@ impl Default for Settings {
             show_completed_days: default_completed_days(),
             changed_days: default_changed_days(),
             week_starts_on: 0,
-            forecast_months: 0,
-            forecast_full_width: false,
             default_due_time: default_due_time(),
             default_defer_time: None,
             current_location: None,

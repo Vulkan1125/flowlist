@@ -41,7 +41,7 @@ The sidebar's fixed perspectives are the backbone:
 | Inbox | tasks with no project |
 | Today | due today, deferred to today, and overdue; overdue can be hidden |
 | Projects | open projects and their tasks |
-| Forecast | overdue / today / tomorrow / later, with a month calendar |
+| Forecast | overdue / today / tomorrow / later, with a collapsible, resizable month calendar |
 | Flagged | flagged tasks |
 | Review | projects due for review |
 | Tags | tasks grouped by tag |
@@ -183,8 +183,8 @@ Settings groups:
 
 - **Appearance** — theme family, light/dark, follow-system appearance.
 - **Sidebar** — which rail sections appear and which rows carry counts.
-- **Numbers** — forecast months, width, Changed window, nearby radius, Trash
-  retention and other defaults.
+- **Numbers** — Changed window, nearby radius, Trash retention and other
+  defaults.
 - **Import / export** — JSON or TaskPaper, merge or replace.
 
 A theme choice applies immediately; closing Settings does not discard it. The

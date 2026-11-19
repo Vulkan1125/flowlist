@@ -260,4 +260,5 @@ cargo test --workspace
 cargo check --workspace
 cargo build -p flowlist --no-default-features   # headless CLI/MCP build
 scripts/gui-smoke.sh                            # mouse-only GUI flows (macOS)
+scripts/gui/forecast-probe.sh                   # Forecast calendar probe (macOS)
 ```

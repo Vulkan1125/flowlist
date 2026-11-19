@@ -71,9 +71,14 @@
   open menu takes `j`/`k`, arrows, Home/End, Enter and Esc. The sheet previews
   how many tasks the view matches as it is edited, Clear filters drops every
   condition, and conditions written by the CLI are named and kept on save.
-- The Forecast calendar now paints a faint checkerboard: alternating date
-  cells carry the theme's text colour at 4% alpha, so the pattern follows the
-  family and appearance and is contrast-checked against the date numbers.
+- Forecast and Calendar are now one perspective. The rich month calendar
+  moved above the Forecast list: one full-width month with a continuous grid,
+  an accent circle for today, tinted event pills, `+N more` overflow and
+  drag-to-reschedule. The duplicate Calendar perspective is gone.
+- A Calendar chip in the content header folds the Forecast month grid away,
+  and the grip under it resizes the calendar with the mouse (`-` / `=` from
+  the keyboard). Both choices are saved with the session, and the grip is
+  clamped so the day cells stay readable and the list keeps its room.
 - Added a Today perspective, second in the sidebar: overdue work in its own
   group, then everything due today plus tasks deferred to today. A Hide
   overdue chip (remembered with the view) drops the overdue group, and a clear
@@ -135,15 +140,9 @@
   switch to; `⌘T` still does the same. A manual switch turns off follow-system
   appearance so the choice sticks.
 - Added a Monday-first month calendar to the top of Forecast, with previous /
-  Today / next controls and an accent bar under every date that has a task. On
-  a wide pane (the working window, full screen, or the minimum window without
-  the inspector) it shows two consecutive months side by side, so a single
-  month never stretches into wide, empty cells. The existing forecast buckets
-  below it are unchanged.
-- The Forecast calendar's Months chip cycles Auto, one month and two months,
-  and its width chip switches between calendar-sized cells and the full pane.
-  Both choices are library settings, so they survive a relaunch and apply in
-  every window; `M` and `W` do the same from the keyboard.
+  Today / next controls, an accent circle for today and event pills on dates
+  that carry a task. The existing forecast buckets sit below it unchanged, and
+  the header chip folds the grid away when the list needs the whole pane.
 - Rename sheets now open with the whole name selected: typing replaces it,
   one Backspace or Delete clears it, and arrows or a click place the caret.
   Sheet text fields also accept a click or drag, so a range of a name can be

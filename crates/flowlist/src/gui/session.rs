@@ -161,6 +161,13 @@ pub struct Session {
     /// Keep the theme family but take light/dark from the OS.
     #[serde(default)]
     pub follow_system: Option<bool>,
+    /// Whether the Forecast month grid is expanded.
+    #[serde(default)]
+    pub forecast_calendar_open: Option<bool>,
+    /// The height the user dragged the Forecast calendar to, in pixels. Absent
+    /// means the calendar sizes itself to the month's week count.
+    #[serde(default)]
+    pub forecast_calendar_height: Option<f32>,
     /// Per-perspective sort, grouping and filters.
     #[serde(default)]
     pub view_options: BTreeMap<String, ViewOptions>,

@@ -1,14 +1,16 @@
 //! The main task list, project dashboards, review queue and nearby places.
 
-use std::collections::BTreeSet;
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::rc::Rc;
 
 use chrono::{Datelike, Duration, NaiveDate};
 use gpui::{
-    AnyElement, Context, IntoElement, MouseButton, SharedString, TextRun, Window, div, font,
-    prelude::*, px,
+    AnyElement, Context, CursorStyle, DragMoveEvent, IntoElement, MouseButton, SharedString,
+    TextRun, Window, div, font, prelude::*, px,
 };
 
-use flowlist_core::command::{Command, ProjectPatch, SettingsPatch};
+use flowlist_core::command::{Command, ProjectPatch};
 use flowlist_core::ids::{ProjectId, TaskId};
 use flowlist_core::model::{
     BuiltinPerspective, GroupBy, Priority, ProjectStatus, RepeatRule, SortBy,
@@ -16,7 +18,7 @@ use flowlist_core::model::{
 use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
 
-use super::drag::{DragTask, ghost};
+use super::drag::{DragForecastResize, DragTask, ghost, resize_ghost};
 use super::icons::{self, Icon};
 use super::widgets::TipExt;
 use super::{
@@ -36,7 +38,6 @@ impl FlowlistApp {
         // screen, including the subtasks an expanded parent reveals.
         self.content_rows.borrow_mut().clear();
         self.empty_note.borrow_mut().take();
-        self.forecast_checker.set(None);
 
         let mut column = div()
             .flex()
@@ -69,7 +70,9 @@ impl FlowlistApp {
                 this.child(self.render_capture_bar(cx))
             });
 
-        if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) {
+        if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast))
+            && self.forecast_calendar_open
+        {
             column = column.child(self.render_forecast_calendar(cx));
         }
 
@@ -99,13 +102,13 @@ impl FlowlistApp {
         column.child(list)
     }
 
-    /// Dates in the library that carry a task, used for the Forecast calendar
-    /// bars. Completed tasks and tasks in closed projects are left out, so the
-    /// calendar agrees with the list below it.
-    fn forecast_marked_dates(&self) -> BTreeSet<NaiveDate> {
+    /// Open tasks with a due date, grouped by the local day they land on.
+    /// Completed tasks, trashed tasks and tasks in closed projects are left
+    /// out so the grid and the Forecast list agree.
+    fn forecast_tasks_by_day(&self) -> BTreeMap<NaiveDate, Vec<TaskId>> {
         let db = self.store.db();
-        let mut marked = BTreeSet::new();
-        for task in db.tasks.values() {
+        let mut days: BTreeMap<NaiveDate, Vec<TaskId>> = BTreeMap::new();
+        for (id, task) in &db.tasks {
             if task.completed || task.is_trashed() {
                 continue;
             }
@@ -116,13 +119,16 @@ impl FlowlistApp {
                 }
             }
             if let Some(due) = task.due {
-                marked.insert(due.local_date());
-            }
-            if let Some(defer) = task.defer {
-                marked.insert(defer.local_date());
+                days.entry(due.local_date()).or_default().push(id.clone());
             }
         }
-        marked
+        for ids in days.values_mut() {
+            ids.sort_by_key(|id| {
+                let task = &db.tasks[id];
+                (task.due.map(|stamp| stamp.at), task.title.to_lowercase())
+            });
+        }
+        days
     }
 
     /// Move the selected Forecast day, creating one at today when none is set.
@@ -135,6 +141,7 @@ impl FlowlistApp {
             .unwrap_or(today);
         self.forecast_date = Some(next);
         self.forecast_month = NaiveDate::from_ymd_opt(next.year(), next.month(), 1).unwrap_or(next);
+        self.forecast_calendar_open = true;
         self.selected.clear();
         self.anchor = None;
         self.save_session();
@@ -145,118 +152,85 @@ impl FlowlistApp {
         self.forecast_month = add_months(self.forecast_month, delta);
     }
 
-    /// Cycle the calendar between Auto, one month and two months. The choice is
-    /// a library setting, so the CLI and a second window see the same layout.
-    pub(super) fn cycle_forecast_months(&mut self, cx: &mut Context<Self>) {
-        let next = match self.store.db().settings.forecast_months.min(2) {
-            0 => 1,
-            1 => 2,
-            _ => 0,
-        };
-        self.execute(Command::UpdateSettings(SettingsPatch {
-            forecast_months: Some(next),
-            ..Default::default()
-        }));
+    /// Bring Forecast back to today.
+    pub(super) fn forecast_today(&mut self) {
+        let today = local_date(now());
+        self.forecast_month =
+            NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
+        self.forecast_date = Some(today);
+        self.forecast_calendar_open = true;
+        self.selected.clear();
+        self.anchor = None;
+        self.save_session();
+    }
+
+    /// Show or hide the Forecast month grid. The choice is remembered, so a
+    /// calendar the user folded away stays folded.
+    pub(super) fn toggle_forecast_calendar(&mut self) {
+        self.forecast_calendar_open = !self.forecast_calendar_open;
+        self.save_session();
+    }
+
+    /// A dragged calendar height is spread across the month's week rows, so a
+    /// five-week month and a six-week month keep the same overall block size.
+    fn forecast_cell_height(&self, month: NaiveDate) -> f32 {
+        let weeks = month_grid(month).2 as f32;
+        match self.forecast_calendar_height {
+            Some(height) => ((height - FORECAST_CALENDAR_CHROME) / weeks)
+                .clamp(FORECAST_CELL_MIN, FORECAST_CELL_MAX),
+            None => 68.0,
+        }
+    }
+
+    /// Keyboard counterpart to the resize grip: step the calendar height by a
+    /// row or so, starting from its natural size when the user has not dragged.
+    pub(super) fn nudge_forecast_height(&mut self, delta: f32, cx: &mut Context<Self>) {
+        let weeks = month_grid(self.forecast_month).2 as f32;
+        let current = self
+            .forecast_calendar_height
+            .unwrap_or(weeks * 68.0 + FORECAST_CALENDAR_CHROME);
+        self.set_forecast_calendar_height(current + delta, cx);
+    }
+
+    /// Set the calendar height from the resize grip, clamped so a month can
+    /// never collapse below readable cells or swallow the whole pane. The
+    /// session write is debounced, since a drag produces a move every frame.
+    pub(super) fn set_forecast_calendar_height(&mut self, height: f32, cx: &mut Context<Self>) {
+        let weeks = month_grid(self.forecast_month).2 as f32;
+        let min = weeks * FORECAST_CELL_MIN + FORECAST_CALENDAR_CHROME;
+        let max = weeks * FORECAST_CELL_MAX + FORECAST_CALENDAR_CHROME;
+        self.forecast_calendar_height = Some(height.clamp(min, max));
+        if !self.forecast_height_dirty {
+            self.forecast_height_dirty = true;
+            cx.spawn(async move |this, cx| {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(400))
+                    .await;
+                this.update(cx, |this, _cx| {
+                    this.forecast_height_dirty = false;
+                    this.save_session();
+                })
+                .ok();
+            })
+            .detach();
+        }
         cx.notify();
     }
 
-    /// Switch the calendar between calendar-sized cells and the full pane.
-    pub(super) fn toggle_forecast_width(&mut self, cx: &mut Context<Self>) {
-        let full = !self.store.db().settings.forecast_full_width;
-        self.execute(Command::UpdateSettings(SettingsPatch {
-            forecast_full_width: Some(full),
-            ..Default::default()
-        }));
-        cx.notify();
-    }
-
-    /// The month grid above the Forecast list. Monday-first, with an accent
-    /// bar under every date that has a task. The Months and Width chips pick
-    /// how many grids paint and whether they fill the pane; in Fixed mode the
-    /// block is capped at calendar size and centred rather than widened.
+    /// The Forecast month grid. It reads like macOS Calendar: a quiet,
+    /// continuous grid with separators, one accent circle for today and
+    /// tinted event pills. One month, always full width, folded away by the
+    /// header chip in the content pane when the user wants the list alone.
     fn render_forecast_calendar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
-        // Recorded for the GUI probe; the checker itself is per date cell.
-        self.forecast_checker
-            .set(Some(u32::from(theme.checker.to_rgb())));
         let today = local_date(now());
         let first = self.forecast_month;
-        let marked = self.forecast_marked_dates();
+        let days = self.forecast_tasks_by_day();
         let window_width = self.window_size.map_or(1254.0, |(width, _)| width);
         let pane_width = forecast_pane_width(window_width, self.show_inspector);
-        let configured_months = self.store.db().settings.forecast_months.min(2);
-        let months = forecast_month_count(window_width, self.show_inspector, configured_months);
-        let full_width = self.store.db().settings.forecast_full_width;
-        let compact = pane_width < 520.0;
+        let compact = pane_width < 620.0;
         let calendar_anchor = self.forecast_calendar_anchor.clone();
-        let months_anchor = self.forecast_months_anchor.clone();
-        let width_anchor = self.forecast_width_anchor.clone();
-
-        let mut panels = div().flex().w_full().gap_6();
-        for slot in 0..months {
-            let month = add_months(first, slot as i32);
-            panels = panels.child(self.render_forecast_month(month, slot, &marked, today, cx));
-        }
-
-        let month_label = match (configured_months, compact) {
-            (0, true) => "Auto".to_string(),
-            (0, false) => format!("Auto · {months}"),
-            (1, true) => "1 mo".to_string(),
-            (1, false) => "1 month".to_string(),
-            (_, true) => "2 mo".to_string(),
-            (_, false) => "2 months".to_string(),
-        };
-        let month_tip = match configured_months {
-            0 => "Calendar months: Auto (M)".to_string(),
-            1 => "Calendar months: 1 (M)".to_string(),
-            _ => "Calendar months: 2 (M)".to_string(),
-        };
-        let width_label = if full_width { "Full width" } else { "Fixed" };
-        let width_tip = if full_width {
-            "Calendar width: fills the pane (W)"
-        } else {
-            "Calendar width: calendar-sized cells (W)"
-        };
-
-        let display_controls = div()
-            .flex()
-            .flex_shrink_0()
-            .items_center()
-            .gap_1()
-            .child(
-                div()
-                    .on_children_prepainted(move |bounds, _, _| {
-                        if let Some(bounds) = bounds.first() {
-                            months_anchor.set(Some(*bounds));
-                        }
-                    })
-                    .child(
-                        div()
-                            .id("forecast-months")
-                            .flow_tip(self, cx, theme, month_tip)
-                            .child(widgets::toggle_chip(
-                                theme,
-                                month_label,
-                                configured_months != 0,
-                            ))
-                            .on_click(cx.listener(|this, _, _, cx| this.cycle_forecast_months(cx))),
-                    ),
-            )
-            .child(
-                div()
-                    .on_children_prepainted(move |bounds, _, _| {
-                        if let Some(bounds) = bounds.first() {
-                            width_anchor.set(Some(*bounds));
-                        }
-                    })
-                    .child(
-                        div()
-                            .id("forecast-width")
-                            .flow_tip(self, cx, theme, width_tip)
-                            .child(widgets::toggle_chip(theme, width_label, full_width))
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_forecast_width(cx))),
-                    ),
-            );
+        let grip_anchor = self.forecast_grip_anchor.clone();
 
         let mut controls = div().flex().flex_shrink_0().items_center().gap_1();
         if let Some(date) = self.forecast_date {
@@ -269,6 +243,7 @@ impl FlowlistApp {
                         this.forecast_date = None;
                         this.selected.clear();
                         this.anchor = None;
+                        this.save_session();
                         cx.notify();
                     }))
                     .into_any_element()
@@ -284,6 +259,7 @@ impl FlowlistApp {
                         this.forecast_date = None;
                         this.selected.clear();
                         this.anchor = None;
+                        this.save_session();
                         cx.notify();
                     }))
                     .into_any_element()
@@ -293,7 +269,7 @@ impl FlowlistApp {
             .child(
                 div()
                     .id("forecast-prev")
-                    .flow_tip(self, cx, theme, "Previous month")
+                    .flow_tip(self, cx, theme, "Previous month (⇧{ )")
                     .child(widgets::button(theme, "‹", false))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.forecast_shift_month(-1);
@@ -303,21 +279,17 @@ impl FlowlistApp {
             .child(
                 div()
                     .id("forecast-today")
-                    .flow_tip(self, cx, theme, "Jump to this month")
+                    .flow_tip(self, cx, theme, "Jump to today (t)")
                     .child(widgets::button(theme, "Today", false))
                     .on_click(cx.listener(|this, _, _, cx| {
-                        let today = local_date(now());
-                        if let Some(first) = NaiveDate::from_ymd_opt(today.year(), today.month(), 1)
-                        {
-                            this.forecast_month = first;
-                            cx.notify();
-                        }
+                        this.forecast_today();
+                        cx.notify();
                     })),
             )
             .child(
                 div()
                     .id("forecast-next")
-                    .flow_tip(self, cx, theme, "Next month")
+                    .flow_tip(self, cx, theme, "Next month (⇧} )")
                     .child(widgets::button(theme, "›", false))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.forecast_shift_month(1);
@@ -328,60 +300,20 @@ impl FlowlistApp {
         let title = div()
             .text_sm()
             .font_weight(gpui::FontWeight::SEMIBOLD)
-            .child(forecast_title(first, months));
-        let header = if compact {
-            // A narrow pane cannot fit the title, both display chips and the
-            // month controls on one line, so the chips take their own row.
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .pb_1()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(title)
-                        .child(controls),
-                )
-                .child(display_controls)
-        } else {
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .pb_1()
-                .child(title)
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .child(display_controls)
-                        .child(controls),
-                )
-        };
-
-        let calendar = div()
+            .child(first.format("%B %Y").to_string());
+        let header = div()
             .flex()
-            .flex_col()
-            .w_full()
-            .gap_1()
-            .child(header)
-            .child(panels);
-        let calendar = if full_width {
-            calendar
-        } else {
-            calendar.max_w(px(forecast_max_width(months)))
-        };
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .pb_1()
+            .child(title)
+            .child(controls);
 
         div()
             .flex()
             .flex_col()
-            .items_center()
+            .w_full()
             .px_4()
             .pt_2()
             .pb_3()
@@ -392,28 +324,78 @@ impl FlowlistApp {
                     calendar_anchor.set(Some(*bounds));
                 }
             })
-            .child(calendar)
+            // A drag on the bottom grip resizes the month grid. The pointer's
+            // offset from the calendar's top edge is the height the user is
+            // asking for, so the block tracks the cursor exactly.
+            .on_drag_move::<DragForecastResize>(cx.listener(
+                |this, event: &DragMoveEvent<DragForecastResize>, _, cx| {
+                    let height = f32::from(event.event.position.y - event.bounds.origin.y);
+                    this.set_forecast_calendar_height(height, cx);
+                },
+            ))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .w_full()
+                    .gap_1()
+                    .child(header)
+                    .child(self.render_forecast_month(first, today, &days, cx))
+                    .child(
+                        div()
+                            .on_children_prepainted(move |bounds, _, _| {
+                                if let Some(bounds) = bounds.first() {
+                                    grip_anchor.set(Some(*bounds));
+                                }
+                            })
+                            .child(
+                                div()
+                                    .id("forecast-resize")
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .w_full()
+                                    .h(px(10.))
+                                    .cursor(CursorStyle::ResizeUpDown)
+                                    .hover(|style| style.bg(theme.hover))
+                                    .flow_tip(
+                                        self,
+                                        cx,
+                                        theme,
+                                        "Drag to resize the calendar (- / =)",
+                                    )
+                                    .child(
+                                        div().w(px(38.)).h(px(3.)).rounded_full().bg(theme.border),
+                                    )
+                                    .on_drag(DragForecastResize, resize_ghost),
+                            ),
+                    ),
+            )
     }
 
-    /// One month's weekday rail and date grid. `slot` keeps element ids unique
-    /// when the neighbouring month also paints the same trailing dates.
+    /// One month's macOS-style grid. Each day is a cell in a single continuous
+    /// surface: separators instead of cards, the day number in the corner, and
+    /// up to two event pills.
     fn render_forecast_month(
         &self,
         first: NaiveDate,
-        slot: usize,
-        marked: &BTreeSet<NaiveDate>,
         today: NaiveDate,
+        days: &BTreeMap<NaiveDate, Vec<TaskId>>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
+        let db = self.store.db();
+        let cell_height = self.forecast_cell_height(first);
         let (grid_start, _, weeks) = month_grid(first);
+        let day_boxes = self.forecast_day_boxes.clone();
+        let chip_boxes = self.forecast_chip_boxes.clone();
 
-        let mut weekdays = div().flex().w_full().gap_1();
+        let mut weekdays = div().flex().w_full();
         for label in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] {
             weekdays = weekdays.child(
                 div()
                     .flex_1()
-                    .h(px(16.))
+                    .h(px(18.))
                     .text_center()
                     .text_xs()
                     .text_color(theme.text_faint)
@@ -421,82 +403,167 @@ impl FlowlistApp {
             );
         }
 
-        let mut grid = div().flex().flex_col().gap_1().pt_1();
+        let mut grid = div()
+            .flex()
+            .flex_col()
+            .w_full()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border_soft)
+            .overflow_hidden();
+
         for week in 0..weeks {
-            let mut row = div().flex().w_full().gap_1();
+            let mut row = div().flex().w_full().when(week + 1 < weeks, |this| {
+                this.border_b_1().border_color(theme.border_soft)
+            });
             for weekday in 0..7 {
                 let date = grid_start + Duration::days((week * 7 + weekday) as i64);
                 let in_month = date.month() == first.month() && date.year() == first.year();
                 let is_today = date == today;
                 let is_selected = self.forecast_date == Some(date);
-                let has_tasks = marked.contains(&date);
-                let number_color = if is_today {
-                    theme.bg
-                } else if has_tasks {
-                    theme.text
-                } else {
-                    theme.text_dim
-                };
-                row = row.child(
+                let ids = days.get(&date).cloned().unwrap_or_default();
+                let count = ids.len();
+                let cell_key = date.to_string();
+                let box_sink = day_boxes.clone();
+                let drop_date = date;
+                let select_date = date;
+                let select_month =
+                    NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date);
+
+                let mut cell = div()
+                    .id(super::sid(format!("forecast-date:{date}")))
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .h(px(cell_height))
+                    .gap_1()
+                    .px_1()
+                    .py_1()
+                    .when(weekday < 6, |this| {
+                        this.border_r_1().border_color(theme.border_soft)
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .when(is_selected, |this| this.bg(theme.selection))
+                    .when(!in_month, |this| this.opacity(0.42))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if this.forecast_date == Some(select_date) {
+                            this.forecast_date = None;
+                        } else {
+                            this.forecast_date = Some(select_date);
+                            this.forecast_month = select_month;
+                        }
+                        this.selected.clear();
+                        this.anchor = None;
+                        this.save_session();
+                        cx.notify();
+                    }))
+                    .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
+                        this.drop_on_forecast_day(drop_date, payload, cx)
+                    }));
+
+                cell = cell.child(
                     div()
-                        .id(super::sid(format!("forecast-date:{slot}:{date}")))
-                        .flex_1()
-                        .h(px(38.))
                         .flex()
-                        .flex_col()
                         .items_center()
-                        .justify_center()
-                        .gap_1()
-                        .rounded_md()
-                        // A whisper of the theme text tints alternating
-                        // squares, so the grid reads as a checkerboard while
-                        // hover and selection still paint over it.
-                        .when((week + weekday) % 2 == 0, |this| this.bg(theme.checker))
-                        .cursor_pointer()
-                        .hover(|style| style.bg(theme.hover))
-                        .when(is_selected, |this| this.bg(theme.selection))
-                        .flow_tip(
-                            self,
-                            cx,
-                            theme,
-                            format!("Show tasks on {}", date.format("%b %-d")),
-                        )
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if this.forecast_date == Some(date) {
-                                this.forecast_date = None;
-                            } else {
-                                this.forecast_date = Some(date);
-                                this.forecast_month = add_months(date, 0);
-                            }
-                            this.selected.clear();
-                            this.anchor = None;
-                            cx.notify();
-                        }))
-                        .when(!in_month, |this| this.opacity(0.35))
+                        .justify_between()
                         .child(
                             div()
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .size(px(24.))
+                                .size(px(20.))
                                 .rounded_full()
                                 .when(is_today, |this| this.bg(theme.accent))
                                 .text_xs()
-                                .text_color(number_color)
                                 .font_weight(if is_today {
                                     gpui::FontWeight::SEMIBOLD
                                 } else {
                                     gpui::FontWeight::NORMAL
                                 })
+                                .text_color(if is_today {
+                                    theme.bg
+                                } else if in_month {
+                                    theme.text
+                                } else {
+                                    theme.text_dim
+                                })
                                 .child(date.day().to_string()),
                         )
-                        .child(
-                            div()
-                                .h(px(3.))
-                                .w(px(16.))
-                                .rounded_full()
-                                .when(has_tasks, |this| this.bg(theme.accent)),
-                        ),
+                        .when(count > 0, |this| {
+                            this.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.text_faint)
+                                    .child(count.to_string()),
+                            )
+                        }),
+                );
+
+                for id in ids.iter().take(2) {
+                    let Some(task) = db.tasks.get(id) else {
+                        continue;
+                    };
+                    let title = task.title.clone();
+                    let payload = DragTask::task(id.clone(), title.clone());
+                    let click_id = id.clone();
+                    let chip_key = id.to_string();
+                    let chip_sink = chip_boxes.clone();
+                    cell = cell.child(
+                        div()
+                            .on_children_prepainted(move |bounds, _, _| {
+                                record_box(&chip_sink, &chip_key, bounds.first().copied());
+                            })
+                            .child(
+                                div()
+                                    .id(super::sid(format!("forecast-chip:{}", click_id)))
+                                    .flex()
+                                    .items_center()
+                                    .h(px(15.))
+                                    .w_full()
+                                    .min_w_0()
+                                    .px_1()
+                                    .rounded_sm()
+                                    .bg(theme.accent_soft)
+                                    .text_xs()
+                                    .text_color(theme.text)
+                                    .truncate()
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        this.forecast_date = Some(date);
+                                        this.forecast_month = select_month;
+                                        this.select_only(click_id.clone());
+                                        this.anchor = Some(click_id.clone());
+                                        this.focus = FocusArea::Content;
+                                        cx.notify();
+                                    }))
+                                    .on_drag(payload, move |payload, position, window, cx| {
+                                        ghost(payload, position, window, cx, theme)
+                                    })
+                                    .child(title),
+                            ),
+                    );
+                }
+                if count > 2 {
+                    cell = cell.child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child(format!("+{} more", count - 2)),
+                    );
+                }
+
+                row = row.child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .on_children_prepainted(move |bounds, _, _| {
+                            record_box(&box_sink, &cell_key, bounds.first().copied());
+                        })
+                        .child(cell),
                 );
             }
             grid = grid.child(row);
@@ -609,6 +676,40 @@ impl FlowlistApp {
                                                         this.hide_overdue = !this.hide_overdue;
                                                         this.remember_view_options();
                                                         this.save_session();
+                                                        cx.notify();
+                                                    })),
+                                            )
+                                            .on_children_prepainted(move |bounds, _, _| {
+                                                if let Some(bounds) = bounds.first() {
+                                                    anchor.set(Some(*bounds));
+                                                }
+                                            }),
+                                    )
+                                },
+                            )
+                            .when(
+                                matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)),
+                                |this| {
+                                    let anchor = self.forecast_toggle_anchor.clone();
+                                    this.child(
+                                        div()
+                                            .flex_shrink_0()
+                                            .child(
+                                                div()
+                                                    .id("forecast-calendar-toggle")
+                                                    .flow_tip(
+                                                        self,
+                                                        cx,
+                                                        theme,
+                                                        "Show or hide the Forecast calendar",
+                                                    )
+                                                    .child(widgets::toggle_chip(
+                                                        theme,
+                                                        "Calendar",
+                                                        self.forecast_calendar_open,
+                                                    ))
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.toggle_forecast_calendar();
                                                         cx.notify();
                                                     })),
                                             )
@@ -2166,6 +2267,33 @@ impl FlowlistApp {
 
 /// The content pane's width in logical pixels. The Forecast calendar uses it
 /// to choose between one and two month grids.
+/// Record a painted box for the GUI probe, keyed by the thing it represents.
+fn record_box(
+    sink: &Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    key: &str,
+    bounds: Option<gpui::Bounds<gpui::Pixels>>,
+) {
+    let Some(bounds) = bounds else {
+        return;
+    };
+    sink.borrow_mut().insert(
+        key.to_string(),
+        [
+            f32::from(bounds.origin.x),
+            f32::from(bounds.origin.y),
+            f32::from(bounds.size.width),
+            f32::from(bounds.size.height),
+        ],
+    );
+}
+
+/// Everything a month grid paints around its week rows: the heading, the
+/// weekday labels and the resize grip. Used to turn a dragged block height into
+/// a per-row height.
+const FORECAST_CALENDAR_CHROME: f32 = 62.0;
+const FORECAST_CELL_MIN: f32 = 44.0;
+const FORECAST_CELL_MAX: f32 = 160.0;
+
 fn forecast_pane_width(window_width: f32, show_inspector: bool) -> f32 {
     (window_width
         - super::SIDEBAR_WIDTH
@@ -2175,49 +2303,6 @@ fn forecast_pane_width(window_width: f32, show_inspector: bool) -> f32 {
             0.0
         })
     .max(0.0)
-}
-
-/// Two months once the pane can give each one enough room for readable cells.
-/// A pinned one- or two-month choice overrides the width check; 0 means auto.
-pub(super) fn forecast_month_count(
-    window_width: f32,
-    show_inspector: bool,
-    configured: u8,
-) -> usize {
-    const TWO_MONTH_MIN: f32 = 620.0;
-    match configured {
-        1 => 1,
-        2 => 2,
-        _ if forecast_pane_width(window_width, show_inspector) >= TWO_MONTH_MIN => 2,
-        _ => 1,
-    }
-}
-
-/// The fixed-width calendar never grows past a comfortable month size: 520px
-/// per month, plus the 24px gap the panels already use. Anything wider is
-/// centred, so a full-screen window keeps calendar-sized cells instead of wide
-/// slabs. Full-width mode skips this cap.
-fn forecast_max_width(months: usize) -> f32 {
-    let months = months.max(1) as f32;
-    months * 520.0 + (months - 1.0) * 24.0
-}
-
-/// The calendar heading: one month, or a range when two are shown.
-fn forecast_title(first: NaiveDate, months: usize) -> String {
-    if months <= 1 {
-        return first.format("%B %Y").to_string();
-    }
-    let last = add_months(first, months as i32 - 1);
-    if first.year() == last.year() {
-        format!(
-            "{} – {} {}",
-            first.format("%B"),
-            last.format("%B"),
-            first.format("%Y")
-        )
-    } else {
-        format!("{} – {}", first.format("%B %Y"), last.format("%B %Y"))
-    }
 }
 
 /// The first day of the month `delta` months after `month`. The Forecast month
@@ -2343,45 +2428,5 @@ mod tests {
             add_months(november, 0),
             NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()
         );
-    }
-
-    #[test]
-    fn two_months_need_a_wide_enough_pane() {
-        // The working window at 1254 shows two months with or without the
-        // inspector; the outer panes leave 694 or 1014 pixels.
-        assert_eq!(forecast_month_count(1254.0, true, 0), 2);
-        assert_eq!(forecast_month_count(1254.0, false, 0), 2);
-        // The minimum window with the inspector keeps one readable grid.
-        assert_eq!(forecast_month_count(880.0, true, 0), 1);
-        // Without the inspector the pane is wide enough for two.
-        assert_eq!(forecast_month_count(880.0, false, 0), 2);
-        // A mid-size window with the inspector is still single.
-        assert_eq!(forecast_month_count(1000.0, true, 0), 1);
-    }
-
-    #[test]
-    fn a_pinned_month_count_overrides_the_pane_width() {
-        // One month even in a wide pane.
-        assert_eq!(forecast_month_count(1600.0, false, 1), 1);
-        // Two months in a pane that would otherwise keep one.
-        assert_eq!(forecast_month_count(880.0, true, 2), 2);
-        // Values outside the three choices fall back to automatic.
-        assert_eq!(forecast_month_count(1254.0, false, 9), 2);
-    }
-
-    #[test]
-    fn forecast_calendar_stops_widening_at_a_calendar_size() {
-        assert_eq!(forecast_max_width(1), 520.0);
-        // Two months plus the gap between the panels.
-        assert_eq!(forecast_max_width(2), 1064.0);
-    }
-
-    #[test]
-    fn forecast_title_spans_the_shown_months() {
-        let november = NaiveDate::from_ymd_opt(2026, 11, 1).unwrap();
-        assert_eq!(forecast_title(november, 1), "November 2026");
-        assert_eq!(forecast_title(november, 2), "November – December 2026");
-        let december = NaiveDate::from_ymd_opt(2026, 12, 1).unwrap();
-        assert_eq!(forecast_title(december, 2), "December 2026 – January 2027");
     }
 }

@@ -155,15 +155,15 @@ working domain and GUI. This page tracks what is implemented and verified.
       reads as calm labels. Keyboard focus and Settings both respect a folded
       or hidden section.
 - [x] Forecast month calendar above the list: Monday-first grid, previous /
-      Today / next controls and an accent bar under dates with a task. A wide
-      pane shows two consecutive months side by side so the grid keeps
-      calendar-sized cells instead of stretching. Clicking a date filters the
+      Today / next controls, an accent circle for today, tinted event pills,
+      and `+N more` when a day overflows. One full-width month is shown, so
+      the cells never stretch into empty slabs. Clicking a date filters the
       list to that day; click again or press `\` to clear, with `[`/`]` day
-      steps and `{`/`}` month steps. A Months chip cycles Auto / one / two
-      months and a width chip toggles calendar-sized cells and the full pane;
-      both are saved library settings. Alternating date cells carry a faint
-      checker tint mixed from the theme's own text colour, so the grid reads
-      as a checkerboard in every family without competing with the numbers.
+      steps and `{`/`}` month steps. A chip in the content header folds the
+      calendar away, and dragging its bottom grip (or `-` / `=`) changes its
+      height; the fold and the height are saved with the session. Chips drag
+      onto a day to reschedule through the ordinary command, so the move is
+      undoable. The Forecast list keeps the normal task routes.
 - [x] Sidebar perspectives, Trash, priority rows, custom perspectives and
       project/folder/tag trees. Badges count shown tasks only, so Trash never
       inflates another perspective.
@@ -288,7 +288,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Cross-process tests spawn the real binary and verify reload in both
       directions
 - [x] `scripts/gui-smoke.sh` drives the mouse-only New project and perspective
-      pencil flows with CoreGraphics events
+      pencil flows with CoreGraphics events, and `scripts/gui/forecast-probe.sh`
+      covers the Forecast calendar's fold, day filter and drag-to-resize
 - [x] Accessibility pass: tooltips on every icon-only control, keyboard routes
       for hover-only actions, documented GPUI limitation
 - [x] Packaging, performance, accessibility and GUI automation docs

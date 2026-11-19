@@ -31,6 +31,7 @@ cargo check --workspace
 cargo test --workspace
 cargo build --release
 scripts/gui-smoke.sh
+scripts/gui/forecast-probe.sh
 ```
 
 The GUI smoke test needs a display and uses `FLOWLIST_TEST_STATE`; see

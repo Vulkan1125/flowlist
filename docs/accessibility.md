@@ -56,20 +56,18 @@ has a keyboard shortcut.
 The Forecast month calendar adds three controls beside the month name:
 previous month, Today and next month. They are labelled `‹`, `Today` and `›`
 with tooltips. Every date cell is clickable and has a tooltip naming the day;
-the selected day is highlighted and an "All dates" button clears it. On a wide
-pane the calendar shows two consecutive months; the heading names the range and
-each month keeps its own weekday rail. Keyboard routes: `[` / `]` step the
-selected day, `{` / `}` step the month, and `\` clears the day filter.
+the selected day is highlighted and an "All dates" button clears it. The
+calendar always shows one full-width month, so the cells never shrink into
+empty slabs on a large window. A Calendar chip in the content header folds the
+whole grid away and back (`forecast-calendar-toggle`); the choice is saved with
+the session. Keyboard routes: `[` / `]` step the selected day, `{` / `}` step
+the month, and `\` clears the day filter.
 
-Two more chips sit before those controls. Months cycles Auto → one month → two
-months (`M`); Auto follows the pane width, while a pinned count stays put even
-in a narrow pane. Width switches between calendar-sized cells and a calendar
-that fills the pane (`W`). Both chips show the current choice and have
-tooltips; the settings are stored in the library, so they survive a relaunch.
-Alternating date cells carry a decorative checker tint built from the theme's
-text colour at 4% alpha; the contrast audit checks numbers on a tinted square
-just as it does every other surface, so the pattern never trades legibility for
-texture. The list below keeps the normal task keyboard routes.
+The calendar's height is adjustable. Drag the grip under the grid with the
+mouse, or press `-` / `=` to shrink or grow it by a row. The height is clamped
+so the day cells stay readable and the list below always keeps room, and it is
+saved with the session, so a size chosen once survives a relaunch. The list
+below keeps the normal task keyboard routes.
 
 ### Sidebar
 

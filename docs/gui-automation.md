@@ -11,6 +11,7 @@ mouse and keyboard events instead, and checks the result through:
 ```sh
 cargo build --release
 scripts/gui-smoke.sh
+scripts/gui/forecast-probe.sh
 ```
 
 The script skips on non-macOS hosts and when `swiftc` is missing. It needs
@@ -141,10 +142,13 @@ should poll for the key (nudging the pointer forces the repaint). `due_anchor`
 and `defer_anchor` give the calendar icon boxes. `hide_overdue` is Today's
 header toggle and `hide_overdue_anchor` its chip box. `empty_note` is the title
 the content pane painted for an empty list (for example `Nothing due today`),
-so a probe can check the calm Today copy. `forecast_checker` is the packed RGBA
-tint the Forecast calendar painted for its alternating date cells (null outside
-Forecast), so a probe can confirm the checker exists, stays low-alpha and
-follows the theme. `modal` is `null` when no sheet is
+so a probe can check the calm Today copy. `forecast_calendar_open`,
+`forecast_calendar`, `forecast_calendar_height`, `forecast_days`,
+`forecast_chips`, `forecast_toggle_anchor` and `forecast_grip_anchor` describe
+the Forecast month grid: whether it is folded, the block and grip boxes, the
+height the user dragged it to (null for the natural size), and the painted day
+and chip boxes. A probe can drag the grip or click the header chip and then
+check the same keys. `modal` is `null` when no sheet is
 open, otherwise the sheet title (`New
 project`, `Perspective`, `Settings`, …). `focus` names the active pane or field
 (`Content`, `Capture`, `Sidebar`, `Field`, `Modal`, …). `field` names the

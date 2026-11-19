@@ -183,9 +183,6 @@ pub struct Theme {
     pub field: Hsla,
     /// Hover wash.
     pub hover: Hsla,
-    /// Alternating calendar squares: the theme's text colour at a whisper of
-    /// alpha, so a checker backdrop never fights the numbers on top of it.
-    pub checker: Hsla,
     /// Nothing at all, for idle rows that must not stack another glass tint.
     pub clear: Hsla,
     pub border: Hsla,
@@ -243,7 +240,6 @@ impl Colors {
             raised: rgba(self.raised).into(),
             field: rgba(self.field).into(),
             hover: rgba(self.hover).into(),
-            checker: Hsla { a: 0.04, ..text },
             clear: transparent_black(),
             border: rgb(self.border).into(),
             border_soft: rgb(self.border_soft).into(),
@@ -765,40 +761,6 @@ mod tests {
         }
     }
 
-    /// The checker backdrop is a texture, not a surface of its own: visible in
-    /// every family, yet a whisper under the dates printed over it.
-    #[test]
-    fn checker_squares_are_subtle_and_theme_derived() {
-        for kind in ThemeKind::ALL {
-            for appearance in Appearance::ALL {
-                let theme = Theme::new(kind, appearance);
-                let context = format!("{kind:?} {appearance:?}");
-                assert_eq!(theme.checker.h, theme.text.h, "{context}: wrong hue");
-                assert_eq!(theme.checker.s, theme.text.s, "{context}: wrong saturation");
-                assert_eq!(theme.checker.l, theme.text.l, "{context}: wrong lightness");
-                assert!(
-                    theme.checker.a > 0.0 && theme.checker.a <= 0.06,
-                    "{context}: checker alpha {} is not a whisper",
-                    theme.checker.a
-                );
-                let square = over(theme.checker, theme.bg);
-                let step = contrast(square, theme.bg);
-                assert!(
-                    step >= 1.02,
-                    "{context}: checker is invisible against the reading surface ({step:.2}:1)"
-                );
-                assert!(
-                    step <= 1.25,
-                    "{context}: checker is too loud against the reading surface ({step:.2}:1)"
-                );
-                assert!(
-                    contrast(theme.text, square) >= 4.5,
-                    "{context}: date numbers drop below 4.5:1 on a checker square"
-                );
-            }
-        }
-    }
-
     /// Legibility is part of the theme contract, not a tuning suggestion.
     ///
     /// Chrome is translucent, so every foreground colour is checked against the
@@ -820,7 +782,6 @@ mod tests {
                 let raised = over(theme.raised, theme.bg);
                 let field = over(theme.field, theme.bg);
                 let selection = over(theme.selection, theme.bg);
-                let checker = over(theme.checker, theme.bg);
                 let label = match appearance {
                     Appearance::Light => over(gpui::white(), theme.bg),
                     Appearance::Dark => raised,
@@ -830,7 +791,6 @@ mod tests {
                     raised,
                     field,
                     selection,
-                    checker,
                     glass,
                     glass_top,
                     glass_bottom,

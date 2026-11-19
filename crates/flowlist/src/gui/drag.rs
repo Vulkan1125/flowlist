@@ -59,6 +59,12 @@ impl DragFolder {
     }
 }
 
+/// Dragging the Forecast calendar's bottom grip. The payload carries no state:
+/// the live height comes from where the pointer sits under the calendar's top
+/// edge, so a resize always tracks the cursor exactly.
+#[derive(Clone, Copy, Debug)]
+pub struct DragForecastResize;
+
 pub struct DragGhost {
     label: String,
     position: Point<Pixels>,
@@ -108,6 +114,25 @@ impl Render for DragGhost {
                             .child(self.label.clone()),
                     ),
             )
+    }
+}
+
+/// Constructor used by the calendar's resize grip. The block itself shows the
+/// live height, so the drag paints nothing under the pointer.
+pub fn resize_ghost(
+    _payload: &DragForecastResize,
+    _position: Point<Pixels>,
+    _window: &mut Window,
+    cx: &mut App,
+) -> gpui::Entity<ResizeGhost> {
+    cx.new(|_| ResizeGhost)
+}
+
+pub struct ResizeGhost;
+
+impl Render for ResizeGhost {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div().size(px(0.))
     }
 }
 
