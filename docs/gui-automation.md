@@ -33,6 +33,11 @@ failure.
 
 All flows use a temporary library, so the test never touches the real one.
 
+`scripts/gui/forecast-probe.sh` covers the merged Forecast month grid: it
+checks the painted day cells and event pills, folds the grid from the header
+chip, filters the list by a date and clears it, then drags the bottom grip and
+confirms the new height is clamped and persisted.
+
 ## The test-state hook
 
 Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
