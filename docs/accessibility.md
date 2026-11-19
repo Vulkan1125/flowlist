@@ -239,7 +239,9 @@ attached to every icon-only control:
 - every Forecast date cell and the priority filter chip.
 
 The help card (`?`) lists the same routes in one place, so a keyboard user does
-not need to discover a tooltip first.
+not need to discover a tooltip first. Settings sections are reachable with
+`⌘1`–`⌘5`, `⇥` visits only the fields in the section on screen, and Plain's
+accent presets are the digits `1`–`9` while Appearance is open.
 
 ## Focus and selection visibility
 
@@ -249,9 +251,12 @@ not need to discover a tooltip first.
   the mouse.
 - Selection in the content list is independent of the mouse and is announced in
   the status bar (`N selected`).
-- Every theme keeps a single accent colour for selection and focus; destructive
-  actions use one warm red and are never encoded by colour alone — the close
-  icon and the tooltip carry the meaning.
+- Every theme keeps a single accent colour for selection and focus. Plain
+  lets that accent be chosen from nine presets (`1`–`9` while Appearance is
+  open), a custom picker or the system eyedropper; custom tones are clamped so
+  the colour still carries text and primary-button labels at 4.5:1.
+  Destructive actions use one warm red and are never encoded by colour alone —
+  the close icon and the tooltip carry the meaning.
 - The reading surface stays opaque in all eleven theme families, in both light and
   dark mode. Translucency is limited to the sidebar, inspector, header and
   status bar, so wallpaper contrast never reaches task text.

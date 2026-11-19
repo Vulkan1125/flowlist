@@ -9,7 +9,7 @@ use flowlist_core::db::Db;
 use flowlist_core::ids::{FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{BuiltinPerspective, Priority};
 
-use super::theme::{Appearance, ThemeKind};
+use super::theme::{Appearance, ThemeKind, parse_hex};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum View {
@@ -142,6 +142,12 @@ pub struct Session {
     pub theme: Option<String>,
     #[serde(default)]
     pub appearance: Option<String>,
+    /// Plain's custom accent, saved separately per appearance so the chosen
+    /// tone stays readable in both light and dark. Absent means the family ink.
+    #[serde(default)]
+    pub plain_accent_light: Option<String>,
+    #[serde(default)]
+    pub plain_accent_dark: Option<String>,
     #[serde(default)]
     pub window: Option<(f32, f32)>,
     #[serde(default)]
@@ -203,6 +209,14 @@ impl Session {
             .or_else(|| self.appearance.as_deref().and_then(Appearance::from_slug))
             .unwrap_or_else(|| kind.default_appearance());
         (kind, appearance)
+    }
+
+    pub fn plain_accent(&self, appearance: Appearance) -> Option<u32> {
+        let value = match appearance {
+            Appearance::Light => &self.plain_accent_light,
+            Appearance::Dark => &self.plain_accent_dark,
+        };
+        value.as_deref().and_then(parse_hex)
     }
 
     pub fn priority_filter(&self) -> Option<Priority> {
@@ -329,5 +343,23 @@ mod tests {
             session(None, Some("dark")).theme_choice(),
             (ThemeKind::Plain, Appearance::Dark)
         );
+    }
+
+    #[test]
+    fn plain_accents_are_per_appearance_and_validated() {
+        let session = Session {
+            plain_accent_light: Some("#1E4EB8".to_string()),
+            plain_accent_dark: Some("8FB6FF".to_string()),
+            ..Session::default()
+        };
+        assert_eq!(session.plain_accent(Appearance::Light), Some(0x1E4EB8));
+        assert_eq!(session.plain_accent(Appearance::Dark), Some(0x8FB6FF));
+
+        let broken = Session {
+            plain_accent_light: Some("#nothex".to_string()),
+            ..Session::default()
+        };
+        assert_eq!(broken.plain_accent(Appearance::Light), None);
+        assert_eq!(Session::default().plain_accent(Appearance::Dark), None);
     }
 }

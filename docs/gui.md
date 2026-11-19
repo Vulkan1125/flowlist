@@ -31,7 +31,8 @@ bar blends into the content so the sidebar is the visual anchor.
   eleven theme families. Plain, the first-run default, is a pure white or
   near-black surface with neutral ink. Its sidebar, inspector and header use a
   lighter Dia-style translucent wash, so the desktop shows through without
-  tinting the glass.
+  tinting the glass. Plain also accepts an accent colour from Settings; the
+  other families keep their own accent.
 - Help (`?`) opens the keyboard and mouse card. Settings (`⌘,`) opens the
   settings sheet.
 
@@ -194,17 +195,29 @@ the caret and a drag for selection. Rename sheets select the whole name on open
 so typing replaces it. The New Project sheet adds Notes and a Review every
 (days) field, so each project can have its own cadence.
 
-Settings groups:
+Settings is a sectioned sheet: a fixed rail on the left and one section on the
+right. `⌘1`–`⌘5` jump straight to a section, and `⇥` only walks the fields in
+the section on screen.
 
-- **Appearance** — theme family, light/dark, follow-system appearance.
+- **Appearance** — theme family, light/dark, follow-system appearance. For
+  Plain only: nine accent presets (`1`–`9` while the section is open), a
+  saturation/brightness square and hue strip for a custom tone per appearance,
+  and a system eyedropper that samples any pixel, wallpaper included. The
+  picker edits the appearance on screen; presets set both tones together. With
+  no custom tone the row shows Plain's ink and marks Ink as selected, while the
+  picker's strip parks on blue so the first drag produces a colour. Picking a
+  light/dark mode while following macOS stops following, so the choice takes
+  effect.
 - **Sidebar** — which rail sections appear and which rows carry counts.
-- **Numbers** — Changed window, nearby radius, Trash retention and other
-  defaults.
-- **Import / export** — JSON or TaskPaper, merge or replace.
+- **Workflow** — vim mode, default review days and the completed/changed
+  history windows.
+- **Nearby** — the radius for tags with a location.
+- **Trash** — how long deleted tasks stay restorable (`0` keeps them forever).
 
-A theme choice applies immediately; closing Settings does not discard it. The
-sidebar choice is saved with the library, so the CLI and MCP see the same
-settings document.
+Theme and accent choices preview live on the whole window. Cancel or Esc
+restores the theme, appearance and accent pair the sheet opened with; Save
+keeps them. The sidebar choice is saved with the library, so the CLI and MCP
+see the same settings document.
 
 ## Data and safety
 

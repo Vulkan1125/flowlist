@@ -301,6 +301,7 @@ echo "6. The title-bar arrows walk back to Archive and forward again"
 # Settings: hide Tags, save, and confirm the rail drops the section.
 "$helpers/flowctl" key 43 cmd
 wait_value modal "Settings"
+click_map settings_toggle_rows "settings-section-sidebar"
 wait_setting show_tags true
 click_map settings_toggle_rows "sidebar-show-tags"
 wait_modal_setting show_tags false
@@ -321,6 +322,8 @@ echo "8. The sidebar choice survives a relaunch"
 # Put it back, and turn a quiet count on while the sheet is open.
 "$helpers/flowctl" key 43 cmd
 wait_value modal "Settings"
+click_map settings_toggle_rows "settings-section-sidebar"
+wait_value settings_section sidebar
 click_map settings_toggle_rows "sidebar-show-tags"
 click_map settings_toggle_rows "sidebar-counts-perspectives"
 "$helpers/flowctl" key 36

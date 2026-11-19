@@ -168,6 +168,193 @@ impl ThemeKind {
     }
 }
 
+/// Curated accent choices for Plain. Each name carries a light and a dark
+/// tone, so the same choice keeps its character in both modes and every tone
+/// clears the contrast contract on its chrome.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlainAccent {
+    pub name: &'static str,
+    pub light: u32,
+    pub dark: u32,
+}
+
+impl PlainAccent {
+    pub fn color(self, appearance: Appearance) -> u32 {
+        match appearance {
+            Appearance::Light => self.light,
+            Appearance::Dark => self.dark,
+        }
+    }
+}
+
+pub const PLAIN_ACCENTS: [PlainAccent; 9] = [
+    PlainAccent {
+        name: "Ink",
+        light: 0x181818,
+        dark: 0xF2F2F2,
+    },
+    PlainAccent {
+        name: "Blue",
+        light: 0x1E4EB8,
+        dark: 0x8FB6FF,
+    },
+    PlainAccent {
+        name: "Teal",
+        light: 0x0B5F5A,
+        dark: 0x86D9CC,
+    },
+    PlainAccent {
+        name: "Green",
+        light: 0x1A5E34,
+        dark: 0xA4DDB4,
+    },
+    PlainAccent {
+        name: "Amber",
+        light: 0x6E4A00,
+        dark: 0xF0CD8A,
+    },
+    PlainAccent {
+        name: "Orange",
+        light: 0x94400E,
+        dark: 0xFFB08A,
+    },
+    PlainAccent {
+        name: "Rose",
+        light: 0xA21F35,
+        dark: 0xF4A6A6,
+    },
+    PlainAccent {
+        name: "Pink",
+        light: 0x9A2765,
+        dark: 0xF3A6D2,
+    },
+    PlainAccent {
+        name: "Violet",
+        light: 0x5136B8,
+        dark: 0xC9B6FF,
+    },
+];
+
+/// `#RRGGBB` to packed RGB. Case-insensitive and tolerant of a missing `#`.
+pub fn parse_hex(value: &str) -> Option<u32> {
+    let value = value.trim().trim_start_matches('#');
+    (value.len() == 6)
+        .then(|| u32::from_str_radix(value, 16).ok())
+        .flatten()
+}
+
+/// Packed RGB to `#RRGGBB`.
+pub fn hex(value: u32) -> String {
+    format!("#{:06X}", value & 0x00FF_FFFF)
+}
+
+/// A painted colour back to `#RRGGBB`, for the test-state file and hex labels.
+pub fn hsla_hex(color: Hsla) -> String {
+    let rgba = gpui::Rgba::from(color);
+    let channel = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u32;
+    hex((channel(rgba.r) << 16) | (channel(rgba.g) << 8) | channel(rgba.b))
+}
+
+/// HSV in `0..=1` for hue, saturation and value.
+pub fn rgb_to_hsv(value: u32) -> (f32, f32, f32) {
+    let r = ((value >> 16) & 0xFF) as f32 / 255.0;
+    let g = ((value >> 8) & 0xFF) as f32 / 255.0;
+    let b = (value & 0xFF) as f32 / 255.0;
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let delta = max - min;
+    let hue = if delta <= f32::EPSILON {
+        0.0
+    } else if max == r {
+        ((g - b) / delta).rem_euclid(6.0) / 6.0
+    } else if max == g {
+        (((b - r) / delta) + 2.0) / 6.0
+    } else {
+        (((r - g) / delta) + 4.0) / 6.0
+    };
+    let saturation = if max <= f32::EPSILON {
+        0.0
+    } else {
+        delta / max
+    };
+    (hue, saturation, max)
+}
+
+pub fn hsv_to_rgb(hue: f32, saturation: f32, value: f32) -> u32 {
+    let hue = hue.rem_euclid(1.0) * 6.0;
+    let saturation = saturation.clamp(0.0, 1.0);
+    let value = value.clamp(0.0, 1.0);
+    let chroma = value * saturation;
+    let second = chroma * (1.0 - ((hue % 2.0) - 1.0).abs());
+    let (r, g, b) = match hue as u32 {
+        0 => (chroma, second, 0.0),
+        1 => (second, chroma, 0.0),
+        2 => (0.0, chroma, second),
+        3 => (0.0, second, chroma),
+        4 => (second, 0.0, chroma),
+        _ => (chroma, 0.0, second),
+    };
+    let lift = value - chroma;
+    let channel = |c: f32| (((c + lift) * 255.0).round() as u32).min(255);
+    (channel(r) << 16) | (channel(g) << 8) | channel(b)
+}
+
+fn srgb_luminance(value: u32) -> f32 {
+    let linear = |channel: u32| {
+        let value = channel as f32 / 255.0;
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * linear((value >> 16) & 0xFF)
+        + 0.7152 * linear((value >> 8) & 0xFF)
+        + 0.0722 * linear(value & 0xFF)
+}
+
+fn color_contrast(a: u32, b: u32) -> f32 {
+    let (lighter, darker) = {
+        let (la, lb) = (srgb_luminance(a), srgb_luminance(b));
+        if la >= lb { (la, lb) } else { (lb, la) }
+    };
+    (lighter + 0.05) / (darker + 0.05)
+}
+
+/// Keep a hand-picked accent readable as text and as the primary button fill.
+///
+/// Plain's chrome is translucent, so the worst surface is the glass over a
+/// black (light mode) or white (dark mode) wallpaper. Rather than rejecting a
+/// colour, the picker moves its value until it clears 4.4:1 there and against
+/// the label it carries, which keeps the hue the user chose.
+pub fn readable_plain_accent(value: u32, appearance: Appearance) -> u32 {
+    let (hue, mut saturation, mut brightness) = rgb_to_hsv(value);
+    let (backdrop, label) = match appearance {
+        Appearance::Light => (0xC4C4C4, 0xFFFFFF),
+        Appearance::Dark => (0x444444, 0x1F1F1F),
+    };
+    for _ in 0..200 {
+        let candidate = hsv_to_rgb(hue, saturation, brightness);
+        if color_contrast(candidate, backdrop) >= 4.5 && color_contrast(candidate, label) >= 4.5 {
+            return candidate;
+        }
+        match appearance {
+            Appearance::Light => brightness = (brightness - 0.01).max(0.0),
+            Appearance::Dark => {
+                if brightness >= 1.0 {
+                    // Saturated blues and indigos top out below the floor even
+                    // at full value, so wash a little colour in until they
+                    // clear it. Hue survives; only the chroma softens.
+                    saturation = (saturation - 0.01).max(0.0);
+                } else {
+                    brightness = (brightness + 0.01).min(1.0);
+                }
+            }
+        }
+    }
+    hsv_to_rgb(hue, saturation, brightness)
+}
+
 #[derive(Clone, Copy)]
 pub struct Theme {
     pub kind: ThemeKind,
@@ -234,7 +421,7 @@ fn tint_toward(base: u32, other: u32, weight: f32) -> u32 {
 }
 
 impl Colors {
-    fn theme(self, kind: ThemeKind, appearance: Appearance) -> Theme {
+    fn theme(self, kind: ThemeKind, appearance: Appearance, custom_accent: Option<u32>) -> Theme {
         let text: Hsla = rgb(self.text).into();
         // Plain keeps the accent wash almost imperceptible, so its chrome
         // reads as one calm neutral surface instead of a tinted pane. The
@@ -244,8 +431,26 @@ impl Colors {
         } else {
             (0.06, 0.05)
         };
+        let custom = (kind == ThemeKind::Plain)
+            .then_some(custom_accent)
+            .flatten()
+            .map(|value| readable_plain_accent(value, appearance));
+        let accent = custom.unwrap_or(self.accent);
+        let (accent_soft, selection) = match custom {
+            Some(_) => {
+                let (soft, selection) = match appearance {
+                    Appearance::Light => (0x24, 0x1F),
+                    Appearance::Dark => (0x36, 0x30),
+                };
+                (
+                    ((accent & 0x00FF_FFFF) << 8) | soft,
+                    ((accent & 0x00FF_FFFF) << 8) | selection,
+                )
+            }
+            None => (self.accent_soft, self.selection),
+        };
         let (glass_top, glass_bottom) = (
-            tint_toward(self.glass, self.accent, top_weight),
+            tint_toward(self.glass, accent, top_weight),
             tint_toward(self.glass, self.bg, bottom_weight),
         );
         Theme {
@@ -264,9 +469,9 @@ impl Colors {
             text,
             text_dim: rgb(self.text_dim).into(),
             text_faint: rgb(self.text_faint).into(),
-            accent: rgb(self.accent).into(),
-            accent_soft: rgba(self.accent_soft).into(),
-            selection: rgba(self.selection).into(),
+            accent: rgb(accent).into(),
+            accent_soft: rgba(accent_soft).into(),
+            selection: rgba(selection).into(),
             danger: rgb(self.danger).into(),
             warning: rgb(self.warning).into(),
             success: rgb(self.success).into(),
@@ -276,6 +481,12 @@ impl Colors {
 
 impl Theme {
     pub fn new(kind: ThemeKind, appearance: Appearance) -> Self {
+        Self::with_accent(kind, appearance, None)
+    }
+
+    /// The palette, with Plain's accent replaced when the caller saved one.
+    /// Other families ignore `accent`; their accent is part of the identity.
+    pub fn with_accent(kind: ThemeKind, appearance: Appearance, accent: Option<u32>) -> Self {
         let colors = match (kind, appearance) {
             (ThemeKind::Plain, Appearance::Light) => Colors {
                 bg: 0xFFFFFF,
@@ -679,7 +890,7 @@ impl Theme {
             },
         };
 
-        colors.theme(kind, appearance)
+        colors.theme(kind, appearance, accent)
     }
 
     pub fn kind(&self) -> ThemeKind {
@@ -897,6 +1108,80 @@ mod tests {
                 assert!(
                     theme.glass.a <= 0.95,
                     "{context}: the glass is so opaque that the blur is gone"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn hex_and_hsv_round_trip() {
+        assert_eq!(parse_hex("#1e4eb8"), Some(0x1E4EB8));
+        assert_eq!(parse_hex("8FB6FF"), Some(0x8FB6FF));
+        assert_eq!(parse_hex("#fff"), None);
+        assert_eq!(hex(0x1E4EB8), "#1E4EB8");
+        for value in [0x1E4EB8, 0xFFFFFF, 0x000000, 0x86D9CC, 0xA21F35] {
+            let (hue, saturation, brightness) = rgb_to_hsv(value);
+            let back = hsv_to_rgb(hue, saturation, brightness);
+            for shift in [16, 8, 0] {
+                let before = (value >> shift) & 0xFF;
+                let after = (back >> shift) & 0xFF;
+                assert!(
+                    before.abs_diff(after) <= 1,
+                    "{value:06X} drifted at shift {shift}"
+                );
+            }
+        }
+    }
+
+    /// A hand-picked accent is part of the theme, so it carries the same
+    /// contract as the curated palettes: readable as text on the chrome and
+    /// as the label on a primary button, in both modes.
+    #[test]
+    fn plain_accents_stay_readable_in_both_modes() {
+        let samples = PLAIN_ACCENTS
+            .iter()
+            .flat_map(|preset| [preset.light, preset.dark])
+            .chain([0xFFFF00, 0x00FF00, 0x000000, 0xFFFFFF]);
+        for accent in samples {
+            for appearance in Appearance::ALL {
+                let theme = Theme::with_accent(ThemeKind::Plain, appearance, Some(accent));
+                let wallpaper = match appearance {
+                    Appearance::Light => gpui::black(),
+                    Appearance::Dark => gpui::white(),
+                };
+                let raised = over(theme.raised, theme.bg);
+                let surfaces = [
+                    theme.bg,
+                    raised,
+                    over(theme.field, theme.bg),
+                    over(theme.selection, theme.bg),
+                    over(theme.glass, wallpaper),
+                    over(theme.glass_top, wallpaper),
+                    over(theme.glass_bottom, wallpaper),
+                ];
+                let label = match appearance {
+                    Appearance::Light => over(gpui::white(), theme.bg),
+                    Appearance::Dark => raised,
+                };
+                let worst = worst_contrast(theme.accent, &surfaces);
+                let painted = hsla_hex(theme.accent);
+                let report: Vec<String> = surfaces
+                    .iter()
+                    .map(|surface| {
+                        format!(
+                            "{}:{:.2}",
+                            hsla_hex(*surface),
+                            contrast(theme.accent, *surface)
+                        )
+                    })
+                    .collect();
+                assert!(
+                    worst >= 4.4,
+                    "accent {accent:06X} painted {painted} reaches only {worst:.2}:1 in {appearance:?} on {report:?}"
+                );
+                assert!(
+                    contrast(label, theme.accent) >= 4.4,
+                    "accent {accent:06X} makes the button label unreadable in {appearance:?}"
                 );
             }
         }

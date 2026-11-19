@@ -4,6 +4,19 @@
 
 ### Interface
 
+- Settings is now a sectioned sheet: a fixed rail (Appearance, Sidebar,
+  Workflow, Nearby, Trash) beside one scrolling pane, so library-wide
+  preferences have a home instead of lengthening one nameless list. `⌘1`–`⌘5`
+  jump between sections, and `⇥` only walks the fields in the section on
+  screen.
+- Plain gains accent colours. Nine curated pairs each carry a light and a dark
+  tone (Ink, Blue, Teal, Green, Amber, Orange, Rose, Pink, Violet), and a
+  saturation/brightness square plus hue strip tune a separate custom accent
+  for each appearance. Keys `1`–`9` choose a preset while Appearance is open.
+  A system eyedropper samples any pixel — wallpaper included — and the result
+  is luminance-clamped so accent text and primary-button labels stay at least
+  4.5:1 on Plain's chrome. Accents are saved per appearance with the session;
+  Cancel restores the pair the sheet opened with.
 - Sidebar rows no longer show a pencil or × on hover. Rename, delete, project
   status and tag location live in the right-click menu, so names keep the full
   row width. A finished project's tick no longer paints a chip behind it.

@@ -1,8 +1,13 @@
 //! Modal sheets: new project/folder/tag/perspective, import, settings,
 //! locations and the keyboard help card.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::Duration;
+
 use gpui::{
-    AnyElement, Bounds, Context, IntoElement, Window, div, point, prelude::*, px, rgba, size,
+    Animation, AnimationExt, AnyElement, Bounds, Context, CursorStyle, IntoElement, Window, div,
+    point, prelude::*, px, rgba, size,
 };
 
 use flowlist_core::ids::{FolderId, PerspectiveId, ProjectId, TaskId};
@@ -12,8 +17,9 @@ use flowlist_core::time::now;
 
 use super::icons::Icon;
 use super::perspective::{PerspectiveForm, ViewChoice, ViewField};
+use super::screen_picker;
 use super::text::TextBuffer;
-use super::theme::{Appearance, Theme, ThemeKind};
+use super::theme::{self, Appearance, PLAIN_ACCENTS, Theme, ThemeKind};
 use super::widgets::TipExt;
 use super::{FlowlistApp, icons, widgets};
 
@@ -108,6 +114,12 @@ pub enum Modal {
         theme: ThemeKind,
         appearance: Appearance,
         sidebar: SidebarOptions,
+        accent_light: Option<u32>,
+        accent_dark: Option<u32>,
+        /// A quiet line under the accent controls, used when the system
+        /// eyedropper is unavailable or times out.
+        accent_note: Option<String>,
+        section: SettingsSection,
     },
     Location {
         lat: TextBuffer,
@@ -149,6 +161,78 @@ impl SidebarFlag {
             SidebarFlag::CountsTags => &mut sidebar.counts_tags,
         };
         *value = !*value;
+    }
+}
+
+/// The left rail of Settings. Sections keep the sheet navigable as more
+/// library-wide preferences arrive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SettingsSection {
+    Appearance,
+    Sidebar,
+    Workflow,
+    Nearby,
+    Trash,
+}
+
+impl SettingsSection {
+    pub const ALL: [SettingsSection; 5] = [
+        SettingsSection::Appearance,
+        SettingsSection::Sidebar,
+        SettingsSection::Workflow,
+        SettingsSection::Nearby,
+        SettingsSection::Trash,
+    ];
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            SettingsSection::Appearance => "appearance",
+            SettingsSection::Sidebar => "sidebar",
+            SettingsSection::Workflow => "workflow",
+            SettingsSection::Nearby => "nearby",
+            SettingsSection::Trash => "trash",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            SettingsSection::Appearance => "Appearance",
+            SettingsSection::Sidebar => "Sidebar",
+            SettingsSection::Workflow => "Workflow",
+            SettingsSection::Nearby => "Nearby",
+            SettingsSection::Trash => "Trash",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            SettingsSection::Appearance => "Theme, accent and how light and dark are chosen.",
+            SettingsSection::Sidebar => "Which sections and counts the rail shows.",
+            SettingsSection::Workflow => "Keyboard behaviour, review cadence and history windows.",
+            SettingsSection::Nearby => "How distance ranks tasks with tagged locations.",
+            SettingsSection::Trash => "How long deleted tasks stay restorable.",
+        }
+    }
+
+    /// Which numeric fields live in this section. Tab and the text buffers are
+    /// scoped to it, so typing in Appearance can never edit a hidden default.
+    pub fn fields(self) -> &'static [usize] {
+        match self {
+            SettingsSection::Workflow => &[0, 1, 2],
+            SettingsSection::Nearby => &[3],
+            SettingsSection::Trash => &[4],
+            SettingsSection::Appearance | SettingsSection::Sidebar => &[],
+        }
+    }
+
+    pub fn icon(self) -> Icon {
+        match self {
+            SettingsSection::Appearance => Icon::Palette,
+            SettingsSection::Sidebar => Icon::PanelRight,
+            SettingsSection::Workflow => Icon::Review,
+            SettingsSection::Nearby => Icon::Crosshair,
+            SettingsSection::Trash => Icon::Trash,
+        }
     }
 }
 
@@ -268,6 +352,10 @@ impl Modal {
             theme: app.theme.kind(),
             appearance: app.theme.appearance(),
             sidebar: settings.sidebar.clone(),
+            accent_light: app.plain_accent_light,
+            accent_dark: app.plain_accent_dark,
+            accent_note: None,
+            section: SettingsSection::Appearance,
         }
     }
 
@@ -409,13 +497,14 @@ impl Modal {
                 changed_days,
                 radius,
                 trash_days,
+                section,
                 ..
             } => match index {
-                0 => Some(review_days),
-                1 => Some(completed_days),
-                2 => Some(changed_days),
-                3 => Some(radius),
-                4 => Some(trash_days),
+                0 if section.fields().contains(&0) => Some(review_days),
+                1 if section.fields().contains(&1) => Some(completed_days),
+                2 if section.fields().contains(&2) => Some(changed_days),
+                3 if section.fields().contains(&3) => Some(radius),
+                4 if section.fields().contains(&4) => Some(trash_days),
                 _ => None,
             },
             Modal::Location { lat, lon } | Modal::TagLocation { lat, lon, .. } => match index {
@@ -455,13 +544,14 @@ impl Modal {
                 changed_days,
                 radius,
                 trash_days,
+                section,
                 ..
             } => match index {
-                0 => Some(review_days),
-                1 => Some(completed_days),
-                2 => Some(changed_days),
-                3 => Some(radius),
-                4 => Some(trash_days),
+                0 if section.fields().contains(&0) => Some(review_days),
+                1 if section.fields().contains(&1) => Some(completed_days),
+                2 if section.fields().contains(&2) => Some(changed_days),
+                3 if section.fields().contains(&3) => Some(radius),
+                4 if section.fields().contains(&4) => Some(trash_days),
                 _ => None,
             },
             Modal::Location { lat, lon } | Modal::TagLocation { lat, lon, .. } => match index {
@@ -521,7 +611,7 @@ impl Modal {
             Modal::Import { .. } | Modal::Help => 620.0,
             Modal::DeleteTask { .. } => 500.0,
             Modal::Perspective { .. } => 680.0,
-            Modal::Settings { .. } => 580.0,
+            Modal::Settings { .. } => 880.0,
             _ => 460.0,
         }
     }
@@ -606,10 +696,7 @@ impl FlowlistApp {
             // for; keep them above the numeric fields so they are visible
             // without scrolling on a normal window.
             if is_settings {
-                body = body.child(self.render_settings_controls(cx));
-                // The rail controls are visual, so they sit with Appearance
-                // instead of being buried under the numeric defaults.
-                body = body.child(self.render_sidebar_settings(cx));
+                body = body.child(self.render_settings_sheet(cx));
             }
             if let Modal::CreateProject { path, .. } = modal {
                 body = body.child(
@@ -735,8 +822,10 @@ impl FlowlistApp {
                     },
                 ));
             }
-            for index in 0..field_count {
-                body = body.child(self.render_modal_field(index, cx));
+            if !is_settings {
+                for index in 0..field_count {
+                    body = body.child(self.render_modal_field(index, cx));
+                }
             }
             if is_new_project {
                 body = body.child(self.render_new_project_controls(cx));
@@ -752,12 +841,13 @@ impl FlowlistApp {
             }
         }
 
+        let card_max_height = if is_settings { 820.0 } else { 640.0 };
         let mut card = div()
             .flex()
             .flex_col()
             .gap_3()
             .w(px(width))
-            .max_h(px(640.))
+            .max_h(px(card_max_height))
             .p_4()
             .rounded_xl()
             .border_1()
@@ -778,6 +868,8 @@ impl FlowlistApp {
                     .child(div().text_xs().text_color(theme.text_faint).child(
                         if matches!(modal, Modal::DeleteTask { .. }) {
                             "Esc close · ⇥ switch choice"
+                        } else if is_settings {
+                            "Esc close · ⌘1–5 sections · ⇥ field"
                         } else if field_count > 0 {
                             "Esc close · ⇥ next field"
                         } else {
@@ -819,7 +911,11 @@ impl FlowlistApp {
             .bg(rgba(0x00000055))
             .child(super::fade_in(
                 "modal-fade",
-                div().flex().flex_col().max_h(px(720.)).child(card),
+                div()
+                    .flex()
+                    .flex_col()
+                    .max_h(px(if is_settings { 880.0 } else { 720.0 }))
+                    .child(card),
             ))
             .into_any_element()
     }
@@ -1617,7 +1713,173 @@ impl FlowlistApp {
         row.child(icon_row)
     }
 
-    fn render_settings_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    /// The Settings sheet: a fixed section rail on the left and one section at
+    /// a time on the right. More library-wide preferences can land as new rail
+    /// items without lengthening a single nameless scroll.
+    fn render_settings_sheet(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let Some(Modal::Settings { section, .. }) = &self.modal else {
+            return div().into_any_element();
+        };
+        let section = *section;
+        let mut rail = div()
+            .flex()
+            .flex_col()
+            .gap(px(2.))
+            .w(px(168.))
+            .flex_shrink_0()
+            .pr_3()
+            .border_r_1()
+            .border_color(theme.border_soft);
+        for item in SettingsSection::ALL {
+            rail = rail.child(self.settings_nav_row(item, section, cx));
+        }
+        let pane = div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .flex_1()
+            .min_w_0()
+            .min_h(px(440.))
+            .pl_3()
+            .child(self.settings_section_header(section));
+        let pane = match section {
+            SettingsSection::Appearance => pane.child(self.render_settings_controls(cx)),
+            SettingsSection::Sidebar => pane.child(self.render_sidebar_settings(cx)),
+            SettingsSection::Workflow => pane.child(self.render_workflow_settings(cx)),
+            SettingsSection::Nearby => pane.child(self.render_nearby_settings(cx)),
+            SettingsSection::Trash => pane.child(self.render_trash_settings(cx)),
+        };
+        // A section change fades its pane in, matching the sheet's own 120 ms
+        // entrance. The id carries the section so the animation restarts on
+        // every switch rather than only on the sheet's first open.
+        let pane = pane.with_animation(
+            gpui::ElementId::Name(format!("settings-pane-{}", section.slug()).into()),
+            Animation::new(Duration::from_millis(120)),
+            |pane, delta| pane.opacity(delta),
+        );
+        div()
+            .flex()
+            .items_start()
+            .w_full()
+            .child(rail)
+            .child(pane)
+            .into_any_element()
+    }
+
+    fn settings_nav_row(
+        &self,
+        item: SettingsSection,
+        section: SettingsSection,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let active = section == item;
+        let boxes = self.settings_toggle_boxes.clone();
+        let key = format!("settings-section-{}", item.slug());
+        let probe_key = key.clone();
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        probe_key.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .child(
+                div()
+                    .id(super::sid(key.clone()))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .h(px(30.))
+                    .px_2()
+                    .rounded_md()
+                    .bg(if active { theme.selection } else { theme.clear })
+                    .text_color(if active { theme.accent } else { theme.text_dim })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(icons::icon(
+                        item.icon(),
+                        14.0,
+                        if active {
+                            theme.accent
+                        } else {
+                            theme.text_faint
+                        },
+                    ))
+                    .child(div().text_sm().child(item.label()))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::Settings { section, .. }) = &mut this.modal {
+                            *section = item;
+                        }
+                        this.modal_focus = item.fields().first().copied().unwrap_or(0);
+                        cx.notify();
+                    })),
+            )
+            .into_any_element()
+    }
+
+    fn settings_section_header(&self, section: SettingsSection) -> AnyElement {
+        let theme = self.theme;
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_lg()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child(section.label()),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(section.description()),
+            )
+            .into_any_element()
+    }
+
+    /// One bordered group inside a section. Grouping is the main defence
+    /// against a settings sheet turning into a wall of controls.
+    fn settings_card(
+        &self,
+        title: &'static str,
+        hint: Option<&'static str>,
+        body: impl IntoElement,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let mut card = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_2()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border_soft)
+            .bg(theme.field)
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(theme.text)
+                    .child(title),
+            )
+            .child(body);
+        if let Some(hint) = hint {
+            card = card.child(div().text_xs().text_color(theme.text_faint).child(hint));
+        }
+        card.into_any_element()
+    }
+
+    fn render_settings_controls(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
         let (selected, appearance) = match &self.modal {
             Some(Modal::Settings {
@@ -1625,7 +1887,6 @@ impl FlowlistApp {
             }) => (*theme, *appearance),
             _ => (theme.kind(), theme.appearance()),
         };
-        let vim = matches!(&self.modal, Some(Modal::Settings { vim_mode: true, .. }));
         let follow_system = matches!(
             &self.modal,
             Some(Modal::Settings {
@@ -1666,13 +1927,27 @@ impl FlowlistApp {
                             .child(mode.label())
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if let Some(Modal::Settings {
-                                    theme, appearance, ..
+                                    appearance,
+                                    follow_system,
+                                    ..
                                 }) = &mut this.modal
                                 {
+                                    // Picking a mode is a deliberate override,
+                                    // so it stops following macOS rather than
+                                    // saving a choice the window ignores.
                                     *appearance = mode;
-                                    // Preview the choice right away; Cancel restores
-                                    // the theme the sheet opened with.
-                                    this.theme = Theme::new(*theme, mode);
+                                    *follow_system = false;
+                                }
+                                let preview = match &this.modal {
+                                    Some(Modal::Settings {
+                                        theme, appearance, ..
+                                    }) => Some((*theme, *appearance)),
+                                    _ => None,
+                                };
+                                if let Some((kind, mode)) = preview {
+                                    // Preview the choice right away; Cancel
+                                    // restores the theme the sheet opened with.
+                                    this.theme = this.preview_theme(kind, mode);
                                 }
                                 cx.notify();
                             })),
@@ -1693,103 +1968,647 @@ impl FlowlistApp {
                         .child(self.theme_swatch(*kind, selected == *kind, appearance, cx)),
                 );
             }
-            // Keep the last row aligned with full rows when it is short.
             for _ in chunk.len()..4 {
                 row = row.child(div().flex_1());
             }
             grid = grid.child(row);
         }
 
+        let follow = div().flex().items_center().gap_2().child(
+            div()
+                .id("modal-follow-system")
+                .child(widgets::button(
+                    theme,
+                    if follow_system {
+                        "Follow system ✓"
+                    } else {
+                        "Follow system"
+                    },
+                    follow_system,
+                ))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    if let Some(Modal::Settings { follow_system, .. }) = &mut this.modal {
+                        *follow_system = !*follow_system;
+                    }
+                    cx.notify();
+                })),
+        );
+
+        let theme_card = self.settings_card(
+            "Theme",
+            Some("Live preview. Cancel restores the theme and accent the sheet opened with."),
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("Light or dark"),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(follow)
+                                .child(modes),
+                        ),
+                )
+                .child(grid)
+                .child(div().text_xs().text_color(theme.text_faint).child(format!(
+                    "{} · {} · ⌘T light/dark · ⇧⌘T next family",
+                    selected.hint(),
+                    appearance.label(),
+                ))),
+        );
+
+        let accent = if selected == ThemeKind::Plain {
+            self.render_plain_accent(cx)
+        } else {
+            self.settings_card(
+                "Accent",
+                Some("Accent colours are a Plain feature. This family carries its own palette."),
+                div(),
+            )
+        };
+
         div()
             .flex()
             .flex_col()
-            .gap_2()
+            .gap_3()
+            .child(theme_card)
+            .child(accent)
+            .into_any_element()
+    }
+
+    /// Plain's accent row. Presets carry a tone for each mode; the picker edits
+    /// the appearance that is currently on screen, so a custom colour can be
+    /// tuned separately for light and dark.
+    fn render_plain_accent(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let Some(Modal::Settings {
+            appearance,
+            accent_light,
+            accent_dark,
+            ..
+        }) = &self.modal
+        else {
+            return div().into_any_element();
+        };
+        let appearance = *appearance;
+        let current = match appearance {
+            Appearance::Light => *accent_light,
+            Appearance::Dark => *accent_dark,
+        };
+        // With no custom tone the accent is Plain's ink, and the row has to
+        // say so: the swatch, hex and marker all follow the painted colour.
+        let ink = match appearance {
+            Appearance::Light => 0x181818,
+            Appearance::Dark => 0xF2F2F2,
+        };
+        let effective = current.unwrap_or(ink);
+        let resolved = theme::readable_plain_accent(effective, appearance);
+        let (hue, saturation, value) = theme::rgb_to_hsv(effective);
+        // A neutral ink has no hue to show; park the strip on a vivid blue so
+        // the first drag in the square yields a colour rather than grey.
+        let hue = if saturation < 0.08 { 0.60 } else { hue };
+        let hue_color = theme::hsv_to_rgb(hue, 1.0, 1.0);
+        let preview = div()
+            .size(px(24.))
+            .rounded_full()
+            .border_1()
+            .border_color(theme.border)
+            .bg(gpui::rgb(resolved));
+
+        let mut presets = div().flex().flex_wrap().items_center().gap_2();
+        for preset in PLAIN_ACCENTS {
+            let active = effective == preset.color(appearance);
+            let slug = preset.name.to_lowercase();
+            presets = presets.child(
+                div()
+                    .on_children_prepainted(self.theme_probe(format!("accent:{slug}")))
+                    .child(
+                        div()
+                            .id(super::sid(format!("accent-{slug}")))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(24.))
+                            .rounded_full()
+                            .border_2()
+                            .border_color(if active { theme.text } else { theme.border })
+                            .bg(gpui::rgb(preset.color(appearance)))
+                            .cursor_pointer()
+                            .hover(|style| style.border_color(theme.accent))
+                            .flow_tip(self, cx, theme, preset.name)
+                            .when(active, |this| {
+                                let ink = if appearance == Appearance::Light {
+                                    theme.text
+                                } else {
+                                    theme.bg
+                                };
+                                this.child(icons::icon(Icon::Check, 11.0, ink))
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.set_plain_accents(Some(preset.light), Some(preset.dark), cx);
+                            })),
+                    ),
+            );
+        }
+
+        // Saturation/value square. The marker is positioned from the derived
+        // HSV, so presets, swatches and the picker always point at one colour.
+        const SV_W: f32 = 176.0;
+        const SV_H: f32 = 84.0;
+        const HUE_H: f32 = 12.0;
+        let sv_bounds: Rc<RefCell<Option<Bounds<gpui::Pixels>>>> = Rc::new(RefCell::new(None));
+        let sv_boxes = self.theme_boxes.clone();
+        let sv_probe = sv_bounds.clone();
+        let sv_down = sv_bounds.clone();
+        let sv_move = sv_bounds.clone();
+        let sv_square = div()
+            .relative()
+            .w(px(SV_W))
+            .h(px(SV_H))
+            .rounded_md()
+            .overflow_hidden()
+            .cursor(CursorStyle::Crosshair)
+            .bg(gpui::rgb(hue_color))
             .child(
                 div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(div().text_xs().text_color(theme.text_faint).child("Theme"))
-                    .child(modes),
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full()
+                    .bg(gpui::linear_gradient(
+                        90.,
+                        gpui::linear_color_stop(gpui::white(), 0.),
+                        gpui::linear_color_stop(gpui::transparent_black(), 1.),
+                    )),
             )
-            .child(grid)
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full()
+                    .bg(gpui::linear_gradient(
+                        0.,
+                        gpui::linear_color_stop(gpui::transparent_black(), 0.),
+                        gpui::linear_color_stop(gpui::black(), 1.),
+                    )),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(saturation * SV_W - 5.0))
+                    .top(px((1.0 - value) * SV_H - 5.0))
+                    .size(px(10.))
+                    .rounded_full()
+                    .border_2()
+                    .border_color(gpui::white())
+                    .shadow_lg(),
+            )
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    let Some(bounds) = *sv_down.borrow() else {
+                        return;
+                    };
+                    let x =
+                        ((event.position.x - bounds.origin.x) / bounds.size.width).clamp(0.0, 1.0);
+                    let y =
+                        ((event.position.y - bounds.origin.y) / bounds.size.height).clamp(0.0, 1.0);
+                    this.set_plain_accent(appearance, Some(theme::hsv_to_rgb(hue, x, 1.0 - y)), cx);
+                }),
+            )
+            .on_mouse_move(
+                cx.listener(move |this, event: &gpui::MouseMoveEvent, _, cx| {
+                    if event.pressed_button != Some(gpui::MouseButton::Left) {
+                        return;
+                    }
+                    let Some(bounds) = *sv_move.borrow() else {
+                        return;
+                    };
+                    let x =
+                        ((event.position.x - bounds.origin.x) / bounds.size.width).clamp(0.0, 1.0);
+                    let y =
+                        ((event.position.y - bounds.origin.y) / bounds.size.height).clamp(0.0, 1.0);
+                    this.set_plain_accent(appearance, Some(theme::hsv_to_rgb(hue, x, 1.0 - y)), cx);
+                }),
+            );
+        let sv = div()
+            .w(px(SV_W))
+            .h(px(SV_H))
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    *sv_probe.borrow_mut() = Some(*bounds);
+                    sv_boxes.borrow_mut().insert(
+                        "accent-sv".to_string(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .child(sv_square);
+
+        // Hue strip: six fixed-width gradients make a continuous wheel without
+        // a shader, and the marker is a thin white line over the chosen hue.
+        let hue_bounds: Rc<RefCell<Option<Bounds<gpui::Pixels>>>> = Rc::new(RefCell::new(None));
+        let hue_boxes = self.theme_boxes.clone();
+        let hue_probe = hue_bounds.clone();
+        let hue_down = hue_bounds.clone();
+        let hue_move = hue_bounds.clone();
+        let segment = (SV_W / 6.0).ceil();
+        let mut hue_bar = div()
+            .relative()
+            .flex()
+            .w(px(SV_W))
+            .h(px(HUE_H))
+            .rounded_full()
+            .overflow_hidden()
+            .cursor(CursorStyle::Crosshair);
+        for step in 0..6 {
+            let from = theme::hsv_to_rgb(step as f32 / 6.0, 1.0, 1.0);
+            let to = theme::hsv_to_rgb((step + 1) as f32 / 6.0, 1.0, 1.0);
+            hue_bar = hue_bar.child(div().w(px(segment)).h(px(HUE_H)).flex_shrink_0().bg(
+                gpui::linear_gradient(
+                    90.,
+                    gpui::linear_color_stop(gpui::rgb(from), 0.),
+                    gpui::linear_color_stop(gpui::rgb(to), 1.),
+                ),
+            ));
+        }
+        let hue_bar = hue_bar
+            .child(
+                div()
+                    .absolute()
+                    .left(px(hue * SV_W - 2.0))
+                    .top_0()
+                    .w(px(4.))
+                    .h(px(HUE_H))
+                    .rounded_full()
+                    .border_1()
+                    .border_color(gpui::white())
+                    .bg(gpui::transparent_black()),
+            )
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    let Some(bounds) = *hue_down.borrow() else {
+                        return;
+                    };
+                    let x =
+                        ((event.position.x - bounds.origin.x) / bounds.size.width).clamp(0.0, 1.0);
+                    this.set_plain_accent(
+                        appearance,
+                        Some(theme::hsv_to_rgb(x, saturation.max(0.55), value.max(0.55))),
+                        cx,
+                    );
+                }),
+            )
+            .on_mouse_move(
+                cx.listener(move |this, event: &gpui::MouseMoveEvent, _, cx| {
+                    if event.pressed_button != Some(gpui::MouseButton::Left) {
+                        return;
+                    }
+                    let Some(bounds) = *hue_move.borrow() else {
+                        return;
+                    };
+                    let x =
+                        ((event.position.x - bounds.origin.x) / bounds.size.width).clamp(0.0, 1.0);
+                    this.set_plain_accent(
+                        appearance,
+                        Some(theme::hsv_to_rgb(x, saturation.max(0.55), value.max(0.55))),
+                        cx,
+                    );
+                }),
+            );
+        let hue_bar = div()
+            .w(px(SV_W))
+            .h(px(HUE_H))
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    *hue_probe.borrow_mut() = Some(*bounds);
+                    hue_boxes.borrow_mut().insert(
+                        "accent-hue".to_string(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .child(hue_bar);
+
+        let picker = div().flex().flex_col().gap_2().child(sv).child(hue_bar);
+
+        let note = match &self.modal {
+            Some(Modal::Settings { accent_note, .. }) => accent_note.clone(),
+            _ => None,
+        };
+        let meta = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .child(preview)
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text)
+                    .child(theme::hex(resolved)),
+            )
             .child(
                 div()
                     .text_xs()
                     .text_color(theme.text_faint)
-                    .child(format!(
-                        "{} · {} · ⌘T light/dark · ⇧⌘T next family · Preview is live",
-                        selected.hint(),
-                        appearance.label(),
-                    )),
+                    .child(format!("Accent · {}", appearance.label())),
+            );
+        let actions = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(
+                div()
+                    .on_children_prepainted(self.theme_probe("accent-pick".to_string()))
+                    .child(
+                        div()
+                            .id(super::sid("accent-pick"))
+                            .child(widgets::button_with_icon(
+                                theme,
+                                Icon::Eyedropper,
+                                "Pick from screen",
+                                false,
+                            ))
+                            .flow_tip(self, cx, theme, "Sample any pixel — wallpaper included")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.pick_accent_from_screen(cx);
+                            })),
+                    ),
             )
             .child(
                 div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
+                    .on_children_prepainted(self.theme_probe("accent-reset".to_string()))
                     .child(
                         div()
-                            .id("modal-vim-mode")
-                            .child(widgets::button(
-                                theme,
-                                if vim { "Vim mode ✓" } else { "Vim mode off" },
-                                vim,
-                            ))
+                            .id(super::sid("accent-reset"))
+                            .child(widgets::button(theme, "Reset to ink", false))
                             .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(Modal::Settings { vim_mode, .. }) = &mut this.modal {
-                                    *vim_mode = !*vim_mode;
-                                }
-                                cx.notify();
+                                this.set_plain_accents(None, None, cx);
                             })),
-                    )
-                    .child(div().text_xs().text_color(theme.text_faint).child(
-                        "hjkl motions, counts, operators and pane focus. ⌘ shortcuts stay available.",
-                    )),
-            )
+                    ),
+            );
+
+        self.settings_card(
+            "Accent",
+            Some(
+                "Presets set light and dark together; keys 1–9 pick one. The picker and eyedropper edit the appearance on screen.",
+            ),
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(presets)
+                .child(
+                    div()
+                        .flex()
+                        .items_start()
+                        .gap_4()
+                        .child(picker)
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_2()
+                                .child(meta)
+                                .child(
+                                    div()
+                                        .max_w(px(260.))
+                                        .text_xs()
+                                        .text_color(theme.text_faint)
+                                        .child(
+                                            "Drag the square for saturation and brightness, or the strip for hue. The eyedropper samples anything on screen, wallpaper included.",
+                                        ),
+                                )
+                                .child(actions)
+                                .when(note.is_some(), |this| {
+                                    this.child(
+                                        div()
+                                            .max_w(px(260.))
+                                            .text_xs()
+                                            .text_color(theme.danger)
+                                            .child(note.unwrap_or_default()),
+                                    )
+                                }),
+                        ),
+                ),
+        )
+    }
+
+    /// Open the system eyedropper. It resolves outside this process, so the
+    /// modal polls a shared slot rather than blocking the frame. Cancelling
+    /// the sampler leaves the accent untouched.
+    fn pick_accent_from_screen(&mut self, cx: &mut Context<Self>) {
+        let Some(Modal::Settings {
+            appearance,
+            accent_note,
+            ..
+        }) = &mut self.modal
+        else {
+            return;
+        };
+        let appearance = *appearance;
+        *accent_note = None;
+        let slot: screen_picker::PickSlot = Rc::new(RefCell::new(None));
+        if !screen_picker::sample(slot.clone()) {
+            if let Some(Modal::Settings { accent_note, .. }) = &mut self.modal {
+                *accent_note = Some("Screen sampling is not available here.".to_string());
+            }
+            cx.notify();
+            return;
+        }
+        cx.spawn(async move |this, cx| {
+            // A cancelled sampler may never call back on older systems, so the
+            // wait is bounded rather than open-ended.
+            for _ in 0..300 {
+                cx.background_executor()
+                    .timer(Duration::from_millis(100))
+                    .await;
+                match slot.borrow_mut().take() {
+                    None => continue,
+                    Some(None) => return,
+                    Some(Some(color)) => {
+                        this.update(cx, |this, cx| {
+                            this.apply_picked_accent(appearance, color, cx);
+                        })
+                        .ok();
+                        return;
+                    }
+                }
+            }
+            this.update(cx, |this, cx| {
+                if let Some(Modal::Settings { accent_note, .. }) = &mut this.modal {
+                    *accent_note = Some("The screen picker timed out.".to_string());
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Store the sampled pixel in the tone that is on screen, clamped the same
+    /// way the picker is so the stored hex is what the window actually paints.
+    fn apply_picked_accent(&mut self, appearance: Appearance, color: u32, cx: &mut Context<Self>) {
+        let resolved = theme::readable_plain_accent(color, appearance);
+        self.set_plain_accent(appearance, Some(resolved), cx);
+    }
+
+    fn set_plain_accent(
+        &mut self,
+        appearance: Appearance,
+        color: Option<u32>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(Modal::Settings {
+            theme,
+            appearance: mode,
+            accent_light,
+            accent_dark,
+            ..
+        }) = &mut self.modal
+        else {
+            return;
+        };
+        match appearance {
+            Appearance::Light => *accent_light = color,
+            Appearance::Dark => *accent_dark = color,
+        }
+        let (kind, mode) = (*theme, *mode);
+        self.theme = self.preview_theme(kind, mode);
+        cx.notify();
+    }
+
+    pub(super) fn set_plain_accents(
+        &mut self,
+        light: Option<u32>,
+        dark: Option<u32>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(Modal::Settings {
+            theme,
+            appearance,
+            accent_light,
+            accent_dark,
+            ..
+        }) = &mut self.modal
+        else {
+            return;
+        };
+        *accent_light = light;
+        *accent_dark = dark;
+        let (kind, mode) = (*theme, *appearance);
+        self.theme = self.preview_theme(kind, mode);
+        cx.notify();
+    }
+
+    fn render_workflow_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let vim = matches!(&self.modal, Some(Modal::Settings { vim_mode: true, .. }));
+        let keyboard = div()
+            .flex()
+            .items_center()
+            .gap_2()
             .child(
                 div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .id("modal-follow-system")
-                            .child(widgets::button(
-                                theme,
-                                if follow_system {
-                                    "Follow system ✓"
-                                } else {
-                                    "Fixed appearance"
-                                },
-                                follow_system,
-                            ))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(Modal::Settings { follow_system, .. }) = &mut this.modal
-                                {
-                                    *follow_system = !*follow_system;
-                                }
-                                cx.notify();
-                            })),
-                    )
-                    .child(div().text_xs().text_color(theme.text_faint).child(
-                        "Take light or dark from macOS and keep the chosen family.",
-                    )),
+                    .id("modal-vim-mode")
+                    .child(widgets::button(
+                        theme,
+                        if vim { "Vim mode ✓" } else { "Vim mode off" },
+                        vim,
+                    ))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Settings { vim_mode, .. }) = &mut this.modal {
+                            *vim_mode = !*vim_mode;
+                        }
+                        cx.notify();
+                    })),
             )
+            .child(div().text_xs().text_color(theme.text_faint).child(
+                "hjkl motions, counts, operators and pane focus. ⌘ shortcuts stay available.",
+            ));
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(self.settings_card("Keyboard", None, keyboard))
+            .child(
+                self.settings_card(
+                    "Review and history",
+                    Some(
+                        "Defaults for the library. Projects can override their own review cadence.",
+                    ),
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(self.render_modal_field(0, cx))
+                        .child(self.render_modal_field(1, cx))
+                        .child(self.render_modal_field(2, cx)),
+                ),
+            )
+            .into_any_element()
+    }
+
+    fn render_nearby_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(self.settings_card(
+                "Distance",
+                Some(
+                    "The Nearby perspective keeps tags within this radius of the library location.",
+                ),
+                self.render_modal_field(3, cx),
+            ))
+            .into_any_element()
+    }
+
+    fn render_trash_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(self.settings_card(
+                "Retention",
+                Some("Zero keeps deleted tasks forever. Expired items are swept when Settings is saved."),
+                self.render_modal_field(4, cx),
+            ))
+            .into_any_element()
     }
 
     fn render_sidebar_settings(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = self.theme;
         let Some(Modal::Settings { sidebar, .. }) = &self.modal else {
             return div().into_any_element();
         };
         let sidebar = sidebar.clone();
-        let label = |text: &str| {
-            div()
-                .text_xs()
-                .text_color(theme.text_faint)
-                .child(text.to_string())
-        };
         let toggle = |key: &'static str,
                       text: &'static str,
                       active: bool,
@@ -1801,18 +2620,10 @@ impl FlowlistApp {
         div()
             .flex()
             .flex_col()
-            .gap_2()
-            .pt_2()
-            .border_t_1()
-            .border_color(theme.border_soft)
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .child("Sidebar"),
-            )
-            .child(label("Sections"))
-            .child(
+            .gap_3()
+            .child(self.settings_card(
+                "Sections",
+                Some("A hidden section disappears from the rail. Its rows still exist in search."),
                 div()
                     .flex()
                     .flex_wrap()
@@ -1852,9 +2663,10 @@ impl FlowlistApp {
                         SidebarFlag::ShowTags,
                         cx,
                     )),
-            )
-            .child(label("Counts"))
-            .child(
+            ))
+            .child(self.settings_card(
+                "Counts",
+                Some("Counts are quiet by default: only the Library shows a number."),
                 div()
                     .flex()
                     .flex_wrap()
@@ -1887,9 +2699,6 @@ impl FlowlistApp {
                         SidebarFlag::CountsTags,
                         cx,
                     )),
-            )
-            .child(div().text_xs().text_color(theme.text_faint).child(
-                "Sections fold from their heading in the rail. Counts are quiet by default.",
             ))
             .into_any_element()
     }
@@ -1976,7 +2785,7 @@ impl FlowlistApp {
             .id(kind.slug())
             .flex_1()
             .min_w_0()
-            .p_1()
+            .p_0p5()
             .rounded_lg()
             .border_1()
             .border_color(if selected { theme.accent } else { theme.border })
@@ -1996,7 +2805,7 @@ impl FlowlistApp {
             .child(
                 div()
                     .flex()
-                    .h(px(38.))
+                    .h(px(28.))
                     .w_full()
                     .rounded_md()
                     .overflow_hidden()
@@ -2011,7 +2820,7 @@ impl FlowlistApp {
                     .items_center()
                     .justify_between()
                     .gap_1()
-                    .pt_1()
+                    .pt_0p5()
                     .child(
                         div()
                             .min_w_0()
@@ -2210,6 +3019,14 @@ fn help_body(theme: super::theme::Theme) -> impl IntoElement {
                 ("⌘O", "import"),
                 ("⇧⌘E", "copy TaskPaper export"),
                 ("? / ⌘?", "this help"),
+            ],
+        ),
+        (
+            "Settings",
+            vec![
+                ("⌘1…⌘5", "Appearance, Sidebar, Workflow, Nearby, Trash"),
+                ("⇥", "next field in the open section"),
+                ("1…9", "Plain accent preset while Appearance is open"),
             ],
         ),
         (

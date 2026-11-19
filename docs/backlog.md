@@ -69,9 +69,11 @@ below; this list is the current map.
       drag-to-reschedule, keyboard day/month steps, a fold-away header chip
       and a mouse-resizable height. There is no separate Calendar perspective.
       Covered by `scripts/gui/forecast-probe.sh`.
-- [x] **Plain theme** — a neutral white/near-black family with a monochrome
-      accent, and the first-run default. Both modes meet the same contrast
-      contract as the other families.
+- [x] **Plain theme** — a neutral white/near-black family and the first-run
+      default. Both modes meet the same contrast contract as the other
+      families. Plain also carries nine accent preset pairs, a custom
+      saturation/brightness/hue picker per appearance and a system eyedropper;
+      custom tones are luminance-clamped to keep the contrast contract.
 - [x] **Visual design pass** — hierarchy, spacing, motion, hover/focus and
       the glass edges, verified live in every theme. Hover-only row actions,
       one illustrated empty state, prose counts, 120 ms overlay fades,
@@ -254,9 +256,10 @@ below; this list is the current map.
 - [x] Rail sections fold from their headings, folders launch folded, the title
       bar walks view history with back/forward arrows, and Archive rows can be
       deleted with confirmation and Undo.
-- [x] Settings has a Sidebar group for section visibility and count badges;
-      counts default quiet outside the Library, while Today always shows its
-      day count.
+- [x] Settings is a sectioned sheet (Appearance, Sidebar, Workflow, Nearby,
+      Trash) with `⌘1`–`⌘5` navigation. It carries section visibility and
+      count badges; counts default quiet outside the Library, while Today
+      always shows its day count.
 
 ## OmniFocus gap research (first pass, November 2026)
 

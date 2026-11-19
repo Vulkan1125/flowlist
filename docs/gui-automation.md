@@ -13,6 +13,7 @@ cargo build --release
 scripts/gui-smoke.sh
 scripts/gui/forecast-probe.sh
 scripts/gui/quick-capture-probe.sh
+scripts/gui/settings-probe.sh
 ```
 
 The script skips on non-macOS hosts and when `swiftc` is missing. It needs
@@ -103,9 +104,13 @@ on pixels.
 `sidebar_visible` lists the row keys the rail targets on this frame, after
 Settings visibility and section folds are applied, while `expanded` lists the
 tree keys explicitly opened and `sidebar_settings` mirrors the persisted
-`show_*`/`counts_*` choices. `settings_toggle_rows` maps every Sidebar control
-in the Settings sheet to a box, and `modal_sidebar` reports the sheet's
-unsaved copy, so a probe can click a toggle and check it before Save.
+`show_*`/`counts_*` choices. `settings_toggle_rows` maps every Settings control
+to a box: `settings-section-<slug>` for the rail (`appearance`, `sidebar`,
+`workflow`, `nearby`, `trash`), then the `sidebar-show-*` and
+`sidebar-counts-*` controls once the Sidebar section is selected. Probes must
+click the section first; the toggles do not paint in another section.
+`settings_section` names the section on screen, and `modal_sidebar` reports the
+sheet's unsaved copy, so a probe can click a toggle and check it before Save.
 `sidebar_counts` maps each count badge actually painted (`builtin:<slug>`,
 `priority:<slug>`, `folder:<id>`, `tag:<id>`) to its box, and
 `sidebar_count_values` reports the number inside each badge. Today's badge is
@@ -146,9 +151,12 @@ value directly. `view_form` reports the sheet's current state
 so poll for `clear` only after a condition is set. `theme_boxes` maps a
 Settings sheet's controls to their boxes: `theme:<slug>` for each family
 swatch (`plain`, `paper`, `mist`, `catppuccin`, `nord`, `gruvbox`, `dracula`,
-`tokyo-night`, `vesper`, `graphite`, `midnight`) and `appearance:<slug>` for
-the `light` and `dark` chips, so a probe can check the live preview without
-guessing at the grid. If the sheet does not paint another frame on its own, a
+`tokyo-night`, `vesper`, `graphite`, `midnight`), `appearance:<slug>` for the
+`light` and `dark` chips, and — while Plain is selected — `accent:<name>` for
+each preset, `accent-sv` and `accent-hue` for the picker, and `accent-pick` /
+`accent-reset` for the eyedropper and reset buttons. The `accent` state key
+reports the colour the window painted, so a probe can check the live preview
+without guessing at the grid. If the sheet does not paint another frame on its own, a
 harmless Tab press forces one. Prepaint boxes land in the
 state file one frame after they are measured, so a probe that opens the picker
 should poll for the key (nudging the pointer forces the repaint). `due_anchor`
@@ -244,6 +252,9 @@ library:
   headings, tag ordering by usage, the live-project folder badge, title-bar
   history, Settings visibility and count choices, and that those choices
   survive a relaunch.
+- `scripts/gui/settings-probe.sh` checks the sectioned sheet, the `⌘1`–`⌘5`
+  section shortcuts, Plain's keyboard accent presets, Cancel's undo pair, the
+  saved accent pair, relaunch persistence and Reset to ink.
 
 Both build the release binary first (`cargo build --release`) and compile the
 Swift helpers themselves.

@@ -254,15 +254,25 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Project status management (active/on hold/done/dropped)
 - [x] Import modal (JSON or TaskPaper, merge or replace)
 - [x] TaskPaper clipboard export (`⇧⌘E`)
-- [x] Settings and tag location modals. Settings includes a Sidebar group
-      that chooses which rail sections appear and which ones carry count
-      badges. The quiet default shows every section but only numbers the
-      Library (and Today, which always carries its day count), so a one-task
-      library does not look busy. The choice is library-wide and survives a
-      relaunch.
+- [x] Settings is a sectioned sheet: Appearance, Sidebar, Workflow, Nearby
+      and Trash sit in a fixed rail beside one scrolling pane, with `⌘1`–`⌘5`
+      as the keyboard route. The Sidebar section chooses which rail sections
+      appear and which ones carry count badges; the quiet default shows every
+      section but only numbers the Library (and Today, which always carries its
+      day count), so a one-task library does not look busy. The choice is
+      library-wide and survives a relaunch.
+- [x] Plain accent colours, kept to the Plain family. Nine curated preset
+      pairs carry a light and a dark tone, so one choice keeps its character
+      in both modes. A saturation/brightness square and hue strip edit the
+      appearance on screen separately, keys `1`–`9` pick a preset, and a
+      system eyedropper samples any pixel on screen (the wallpaper included).
+      Every custom tone is luminance-clamped to preserve the 4.5:1 contract
+      for accent text and primary-button labels. Cancel restores the accent
+      pair the sheet opened with; Save persists both tones in the library
+      session.
 - [x] Session persistence: view, selection, inspector, sort, grouping,
       per-view options, per-view priority filter, First Available, theme,
-      follow-system, vim mode and window size
+      Plain's accent pair, follow-system, vim mode and window size
 - [x] Eleven theme families — Plain, Paper, Mist, Catppuccin, Nord, Gruvbox,
       Dracula, Tokyo Night, Vesper, Graphite and Midnight — each with a light
       and a dark palette, chosen in Settings or with the title-bar moon/sun
@@ -270,7 +280,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       white reading surface in light mode and a near-black one in dark mode,
       and is the first-run default. Clicking a swatch or appearance chip
       previews it on the live window; Cancel or Esc puts back the theme the
-      sheet opened with, and Save keeps the new one.
+      sheet opened with, and Save keeps the new one. Plain also carries the
+      accent presets, custom picker and eyedropper; the other families keep
+      their own accent as part of their identity.
 - [x] Follow-system appearance: keep the theme family, take light/dark from
       the macOS window appearance. A manual light/dark switch turns this off so
       the chosen mode is not reverted on the next frame.
@@ -356,5 +368,4 @@ shortcut set.
 Outstanding work lives in [backlog.md](backlog.md) and the durable
 `flowlist.md` list in the project root. The short version:
 
-- Optional accent-colour variants on top of the eleven base families.
 - Additional automation coverage for mouse-only entity management flows.

@@ -13,6 +13,7 @@ mod inspector;
 mod modals;
 mod perspective;
 mod quick_capture;
+mod screen_picker;
 mod session;
 mod sidebar;
 mod text;
@@ -471,6 +472,12 @@ pub struct FlowlistApp {
     /// The theme the Settings sheet opened with. Theme and appearance clicks
     /// preview on the live window; Cancel puts this one back.
     theme_on_open: Option<Theme>,
+    /// Plain's custom accent per appearance. Other families ignore these and
+    /// keep their own accent.
+    plain_accent_light: Option<u32>,
+    plain_accent_dark: Option<u32>,
+    /// The accent pair the Settings sheet opened with, restored on Cancel.
+    accent_on_open: Option<(Option<u32>, Option<u32>)>,
     modal_focus: usize,
     modal_scroll: ScrollHandle,
     toast: Option<String>,
@@ -514,7 +521,16 @@ impl FlowlistApp {
             .filter(|id| store.db().tasks.contains_key(id))
             .collect();
         let (theme_kind, theme_appearance) = session.theme_choice();
-        let theme = Theme::new(theme_kind, theme_appearance);
+        let plain_accent_light = session.plain_accent(theme::Appearance::Light);
+        let plain_accent_dark = session.plain_accent(theme::Appearance::Dark);
+        let theme = Theme::with_accent(
+            theme_kind,
+            theme_appearance,
+            match theme_appearance {
+                theme::Appearance::Light => plain_accent_light,
+                theme::Appearance::Dark => plain_accent_dark,
+            },
+        );
         let sort = session.sort.as_deref().and_then(sort_from_slug);
         let group = session.group.as_deref().and_then(group_from_slug);
         let show_completed = session.show_completed.unwrap_or(false);
@@ -638,6 +654,9 @@ impl FlowlistApp {
             draft_task: None,
             modal: None,
             theme_on_open: None,
+            plain_accent_light,
+            plain_accent_dark,
+            accent_on_open: None,
             modal_focus: 0,
             modal_scroll: ScrollHandle::new(),
             toast,
@@ -676,6 +695,39 @@ impl FlowlistApp {
         self.save_session();
     }
 
+    /// Build the window palette from the saved family, mode and Plain accent.
+    fn build_theme(&self, kind: theme::ThemeKind, appearance: theme::Appearance) -> Theme {
+        let accent = match appearance {
+            theme::Appearance::Light => self.plain_accent_light,
+            theme::Appearance::Dark => self.plain_accent_dark,
+        };
+        Theme::with_accent(kind, appearance, accent)
+    }
+
+    /// The palette a Settings control should preview. While the sheet is open
+    /// the draft accents live on the modal, so previews and the eventual Save
+    /// always agree.
+    pub(super) fn preview_theme(
+        &self,
+        kind: theme::ThemeKind,
+        appearance: theme::Appearance,
+    ) -> Theme {
+        if let Some(modals::Modal::Settings {
+            accent_light,
+            accent_dark,
+            ..
+        }) = &self.modal
+        {
+            let accent = match appearance {
+                theme::Appearance::Light => *accent_light,
+                theme::Appearance::Dark => *accent_dark,
+            };
+            Theme::with_accent(kind, appearance, accent)
+        } else {
+            self.build_theme(kind, appearance)
+        }
+    }
+
     fn save_session(&self) {
         let session = Session {
             view: Some(self.view.key()),
@@ -683,6 +735,8 @@ impl FlowlistApp {
             inspector: Some(self.show_inspector),
             theme: Some(self.theme.kind().slug().to_string()),
             appearance: Some(self.theme.appearance().slug().to_string()),
+            plain_accent_light: self.plain_accent_light.map(theme::hex),
+            plain_accent_dark: self.plain_accent_dark.map(theme::hex),
             window: self.window_size,
             sort: self.sort.map(|sort| sort_slug(sort).to_string()),
             group: self.group.map(|group| group_slug(group).to_string()),
@@ -2802,8 +2856,10 @@ impl FlowlistApp {
         // if the sheet is cancelled.
         if matches!(modal, modals::Modal::Settings { .. }) {
             self.theme_on_open = Some(self.theme);
+            self.accent_on_open = Some((self.plain_accent_light, self.plain_accent_dark));
         } else {
             self.theme_on_open = None;
+            self.accent_on_open = None;
         }
         self.modal = Some(modal);
         self.modal_focus = 0;
@@ -2835,6 +2891,10 @@ impl FlowlistApp {
     }
 
     fn close_modal(&mut self, cx: &mut Context<Self>) {
+        if let Some((light, dark)) = self.accent_on_open.take() {
+            self.plain_accent_light = light;
+            self.plain_accent_dark = dark;
+        }
         if let Some(theme) = self.theme_on_open.take() {
             self.theme = theme;
         }
@@ -2861,6 +2921,7 @@ impl FlowlistApp {
                 self.focus = FocusArea::Content;
                 // The previewed theme is now committed; drop the undo copy.
                 self.theme_on_open = None;
+                self.accent_on_open = None;
             }
             Err(message) => {
                 self.modal = Some(modal);
@@ -3138,6 +3199,9 @@ impl FlowlistApp {
                 theme,
                 appearance,
                 sidebar,
+                accent_light,
+                accent_dark,
+                ..
             } => {
                 let review = review_days
                     .text()
@@ -3178,7 +3242,9 @@ impl FlowlistApp {
                 }
                 self.vim_mode = *vim_mode;
                 self.follow_system = *follow_system;
-                self.theme = Theme::new(*theme, *appearance);
+                self.plain_accent_light = *accent_light;
+                self.plain_accent_dark = *accent_dark;
+                self.theme = self.build_theme(*theme, *appearance);
                 self.save_session();
             }
             modals::Modal::Location { lat, lon } => {
@@ -3243,6 +3309,29 @@ impl FlowlistApp {
 
         if self.focus == FocusArea::Modal {
             if mods.platform {
+                // Settings sections are one keystroke away. The digits do not
+                // collide with the sheet's fields because a field would have
+                // to be an ⌘-chord to see them first.
+                let section = match stroke.key.as_str() {
+                    "1" => Some(modals::SettingsSection::Appearance),
+                    "2" => Some(modals::SettingsSection::Sidebar),
+                    "3" => Some(modals::SettingsSection::Workflow),
+                    "4" => Some(modals::SettingsSection::Nearby),
+                    "5" => Some(modals::SettingsSection::Trash),
+                    _ => None,
+                };
+                if let (
+                    Some(section),
+                    Some(modals::Modal::Settings {
+                        section: current, ..
+                    }),
+                ) = (section, &mut self.modal)
+                {
+                    *current = section;
+                    self.modal_focus = section.fields().first().copied().unwrap_or(0);
+                    cx.notify();
+                    return;
+                }
                 if stroke.key == "w" || stroke.key == "q" {
                     self.close_modal(cx);
                     return;
@@ -3260,15 +3349,43 @@ impl FlowlistApp {
                             *appearance = appearance.toggled();
                         }
                     }
-                    if let Some(modals::Modal::Settings {
-                        theme, appearance, ..
-                    }) = &self.modal
-                    {
+                    let preview = match &self.modal {
+                        Some(modals::Modal::Settings {
+                            theme, appearance, ..
+                        }) => Some((*theme, *appearance)),
+                        _ => None,
+                    };
+                    if let Some((kind, mode)) = preview {
                         // The shortcut previews just like the swatches do.
-                        self.theme = Theme::new(*theme, *appearance);
+                        self.theme = self.preview_theme(kind, mode);
                     }
                     cx.notify();
                     return;
+                }
+            }
+            // Plain's accent presets are one digit away while Appearance is
+            // open; no field is visible there, so the digits are free.
+            if !mods.platform
+                && !mods.alt
+                && !mods.control
+                && !mods.shift
+                && self.active_buffer_mut().is_none()
+                && matches!(
+                    self.modal,
+                    Some(modals::Modal::Settings {
+                        theme: theme::ThemeKind::Plain,
+                        section: modals::SettingsSection::Appearance,
+                        ..
+                    })
+                )
+            {
+                if let Ok(index) = stroke.key.parse::<usize>() {
+                    if let Some(preset) = theme::PLAIN_ACCENTS.get(index.wrapping_sub(1)) {
+                        let (light, dark) = (preset.light, preset.dark);
+                        self.set_plain_accents(Some(light), Some(dark), cx);
+                        cx.notify();
+                        return;
+                    }
                 }
             }
             if let Some(field) = self.view_menu {
@@ -3373,17 +3490,26 @@ impl FlowlistApp {
                         return;
                     }
                     BufferKey::Tab => {
-                        let count = self
-                            .modal
-                            .as_ref()
-                            .map(|modal| modal.field_count())
-                            .unwrap_or(0);
-                        if count > 0 {
-                            self.modal_focus = if mods.shift {
-                                (self.modal_focus + count - 1) % count
+                        // Settings only tabs through the fields in the section
+                        // on screen; the other defaults stay hidden.
+                        let indices: Vec<usize> = match &self.modal {
+                            Some(modals::Modal::Settings { section, .. }) => {
+                                section.fields().to_vec()
+                            }
+                            Some(modal) => (0..modal.field_count()).collect(),
+                            None => Vec::new(),
+                        };
+                        if !indices.is_empty() {
+                            let at = indices
+                                .iter()
+                                .position(|index| *index == self.modal_focus)
+                                .unwrap_or(0);
+                            let next = if mods.shift {
+                                (at + indices.len() - 1) % indices.len()
                             } else {
-                                (self.modal_focus + 1) % count
+                                (at + 1) % indices.len()
                             };
+                            self.modal_focus = indices[next];
                         }
                         cx.notify();
                         return;
@@ -4866,6 +4992,7 @@ impl FlowlistApp {
                 ]
             })
         };
+        let accent = theme::hsla_hex(self.theme.accent);
         let mut state = serde_json::json!({
             "view": self.view.key(),
             "modal": self.modal.as_ref().map(|modal| modal.title()),
@@ -4984,6 +5111,11 @@ impl FlowlistApp {
             ClockUnit::Minute => "minute",
         });
         state["date_picker_boxes"] = serde_json::json!(self.date_picker_boxes.borrow().clone());
+        state["accent"] = serde_json::json!(accent);
+        state["settings_section"] = serde_json::json!(match &self.modal {
+            Some(modals::Modal::Settings { section, .. }) => Some(section.slug()),
+            _ => None,
+        });
         state["theme_boxes"] = serde_json::json!(self.theme_boxes.borrow().clone());
         state["view_menu"] = serde_json::json!(self.view_menu.map(|field| field.key()));
         state["view_boxes"] = serde_json::json!(self.view_boxes.borrow().clone());
@@ -5097,7 +5229,7 @@ impl FlowlistApp {
             _ => theme::Appearance::Light,
         };
         if self.theme.appearance() != appearance {
-            self.theme = Theme::new(self.theme.kind(), appearance);
+            self.theme = self.build_theme(self.theme.kind(), appearance);
         }
     }
 

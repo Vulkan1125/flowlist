@@ -34,6 +34,7 @@ pub enum Icon {
     Help,
     Settings,
     Palette,
+    Eyedropper,
     Sun,
     Moon,
     PanelRight,
@@ -64,7 +65,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    pub const ALL: [Icon; 50] = [
+    pub const ALL: [Icon; 51] = [
         Icon::Inbox,
         Icon::Projects,
         Icon::Forecast,
@@ -88,6 +89,7 @@ impl Icon {
         Icon::Help,
         Icon::Settings,
         Icon::Palette,
+        Icon::Eyedropper,
         Icon::Sun,
         Icon::Moon,
         Icon::PanelRight,
@@ -142,6 +144,7 @@ impl Icon {
             Icon::Help => "icons/help.svg",
             Icon::Settings => "icons/settings.svg",
             Icon::Palette => "icons/palette.svg",
+            Icon::Eyedropper => "icons/eyedropper.svg",
             Icon::Sun => "icons/sun.svg",
             Icon::Moon => "icons/moon.svg",
             Icon::PanelRight => "icons/panel-right.svg",
@@ -234,6 +237,9 @@ impl Icon {
             }
             Icon::Palette => {
                 r#"<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>"#
+            }
+            Icon::Eyedropper => {
+                r#"<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/>"#
             }
             Icon::Sun => {
                 r#"<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>"#
@@ -343,7 +349,7 @@ mod tests {
 
     #[test]
     fn icon_set_is_complete_and_unique() {
-        assert_eq!(Icon::ALL.len(), 50);
+        assert_eq!(Icon::ALL.len(), 51);
         let mut paths: Vec<&str> = Icon::ALL.iter().map(|icon| icon.path()).collect();
         paths.sort_unstable();
         paths.dedup();

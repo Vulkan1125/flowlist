@@ -682,9 +682,13 @@ pub fn stored_theme(paths: &DataPaths) -> Theme {
         .ok()
         .and_then(|text| serde_json::from_str::<Session>(&text).ok());
     let (kind, appearance) = session
+        .as_ref()
         .map(|session| session.theme_choice())
         .unwrap_or((ThemeKind::Plain, Appearance::Light));
-    Theme::new(kind, appearance)
+    let accent = session
+        .as_ref()
+        .and_then(|session| session.plain_accent(appearance));
+    Theme::with_accent(kind, appearance, accent)
 }
 
 /// Bring the app forward the way a global launcher does. GPUI's
