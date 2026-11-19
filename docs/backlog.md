@@ -116,8 +116,9 @@ below; this list is the current map.
 - [x] **Inbox means unscheduled** — a root task with no project and no due or
       defer date is in the Inbox. Adding a date moves it to Today or Forecast,
       clearing the dates files it back, and the sidebar badge and `stats`
-      counter use the same rule. Quick captures no longer inherit the last
-      view's project, tag, priority or forecast date.
+      counter both treat a scheduled root as out of the Inbox. Quick captures
+      no longer inherit the last view's project, tag, priority or forecast
+      date.
 - [x] **Forecast date selection** — clicking a calendar date shows that day's
       due/deferred tasks; click again or press `\` to clear. `[`/`]` step a day,
       `{`/`}` step a month.

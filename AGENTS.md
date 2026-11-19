@@ -23,9 +23,9 @@ desktop window, a CLI and an MCP server over one shared `flowlist-core`.
   the contrast contract in `crates/flowlist/src/gui/theme.rs` green.
 - Never print the user's email address in Git output or replies.
 - Inbox means unscheduled: it holds roots with no project and no due or defer
-  date. The sidebar count, `stats` and `query::view(Inbox)` must agree, and
-  quick capture files plain text there unless the text names a project or a
-  date.
+  date. The sidebar badge and `query::view(Inbox)` share
+  `inbox_unscheduled_outline`, and quick capture files plain text there unless
+  the text names a project or a date.
 
 ## Checks
 
