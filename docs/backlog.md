@@ -179,8 +179,9 @@ below; this list is the current map.
       empty views share one illustrated halo, counts read as prose, menus and
       sheets fade in over 120 ms, theme swatches are miniature windows, and
       the status bar keeps the revision and library path in a tooltip. The
-      contrast contract in `theme.rs` is unchanged and all eleven families
-      were checked in both modes, including over a busy desktop.
+      contrast contract in `theme.rs` is unchanged: the automated palette
+      audit covers all eleven families in both modes, and the live window was
+      checked over a busy desktop.
 
 ## Landed in the current UI round
 
