@@ -279,9 +279,11 @@ impl Theme {
         let colors = match (kind, appearance) {
             (ThemeKind::Plain, Appearance::Light) => Colors {
                 bg: 0xFFFFFF,
-                // Nearly opaque chrome keeps "Plain" genuinely neutral: the
-                // desktop tint is a whisper instead of a grey wash.
-                glass: 0xFFFFFFF2,
+                // Plain runs a lighter wash than the tinted families so the
+                // desktop reads clearly through the sidebar and inspector,
+                // like Dia's vibrancy. The neutral tint keeps the glass from
+                // picking up the wallpaper's colour.
+                glass: 0xFFFFFFD1,
                 raised: 0xFFFFFFFF,
                 field: 0xF4F4F4E6,
                 hover: 0x0000000F,
@@ -294,12 +296,12 @@ impl Theme {
                 accent_soft: 0x18181824,
                 selection: 0x1818181F,
                 danger: 0xA61B1B,
-                warning: 0x7A5300,
-                success: 0x1F6B3C,
+                warning: 0x6E4A00,
+                success: 0x1B5F35,
             },
             (ThemeKind::Plain, Appearance::Dark) => Colors {
                 bg: 0x0B0B0B,
-                glass: 0x141414F2,
+                glass: 0x141414D1,
                 raised: 0x1F1F1FFF,
                 field: 0xFFFFFF14,
                 hover: 0xFFFFFF1A,

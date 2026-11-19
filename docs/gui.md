@@ -29,8 +29,9 @@ bar blends into the content so the sidebar is the visual anchor.
   inline capture bar.
 - The theme button switches light/dark (`⌘T`); `⇧⌘T` / `⌥⌘T` step through the
   eleven theme families. Plain, the first-run default, is a pure white or
-  near-black surface with neutral ink and an almost imperceptible chrome wash,
-  so it stays neutral over any wallpaper.
+  near-black surface with neutral ink. Its sidebar, inspector and header use a
+  lighter Dia-style translucent wash, so the desktop shows through without
+  tinting the glass.
 - Help (`?`) opens the keyboard and mouse card. Settings (`⌘,`) opens the
   settings sheet.
 

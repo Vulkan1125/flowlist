@@ -346,8 +346,9 @@ shortcut set.
 - [x] Visual design pass: row actions stay hidden until hover, every empty
       view shares one illustrated halo, counts read as prose (`1 task`,
       `6 tasks`), menus, the toast and sheets fade in over 120 ms, and theme
-      swatches preview each family as a miniature window. Plain keeps its
-      chrome wash nearly imperceptible so it stays neutral over any wallpaper.
+      swatches preview each family as a miniature window. Plain uses a lighter
+      Dia-style translucent wash on the sidebar, inspector and header, so the
+      desktop shows through without tinting the glass.
 
 ## Next refinements
 

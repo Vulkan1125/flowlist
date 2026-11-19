@@ -10,8 +10,10 @@
   in over 120 ms, and theme swatches preview each family as a miniature
   window. The status bar keeps the revision and library path in a tooltip.
 - A new Plain theme family adds a pure white light palette and a near-black
-  dark palette with a neutral ink accent. It is the first-run default for a
-  library with no saved theme; existing saved themes are untouched.
+  dark palette with a neutral ink accent. Its sidebar, inspector and header
+  use a lighter Dia-style translucent wash, so the desktop shows through
+  without tinting the glass. It is the first-run default for a library with no
+  saved theme; existing saved themes are untouched.
 - `⌃⌥Space` now opens a Things 3-style floating capture panel in the middle
   of the screen instead of bringing the whole window forward. The panel is a
   compact, square-cornered card that stays above normal windows when another
