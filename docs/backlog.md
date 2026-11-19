@@ -72,8 +72,10 @@ below; this list is the current map.
 - [x] **Plain theme** — a neutral white/near-black family with a monochrome
       accent, and the first-run default. Both modes meet the same contrast
       contract as the other families.
-- [ ] **Visual design pass** — hierarchy, spacing, motion, hover/focus and the
-      glass edges, verified live in every theme.
+- [x] **Visual design pass** — hierarchy, spacing, motion, hover/focus and
+      the glass edges, verified live in every theme. Hover-only row actions,
+      one illustrated empty state, prose counts, 120 ms overlay fades,
+      miniature-window theme swatches and a quieter status bar.
 
 ## Interaction polish
 
