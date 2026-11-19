@@ -91,10 +91,21 @@ impl FlowlistApp {
             .flex()
             .flex_col()
             .items_center()
-            .gap_2()
+            .gap_3()
             .p_6()
             .text_center()
-            .child(icons::icon(Icon::Info, 30.0, theme.text_faint))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(54.))
+                    .rounded_full()
+                    .bg(theme.field)
+                    .border_1()
+                    .border_color(theme.border_soft)
+                    .child(icons::icon(Icon::Info, 22.0, theme.text_faint)),
+            )
             .child(
                 div()
                     .text_color(theme.text_dim)

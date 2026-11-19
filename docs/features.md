@@ -343,12 +343,16 @@ shortcut set.
   "Rename (⌘R)" and "Delete (⌘⌫)".
 - Tooltips never cover the row they describe. Mouse-only controls also have
   keyboard routes (`r` and `⇧L` in the sidebar).
+- [x] Visual design pass: row actions stay hidden until hover, every empty
+      view shares one illustrated halo, counts read as prose (`1 task`,
+      `6 tasks`), menus, the toast and sheets fade in over 120 ms, and theme
+      swatches preview each family as a miniature window. Plain keeps its
+      chrome wash nearly imperceptible so it stays neutral over any wallpaper.
 
 ## Next refinements
 
 Outstanding work lives in [backlog.md](backlog.md) and the durable
 `flowlist.md` list in the project root. The short version:
 
-- Visual QA of the glass surfaces against busy wallpapers.
-- Optional accent-colour variants on top of the ten base families.
+- Optional accent-colour variants on top of the eleven base families.
 - Additional automation coverage for mouse-only entity management flows.

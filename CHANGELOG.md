@@ -4,6 +4,11 @@
 
 ### Interface
 
+- Visual design pass: task checkboxes stay visible on a white surface, row
+  actions wait for hover, every empty view shares one illustrated halo,
+  counts read as prose (`1 task`, `6 tasks`), menus, the toast and sheets fade
+  in over 120 ms, and theme swatches preview each family as a miniature
+  window. The status bar keeps the revision and library path in a tooltip.
 - A new Plain theme family adds a pure white light palette and a near-black
   dark palette with a neutral ink accent. It is the first-run default for a
   library with no saved theme; existing saved themes are untouched.

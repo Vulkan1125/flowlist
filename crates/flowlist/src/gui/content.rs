@@ -529,6 +529,7 @@ impl FlowlistApp {
                                     .text_xs()
                                     .text_color(theme.text)
                                     .truncate()
+                                    .text_ellipsis()
                                     .cursor_pointer()
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
@@ -934,9 +935,15 @@ impl FlowlistApp {
                     .text_xs()
                     .text_color(theme.text_faint)
                     .child(if is_archive {
-                        format!("{count} project(s)")
+                        if count == 0 {
+                            "No projects".to_string()
+                        } else {
+                            super::plural(count, "project", "projects")
+                        }
+                    } else if count == 0 {
+                        "No tasks".to_string()
                     } else {
-                        format!("{count} task(s)")
+                        super::plural(count, "task", "tasks")
                     })
                     .when(self.store.can_undo(), |this| {
                         this.child(
@@ -1164,7 +1171,7 @@ impl FlowlistApp {
         )
     }
 
-    fn render_groups(&self, groups: &[Group], cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_groups(&self, groups: &[Group], cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
         let mut list = div().flex().flex_col().w_full().py_1();
         let show_headers = groups.len() > 1
@@ -1172,25 +1179,29 @@ impl FlowlistApp {
                 self.view,
                 View::Builtin(BuiltinPerspective::Projects) | View::Folder(_) | View::Custom(_)
             );
-        if groups.is_empty() {
-            list = list.child(
-                if matches!(self.view, View::Builtin(BuiltinPerspective::Today)) {
-                    // Today should read as a clear day, not as an empty list.
-                    let detail = if self.hide_overdue {
+        // A view with a single empty group is really an empty view: give it
+        // the same illustrated empty state instead of a lonely caption.
+        let entirely_empty = groups.len() == 1 && groups[0].rows.is_empty() && !show_headers;
+        if groups.is_empty() || entirely_empty {
+            let (title, detail) = match &self.view {
+                View::Builtin(BuiltinPerspective::Today) => (
+                    "Nothing due today",
+                    if self.hide_overdue {
                         "Overdue tasks are hidden."
                     } else {
                         "A clear day. Capture something above when it comes up."
-                    };
-                    self.render_empty("Nothing due today", detail)
-                        .into_any_element()
-                } else {
-                    self.render_empty(
-                        "Nothing here",
-                        "Capture something above, or switch perspective from the sidebar.",
-                    )
-                    .into_any_element()
-                },
-            );
+                    },
+                ),
+                View::Builtin(BuiltinPerspective::Completed) => (
+                    "Nothing completed yet",
+                    "Finish a task with x and it will wait here.",
+                ),
+                _ => (
+                    "Nothing here",
+                    "Capture something above, or switch perspective from the sidebar.",
+                ),
+            };
+            return self.render_empty(title, detail).into_any_element();
         }
         for group in groups {
             let open = self.is_open(&group.key, true);
@@ -1216,7 +1227,7 @@ impl FlowlistApp {
                 }
             }
         }
-        list
+        list.into_any_element()
     }
 
     /// Record where an Archive row or its Reopen button painted, so a probe
@@ -1619,6 +1630,9 @@ impl FlowlistApp {
         let due_color = due
             .map(|stamp| due_color(stamp, &theme))
             .unwrap_or(theme.text_faint);
+        // Hover reveals the quiet row actions without leaving a ghost icon
+        // in every line of the list.
+        let row_group = format!("task-row:{id}");
         let title_color = if completed {
             theme.text_faint
         } else if availability.is_available() {
@@ -1629,6 +1643,7 @@ impl FlowlistApp {
 
         let base = div()
             .id(super::sid(format!("task:{}", id)))
+            .group(row_group.clone())
             .flex()
             .items_center()
             .gap_2()
@@ -1755,8 +1770,9 @@ impl FlowlistApp {
                     } else {
                         theme.text_faint
                     })
-                    .opacity(if flagged { 1.0 } else { 0.35 })
+                    .opacity(if flagged { 1.0 } else { 0.0 })
                     .cursor_pointer()
+                    .group_hover(row_group, |style| style.opacity(1.0))
                     .hover(|style| style.opacity(1.0))
                     .flow_tip(
                         self,

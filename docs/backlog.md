@@ -172,11 +172,13 @@ below; this list is the current map.
       OmniFocus 4.3 reference manual (`support.omnigroup.com/documentation/
       omnifocus/universal/4.3.3/en/`). Findings and adopt/later decisions are
       below.
-- [ ] **"Absolutely stunning UI design"** — a deliberate visual pass, not a
-      bug fix: hierarchy and type scale, spacing rhythm, hover and focus
-      states, empty states, motion, and the glass edges against busy
-      wallpapers. Verify every change in a live window and keep the contrast
-      contract in `theme.rs` intact.
+- [x] **"Absolutely stunning UI design"** — the deliberate visual pass:
+      checkboxes stay visible on a white surface, row actions wait for hover,
+      empty views share one illustrated halo, counts read as prose, menus and
+      sheets fade in over 120 ms, theme swatches are miniature windows, and
+      the status bar keeps the revision and library path in a tooltip. The
+      contrast contract in `theme.rs` is unchanged and all eleven families
+      were checked in both modes, including over a busy desktop.
 
 ## Landed in the current UI round
 

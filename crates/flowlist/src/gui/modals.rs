@@ -817,14 +817,10 @@ impl FlowlistApp {
             // underneath, not select a row or chip through the sheet.
             .occlude()
             .bg(rgba(0x00000055))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .max_h(px(720.))
-                    .child(card)
-                    .into_any_element(),
-            )
+            .child(super::fade_in(
+                "modal-fade",
+                div().flex().flex_col().max_h(px(720.)).child(card),
+            ))
             .into_any_element()
     }
 
@@ -2046,24 +2042,56 @@ impl FlowlistApp {
     }
 
     /// One half of a theme swatch: the selected appearance is drawn at full
-    /// strength, the other side recedes so the pair reads as one family.
+    /// strength, the other side recedes so the pair reads as one family. Each
+    /// half is a tiny window — rail, chrome and two lines — so the palette
+    /// reads as a place rather than as two rectangles.
     fn half_preview(&self, preview: Theme, active: bool) -> impl IntoElement {
         div()
             .flex()
-            .flex_col()
             .flex_1()
             .h_full()
             .min_w_0()
             .bg(preview.bg)
-            .opacity(if active { 1.0 } else { 0.42 })
-            .child(div().h(px(9.)).w_full().bg(preview.glass_fill(90.)))
+            .opacity(if active { 1.0 } else { 0.4 })
+            .child(
+                div()
+                    .w(px(10.))
+                    .h_full()
+                    .bg(preview.glass_fill(90.))
+                    .border_r_1()
+                    .border_color(preview.border_soft),
+            )
             .child(
                 div()
                     .flex()
+                    .flex_col()
                     .flex_1()
-                    .items_center()
-                    .px_1()
-                    .child(div().h(px(4.)).w(px(16.)).rounded_full().bg(preview.accent)),
+                    .min_w_0()
+                    .child(div().h(px(6.)).w_full().bg(preview.glass_fill(90.)))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .justify_center()
+                            .gap(px(3.))
+                            .px(px(4.))
+                            .child(
+                                div()
+                                    .h(px(2.5))
+                                    .w(px(20.))
+                                    .rounded_full()
+                                    .bg(preview.text.opacity(0.55)),
+                            )
+                            .child(
+                                div()
+                                    .h(px(2.5))
+                                    .w(px(13.))
+                                    .rounded_full()
+                                    .bg(preview.text_faint.opacity(0.6)),
+                            )
+                            .child(div().h(px(3.)).w(px(7.)).rounded_full().bg(preview.accent)),
+                    ),
             )
     }
 

@@ -29,7 +29,8 @@ bar blends into the content so the sidebar is the visual anchor.
   inline capture bar.
 - The theme button switches light/dark (`⌘T`); `⇧⌘T` / `⌥⌘T` step through the
   eleven theme families. Plain, the first-run default, is a pure white or
-  near-black surface with neutral ink.
+  near-black surface with neutral ink and an almost imperceptible chrome wash,
+  so it stays neutral over any wallpaper.
 - Help (`?`) opens the keyboard and mouse card. Settings (`⌘,`) opens the
   settings sheet.
 
@@ -157,6 +158,12 @@ library-wide and survives a relaunch.
 Every sidebar row has a right-click menu: Open, Rename, Delete, New child,
 project status, tag location, and Empty Trash where it applies. Hovering a row
 reveals its pencil and × without stealing width from the name at rest.
+
+Task rows follow the same rule: the flag control and hover wash appear only
+under the pointer, so an idle list is titles and metadata. Empty views share
+one illustrated halo, counts read as prose (`1 task`, `6 tasks`), and menus,
+toasts and sheets fade in over 120 ms. Settings previews each theme family as
+a miniature window.
 
 ## Projects, review and archive
 

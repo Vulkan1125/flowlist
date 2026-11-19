@@ -236,13 +236,25 @@ fn tint_toward(base: u32, other: u32, weight: f32) -> u32 {
 impl Colors {
     fn theme(self, kind: ThemeKind, appearance: Appearance) -> Theme {
         let text: Hsla = rgb(self.text).into();
+        // Plain keeps the accent wash almost imperceptible, so its chrome
+        // reads as one calm neutral surface instead of a tinted pane. The
+        // gradient still exists to satisfy the glass contract.
+        let (top_weight, bottom_weight) = if kind == ThemeKind::Plain {
+            (0.02, 0.02)
+        } else {
+            (0.06, 0.05)
+        };
+        let (glass_top, glass_bottom) = (
+            tint_toward(self.glass, self.accent, top_weight),
+            tint_toward(self.glass, self.bg, bottom_weight),
+        );
         Theme {
             kind,
             appearance,
             bg: rgb(self.bg).into(),
             glass: rgba(self.glass).into(),
-            glass_top: rgba(tint_toward(self.glass, self.accent, 0.06)).into(),
-            glass_bottom: rgba(tint_toward(self.glass, self.bg, 0.05)).into(),
+            glass_top: rgba(glass_top).into(),
+            glass_bottom: rgba(glass_bottom).into(),
             raised: rgba(self.raised).into(),
             field: rgba(self.field).into(),
             hover: rgba(self.hover).into(),
@@ -267,30 +279,32 @@ impl Theme {
         let colors = match (kind, appearance) {
             (ThemeKind::Plain, Appearance::Light) => Colors {
                 bg: 0xFFFFFF,
-                glass: 0xFFFFFFE8,
-                raised: 0xFFFFFFF7,
-                field: 0xF7F7F7D9,
-                hover: 0x0000000D,
-                border: 0xE4E4E4,
-                border_soft: 0xF0F0F0,
+                // Nearly opaque chrome keeps "Plain" genuinely neutral: the
+                // desktop tint is a whisper instead of a grey wash.
+                glass: 0xFFFFFFF2,
+                raised: 0xFFFFFFFF,
+                field: 0xF4F4F4E6,
+                hover: 0x0000000F,
+                border: 0xDCDCDC,
+                border_soft: 0xEDEDED,
                 text: 0x0A0A0A,
                 text_dim: 0x4F4F4F,
                 text_faint: 0x707070,
                 accent: 0x181818,
                 accent_soft: 0x18181824,
-                selection: 0x1818181A,
+                selection: 0x1818181F,
                 danger: 0xA61B1B,
                 warning: 0x7A5300,
                 success: 0x1F6B3C,
             },
             (ThemeKind::Plain, Appearance::Dark) => Colors {
                 bg: 0x0B0B0B,
-                glass: 0x161616E8,
-                raised: 0x1C1C1CF7,
-                field: 0xFFFFFF12,
+                glass: 0x141414F2,
+                raised: 0x1F1F1FFF,
+                field: 0xFFFFFF14,
                 hover: 0xFFFFFF1A,
-                border: 0x333333,
-                border_soft: 0x252525,
+                border: 0x3A3A3A,
+                border_soft: 0x282828,
                 text: 0xF7F7F7,
                 text_dim: 0xC2C2C2,
                 text_faint: 0x919191,

@@ -356,10 +356,24 @@ pub fn checkbox(theme: Theme, completed: bool, accent: gpui::Hsla) -> impl IntoE
         .size(px(16.))
         .rounded_full()
         .border_1()
-        .border_color(if completed { accent } else { theme.border })
-        .bg(if completed { accent } else { theme.field })
+        // The idle ring needs to be visible on a pure white reading surface,
+        // where a plain hairline disappears. Hovering pulls it to the accent.
+        .border_color(if completed {
+            accent
+        } else {
+            theme.text_faint.opacity(0.55)
+        })
+        .bg(if completed { accent } else { theme.clear })
         .text_color(if completed { theme.raised } else { accent })
         .text_xs()
+        .cursor_pointer()
+        .hover(|style| {
+            if completed {
+                style.opacity(0.9)
+            } else {
+                style.border_color(accent).bg(theme.hover)
+            }
+        })
         .when(completed, |this| {
             this.child(icons::icon(Icon::Check, 11.0, theme.bg))
         })
@@ -394,6 +408,31 @@ pub fn section_label(theme: Theme, text: impl Into<String>) -> impl IntoElement 
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(theme.text_faint)
         .child(text.into())
+}
+
+/// A quiet, borderless creation action for the foot of the sidebar. It keeps
+/// the same hit area as the labelled button while letting the rail breathe.
+pub fn ghost_button_with_icon(
+    theme: Theme,
+    icon: Icon,
+    label: impl Into<String>,
+) -> impl IntoElement {
+    let label = label.into();
+    div()
+        .h(px(26.))
+        .px_2()
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap_1p5()
+        .rounded_md()
+        .bg(theme.clear)
+        .text_color(theme.text_dim)
+        .text_xs()
+        .cursor_pointer()
+        .hover(|style| style.bg(theme.hover).text_color(theme.text))
+        .child(icons::icon(icon, 12.0, theme.text_faint))
+        .child(label)
 }
 
 pub fn button(theme: Theme, label: impl Into<String>, primary: bool) -> impl IntoElement {

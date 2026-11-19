@@ -1186,65 +1186,64 @@ impl FlowlistApp {
         }
 
         rail = rail.child(lower);
+        // Two explicit rows keep the four creation actions aligned instead
+        // of letting wrap count decide the layout at different rail widths.
+        let foot_row = |left: gpui::AnyElement, right: gpui::AnyElement| {
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .child(div().flex_1().child(left))
+                .child(div().flex_1().child(right))
+        };
         rail.child(
             div()
                 .flex()
-                .flex_wrap()
+                .flex_col()
                 .gap_1()
                 .p_2()
                 .border_t_1()
                 .border_color(theme.border_soft)
-                .child(
+                .child(foot_row(
                     div()
                         .id("new-project")
-                        .flex_1()
-                        .child(widgets::button_with_icon(
+                        .child(widgets::ghost_button_with_icon(
                             theme,
                             Icon::Plus,
                             "Project",
-                            false,
                         ))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.open_modal(super::modals::Modal::new_project(this), cx)
-                        })),
-                )
-                .child(
+                        }))
+                        .into_any_element(),
                     div()
                         .id("new-folder")
-                        .flex_1()
-                        .child(widgets::button_with_icon(
-                            theme,
-                            Icon::Plus,
-                            "Folder",
-                            false,
-                        ))
+                        .child(widgets::ghost_button_with_icon(theme, Icon::Plus, "Folder"))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.open_modal(super::modals::Modal::new_folder(this), cx)
-                        })),
-                )
-                .child(
+                        }))
+                        .into_any_element(),
+                ))
+                .child(foot_row(
                     div()
                         .id("new-tag")
-                        .flex_1()
-                        .child(widgets::button_with_icon(theme, Icon::Plus, "Tag", false))
+                        .child(widgets::ghost_button_with_icon(theme, Icon::Plus, "Tag"))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.open_modal(super::modals::Modal::new_tag(this), cx)
-                        })),
-                )
-                .child(
+                        }))
+                        .into_any_element(),
                     div()
                         .id("new-perspective")
-                        .flex_1()
-                        .child(widgets::button_with_icon(
+                        .child(widgets::ghost_button_with_icon(
                             theme,
                             Icon::Perspective,
                             "View",
-                            false,
                         ))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.open_modal(super::modals::Modal::new_perspective(this), cx)
-                        })),
-                ),
+                        }))
+                        .into_any_element(),
+                )),
         )
     }
 

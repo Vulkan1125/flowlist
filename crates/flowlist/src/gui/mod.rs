@@ -29,9 +29,10 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use chrono::{Datelike, Timelike};
 use gpui::{
-    App, Application, Bounds, ClipboardItem, Context, CursorStyle, FocusHandle, Focusable,
-    IntoElement, KeyDownEvent, Keystroke, MouseButton, Render, ScrollHandle, SharedString, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowOptions, div, point, prelude::*, px, size,
+    Animation, AnimationExt, App, Application, Bounds, ClipboardItem, Context, CursorStyle,
+    FocusHandle, Focusable, IntoElement, KeyDownEvent, Keystroke, MouseButton, Render,
+    ScrollHandle, SharedString, Window, WindowBackgroundAppearance, WindowBounds, WindowOptions,
+    div, ease_out_quint, point, prelude::*, px, size,
 };
 
 use flowlist_core::command::{
@@ -183,6 +184,30 @@ fn menu_position(
     (
         x.min((viewport.0 - width).max(0.0)).max(0.0),
         y.min((viewport.1 - height).max(0.0)).max(0.0),
+    )
+}
+
+/// `1 task` / `3 tasks`. Prose in the header and toasts reads as words
+/// rather than as a template with an optional bracket.
+fn plural(count: usize, one: &str, many: &str) -> String {
+    if count == 1 {
+        format!("1 {one}")
+    } else {
+        format!("{count} {many}")
+    }
+}
+
+/// Fade a freshly mounted overlay in. 120 ms reads as motion without making
+/// a menu feel late, and the animation is keyed by id so it runs once per
+/// open rather than on every render.
+fn fade_in<E>(id: &'static str, element: E) -> impl IntoElement
+where
+    E: IntoElement + Styled + 'static,
+{
+    element.with_animation(
+        id,
+        Animation::new(Duration::from_millis(120)).with_easing(ease_out_quint()),
+        |element, delta| element.opacity(delta),
     )
 }
 
@@ -1513,7 +1538,10 @@ impl FlowlistApp {
         } else {
             "Moved to Trash"
         };
-        self.toast = Some(format!("{verb} {count} task(s) · ⌘Z to undo"));
+        self.toast = Some(format!(
+            "{verb} {} · ⌘Z to undo",
+            plural(count, "task", "tasks")
+        ));
         self.save_session();
         cx.notify();
     }
@@ -2765,7 +2793,7 @@ impl FlowlistApp {
             return;
         }
         cx.write_to_clipboard(ClipboardItem::new_string(lines.join("\n")));
-        self.toast = Some(format!("Copied {} task(s)", lines.len()));
+        self.toast = Some(format!("Copied {}", plural(lines.len(), "task", "tasks")));
         cx.notify();
     }
 
@@ -4309,9 +4337,13 @@ impl FlowlistApp {
             }
         }
         self.toast = Some(if failed == 0 {
-            format!("Pasted {created} task(s)")
+            format!("Pasted {}", plural(created, "task", "tasks"))
         } else {
-            format!("Pasted {created} task(s), skipped {failed} line(s)")
+            format!(
+                "Pasted {}, skipped {}",
+                plural(created, "task", "tasks"),
+                plural(failed, "line", "lines")
+            )
         });
         self.save_session();
         cx.notify();
@@ -5414,12 +5446,16 @@ impl FlowlistApp {
                                 }),
                         )
                     })
-                    .child(format!("rev {revision}"))
+                    // The revision and full library path stay available on
+                    // hover instead of putting engineering detail in every
+                    // frame of the status bar.
                     .child(
                         div()
+                            .id("status-library")
                             .max_w(px(360.))
                             .overflow_hidden()
                             .whitespace_nowrap()
+                            .flow_tip(self, cx, theme, format!("{root} · revision {revision}"))
                             .child(root),
                     ),
             )
@@ -5498,7 +5534,8 @@ impl FlowlistApp {
             .w_full()
             .flex()
             .justify_center()
-            .child(
+            .child(fade_in(
+                "toast-fade",
                 div()
                     .id("toast")
                     .px_4()
@@ -5513,7 +5550,7 @@ impl FlowlistApp {
                     .cursor_pointer()
                     .child(message)
                     .on_click(clear),
-            )
+            ))
     }
 
     fn render_empty(&self, title: &str, detail: &str) -> impl IntoElement {
@@ -5526,11 +5563,25 @@ impl FlowlistApp {
             .items_center()
             .justify_center()
             .flex_1()
-            .gap_2()
+            .gap_3()
             .py_12()
-            .child(icons::icon(Icon::CircleDashed, 34.0, theme.text_faint))
+            .child(
+                // A soft halo keeps the empty state from reading as a missing
+                // image while staying quieter than a full illustration.
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(76.))
+                    .rounded_full()
+                    .bg(theme.field)
+                    .border_1()
+                    .border_color(theme.border_soft)
+                    .child(icons::icon(Icon::CircleDashed, 30.0, theme.text_faint)),
+            )
             .child(
                 div()
+                    .text_base()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .text_color(theme.text_dim)
                     .child(title.to_string()),
@@ -5682,7 +5733,8 @@ impl Render for FlowlistApp {
             && let Some(anchor) = self.sort_anchor.get()
         {
             let (x, y) = menu_position(anchor, viewport, 160.0, 250.0);
-            root = root.child(
+            root = root.child(fade_in(
+                "sort-menu-fade",
                 div()
                     .id("sort-menu-layer")
                     .absolute()
@@ -5690,13 +5742,14 @@ impl Render for FlowlistApp {
                     .left(px(x))
                     .top(px(y))
                     .child(self.render_sort_menu(cx)),
-            );
+            ));
         }
         if self.group_menu_open
             && let Some(anchor) = self.group_anchor.get()
         {
             let (x, y) = menu_position(anchor, viewport, 160.0, 250.0);
-            root = root.child(
+            root = root.child(fade_in(
+                "group-menu-fade",
                 div()
                     .id("group-menu-layer")
                     .absolute()
@@ -5704,13 +5757,14 @@ impl Render for FlowlistApp {
                     .left(px(x))
                     .top(px(y))
                     .child(self.render_group_menu(cx)),
-            );
+            ));
         }
         if self.priority_menu_open
             && let Some(anchor) = self.priority_anchor.get()
         {
             let (x, y) = menu_position(anchor, viewport, 150.0, 160.0);
-            root = root.child(
+            root = root.child(fade_in(
+                "priority-menu-fade",
                 div()
                     .id("priority-menu-layer")
                     .absolute()
@@ -5718,14 +5772,15 @@ impl Render for FlowlistApp {
                     .left(px(x))
                     .top(px(y))
                     .child(self.render_priority_menu(cx)),
-            );
+            ));
         }
         if let Some(field) = self.date_picker
             && let Some(anchor) = self.date_anchor(field).get()
         {
             let (x, y) =
                 date_picker_position(anchor, viewport, DATE_PICKER_WIDTH, DATE_PICKER_HEIGHT);
-            root = root.child(
+            root = root.child(fade_in(
+                "date-picker-fade",
                 div()
                     .id("date-picker-layer")
                     .absolute()
@@ -5733,7 +5788,7 @@ impl Render for FlowlistApp {
                     .left(px(x))
                     .top(px(y))
                     .child(self.render_date_picker(cx)),
-            );
+            ));
         }
         if self.toast.is_some() {
             root = root.child(self.render_toast(cx));
