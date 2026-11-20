@@ -227,8 +227,9 @@ below; this list is the current map.
       one row, with the subtitle on its own row so it is never squeezed. A view
       name that cannot fit beside the controls is omitted rather than clipped
       to a few letters. Search moved to the title bar as a full field at every
-      window width, centered on the content pane with a × to clear the query;
-      the title-bar theme icon was removed.
+      window width, centered on the content pane with the inspector's column
+      always reserved so the field never moves or collides with the actions,
+      and a × to clear the query; the title-bar theme icon was removed.
 - [x] Sidebar rows give their full width to the name. Rename, delete, status
       and tag location live in the right-click menu, which keeps every row
       uncluttered; long project, folder, tag, perspective and review-card names

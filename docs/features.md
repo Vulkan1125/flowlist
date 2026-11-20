@@ -125,8 +125,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Content header layout: the view title and Sort/Group/Filter chips share
       one row, while the subtitle sits on its own row. A view name that cannot
       fit beside the controls is omitted instead of clipped. Search lives in
-      the title bar at every window width, centered on the content pane, with
-      a × that clears the query. The title-bar theme (palette) icon is gone
+      the title bar at every window width, centered on the content pane with
+      the inspector's column always reserved (so it stays put when the
+      inspector toggles), and a × that clears the query. The title-bar theme (palette) icon is gone
       while its keyboard shortcuts remain.
 - [x] Sidebar rows give their full width to the name. Rename, delete, project
       status and tag location live in the right-click menu, so no pencil or ×

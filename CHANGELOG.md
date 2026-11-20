@@ -9,6 +9,9 @@
   preferences have a home instead of lengthening one nameless list. `⌘1`–`⌘5`
   jump between sections, and `⇥` only walks the fields in the section on
   screen.
+- The title-bar search keeps the inspector's column reserved when the
+  inspector is closed, so it no longer moves between inspector states or slides
+  under the **Add task** cluster.
 - The macOS close, minimise and zoom buttons now sit over the header by
   default instead of being hidden, and Settings → Appearance → Window controls
   hides them again (`W` while the section is open). The header reserves the

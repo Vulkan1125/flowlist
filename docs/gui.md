@@ -23,7 +23,9 @@ the sidebar is the visual anchor.
 - **Back / forward** sit beside the app name and walk the views the window came
   through (`⌘[` / `⌘]`). A new view drops the forward trail, deleted projects
   are skipped, and the arrows dim when there is nowhere to go.
-- **Search** is centered on the content pane at every width. The × clears it.
+- **Search** is centered on the content pane at every width, with the
+  inspector's column reserved even when the inspector is closed, so the field
+  never moves or slides under the action cluster. The × clears it.
   Search covers task titles and notes, checklist steps, projects, folders, tags
   and perspectives.
 - **Add task** focuses capture from any view, including a view that has no

@@ -5336,7 +5336,7 @@ impl FlowlistApp {
     fn render_header(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let window_width = self.window_size.map_or(1254.0, |(width, _)| width);
-        let (search_left, search_width) = search_slot(window_width, self.show_inspector);
+        let (search_left, search_width) = search_slot(window_width);
         let can_back = self.can_go_back();
         let can_forward = self.can_go_forward();
         div()
@@ -6073,39 +6073,18 @@ pub fn run(paths: DataPaths) -> Result<()> {
 }
 
 /// The title-bar search sits centered on the content pane, not on the whole
-/// window: the sidebar is 240 wide and the inspector 320. The field keeps a
-/// usable width by giving way to the title-bar action cluster at the right
-/// edge, shrinking first and, below that, shifting left just enough.
-fn search_slot(window_width: f32, show_inspector: bool) -> (f32, f32) {
-    const ACTIONS: f32 = 300.0;
+/// window: the sidebar is 240 wide and the inspector 320. The inspector's width
+/// stays reserved even when the inspector is closed, so the field keeps one
+/// place as panes open and close and never slides under the action cluster at
+/// the right edge.
+fn search_slot(window_width: f32) -> (f32, f32) {
     const FIELD_MAX: f32 = 420.0;
-    const FIELD_MIN: f32 = 120.0;
     const PANE_INSET: f32 = 16.0;
-    const ACTIONS_GAP: f32 = 8.0;
 
     let pane_left = SIDEBAR_WIDTH;
-    let pane_right = window_width - if show_inspector { INSPECTOR_WIDTH } else { 0.0 };
-    let pane_width = (pane_right - pane_left).max(0.0);
-    let pane_center = pane_left + pane_width / 2.0;
-    let mut width = FIELD_MAX.min((pane_width - 2.0 * PANE_INSET).max(0.0));
-    let mut left = pane_left + (pane_width - width) / 2.0;
-
-    if !show_inspector {
-        // With the inspector hidden the actions float over the content pane's
-        // right edge. Try to stay centered by shortening the field; if the
-        // centered field would still be cramped, sit in the free band instead.
-        let right_limit = window_width - ACTIONS - ACTIONS_GAP;
-        let centered_room = 2.0 * (right_limit - pane_center);
-        if centered_room >= FIELD_MIN {
-            width = width.min(centered_room);
-            left = pane_left + (pane_width - width) / 2.0;
-        } else {
-            let band_left = pane_left + PANE_INSET;
-            let band_width = (right_limit - band_left).max(0.0);
-            width = width.min(band_width);
-            left = (right_limit - width).max(band_left);
-        }
-    }
+    let pane_width = (window_width - INSPECTOR_WIDTH - pane_left).max(0.0);
+    let width = FIELD_MAX.min((pane_width - 2.0 * PANE_INSET).max(0.0));
+    let left = pane_left + (pane_width - width) / 2.0;
     (left, width)
 }
 
@@ -6168,27 +6147,16 @@ mod tests {
         use super::search_slot;
 
         // Inspector open at the working size: 240..934, center 587.
-        let (left, width) = search_slot(1254.0, true);
+        let (left, width) = search_slot(1254.0);
         assert_eq!(width, 420.0);
         assert!((left + width / 2.0 - 587.0).abs() < 0.01);
 
-        // Inspector hidden: the pane runs to the window edge, center 747. The
-        // field shortens a little so the action cluster keeps its gutter.
-        let (left, width) = search_slot(1254.0, false);
-        assert_eq!(width, 398.0);
-        assert!((left + width / 2.0 - 747.0).abs() < 0.01);
-
-        // At the minimum window, a centered 160px field would collide with
-        // the actions, so the field uses the free band and stays clear.
-        let (left, width) = search_slot(880.0, false);
-        assert_eq!(width, 316.0);
-        assert_eq!(left, 256.0);
-        assert!((left + width) <= 880.0 - 300.0 - 8.0 + 0.01);
-
-        // With the inspector open at the minimum size, centering still fits.
-        let (left, width) = search_slot(880.0, true);
+        // At the minimum window the pane narrows but the field still centers
+        // on it and clears the action cluster at the right edge.
+        let (left, width) = search_slot(880.0);
         assert_eq!(width, 288.0);
         assert!((left + width / 2.0 - 400.0).abs() < 0.01);
+        assert!((left + width) <= 880.0 - 300.0 - 8.0 + 0.01);
     }
 
     #[test]
