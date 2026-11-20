@@ -112,9 +112,11 @@ working domain and GUI. This page tracks what is implemented and verified.
 ## GUI
 
 - [x] Full-height glass window with a blended header, persistent sidebar
-      and optional inspector. The macOS traffic lights are hidden; the
-      header shows the app name, a search field and an **Add task** button with
-      a plus icon, which focuses capture from any view.
+      and optional inspector. The macOS traffic lights show over the header by
+      default and Settings → Appearance can hide them (`W` toggles them while
+      that section is open); the header reserves room for them when they are
+      visible. It shows the app name, a search field and an **Add task** button
+      with a plus icon, which focuses capture from any view.
 - [x] Back and forward arrows sit beside the app name in the title bar and
       walk the views the window came through (`⌘[` / `⌘]`). Going from the
       Archive to a project and pressing back returns to the Archive; a new

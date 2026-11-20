@@ -14,8 +14,9 @@ routes and tooltips see [accessibility.md](accessibility.md).
 | Content | the selected view, its Sort/Group/Filter chips, and the task rows |
 | Inspector | details for the selected task or project, toggled with `i` or `⌘I` |
 
-The window is full-height glass with the macOS traffic lights hidden. The title
-bar blends into the content so the sidebar is the visual anchor.
+The window is full-height glass; the macOS traffic lights sit over the header
+by default and Settings can hide them. The title bar blends into the content so
+the sidebar is the visual anchor.
 
 ### Title bar
 
@@ -207,16 +208,19 @@ the section on screen.
   no custom tone the row shows Plain's ink and marks Ink as selected, while the
   picker's strip parks on blue so the first drag produces a colour. Picking a
   light/dark mode while following macOS stops following, so the choice takes
-  effect.
+  effect. A Window controls row below the accent card shows or hides the macOS
+  close/minimise/zoom buttons (`W` while the section is open). The header
+  reserves room for them when they are visible and tightens up when they are
+  not.
 - **Sidebar** — which rail sections appear and which rows carry counts.
 - **Workflow** — vim mode, default review days and the completed/changed
   history windows.
 - **Nearby** — the radius for tags with a location.
 - **Trash** — how long deleted tasks stay restorable (`0` keeps them forever).
 
-Theme and accent choices preview live on the whole window. Cancel or Esc
-restores the theme, appearance and accent pair the sheet opened with; Save
-keeps them. The sidebar choice is saved with the library, so the CLI and MCP
+Theme, accent and window-button choices preview live on the whole window.
+Cancel or Esc restores the theme, appearance, accent pair and window buttons
+the sheet opened with; Save keeps them. The sidebar choice is saved with the library, so the CLI and MCP
 see the same settings document.
 
 ## Data and safety

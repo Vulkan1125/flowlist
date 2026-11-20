@@ -114,6 +114,8 @@ pub enum Modal {
         theme: ThemeKind,
         appearance: Appearance,
         sidebar: SidebarOptions,
+        /// Show the macOS close/minimise/zoom buttons over the header.
+        traffic_lights: bool,
         accent_light: Option<u32>,
         accent_dark: Option<u32>,
         /// A quiet line under the accent controls, used when the system
@@ -206,7 +208,9 @@ impl SettingsSection {
 
     pub fn description(self) -> &'static str {
         match self {
-            SettingsSection::Appearance => "Theme, accent and how light and dark are chosen.",
+            SettingsSection::Appearance => {
+                "Theme, accent, window controls and how light and dark are chosen."
+            }
             SettingsSection::Sidebar => "Which sections and counts the rail shows.",
             SettingsSection::Workflow => "Keyboard behaviour, review cadence and history windows.",
             SettingsSection::Nearby => "How distance ranks tasks with tagged locations.",
@@ -352,6 +356,7 @@ impl Modal {
             theme: app.theme.kind(),
             appearance: app.theme.appearance(),
             sidebar: settings.sidebar.clone(),
+            traffic_lights: app.traffic_lights_visible,
             accent_light: app.plain_accent_light,
             accent_dark: app.plain_accent_dark,
             accent_note: None,
@@ -620,7 +625,7 @@ impl Modal {
 impl FlowlistApp {
     pub(super) fn render_modal(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = self.theme;
@@ -841,7 +846,15 @@ impl FlowlistApp {
             }
         }
 
-        let card_max_height = if is_settings { 820.0 } else { 640.0 };
+        // The settings sheet carries the theme grid, the accent picker and the
+        // window chrome row. Size it to the window so a tall display shows
+        // everything at once while a short one falls back to scrolling.
+        let viewport_height = f32::from(window.viewport_size().height);
+        let card_max_height = if is_settings {
+            (viewport_height - 140.0).clamp(320.0, 940.0)
+        } else {
+            640.0
+        };
         let mut card = div()
             .flex()
             .flex_col()
@@ -914,7 +927,11 @@ impl FlowlistApp {
                 div()
                     .flex()
                     .flex_col()
-                    .max_h(px(if is_settings { 880.0 } else { 720.0 }))
+                    .max_h(px(if is_settings {
+                        card_max_height + 60.0
+                    } else {
+                        720.0
+                    }))
                     .child(card),
             ))
             .into_any_element()
@@ -1894,6 +1911,13 @@ impl FlowlistApp {
                 ..
             })
         );
+        let traffic_lights = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                traffic_lights: true,
+                ..
+            })
+        );
 
         let mut modes = div()
             .flex()
@@ -2040,12 +2064,78 @@ impl FlowlistApp {
             )
         };
 
+        let boxes = self.settings_toggle_boxes.clone();
+        // One slim row rather than a full card: the toggle belongs with the
+        // window's appearance, but it does not need its own heading.
+        let window_card = div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .p_2()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border_soft)
+            .bg(theme.field)
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_0p5()
+                    .child(div().text_sm().child("Window controls"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child("Close, minimise and zoom in the header. W toggles them."),
+                    ),
+            )
+            .child(
+                div()
+                    .id("settings-window-controls")
+                    .child(
+                        div()
+                            .on_children_prepainted(move |bounds, _, _| {
+                                if let Some(bounds) = bounds.first() {
+                                    boxes.borrow_mut().insert(
+                                        "settings-window-controls".to_string(),
+                                        [
+                                            f32::from(bounds.origin.x),
+                                            f32::from(bounds.origin.y),
+                                            f32::from(bounds.size.width),
+                                            f32::from(bounds.size.height),
+                                        ],
+                                    );
+                                }
+                            })
+                            .child(widgets::button(
+                                theme,
+                                if traffic_lights {
+                                    "Visible ✓"
+                                } else {
+                                    "Hidden"
+                                },
+                                traffic_lights,
+                            )),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Settings { traffic_lights, .. }) = &mut this.modal {
+                            *traffic_lights = !*traffic_lights;
+                            // Preview the choice on the window; Cancel
+                            // restores the value the sheet opened with.
+                            this.traffic_lights_visible = *traffic_lights;
+                        }
+                        cx.notify();
+                    })),
+            );
+
         div()
             .flex()
             .flex_col()
             .gap_3()
             .child(theme_card)
             .child(accent)
+            .child(window_card)
             .into_any_element()
     }
 

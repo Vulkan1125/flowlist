@@ -187,7 +187,8 @@ below; this list is the current map.
 
 ## Landed in the current UI round
 
-- [x] macOS traffic lights removed from the app window.
+- [x] macOS traffic lights kept in the header by default, with a Settings →
+      Appearance toggle to hide them (`W` while the section is open).
 - [x] Title bar reduced to the app name only — no app badge, no
       `Flowlist / view`.
 - [x] Inspector toggle uses an info (`i`) icon instead of the sidebar icon.

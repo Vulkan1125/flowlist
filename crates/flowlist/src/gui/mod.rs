@@ -504,8 +504,14 @@ pub struct FlowlistApp {
     /// The appearance the window glass was last pinned to, if the platform had
     /// a blur view to tune.
     blur_mode: Option<theme::Appearance>,
-    /// Set once AppKit has hidden the close/miniaturize/zoom buttons.
-    traffic_lights_hidden: bool,
+    /// Show the macOS close/miniaturize/zoom buttons over the header.
+    traffic_lights_visible: bool,
+    /// What was last pushed to AppKit. `None` retries each frame until the
+    /// window has a titlebar to move.
+    traffic_lights_applied: Option<bool>,
+    /// The window-buttons choice the Settings sheet opened with, restored on
+    /// Cancel like the theme preview.
+    traffic_lights_on_open: Option<bool>,
 }
 
 impl FlowlistApp {
@@ -539,6 +545,7 @@ impl FlowlistApp {
         let priority_filter = session.priority_filter();
         let only_available = session.only_available.unwrap_or(false);
         let follow_system = session.follow_system.unwrap_or(false);
+        let traffic_lights_visible = session.traffic_lights.unwrap_or(true);
         let view_options = session.view_options.clone();
         let window_size = session.window;
         let focus_handle = cx.focus_handle();
@@ -673,7 +680,9 @@ impl FlowlistApp {
             test_state_path: std::env::var_os("FLOWLIST_TEST_STATE").map(PathBuf::from),
             test_state_last: None,
             blur_mode: None,
-            traffic_lights_hidden: false,
+            traffic_lights_visible,
+            traffic_lights_applied: None,
+            traffic_lights_on_open: None,
         };
         app.restore_view_options();
         app
@@ -745,6 +754,7 @@ impl FlowlistApp {
             priority_filter: self.priority_filter.map(|p| p.slug().to_string()),
             only_available: Some(self.only_available),
             follow_system: Some(self.follow_system),
+            traffic_lights: Some(self.traffic_lights_visible),
             forecast_calendar_open: Some(self.forecast_calendar_open),
             forecast_calendar_height: self.forecast_calendar_height,
             view_options: {
@@ -2857,9 +2867,11 @@ impl FlowlistApp {
         if matches!(modal, modals::Modal::Settings { .. }) {
             self.theme_on_open = Some(self.theme);
             self.accent_on_open = Some((self.plain_accent_light, self.plain_accent_dark));
+            self.traffic_lights_on_open = Some(self.traffic_lights_visible);
         } else {
             self.theme_on_open = None;
             self.accent_on_open = None;
+            self.traffic_lights_on_open = None;
         }
         self.modal = Some(modal);
         self.modal_focus = 0;
@@ -2898,6 +2910,9 @@ impl FlowlistApp {
         if let Some(theme) = self.theme_on_open.take() {
             self.theme = theme;
         }
+        if let Some(visible) = self.traffic_lights_on_open.take() {
+            self.traffic_lights_visible = visible;
+        }
         self.modal = None;
         self.modal_focus = 0;
         self.view_menu = None;
@@ -2922,6 +2937,7 @@ impl FlowlistApp {
                 // The previewed theme is now committed; drop the undo copy.
                 self.theme_on_open = None;
                 self.accent_on_open = None;
+                self.traffic_lights_on_open = None;
             }
             Err(message) => {
                 self.modal = Some(modal);
@@ -3201,6 +3217,7 @@ impl FlowlistApp {
                 sidebar,
                 accent_light,
                 accent_dark,
+                traffic_lights,
                 ..
             } => {
                 let review = review_days
@@ -3242,6 +3259,7 @@ impl FlowlistApp {
                 }
                 self.vim_mode = *vim_mode;
                 self.follow_system = *follow_system;
+                self.traffic_lights_visible = *traffic_lights;
                 self.plain_accent_light = *accent_light;
                 self.plain_accent_dark = *accent_dark;
                 self.theme = self.build_theme(*theme, *appearance);
@@ -3387,6 +3405,30 @@ impl FlowlistApp {
                         return;
                     }
                 }
+            }
+            // `w` flips the window buttons while Appearance is open. No field
+            // is visible in that section, so the letter cannot collide with
+            // typing; it mirrors the digits that pick accent presets.
+            if !mods.platform
+                && !mods.alt
+                && !mods.control
+                && !mods.shift
+                && stroke.key == "w"
+                && self.active_buffer_mut().is_none()
+                && matches!(
+                    self.modal,
+                    Some(modals::Modal::Settings {
+                        section: modals::SettingsSection::Appearance,
+                        ..
+                    })
+                )
+            {
+                if let Some(modals::Modal::Settings { traffic_lights, .. }) = &mut self.modal {
+                    *traffic_lights = !*traffic_lights;
+                    self.traffic_lights_visible = *traffic_lights;
+                }
+                cx.notify();
+                return;
             }
             if let Some(field) = self.view_menu {
                 let choices = self.view_choices(field);
@@ -5048,7 +5090,11 @@ impl FlowlistApp {
             "sidebar_menu": self.sidebar_menu.as_ref().map(|menu| menu.key()),
             "forecast_date": self.forecast_date.map(|date| date.to_string()),
             "trashed": self.store.db().trash_count(),
-            "traffic_lights": if self.traffic_lights_hidden { "hidden" } else { "visible" },
+            "traffic_lights": match self.traffic_lights_applied {
+                Some(true) => "visible",
+                Some(false) => "hidden",
+                None => "unknown",
+            },
             "modal_theme": match &self.modal {
                 Some(modals::Modal::Settings { theme, appearance, .. }) => {
                     Some(format!("{}/{}", theme.slug(), appearance.slug()))
@@ -5308,7 +5354,14 @@ impl FlowlistApp {
                     .flex_shrink_0()
                     .items_center()
                     .gap_1()
-                    .pl_4()
+                    // The native window buttons sit at x = 18..72 when they
+                    // are shown, so the name and history have to start after
+                    // them rather than underneath.
+                    .pl(px(if self.traffic_lights_visible {
+                        88.
+                    } else {
+                        16.
+                    }))
                     .child(
                         div()
                             .cursor(CursorStyle::OpenHand)
@@ -5762,11 +5815,13 @@ impl Render for FlowlistApp {
             window.focus(&self.focus_handle);
         }
         window.set_window_title("Flowlist");
-        // The custom glass header replaces the system titlebar, so the
-        // standard close/miniaturize/zoom controls are hidden rather than
-        // floating over the app name.
-        if !self.traffic_lights_hidden && blur::hide_traffic_lights(window) {
-            self.traffic_lights_hidden = true;
+        // The native buttons sit over the custom header by default. Retry
+        // until AppKit has built the titlebar, then only touch them again when
+        // Settings changes the preference.
+        if self.traffic_lights_applied != Some(self.traffic_lights_visible)
+            && blur::set_traffic_lights(window, self.traffic_lights_visible)
+        {
+            self.traffic_lights_applied = Some(self.traffic_lights_visible);
         }
         // Keep the window's vibrancy in step with the palette: light glass for
         // a light theme, dark for a dark one, whatever macOS itself is set to.
@@ -5957,7 +6012,7 @@ pub fn run(paths: DataPaths) -> Result<()> {
                     titlebar: Some(gpui::TitlebarOptions {
                         title: Some("Flowlist".into()),
                         appears_transparent: true,
-                        traffic_light_position: Some(point(px(18.), px(-2.))),
+                        traffic_light_position: Some(point(px(18.), px(17.))),
                     }),
                     window_background: WindowBackgroundAppearance::Blurred,
                     window_bounds: Some(WindowBounds::Windowed(bounds)),

@@ -31,3 +31,6 @@ strip = "symbols"
 
 [profile.dev.package."*"]
 opt-level = 1
+
+[patch.crates-io]
+gpui = { path = "vendor/gpui" }

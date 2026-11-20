@@ -1,7 +1,8 @@
 #!/bin/sh
-# Settings probe: the sectioned sheet, Plain's accent presets, Cancel's undo
-# pair and the saved session. The system eyedropper is a pointer-driven macOS
-# panel, so this probe only checks that its control paints.
+# Settings probe: the sectioned sheet, Plain's accent presets, the window
+# controls toggle, Cancel's undo pair and the saved session. The system
+# eyedropper is a pointer-driven macOS panel, so this probe only checks that
+# its control paints.
 set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 bin=${BIN:-$root/target/release/flowlist}
@@ -190,5 +191,35 @@ if [ -n "$reset" ]; then
   exit 1
 fi
 echo "  reset clears both tones"
+
+echo "7. Window controls hide the buttons; Escape restores, Save persists"
+open_settings
+wait_map settings_toggle_rows "settings-window-controls"
+wait_value traffic_lights "visible"
+click_map settings_toggle_rows "settings-window-controls"
+wait_value traffic_lights "hidden"
+"$helpers/flowctl" key 53
+wait_value modal ""
+wait_value traffic_lights "visible"
+open_settings
+click_map settings_toggle_rows "settings-window-controls"
+wait_value traffic_lights "hidden"
+"$helpers/flowctl" key 36
+wait_value modal ""
+python3 - "$lib/session.json" <<'PY'
+import json, sys
+try:
+    session = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    session = {}
+if session.get("traffic_lights") is not False:
+    print("FAIL: traffic_lights saved as", session.get("traffic_lights"), file=sys.stderr)
+    sys.exit(1)
+PY
+echo "  saved traffic_lights=false"
+kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
+launch
+wait_value traffic_lights "hidden"
+echo "  hidden buttons survive a relaunch"
 
 echo "ALL SETTINGS CHECKS PASSED"

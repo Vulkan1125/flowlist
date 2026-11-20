@@ -9,6 +9,17 @@
   preferences have a home instead of lengthening one nameless list. `⌘1`–`⌘5`
   jump between sections, and `⇥` only walks the fields in the section on
   screen.
+- The macOS close, minimise and zoom buttons now sit over the header by
+  default instead of being hidden, and Settings → Appearance → Window controls
+  hides them again (`W` while the section is open). The header reserves the
+  buttons' space while they show, the choice previews live, Cancel restores the
+  state the sheet opened with, and the choice is saved with the session.
+- The Settings sheet sizes itself to the window instead of a fixed height, so
+  the theme grid, accent picker and window controls fit at once on a tall
+  display and the pane scrolls on a short one.
+- Rounded and bordered quads now snap to the device pixel grid when painted,
+  so borders that used to land on half pixels render as solid one-pixel lines
+  instead of two washed-out rows.
 - Plain gains accent colours. Nine curated pairs each carry a light and a dark
   tone (Ink, Blue, Teal, Green, Amber, Orange, Rose, Pink, Violet), and a
   saturation/brightness square plus hue strip tune a separate custom accent

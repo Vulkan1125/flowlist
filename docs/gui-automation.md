@@ -66,7 +66,7 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "theme": "catppuccin",
   "appearance": "light",
   "blur": "light",
-  "traffic_lights": "hidden",
+  "traffic_lights": "visible",
   "modal_theme": null,
   "modal_close": true,
   "sort_menu": false,
@@ -111,6 +111,7 @@ to a box: `settings-section-<slug>` for the rail (`appearance`, `sidebar`,
 click the section first; the toggles do not paint in another section.
 `settings_section` names the section on screen, and `modal_sidebar` reports the
 sheet's unsaved copy, so a probe can click a toggle and check it before Save.
+`settings-window-controls` is the Appearance section's window-buttons toggle.
 `sidebar_counts` maps each count badge actually painted (`builtin:<slug>`,
 `priority:<slug>`, `folder:<id>`, `tag:<id>`) to its box, and
 `sidebar_count_values` reports the number inside each badge. Today's badge is
@@ -176,8 +177,9 @@ project`, `Perspective`, `Settings`, …). `focus` names the active pane or fiel
 inspector field being edited (`Title`, `Notes`, `Project`, …) and is null
 otherwise. `draft` is true while a
 task created with `o`/`O` is still being titled, and `suggestions` counts the
-rows in the open project picker. `traffic_lights` reports
-whether the AppKit window buttons were hidden. `sort_menu`, `group_menu` and
+rows in the open project picker. `traffic_lights` reports what was last pushed to AppKit for the macOS window
+buttons — `visible`, `hidden`, or `unknown` before the titlebar exists — so a
+probe can assert the Settings toggle took effect. `sort_menu`, `group_menu` and
 `priority_menu` say whether the header menus are open; `sidebar_menu` names the
 row a right-click menu belongs to (`builtin:inbox`, `project:<id>`, `tag:<id>`,
 …) or is null. `sort_anchor`, `group_anchor` and `priority_anchor` confirm the

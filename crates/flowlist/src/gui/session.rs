@@ -167,6 +167,11 @@ pub struct Session {
     /// Keep the theme family but take light/dark from the OS.
     #[serde(default)]
     pub follow_system: Option<bool>,
+    /// Show the macOS close, minimise and zoom buttons over the header.
+    /// Absent means visible, including for sessions written before the
+    /// setting existed.
+    #[serde(default)]
+    pub traffic_lights: Option<bool>,
     /// Whether the Forecast month grid is expanded.
     #[serde(default)]
     pub forecast_calendar_open: Option<bool>,
