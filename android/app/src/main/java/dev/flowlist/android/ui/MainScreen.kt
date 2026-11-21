@@ -78,6 +78,7 @@ import dev.flowlist.android.data.isActive
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.label
 import dev.flowlist.android.data.today
+import dev.flowlist.android.data.taskViews
 import dev.flowlist.android.data.isToday
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -131,6 +132,12 @@ fun MainScreen(
         if (initialTab != null) onTabConsumed()
     }
     val snapshot = state.snapshot
+    val children = remember(snapshot?.revision) {
+        snapshot?.db?.taskViews()
+            ?.filter { it.parent != null }
+            ?.groupBy { it.parent!! }
+            .orEmpty()
+    }
     val snackbarHost = remember { SnackbarHostState() }
 
     val complete: (TaskView, Boolean) -> Unit = { task, done ->
@@ -239,6 +246,7 @@ fun MainScreen(
             when (tab) {
                 Tab.Inbox -> InboxList(
                     swipeActions = preferences.swipeActions,
+                    children = children,
                     tasks = snapshot?.db?.inbox().orEmpty(),
                     pending = state.pending,
                     onToggle = { task -> complete(task, true) },
@@ -247,6 +255,7 @@ fun MainScreen(
                 )
                 Tab.Today -> TodayList(
                     swipeActions = preferences.swipeActions,
+                    children = children,
                     tasks = snapshot?.db?.today().orEmpty(),
                     pending = state.pending,
                     onToggle = { task -> complete(task, true) },
@@ -255,6 +264,7 @@ fun MainScreen(
                 )
                 Tab.Forecast -> ForecastList(
                     swipeActions = preferences.swipeActions,
+                    children = children,
                     groups = snapshot?.db?.forecast().orEmpty(),
                     pending = state.pending,
                     onToggle = { task -> complete(task, true) },
@@ -289,6 +299,9 @@ fun MainScreen(
                 task = dto,
                 projects = db.projects.values.toList(),
                 tags = db.tags.values.toList(),
+                subtasks = db.tasks.values
+                    .filter { it.parent == taskView.id && it.isActive }
+                    .sortedBy { it.title.lowercase() },
                 pending = taskView.id in state.pending,
                 weekStartsMonday = preferences.weekStartsMonday,
                 defaultTimeMinutes = preferences.defaultTimeMinutes,
@@ -305,6 +318,12 @@ fun MainScreen(
                 },
                 onChecklist = { item, completed ->
                     scope.launch { repository.toggleChecklist(dto, item.id, completed) }
+                },
+                onAddSubtask = { title ->
+                    scope.launch { repository.addSubtask(dto, title) }
+                },
+                onToggleSubtask = { child, completed ->
+                    scope.launch { repository.complete(child.id, completed) }
                 },
                 onComplete = {
                     complete(taskView, !taskView.completed)
@@ -470,6 +489,7 @@ private fun OfflineNotice(onRetry: () -> Unit) {
 @Composable
 private fun InboxList(
     swipeActions: Boolean,
+    children: Map<String, List<TaskView>>,
     tasks: List<TaskView>,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
@@ -488,22 +508,16 @@ private fun InboxList(
         }
         items(tasks, key = { it.id }) { task ->
             if (swipeActions) {
-                if (swipeActions) {
-                    SwipeTaskRow(
-                        task = task,
-                        pending = task.id in pending,
-                        onToggle = { onToggle(task) },
-                        onTrash = { onTrash(task) },
-                        onClick = { onClick(task) },
-                    )
-                } else {
-                    TaskRow(
-                        task = task.copy(pending = task.id in pending),
-                        onToggle = { onToggle(task) },
-                        onClick = { onClick(task) },
-                    )
-                    Hairline(Modifier.padding(start = 58.dp))
-                }
+                TaskTreeItem(
+                    task = task,
+                    children = children,
+                    pending = task.id in pending,
+                    swipeActions = swipeActions,
+                    depth = 0,
+                    onToggle = onToggle,
+                    onTrash = onTrash,
+                    onClick = onClick,
+                )
             } else {
                 TaskRow(
                     task = task.copy(pending = task.id in pending),
@@ -519,6 +533,7 @@ private fun InboxList(
 @Composable
 private fun TodayList(
     swipeActions: Boolean,
+    children: Map<String, List<TaskView>>,
     tasks: List<TaskView>,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
@@ -540,43 +555,31 @@ private fun TodayList(
         if (overdue.isNotEmpty()) {
             item { SectionLabel("Overdue") }
             items(overdue, key = { it.id }) { task ->
-                if (swipeActions) {
-                    SwipeTaskRow(
-                        task = task,
-                        pending = task.id in pending,
-                        onToggle = { onToggle(task) },
-                        onTrash = { onTrash(task) },
-                        onClick = { onClick(task) },
-                    )
-                } else {
-                    TaskRow(
-                        task = task.copy(pending = task.id in pending),
-                        onToggle = { onToggle(task) },
-                        onClick = { onClick(task) },
-                    )
-                    Hairline(Modifier.padding(start = 58.dp))
-                }
+                TaskTreeItem(
+                    task = task,
+                    children = children,
+                    pending = task.id in pending,
+                    swipeActions = swipeActions,
+                    depth = 0,
+                    onToggle = onToggle,
+                    onTrash = onTrash,
+                    onClick = onClick,
+                )
             }
         }
         if (today.isNotEmpty()) {
             item { SectionLabel(if (overdue.isEmpty()) "Due today" else "Today") }
             items(today, key = { it.id }) { task ->
-                if (swipeActions) {
-                    SwipeTaskRow(
-                        task = task,
-                        pending = task.id in pending,
-                        onToggle = { onToggle(task) },
-                        onTrash = { onTrash(task) },
-                        onClick = { onClick(task) },
-                    )
-                } else {
-                    TaskRow(
-                        task = task.copy(pending = task.id in pending),
-                        onToggle = { onToggle(task) },
-                        onClick = { onClick(task) },
-                    )
-                    Hairline(Modifier.padding(start = 58.dp))
-                }
+                TaskTreeItem(
+                    task = task,
+                    children = children,
+                    pending = task.id in pending,
+                    swipeActions = swipeActions,
+                    depth = 0,
+                    onToggle = onToggle,
+                    onTrash = onTrash,
+                    onClick = onClick,
+                )
             }
         }
     }
@@ -585,6 +588,7 @@ private fun TodayList(
 @Composable
 private fun ForecastList(
     swipeActions: Boolean,
+    children: Map<String, List<TaskView>>,
     groups: Map<LocalDate, List<TaskView>>,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
@@ -604,22 +608,16 @@ private fun ForecastList(
         groups.forEach { (date, tasks) ->
             item(key = "day-$date") { ForecastHeader(date, tasks.size) }
             items(tasks, key = { it.id }) { task ->
-                if (swipeActions) {
-                    SwipeTaskRow(
-                        task = task,
-                        pending = task.id in pending,
-                        onToggle = { onToggle(task) },
-                        onTrash = { onTrash(task) },
-                        onClick = { onClick(task) },
-                    )
-                } else {
-                    TaskRow(
-                        task = task.copy(pending = task.id in pending),
-                        onToggle = { onToggle(task) },
-                        onClick = { onClick(task) },
-                    )
-                    Hairline(Modifier.padding(start = 58.dp))
-                }
+                TaskTreeItem(
+                    task = task,
+                    children = children,
+                    pending = task.id in pending,
+                    swipeActions = swipeActions,
+                    depth = 0,
+                    onToggle = onToggle,
+                    onTrash = onTrash,
+                    onClick = onClick,
+                )
             }
         }
     }

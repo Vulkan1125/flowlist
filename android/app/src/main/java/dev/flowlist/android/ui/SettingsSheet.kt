@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,11 +58,14 @@ import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.AppState
 import dev.flowlist.android.icon.AppIcon
 import dev.flowlist.android.icon.AppIcons
+import dev.flowlist.android.data.UpdateChecker
+import dev.flowlist.android.data.UpdateInfo
 import dev.flowlist.android.notify.DueNotifications
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +86,10 @@ fun SettingsSheet(
     var reminders by remember { mutableStateOf(DueNotifications.enabled(context)) }
     var reminderDenied by remember { mutableStateOf(false) }
     var appIcon by remember { mutableStateOf(AppIcons.current(context)) }
+    var checkingUpdate by remember { mutableStateOf(false) }
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var updateMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     val permission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -404,6 +412,49 @@ fun SettingsSheet(
                     lineHeight = 18.sp,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = updateMessage ?: "Check for a newer APK",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (updateInfo != null) colors.success else colors.faint,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        onClick = {
+                            if (updateInfo != null) {
+                                val target = updateInfo!!.downloadUrl
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+                            } else {
+                                checkingUpdate = true
+                                updateMessage = "Checking…"
+                                scope.launch {
+                                    UpdateChecker.check().fold(
+                                        onSuccess = { found ->
+                                            checkingUpdate = false
+                                            updateInfo = found
+                                            updateMessage = if (found == null) {
+                                                "Up to date"
+                                            } else {
+                                                "v${found.latest} is available"
+                                            }
+                                        },
+                                        onFailure = {
+                                            checkingUpdate = false
+                                            updateMessage = "Could not check · tap to retry"
+                                        },
+                                    )
+                                }
+                            }
+                        },
+                        enabled = !checkingUpdate,
+                    ) {
+                        Text(
+                            if (updateInfo != null) "Download" else "Check for updates",
+                            color = colors.accent,
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(
                         onClick = {

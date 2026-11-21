@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — 2026-11-21
+
+- **Subtasks on the phone.** Child tasks sit indented under their parent in
+  every list, and the task editor shows them with completion circles plus an
+  **Add subtask** field. New subtasks go through `create_task` with a parent and
+  queue offline like everything else.
+- **Check for updates.** Settings → About asks GitHub for the latest release,
+  compares versions and offers a **Download** button for the APK. The current
+  version is shown beside it.
+- The phone search and checklist steps from 0.5.0 remain.
+
 ## 0.5.0 — 2026-11-21
 
 - **Mac empty states stay focused.** Today keeps its sun and cloud doodle and

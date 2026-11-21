@@ -4,7 +4,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -163,6 +165,36 @@ fun deleteCommand(ids: List<String>): JsonObject = buildJsonObject {
 
 fun updateCommand(id: String, patch: JsonObject): JsonObject = buildJsonObject {
     put("update_task", buildJsonObject { put("id", id); put("patch", patch) })
+}
+
+fun createSubtaskCommand(
+    id: String,
+    title: String,
+    parentId: String,
+    projectId: String?,
+): JsonObject = buildJsonObject {
+    put(
+        "create_task",
+        buildJsonObject {
+            put("id", id)
+            put("title", title)
+            put("notes", "")
+            put("project", projectId?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("project_path", JsonNull)
+            put("parent", parentId)
+            put("tags", buildJsonArray {})
+            put("tag_paths", buildJsonArray {})
+            put("due", JsonNull)
+            put("defer", JsonNull)
+            put("estimate_min", JsonNull)
+            put("flagged", false)
+            put("priority", JsonNull)
+            put("attachments", buildJsonArray {})
+            put("repeat", JsonNull)
+            put("sequential", false)
+            put("position", "end")
+        },
+    )
 }
 
 fun checklistCommand(

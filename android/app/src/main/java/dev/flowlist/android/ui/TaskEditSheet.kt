@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -69,12 +70,15 @@ fun TaskEditSheet(
     task: TaskDto,
     projects: List<ProjectDto>,
     tags: List<TagDto>,
+    subtasks: List<TaskDto>,
     pending: Boolean,
     weekStartsMonday: Boolean = true,
     defaultTimeMinutes: Int = 9 * 60,
     onDismiss: () -> Unit,
     onSave: (TaskEdit) -> Unit,
     onChecklist: (ChecklistDto, Boolean) -> Unit,
+    onAddSubtask: (String) -> Unit,
+    onToggleSubtask: (TaskDto, Boolean) -> Unit,
     onComplete: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -92,6 +96,8 @@ fun TaskEditSheet(
     }
     var selectedTags by remember(task.id) { mutableStateOf(task.tags.toSet()) }
     var checklist by remember(task.id) { mutableStateOf(task.checklist) }
+    var addingSubtask by remember { mutableStateOf(false) }
+    var subtaskTitle by remember { mutableStateOf("") }
     var projectMenu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var datePickerForDue by remember { mutableStateOf(true) }
@@ -215,6 +221,89 @@ fun TaskEditSheet(
                             },
                         )
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Label("Subtasks")
+            subtasks.forEach { child ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CheckCircle(
+                        checked = child.completed,
+                        onClick = { onToggleSubtask(child, !child.completed) },
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = child.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (child.completed) colors.faint else colors.ink,
+                        textDecoration = if (child.completed) {
+                            androidx.compose.ui.text.style.TextDecoration.LineThrough
+                        } else {
+                            null
+                        },
+                    )
+                }
+            }
+            if (addingSubtask) {
+                OutlinedTextField(
+                    value = subtaskTitle,
+                    onValueChange = { subtaskTitle = it },
+                    placeholder = { Text("Subtask name", color = colors.faint) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = colors.accent,
+                        unfocusedBorderColor = colors.hairline,
+                        focusedContainerColor = colors.background,
+                        unfocusedContainerColor = colors.background,
+                        focusedTextColor = colors.ink,
+                        unfocusedTextColor = colors.ink,
+                        cursorColor = colors.accent,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { addingSubtask = false; subtaskTitle = "" }) {
+                        Text("Cancel", color = colors.faint)
+                    }
+                    TextButton(
+                        onClick = {
+                            if (subtaskTitle.isNotBlank()) {
+                                onAddSubtask(subtaskTitle)
+                                subtaskTitle = ""
+                                addingSubtask = false
+                            }
+                        },
+                    ) {
+                        Text("Add", color = colors.accent)
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { addingSubtask = true }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Rounded.Add,
+                        contentDescription = null,
+                        tint = colors.accent,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Add subtask",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.faint,
+                    )
                 }
             }
 

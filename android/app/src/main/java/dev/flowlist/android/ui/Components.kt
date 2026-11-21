@@ -99,13 +99,14 @@ fun TaskRow(
     onToggle: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    depth: Int = 0,
 ) {
     val colors = flow
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 54.dp)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(start = (20 + depth * 18).dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Spacer(modifier = Modifier.height(1.dp))
@@ -189,6 +190,7 @@ fun SwipeTaskRow(
     onToggle: () -> Unit,
     onTrash: () -> Unit,
     onClick: () -> Unit,
+    depth: Int = 0,
 ) {
     val colors = flow
     val state = rememberSwipeToDismissBoxState(
@@ -234,9 +236,53 @@ fun SwipeTaskRow(
                 onToggle = onToggle,
                 onClick = onClick,
                 modifier = Modifier.background(colors.background),
+                depth = depth,
             )
         }
         Hairline(Modifier.padding(start = 58.dp))
+    }
+}
+
+@Composable
+fun TaskTreeItem(
+    task: TaskView,
+    children: Map<String, List<TaskView>>,
+    pending: Boolean,
+    swipeActions: Boolean,
+    depth: Int,
+    onToggle: (TaskView) -> Unit,
+    onTrash: (TaskView) -> Unit,
+    onClick: (TaskView) -> Unit,
+) {
+    val kids = children[task.id].orEmpty()
+    if (swipeActions && depth == 0) {
+        SwipeTaskRow(
+            task = task,
+            pending = pending,
+            onToggle = { onToggle(task) },
+            onTrash = { onTrash(task) },
+            onClick = { onClick(task) },
+        )
+    } else {
+        TaskRow(
+            task = task.copy(pending = pending),
+            onToggle = { onToggle(task) },
+            onClick = { onClick(task) },
+            depth = depth,
+        )
+        Hairline(Modifier.padding(start = (58 + depth * 18).dp))
+    }
+    kids.forEach { child ->
+        TaskTreeItem(
+            task = child,
+            children = children,
+            pending = pending,
+            swipeActions = swipeActions,
+            depth = depth + 1,
+            onToggle = onToggle,
+            onTrash = onTrash,
+            onClick = onClick,
+        )
     }
 }
 

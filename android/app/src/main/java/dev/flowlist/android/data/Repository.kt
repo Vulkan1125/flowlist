@@ -219,6 +219,33 @@ class Repository(context: Context) {
         sync()
     }
 
+    suspend fun addSubtask(parent: TaskDto, title: String) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return
+        val snapshot = _state.value.snapshot ?: return
+        val id = Ulid.next()
+        val now = java.time.Instant.now().toString()
+        val child = TaskDto(
+            id = id,
+            title = trimmed,
+            parent = parent.id,
+            project = parent.project,
+            createdAt = now,
+            modifiedAt = now,
+        )
+        val updated = snapshot.copy(db = snapshot.db.copy(tasks = snapshot.db.tasks + (id to child)))
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = createSubtaskCommand(id, trimmed, parent.id, parent.project),
+                label = trimmed,
+            ),
+        )
+        sync()
+    }
+
     suspend fun toggleChecklist(task: TaskDto, itemId: String, completed: Boolean) {
         val snapshot = _state.value.snapshot ?: return
         val db = snapshot.db

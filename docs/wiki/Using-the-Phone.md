@@ -106,3 +106,13 @@ project or tag. Results can be completed in place or opened.
 
 Checklist steps appear in the task editor. Tapping one sends
 `update_checklist_item` through the same offline queue as every other edit.
+
+## Subtasks
+
+Child tasks appear indented under their parent. In the task editor, the
+**Subtasks** section lists them and offers **Add subtask**; the new task is
+created under the current one and stays in the same project. Completing a
+subtask uses the same optimistic offline queue.
+
+Settings → About → **Check for updates** reads the latest GitHub release and
+offers the APK when a newer version exists.
