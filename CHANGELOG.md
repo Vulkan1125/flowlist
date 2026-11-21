@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.8 — 2026-11-21
+
+- **Task circles show priority:** red for high, yellow for medium, and the
+  theme accent for low. Completed tasks keep the accent-filled check.
+- Priority no longer draws its own flag; the flag on the right means the task
+  is flagged.
+
 ## 0.9.7 — 2026-11-21
 
 - **Forecast remembers Month or Agenda** across app restarts.

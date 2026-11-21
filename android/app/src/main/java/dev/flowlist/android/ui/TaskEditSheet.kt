@@ -205,7 +205,11 @@ fun TaskEditSheet(
                 .padding(bottom = 30.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                CheckCircle(checked = task.completed, onClick = onComplete)
+                CheckCircle(
+                    checked = task.completed,
+                    onClick = onComplete,
+                    priority = task.priority,
+                )
                 Spacer(modifier = Modifier.width(14.dp))
                 Text(
                     text = if (pending) "Waiting to sync" else "Task",
@@ -440,6 +444,7 @@ fun TaskEditSheet(
                     CheckCircle(
                         checked = child.completed,
                         onClick = { onToggleSubtask(child, !child.completed) },
+                        priority = child.priority,
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(

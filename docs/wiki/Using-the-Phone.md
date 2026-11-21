@@ -150,8 +150,9 @@ touched.
 
 ## Task rows
 
-A flagged task shows a small flag at the far right of its row, after the
-priority mark. Pending edits and priority marks stay to its left.
+Priority is shown by the task circle: red for high, yellow for medium and the
+theme accent for low. A flagged task shows a single flag at the far right of
+its row; priorities never add their own flag.
 
 ## Checklists
 

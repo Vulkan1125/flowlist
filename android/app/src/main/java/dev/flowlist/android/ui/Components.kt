@@ -57,7 +57,12 @@ import dev.flowlist.android.data.isToday
 import dev.flowlist.android.data.label
 
 @Composable
-fun CheckCircle(checked: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun CheckCircle(
+    checked: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    priority: String? = null,
+) {
     val colors = flow
     val background by animateColorAsState(
         if (checked) colors.accent else Color.Transparent,
@@ -68,6 +73,14 @@ fun CheckCircle(checked: Boolean, onClick: () -> Unit, modifier: Modifier = Modi
         animationSpec = spring(dampingRatio = 0.6f, stiffness = 700f),
         label = "check-scale",
     )
+    val priorityTone = when (priority) {
+        "high" -> colors.danger
+        "medium" -> colors.warning
+        "low" -> colors.accent
+        else -> colors.hairline
+    }
+    val ring = if (checked) colors.accent else priorityTone
+    val ringWidth = if (!checked && (priority == "high" || priority == "medium")) 2.dp else 1.5.dp
     Box(
         modifier = modifier
             .size(22.dp)
@@ -75,8 +88,8 @@ fun CheckCircle(checked: Boolean, onClick: () -> Unit, modifier: Modifier = Modi
             .clip(CircleShape)
             .background(background)
             .border(
-                width = 1.5.dp,
-                color = if (checked) colors.accent else colors.hairline,
+                width = ringWidth,
+                color = ring,
                 shape = CircleShape,
             )
             .clickable(onClick = onClick),
@@ -114,6 +127,7 @@ fun TaskRow(
             checked = task.completed,
             onClick = onToggle,
             modifier = Modifier.padding(top = 1.dp),
+            priority = task.priority,
         )
         Spacer(modifier = Modifier.width(14.dp))
         Column(
@@ -165,10 +179,6 @@ fun TaskRow(
         if (task.pending) {
             Spacer(modifier = Modifier.width(8.dp))
             PendingChip()
-        }
-        if (task.priority != null && !task.completed) {
-            Spacer(modifier = Modifier.width(8.dp))
-            PriorityMark(task.priority)
         }
         if (task.flagged && !task.completed) {
             Spacer(modifier = Modifier.width(8.dp))
@@ -310,27 +320,6 @@ fun PendingChip() {
         )
     }
 }
-
-@Composable
-fun PriorityMark(priority: String?) {
-    val colors = flow
-    val color = when (priority) {
-        "high" -> colors.danger
-        "medium" -> colors.warning
-        else -> colors.accent
-    }
-    Icon(
-        imageVector = Icons.Rounded.Flag,
-        contentDescription = when (priority) {
-            "high" -> "Priority 1"
-            "medium" -> "Priority 2"
-            else -> "Priority 3"
-        },
-        tint = color,
-        modifier = Modifier.size(15.dp),
-    )
-}
-
 
 @Composable
 fun Hairline(modifier: Modifier = Modifier) {
