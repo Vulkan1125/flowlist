@@ -6,6 +6,11 @@ server for AI assistants.
 
 Nothing leaves your Mac. There is no account, no sync service and no telemetry.
 
+> **AI-written documentation.** This wiki was written with AI assistance and may
+> contain mistakes or lag behind the app. The app and its release notes are the
+> source of truth. Please report corrections on the
+> [issue tracker](https://github.com/Vulkan1125/flowlist/issues).
+
 ![The Flowlist window showing the Inbox](images/gui-inbox.png)
 
 *The Inbox in the Catppuccin theme. Plain is the default; all eleven families

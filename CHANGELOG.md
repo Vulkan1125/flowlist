@@ -368,7 +368,7 @@
   `--changed`/`--attachments` on `list`. MCP: trash tools,
   `convert_task_to_project`, attachment fields and `icon` on project tools,
   and an `attachments` view for `list_tasks`.
-- Added an OmniFocus 4.3 comparison and the next adopted gaps to
+- Added a task-manager comparison and the next adopted gaps to
   `docs/backlog.md`.
 
 ## 0.1.0 — 2026-11-13

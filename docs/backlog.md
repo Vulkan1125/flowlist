@@ -115,7 +115,7 @@ below; this list is the current map.
 - [x] **Priorities** — optional High / Medium / Low on tasks, with a coloured
       row mark, inspector chips, a global priority filter in every view,
       sidebar rows, and CLI/MCP support.
-- [x] **OmniFocus project types** — parallel, sequential and single-action
+- [x] **Project types** — parallel, sequential and single-action
       projects, chosen in the New Project sheet and cycled from the project
       banner. Legacy `sequential` files still map to the sequential kind.
 - [x] **Container-type polish** — task subtrees now carry a
@@ -172,10 +172,8 @@ below; this list is the current map.
 
 ## Research and design
 
-- [x] **OmniFocus feature research** — first pass completed against the
-      OmniFocus 4.3 reference manual (`support.omnigroup.com/documentation/
-      omnifocus/universal/4.3.3/en/`). Findings and adopt/later decisions are
-      below.
+- [x] **Task-manager feature research** — first pass completed against a
+      reference manual. Findings and adopt/later decisions are below.
 - [x] **"Absolutely stunning UI design"** — the deliberate visual pass:
       checkboxes stay visible on a white surface, row actions wait for hover,
       empty views share one illustrated halo, counts read as prose, menus and
@@ -263,10 +261,10 @@ below; this list is the current map.
       count badges; counts default quiet outside the Library, while Today
       always shows its day count.
 
-## OmniFocus gap research (first pass, November 2026)
+## Task-manager gap research (first pass, November 2026)
 
-Source: the OmniFocus 4.3.3 reference manual and glossary. This is a product
-comparison, not a claim of feature parity.
+Source: a widely used task manager's reference manual and glossary. This is a
+product comparison, not a claim of feature parity.
 
 ### Adopt next
 
@@ -281,18 +279,19 @@ comparison, not a claim of feature parity.
 
 ### Later / evaluate
 
-- **Forecast Tag (OmniFocus Pro)** — a designated tag marks items for Forecast
-  even without a due or defer date. This is a clean fit for our tag model; add
+- **Forecast Tag** — a designated tag marks items for Forecast even without a
+  due or defer date. This is a clean fit for our tag model; add
   a Settings field that names the tag and include it in the Forecast query.
-- **Favorite perspectives and a perspectives bar** — OmniFocus lets users
-  reorder and hide perspectives, and assigns keyboard shortcuts per
+- **Favorite perspectives and a perspectives bar** — the reference app lets
+  users reorder and hide perspectives, and assigns keyboard shortcuts per
   perspective. Our sidebar order is fixed. Add favorites, drag reorder and a
   per-view shortcut field.
 - **Quick Open** — one palette that finds perspectives, folders, projects,
   tags and plug-ins from anywhere. Flowlist search covers tasks and entities;
   a command palette would be the next step, not a second search UI.
-- **Clean up resolved items** — OmniFocus decides when completed rows leave the
-  list, and warns before deleting a container that hides completed children.
+- **Clean up resolved items** — the reference app decides when completed rows
+  leave the list, and warns before deleting a container that hides completed
+  children.
   Add a cleanup policy setting and a pre-delete warning for hidden subtrees.
 - **Review sidebar calendar** — the Review perspective pairs a calendar of
   upcoming review dates with the project list. Add a mini calendar to our
@@ -303,19 +302,20 @@ comparison, not a claim of feature parity.
   fields. Keep this behind the design pass so it does not fragment the one
   visual language.
 - **Tag status affecting availability** — an On Hold or Dropped tag can make an
-  action unavailable in OmniFocus. We model tag status but do not yet let it
-  gate availability.
+  action unavailable in the reference app. We model tag status but do not yet
+  let it gate availability.
 - **Convert inbox item to project** — a one-command promotion with the item's
-  notes and dates carried across, matching OmniFocus's Convert to Project.
+  notes and dates carried across, matching the reference app's Convert to
+  Project.
 - **System capture surfaces** — Quick Entry, Mail Drop, clippings and
   share-sheet capture. Background capture is already in the backlog; treat
   Mail Drop as a separate import path.
-- **Notifications and due reminders** — OmniFocus alerts on due/defer times.
-  Flowlist is local-first and has no notification scheduler yet.
+- **Notifications and due reminders** — the reference app alerts on due/defer
+  times. Flowlist is local-first and has no notification scheduler yet.
 
 ### Explicitly skipped for now
 
-- OmniFocus sync, Omni Accounts, web access and Omni Automation plug-ins: they
-  conflict with the single local library and the shared Rust command layer.
+- Hosted sync, web accounts, web access and automation plug-ins: they conflict
+  with the single local library and the shared Rust command layer.
 - Custom fluid/column layouts per device: Flowlist is a single desktop app and
   should keep one adaptive layout until the visual pass is finished.

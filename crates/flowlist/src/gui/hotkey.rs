@@ -9,7 +9,7 @@
 //! Everywhere else registration simply reports "not available" and the app
 //! keeps working with the in-window capture bar.
 
-/// Control + Option + Space, the same quick-entry chord OmniFocus uses.
+/// Control + Option + Space, the quick-entry chord.
 const CAPTURE_KEY_CODE: u32 = 49; // kVK_Space
 const CAPTURE_MODIFIERS: u32 = 0x1000 | 0x0800; // controlKey | optionKey
 

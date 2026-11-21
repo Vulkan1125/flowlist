@@ -52,9 +52,9 @@ impl ProjectStatus {
     }
 }
 
-/// OmniFocus-style project types. Parallel projects release every task at
-/// once, sequential projects release one at a time, and single-action lists
-/// are buckets of independent one-off tasks.
+/// Project types. Parallel projects release every task at once, sequential
+/// projects release one at a time, and single-action lists are buckets of
+/// independent one-off tasks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectKind {

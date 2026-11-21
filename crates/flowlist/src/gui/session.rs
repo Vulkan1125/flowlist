@@ -122,9 +122,8 @@ impl View {
     }
 }
 
-/// Sorting, grouping and filters remembered per perspective. OmniFocus keeps
-/// these with the perspective; Flowlist keeps the same idea in the session so
-/// built-in and saved views behave alike.
+/// Sorting, grouping and filters remembered per perspective. The choice lives
+/// in the session so built-in and saved views behave alike.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct ViewOptions {
     #[serde(default)]
