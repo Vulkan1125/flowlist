@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.AppState
+import dev.flowlist.android.data.SettingsDto
 import dev.flowlist.android.icon.AppIcon
 import dev.flowlist.android.icon.AppIcons
 import dev.flowlist.android.data.UpdateChecker
@@ -75,6 +76,8 @@ fun SettingsSheet(
     onThemeChange: (ThemeSettings) -> Unit,
     preferences: AppPreferences,
     onPreferencesChange: (AppPreferences) -> Unit,
+    librarySettings: SettingsDto,
+    onLibrarySettings: (SettingsDto) -> Unit,
     onDismiss: () -> Unit,
     onSync: () -> Unit,
     onSignOut: () -> Unit,
@@ -286,6 +289,54 @@ fun SettingsSheet(
                 ) {
                     onPreferencesChange(preferences.copy(swipeActions = it))
                 }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+            SettingsCard("Library") {
+                SmallLabel("Review every")
+                ChoiceRow {
+                    listOf(7, 14, 30).forEach { days ->
+                        Pill("${days}d", librarySettings.defaultReviewDays == days) {
+                            onLibrarySettings(librarySettings.copy(defaultReviewDays = days))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+                SmallLabel("Changed window")
+                ChoiceRow {
+                    listOf(7, 14, 30).forEach { days ->
+                        Pill("${days}d", librarySettings.changedDays == days) {
+                            onLibrarySettings(librarySettings.copy(changedDays = days))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+                SmallLabel("Keep completed")
+                ChoiceRow {
+                    listOf(30, 60, 90).forEach { days ->
+                        Pill("${days}d", librarySettings.showCompletedDays == days) {
+                            onLibrarySettings(librarySettings.copy(showCompletedDays = days))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+                SmallLabel("Trash retention")
+                ChoiceRow {
+                    listOf(0, 7, 30, 90).forEach { days ->
+                        Pill(
+                            label = if (days == 0) "Forever" else "${days}d",
+                            selected = librarySettings.trashRetentionDays == days,
+                        ) {
+                            onLibrarySettings(librarySettings.copy(trashRetentionDays = days))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "These live in the library, so the Mac sees the same defaults.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.faint,
+                )
             }
 
             Spacer(modifier = Modifier.height(14.dp))

@@ -64,6 +64,9 @@ import dev.flowlist.android.data.StampDto
 import dev.flowlist.android.data.TagDto
 import dev.flowlist.android.data.TaskDto
 import dev.flowlist.android.data.TaskEdit
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import dev.flowlist.android.data.repeatCommand
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.isToday
 import dev.flowlist.android.data.label
@@ -83,6 +86,7 @@ fun TaskEditSheet(
     onChecklist: (ChecklistDto, Boolean) -> Unit,
     onAddSubtask: (String) -> Unit,
     onToggleSubtask: (TaskDto, Boolean) -> Unit,
+    onDeleteSeries: () -> Unit,
     onComplete: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -102,6 +106,8 @@ fun TaskEditSheet(
     var checklist by remember(task.id) { mutableStateOf(task.checklist) }
     var addingSubtask by remember { mutableStateOf(false) }
     var subtaskTitle by remember { mutableStateOf("") }
+    var repeat by remember(task.id) { mutableStateOf(task.repeat) }
+    var confirmSeries by remember { mutableStateOf(false) }
     val subtaskFocus = remember { FocusRequester() }
     LaunchedEffect(addingSubtask) {
         if (addingSubtask) {
@@ -113,6 +119,11 @@ fun TaskEditSheet(
     var confirmDelete by remember { mutableStateOf(false) }
     var datePickerForDue by remember { mutableStateOf(true) }
     var showDueSheet by remember { mutableStateOf(false) }
+
+    val repeatUnit = ((repeat as? JsonObject)?.get("unit") as? JsonPrimitive)?.content
+    fun setRepeat(unit: String?) {
+        repeat = unit?.let { repeatCommand(it) }
+    }
 
     fun applyStamp(value: StampDto?) {
         if (datePickerForDue) due = value else defer = value
@@ -165,6 +176,16 @@ fun TaskEditSheet(
                     .fillMaxWidth()
                     .padding(top = 2.dp),
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Label("Repeat")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PriorityPill("None", repeat == null, colors.accent) { setRepeat(null) }
+                PriorityPill("Daily", repeatUnit == "days", colors.accent) { setRepeat("days") }
+                PriorityPill("Weekly", repeatUnit == "weeks", colors.accent) { setRepeat("weeks") }
+                PriorityPill("Monthly", repeatUnit == "months", colors.accent) { setRepeat("months") }
+                PriorityPill("Yearly", repeatUnit == "years", colors.accent) { setRepeat("years") }
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
             EditRow(
@@ -459,6 +480,7 @@ fun TaskEditSheet(
                             flagged = flagged,
                             estimateMin = estimate.toIntOrNull(),
                             tags = selectedTags,
+                            repeat = repeat,
                         ),
                     )
                 },
@@ -483,7 +505,32 @@ fun TaskEditSheet(
             ) {
                 Text("Move to Trash", color = colors.danger)
             }
+            if (task.repeat != null) {
+                TextButton(
+                    onClick = { confirmSeries = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Delete whole series", color = colors.danger)
+                }
+            }
         }
+    }
+
+    if (confirmSeries) {
+        AlertDialog(
+            onDismissRequest = { confirmSeries = false },
+            title = { Text("Delete the whole series?") },
+            text = { Text("Every occurrence of “${task.title}” goes to Trash on your Mac.") },
+            confirmButton = {
+                TextButton(onClick = { confirmSeries = false; onDeleteSeries() }) {
+                    Text("Delete series", color = colors.danger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmSeries = false }) { Text("Cancel") }
+            },
+            containerColor = colors.background,
+        )
     }
 
     if (showDueSheet) {

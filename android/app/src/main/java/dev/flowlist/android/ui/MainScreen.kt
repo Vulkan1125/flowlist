@@ -24,9 +24,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Inbox
-import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -39,7 +39,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -92,7 +98,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
     Today("Today", Icons.Outlined.WbSunny),
     Forecast("Forecast", Icons.Outlined.CalendarMonth),
     Browse("Browse", Icons.Outlined.FolderOpen),
-    More("More", Icons.Outlined.MoreHoriz),
+    Settings("Settings", Icons.Outlined.Settings),
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -115,17 +121,16 @@ fun MainScreen(
                 "today" -> Tab.Today
                 "forecast" -> Tab.Forecast
                 "browse" -> Tab.Browse
-                "more" -> Tab.More
                 else -> Tab.Inbox
             },
         )
     }
     var capture by rememberSaveable { mutableStateOf(false) }
-    var settings by rememberSaveable { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf(false) }
     var detail by remember { mutableStateOf<TaskView?>(null) }
     var project by remember { mutableStateOf<ProjectDto?>(null) }
     var moreView by remember { mutableStateOf<MoreView?>(null) }
+    val drawer = rememberDrawerState(DrawerValue.Closed)
     val haptics = LocalHapticFeedback.current
     var offlineWarning by remember { mutableStateOf(false) }
     LaunchedEffect(state.offlineSince) {
@@ -185,6 +190,24 @@ fun MainScreen(
         }
     }
 
+    ModalNavigationDrawer(
+        drawerState = drawer,
+        drawerContent = {
+            ModalDrawerSheet(drawerContainerColor = colors.background) {
+                LibraryDrawer(
+                    tab = tab,
+                    onTab = { item ->
+                        tab = item
+                        scope.launch { drawer.close() }
+                    },
+                    onMore = { view ->
+                        moreView = view
+                        scope.launch { drawer.close() }
+                    },
+                )
+            }
+        },
+    ) {
     Scaffold(
         containerColor = colors.background,
         snackbarHost = { FlowSnackbarHost(snackbarHost) },
@@ -219,7 +242,7 @@ fun MainScreen(
             }
         },
         floatingActionButton = {
-            if (tab != Tab.More) {
+            if (tab != Tab.Settings) {
                 FloatingActionButton(
                     onClick = {
                     if (preferences.haptics) {
@@ -251,9 +274,8 @@ fun MainScreen(
             Header(
                 tab = tab,
                 state = state,
-                onSettings = { settings = true },
+                onMenu = { scope.launch { drawer.open() } },
                 onSearch = { search = true },
-                showSettings = tab == Tab.More,
                 modifier = Modifier.statusBarsPadding(),
             )
             if (offlineWarning) {
@@ -292,12 +314,23 @@ fun MainScreen(
                     snapshot = snapshot,
                     onOpen = { project = it },
                 )
-                Tab.More -> MoreScreen(
-                    db = snapshot?.db,
-                    onOpen = { moreView = it },
+                Tab.Settings -> SettingsScreen(
+                    state = state,
+                    theme = theme,
+                    onThemeChange = onThemeChange,
+                    preferences = preferences,
+                    onPreferencesChange = onPreferencesChange,
+                    librarySettings = snapshot?.db?.settings ?: dev.flowlist.android.data.SettingsDto(),
+                    onLibrarySettings = { updated ->
+                        scope.launch { repository.updateLibrarySettings(updated) }
+                    },
+                    onSync = { scope.launch { repository.sync() } },
+                    onSignOut = { scope.launch { repository.signOut() } },
                 )
             }
         }
+    }
+
     }
 
     if (capture) {
@@ -344,6 +377,10 @@ fun MainScreen(
                 },
                 onToggleSubtask = { child, completed ->
                     scope.launch { repository.complete(child.id, completed) }
+                },
+                onDeleteSeries = {
+                    detail = null
+                    scope.launch { repository.deleteSeries(dto) }
                 },
                 onComplete = {
                     complete(taskView, !taskView.completed)
@@ -435,20 +472,69 @@ fun MainScreen(
         )
     }
 
-    if (settings) {
-        SettingsSheet(
-            state = state,
-            onDismiss = { settings = false },
-            onSync = { scope.launch { repository.sync() } },
-            onSignOut = {
-                settings = false
-                scope.launch { repository.signOut() }
+
+
+    if (capture) {
+        CaptureSheet(
+            onDismiss = { capture = false },
+            onAdd = { text ->
+                capture = false
+                if (preferences.haptics) {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+                scope.launch { repository.capture(text) }
             },
-            theme = theme,
-            onThemeChange = onThemeChange,
-            preferences = preferences,
-            onPreferencesChange = onPreferencesChange,
         )
+    }
+}
+
+@Composable
+private fun LibraryDrawer(
+    tab: Tab,
+    onTab: (Tab) -> Unit,
+    onMore: (MoreView) -> Unit,
+) {
+    val colors = flow
+    Column(modifier = Modifier.statusBarsPadding().padding(vertical = 12.dp)) {
+        Text(
+            text = "Library",
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.ink,
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 14.dp),
+        )
+        Tab.entries.filter { it != Tab.Settings }.forEach { item ->
+            NavigationDrawerItem(
+                label = { Text(item.label) },
+                icon = { Icon(item.icon, null, modifier = Modifier.size(19.dp)) },
+                selected = tab == item,
+                onClick = { onTab(item) },
+                modifier = Modifier.padding(horizontal = 12.dp),
+                colors = androidx.compose.material3.NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor = colors.field,
+                    selectedIconColor = colors.accent,
+                    selectedTextColor = colors.accent,
+                    unselectedIconColor = colors.faint,
+                    unselectedTextColor = colors.ink,
+                ),
+            )
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 10.dp),
+            color = colors.hairline,
+        )
+        MoreView.entries.forEach { view ->
+            NavigationDrawerItem(
+                label = { Text(view.label) },
+                icon = { Icon(view.icon, null, modifier = Modifier.size(19.dp)) },
+                selected = false,
+                onClick = { onMore(view) },
+                modifier = Modifier.padding(horizontal = 12.dp),
+                colors = androidx.compose.material3.NavigationDrawerItemDefaults.colors(
+                    unselectedIconColor = colors.faint,
+                    unselectedTextColor = colors.ink,
+                ),
+            )
+        }
     }
 }
 
@@ -456,15 +542,22 @@ fun MainScreen(
 private fun Header(
     tab: Tab,
     state: AppState,
-    onSettings: () -> Unit,
+    onMenu: () -> Unit,
     onSearch: () -> Unit,
-    showSettings: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = flow
     val today = LocalDate.now()
     Column(modifier = modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 18.dp, bottom = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onMenu, modifier = Modifier.padding(end = 4.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.Menu,
+                    contentDescription = "Library",
+                    tint = colors.faint,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = tab.label,
@@ -485,7 +578,7 @@ private fun Header(
 
                         Tab.Forecast -> "The next two weeks"
                         Tab.Browse -> "${state.snapshot?.db?.projects?.size ?: 0} projects"
-                        Tab.More -> "Review, archive, trash and more"
+                        Tab.Settings -> "Appearance, tasks, sync and about"
                     },
                     style = MaterialTheme.typography.labelMedium,
                     color = colors.faint,
@@ -498,16 +591,6 @@ private fun Header(
                     tint = colors.faint,
                     modifier = Modifier.size(20.dp),
                 )
-            }
-            if (showSettings) {
-                IconButton(onClick = onSettings) {
-                    Icon(
-                        imageVector = Icons.Outlined.Settings,
-                        contentDescription = "Settings",
-                        tint = colors.faint,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
             }
         }
     }

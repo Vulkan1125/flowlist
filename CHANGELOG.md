@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.0 — 2026-11-21
+
+- **Settings is a destination, not a sheet.** The fifth tab opens a settings
+  home with Appearance, Tasks, Library, Notifications, Connection and About,
+  each on its own page with a back arrow. The gear is gone from every header.
+- **A hamburger drawer replaces More.** Inbox, Today, Forecast and Browse sit
+  above Review, Completed, Archive, Trash, Tags, Priorities, Changed and
+  Attachments in a left drawer.
+- **Library defaults** now live in the library: review interval, changed
+  window, completed visibility and trash retention. Changing them on the phone
+  updates the Mac too.
+- **Repeat rules on the phone:** None, Daily, Weekly, Monthly or Yearly, plus
+  “Delete whole series” for repeating tasks.
+- **Startup view:** Settings → Tasks → Open on chooses Inbox, Today, Forecast
+  or Browse for a normal launch.
+
 ## 0.7.0 — 2026-11-21
 
 - **More on the phone.** A fifth destination collects Review, Completed,

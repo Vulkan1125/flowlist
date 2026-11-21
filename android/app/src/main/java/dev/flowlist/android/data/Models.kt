@@ -25,6 +25,17 @@ data class Db(
     val tags: Map<String, TagDto> = emptyMap(),
     @SerialName("inbox_order") val inboxOrder: List<String> = emptyList(),
     val root: List<JsonElement> = emptyList(),
+    val settings: SettingsDto = SettingsDto(),
+)
+
+@Serializable
+data class SettingsDto(
+    @SerialName("default_review_days") val defaultReviewDays: Int = 7,
+    @SerialName("show_completed_days") val showCompletedDays: Int = 30,
+    @SerialName("changed_days") val changedDays: Int = 7,
+    @SerialName("trash_retention_days") val trashRetentionDays: Int = 30,
+    @SerialName("default_due_time") val defaultDueTime: String? = "17:00:00",
+    @SerialName("default_defer_time") val defaultDeferTime: String? = null,
 )
 
 @Serializable
@@ -48,6 +59,8 @@ data class TaskDto(
     @SerialName("child_order") val childOrder: List<String> = emptyList(),
     @SerialName("created_at") val createdAt: String = "",
     @SerialName("modified_at") val modifiedAt: String = "",
+    val repeat: JsonElement? = null,
+    @SerialName("repeat_series") val repeatSeries: String? = null,
 )
 
 @Serializable
@@ -130,6 +143,7 @@ data class TaskEdit(
     val flagged: Boolean,
     val estimateMin: Int?,
     val tags: Set<String>,
+    val repeat: JsonElement? = null,
 )
 
 data class TaskView(
@@ -291,10 +305,22 @@ fun StampDto.isOverdue(): Boolean {
     return if (hasTime) moment.isBefore(now) else moment.toLocalDate().isBefore(LocalDate.now())
 }
 
-fun Db.completedTasks(): List<TaskView> =
-    taskViews(includeCompleted = true)
+fun Db.completedTasks(): List<TaskView> {
+    val days = settings.showCompletedDays.toLong()
+    val cutoff = if (days > 0) {
+        System.currentTimeMillis() - days * 24 * 60 * 60 * 1000
+    } else {
+        Long.MIN_VALUE
+    }
+    return taskViews(includeCompleted = true)
         .filter { it.completed && !it.trashed }
+        .filter { task ->
+            task.completedAt?.let {
+                runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() ?: Long.MAX_VALUE
+            }?.let { it >= cutoff } ?: true
+        }
         .sortedByDescending { it.completedAt.orEmpty() }
+}
 
 fun Db.trashedTasks(): List<TaskView> =
     taskViews(includeCompleted = true, includeTrashed = true)
@@ -324,7 +350,7 @@ fun Db.priorityGroups(): List<Pair<String, List<TaskView>>> {
     ).filter { it.second.isNotEmpty() }
 }
 
-fun Db.changedTasks(days: Long = 7): List<TaskView> {
+fun Db.changedTasks(days: Long = settings.changedDays.toLong()): List<TaskView> {
     val cutoff = System.currentTimeMillis() - days * 24 * 60 * 60 * 1000
     return taskViews()
         .filter { task ->

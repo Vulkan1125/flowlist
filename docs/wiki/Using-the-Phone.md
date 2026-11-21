@@ -130,3 +130,18 @@ The fifth tab collects the rest of the library:
 
 Settings lives only in this tab now. **Settings → Tasks → Open on** chooses
 Inbox, Today, Forecast or Browse for a normal launch.
+
+## Settings and the drawer
+
+Settings is the fifth tab. Its home lists Appearance, Tasks, Library,
+Notifications, Connection and About, and each opens a short page with a back
+arrow. The header no longer carries a gear.
+
+The hamburger on the left opens the library drawer: Inbox, Today, Forecast and
+Browse, then Review, Completed, Archive, Trash, Tags, Priorities, Changed and
+Attachments.
+
+Library defaults — review interval, changed window, completed visibility and
+trash retention — write through `update_settings`, so the Mac sees the same
+values. Repeating tasks can be set to None, Daily, Weekly, Monthly or Yearly,
+and a series can be deleted in one action.

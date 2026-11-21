@@ -167,6 +167,28 @@ fun updateCommand(id: String, patch: JsonObject): JsonObject = buildJsonObject {
     put("update_task", buildJsonObject { put("id", id); put("patch", patch) })
 }
 
+fun settingsCommand(patch: JsonObject): JsonObject = buildJsonObject {
+    put("update_settings", patch)
+}
+
+fun repeatCommand(unit: String): JsonObject = buildJsonObject {
+    put("mode", "due_again")
+    put("schedule", "fixed")
+    put("every", 1)
+    put("unit", unit)
+    put("end", buildJsonObject { put("kind", "never") })
+    put("completed_count", 0)
+}
+
+fun deleteSeriesCommand(ids: List<String>): JsonObject = buildJsonObject {
+    put(
+        "delete_task_series",
+        buildJsonObject {
+            put("ids", buildJsonArray { ids.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
+        },
+    )
+}
+
 fun reviewCommand(id: String, reviewedOn: String): JsonObject = buildJsonObject {
     put(
         "complete_review",

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.put
@@ -176,6 +177,7 @@ class Repository(context: Context) {
             flagged = edit.flagged,
             estimateMin = edit.estimateMin,
             tags = edit.tags.toList(),
+            repeat = edit.repeat,
             modifiedAt = java.time.Instant.now().toString(),
         )
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
@@ -196,6 +198,7 @@ class Repository(context: Context) {
             put("priority", priorityJson)
             put("flagged", edit.flagged)
             put("estimate_min", estimateJson)
+            put("repeat", edit.repeat ?: JsonNull)
         }
         enqueue(
             PendingOp(
@@ -263,6 +266,60 @@ class Repository(context: Context) {
                 id = "op_${UUID.randomUUID()}",
                 command = checklistCommand(task.id, itemId, item.title, completed),
                 label = item.title,
+            ),
+        )
+        sync()
+    }
+
+    suspend fun updateLibrarySettings(updated: SettingsDto) {
+        val current = _state.value.snapshot?.db?.settings ?: SettingsDto()
+        val patch = buildJsonObject {
+            if (updated.defaultReviewDays != current.defaultReviewDays) {
+                put("default_review_days", updated.defaultReviewDays)
+            }
+            if (updated.showCompletedDays != current.showCompletedDays) {
+                put("show_completed_days", updated.showCompletedDays)
+            }
+            if (updated.changedDays != current.changedDays) {
+                put("changed_days", updated.changedDays)
+            }
+            if (updated.trashRetentionDays != current.trashRetentionDays) {
+                put("trash_retention_days", updated.trashRetentionDays)
+            }
+        }
+        if (patch.isEmpty()) return
+        updateSettings(updated, patch)
+    }
+
+    suspend fun updateSettings(updated: dev.flowlist.android.data.SettingsDto, patch: kotlinx.serialization.json.JsonObject) {
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val next = snapshot.copy(db = db.copy(settings = updated))
+        files.saveSnapshot(next)
+        _state.update { it.copy(snapshot = next) }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = settingsCommand(patch),
+                label = "Settings",
+            ),
+        )
+        sync()
+    }
+
+    suspend fun deleteSeries(task: TaskDto) {
+        val snapshot = _state.value.snapshot ?: return
+        val series = task.repeatSeries ?: task.id
+        val db = snapshot.db
+        val removed = db.tasks.filterValues { it.repeatSeries == series || it.id == task.id }.keys
+        val updated = snapshot.copy(db = db.copy(tasks = db.tasks - removed))
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = deleteSeriesCommand(removed.toList()),
+                label = task.title,
             ),
         )
         sync()
