@@ -4,7 +4,7 @@
 reviews and a floating capture panel in one native window. The same library is
 available from the `flowlist` CLI and an MCP server for AI assistants.
 
-**[Download Flowlist 0.1.3](https://github.com/Vulkan1125/flowlist/releases/latest)**
+**[Download Flowlist 0.1.4](https://github.com/Vulkan1125/flowlist/releases/latest)**
 · [Wiki](https://github.com/Vulkan1125/flowlist/wiki)
 · [Using the GUI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-GUI)
 · [CLI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-CLI)
@@ -17,12 +17,15 @@ Settings → Appearance.*
 
 ## Install
 
-1. Download **Flowlist-0.1.3.dmg** (or the zip) from the latest release.
+1. Download **Flowlist-0.1.4.dmg** (or the zip) from the latest release.
 2. Open the DMG and drag **Flowlist** to Applications, or unzip and move the app
    yourself.
 3. The first time, right-click the app and choose **Open**. The build is
    ad-hoc signed and not notarised, so macOS asks once.
-4. Requires macOS 13 or later.
+4. In Flowlist, open **Settings → About → Command line → Install
+   command-line tool**. Then `flowlist` works in Terminal. You can also run
+   `/Applications/Flowlist.app/Contents/MacOS/flowlist install-cli` once.
+5. Requires macOS 13 or later.
 
 Your library lives in `~/Library/Application Support/Flowlist`. Nothing is
 uploaded; there is no account, no sync service and no telemetry.
@@ -82,15 +85,20 @@ capturing, or `⌘Enter` to file and select the task in the main window.
 
 ## Quick start in the terminal
 
-```sh
-FLOWLIST="/Applications/Flowlist.app/Contents/MacOS/flowlist"
+After **Settings → About → Install command-line tool**:
 
-"$FLOWLIST" add 'Draft the launch email #writing ::Website due:friday est:45m'
-"$FLOWLIST" list --today
-"$FLOWLIST" done <ID>
-"$FLOWLIST" review
-"$FLOWLIST" undo
+```sh
+flowlist add 'Draft the launch email #writing ::Website due:friday est:45m'
+flowlist list --today
+flowlist done <ID>
+flowlist review
+flowlist undo
 ```
+
+The installer puts a link in the first writable folder on your `PATH` and
+prefers `~/.local/bin`. If that folder is not on `PATH`, the sheet offers a
+one-click `~/.zshrc` line. You can always use the full path instead:
+`/Applications/Flowlist.app/Contents/MacOS/flowlist`.
 
 Add `--json` to any command for scripts. `FLOWLIST_HOME` or `--data-dir` points
 the CLI at another library. The full command reference is in the

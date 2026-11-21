@@ -5321,6 +5321,18 @@ impl FlowlistApp {
             update::UpdateState::Ready { .. } => "ready",
             update::UpdateState::Failed(_) => "failed",
         });
+        state["cli"] = match crate::cli_install::status() {
+            crate::cli_install::Status::Installed { path, on_path } => serde_json::json!({
+                "installed": true,
+                "path": path,
+                "on_path": on_path,
+            }),
+            crate::cli_install::Status::Missing => serde_json::json!({
+                "installed": false,
+                "path": null,
+                "on_path": false,
+            }),
+        };
         state["notifications"] = serde_json::json!({
             "enabled": self.due_notifications,
             "permission": self.notification_permission.label(),

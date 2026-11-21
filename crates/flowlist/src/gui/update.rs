@@ -151,6 +151,101 @@ impl FlowlistApp {
                 .child(div().text_sm().text_color(color).child(status))
                 .child(actions),
         );
+        let cli_status = crate::cli_install::status();
+        let (cli_path, cli_on_path) = match &cli_status {
+            crate::cli_install::Status::Installed { path, on_path } => {
+                (Some(path.display().to_string()), *on_path)
+            }
+            crate::cli_install::Status::Missing => (None, false),
+        };
+        let mut cli_actions = div().flex().items_center().gap_2();
+        cli_actions = cli_actions.child(
+            div()
+                .id("cli-install")
+                .child(widgets::button(
+                    theme,
+                    if cli_path.is_some() {
+                        "Reinstall command"
+                    } else {
+                        "Install command-line tool"
+                    },
+                    cli_path.is_none(),
+                ))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    match crate::cli_install::install() {
+                        Ok(installed) => {
+                            this.toast = Some(if installed.on_path {
+                                format!("Installed {}", installed.path.display())
+                            } else {
+                                format!(
+                                    "Installed {}; add its folder to PATH",
+                                    installed.path.display()
+                                )
+                            });
+                        }
+                        Err(error) => this.toast = Some(error),
+                    }
+                    cx.notify();
+                })),
+        );
+        if let Some(path) = &cli_path
+            && !cli_on_path
+            && let Some(dir) = std::path::Path::new(path).parent()
+        {
+            let dir = dir.to_path_buf();
+            cli_actions = cli_actions.child(
+                div()
+                    .id("cli-path")
+                    .child(widgets::button(theme, "Add to shell PATH", false))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        match crate::cli_install::add_to_zshrc(&dir) {
+                            Ok(rc) => {
+                                this.toast =
+                                    Some(format!("Added to {}; open a new Terminal", rc.display()));
+                            }
+                            Err(error) => this.toast = Some(error),
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        let command_line = self.settings_card(
+            "Command line",
+            Some(
+                "Run flowlist from any Terminal window. The command lives inside the app bundle; this puts a link on your PATH.",
+            ),
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(div().text_xs().text_color(theme.text_faint).child(
+                            if let Some(path) = &cli_path {
+                                format!("flowlist → {path}")
+                            } else {
+                                "Not installed on PATH yet.".to_string()
+                            },
+                        ))
+                        .when(cli_path.is_some(), |this| {
+                            this.child(
+                                div().text_xs().text_color(if cli_on_path {
+                                    theme.success
+                                } else {
+                                    theme.warning
+                                }).child(if cli_on_path {
+                                    "On your PATH"
+                                } else {
+                                    "Installed, but its folder is not on PATH"
+                                }),
+                            )
+                        }),
+                )
+                .child(cli_actions),
+        );
         let links = self.settings_card(
             "Links",
             None,
@@ -220,6 +315,7 @@ impl FlowlistApp {
             .flex_col()
             .gap_3()
             .child(about)
+            .child(command_line)
             .child(updates)
             .child(links)
             .into_any_element()

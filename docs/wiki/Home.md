@@ -18,13 +18,15 @@ are in Settings → Appearance.*
 
 ## Install
 
-1. Download **Flowlist-0.1.3.dmg** (or the zip) from the
+1. Download **Flowlist-0.1.4.dmg** (or the zip) from the
    [latest release](https://github.com/Vulkan1125/flowlist/releases/latest).
 2. Open the DMG and drag **Flowlist** to Applications, or unzip and move the
    app yourself.
 3. The first time, right-click the app and choose **Open**. The build is
    ad-hoc signed and not notarised, so macOS asks once.
-4. Requires macOS 13 or later.
+4. In Flowlist, open **Settings → About → Command line → Install
+   command-line tool** so `flowlist` works in Terminal.
+5. Requires macOS 13 or later.
 
 Flowlist keeps its library in
 `~/Library/Application Support/Flowlist`. Move the folder to a synced disk and

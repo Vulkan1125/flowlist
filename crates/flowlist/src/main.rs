@@ -5,6 +5,7 @@
 //! `flowlist mcp` speaks Model Context Protocol on stdio.
 
 mod cli;
+mod cli_install;
 
 #[cfg(feature = "gui")]
 mod gui;

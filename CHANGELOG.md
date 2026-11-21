@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.4 — 2026-11-21
+
+- The app can install its own command-line tool. **Settings → About → Command
+  line → Install command-line tool** puts a `flowlist` link in the first
+  writable folder already on `PATH`, preferring `~/.local/bin`, so no admin
+  password is needed. If the folder is not on `PATH`, the card shows the exact
+  `export PATH=…` line and offers a one-click `~/.zshrc` update.
+- `flowlist install-cli` does the same from a terminal, for a build run from
+  its full path.
+- After moving the app, running the installer again repairs the link. The full
+  path remains a fallback.
+
 ## 0.1.3 — 2026-11-21
 
 - Toasts and CLI results read as statements now instead of the command names

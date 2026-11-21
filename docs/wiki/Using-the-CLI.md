@@ -4,20 +4,28 @@ The `flowlist` command is the same app, without the window. It reads and writes
 the same library as the GUI, so anything you do here shows up there, and the
 same `⌘Z` / `flowlist undo` history covers both.
 
-## Find the binary
+## Install the command
 
-The app bundles the CLI:
-
-```sh
-FLOWLIST="/Applications/Flowlist.app/Contents/MacOS/flowlist"
-"$FLOWLIST" --version
-```
-
-Add a short alias in `~/.zshrc` if you use it often:
+A macOS app bundle does not put its binary on `PATH` by itself. Open
+**Settings → About → Command line** and choose **Install command-line tool**.
+Flowlist creates a `flowlist` link in the first writable folder already on your
+`PATH` (it prefers `~/.local/bin`), so this works without an admin password:
 
 ```sh
-alias flowlist="/Applications/Flowlist.app/Contents/MacOS/flowlist"
+flowlist --version
 ```
+
+If it had to use a folder outside `PATH`, the same card offers a one-click
+`~/.zshrc` line and shows the line to copy. You can also install it from a
+terminal once:
+
+```sh
+"/Applications/Flowlist.app/Contents/MacOS/flowlist" install-cli
+```
+
+After moving the app to another folder, run the installer again so the link
+points at the new bundle. The full path always works as a fallback:
+`/Applications/Flowlist.app/Contents/MacOS/flowlist`.
 
 Every command accepts `--json` and `--data-dir <DIR>`. The library defaults to
 `~/Library/Application Support/Flowlist`; set `FLOWLIST_HOME` to point the CLI

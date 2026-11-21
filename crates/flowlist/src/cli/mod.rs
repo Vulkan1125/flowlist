@@ -109,6 +109,8 @@ pub enum CliCommand {
     Doctor(DoctorArgs),
     /// Print the library location.
     Where,
+    /// Put the flowlist executable on PATH.
+    InstallCli,
     /// Run the MCP server on stdio.
     Mcp,
     /// Open the graphical application.
@@ -677,12 +679,31 @@ fn try_run() -> Result<()> {
         CliCommand::Import(args) => cmd_import(&cli, args, &paint),
         CliCommand::Doctor(args) => cmd_doctor(&cli, args, &paint),
         CliCommand::Where => cmd_where(&cli, &paint),
+        CliCommand::InstallCli => cmd_install_cli(&paint),
         CliCommand::Mcp => {
             let paths = DataPaths::discover(cli.data_dir.clone())?;
             crate::mcp::serve(paths)
         }
         CliCommand::Gui => start_gui(&cli),
     }
+}
+
+fn cmd_install_cli(paint: &Paint) -> Result<()> {
+    match crate::cli_install::install() {
+        Ok(installed) => {
+            println!("{} {}", paint.green("Installed"), installed.path.display());
+            if !installed.on_path {
+                let dir = installed.path.parent().unwrap_or(std::path::Path::new(""));
+                println!(
+                    "{}",
+                    paint.green(&format!("Add {} to PATH:", dir.display()))
+                );
+                println!("  export PATH=\"{}:$PATH\"", dir.display());
+            }
+        }
+        Err(error) => bail!("{error}"),
+    }
+    Ok(())
 }
 
 fn start_gui(cli: &Cli) -> Result<()> {
