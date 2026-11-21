@@ -111,8 +111,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(flow.background)
-            .statusBarsPadding(),
+            .background(flow.background),
     ) {
         if (current == null) {
             SettingsHome(

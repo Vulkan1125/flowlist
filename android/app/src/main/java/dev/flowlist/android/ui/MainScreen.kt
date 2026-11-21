@@ -285,7 +285,6 @@ fun MainScreen(
                 state = state,
                 onMenu = { scope.launch { drawer.open() } },
                 onSearch = { search = true },
-                modifier = Modifier.statusBarsPadding(),
             )
             if (offlineWarning) {
                 OfflineNotice(onRetry = { scope.launch { repository.sync() } })

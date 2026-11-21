@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.3 — 2026-11-21
+
+- Removed a duplicated status-bar inset: the header and Settings were being
+  padded once by the Scaffold and again by their own `statusBarsPadding`, which
+  made them look unchanged after 0.8.2. Both now start directly under the
+  system bar.
+
 ## 0.8.2 — 2026-11-21
 
 - The phone header sits closer to the top: no extra top padding, and the
