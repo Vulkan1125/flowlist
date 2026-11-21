@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.3 — 2026-11-21
+
+- Toasts and CLI results read as statements now instead of the command names
+  that produced them: **Settings updated**, **Task “X” updated**, **Completed
+  task “X”**, **Moved 1 task to Trash**, **Priority set to high for 2 tasks**,
+  **Checklist step “X” added**, **Project “X” added**, **Folder “X” renamed**,
+  **Tag “X” deleted**, **Perspective “X” saved**, and so on.
+- Proper singular/plural counts replace `task(s)` / `project(s)` throughout
+  command results; deleting a project or folder with nothing inside no longer
+  claims it moved zero tasks to Trash. Empty completions say **Nothing to
+  change**.
+- The CLI no longer prints a verb followed by an imperative label
+  (“Completed Complete task …”) and uses the same messages as the toasts.
+
 ## 0.1.2 — 2026-11-21
 
 - Boolean settings are switches now instead of tick-mark buttons: Vim mode,

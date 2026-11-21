@@ -1054,15 +1054,14 @@ fn cmd_done(cli: &Cli, args: DoneArgs, paint: &Paint) -> Result<()> {
                 "affected": outcome.affected,
             }))?
         );
+    } else if let Some(message) = outcome.message {
+        println!("{}", paint.green(&message),);
     } else {
         println!(
             "{} {}",
             paint.green(if completed { "Completed" } else { "Reopened" }),
             outcome.label
         );
-        if let Some(message) = outcome.message {
-            println!("  {}", paint.dim(&message));
-        }
     }
     Ok(())
 }
@@ -1084,6 +1083,13 @@ fn cmd_convert(cli: &Cli, args: ConvertArgs, paint: &Paint) -> Result<()> {
         println!(
             "{}",
             serde_json::to_string_pretty(&render::project_value(store.db(), &project))?
+        );
+    } else if let Some(message) = outcome.message {
+        println!(
+            "{} {}  {}",
+            paint.green(&message),
+            paint.cyan(project.short()),
+            store.db().project_path(&project)
         );
     } else {
         println!(
@@ -1198,20 +1204,20 @@ fn cmd_remove(cli: &Cli, args: RemoveArgs, paint: &Paint) -> Result<()> {
     let mut store = open_store(cli)?;
     let ids = resolve_tasks(store.db(), &args.ids)?;
     let count = ids.len();
-    if args.series {
-        store.execute(CoreCommand::DeleteTaskSeries { ids })?;
+    let outcome = if args.series {
+        store.execute(CoreCommand::DeleteTaskSeries { ids })?
     } else {
-        store.execute(CoreCommand::DeleteTasks { ids })?;
-    }
+        store.execute(CoreCommand::DeleteTasks { ids })?
+    };
     if cli.json {
         println!(
             "{}",
             serde_json::to_string_pretty(&json!({"deleted": count, "series": args.series}))?
         );
-    } else if args.series {
-        println!("{} {} repeating series to Trash", paint.red("Moved"), count);
+    } else if let Some(message) = outcome.message {
+        println!("{}", paint.red(&message));
     } else {
-        println!("{} {} task(s) to Trash", paint.red("Moved"), count);
+        println!("{} {} to Trash", paint.red("Moved"), count);
     }
     Ok(())
 }
@@ -1325,14 +1331,16 @@ fn cmd_mv(cli: &Cli, args: MvArgs, paint: &Paint) -> Result<()> {
     } else {
         TaskPlacement::Inbox(position)
     };
-    store.execute(CoreCommand::MoveTasks { ids, placement })?;
+    let outcome = store.execute(CoreCommand::MoveTasks { ids, placement })?;
     if cli.json {
         println!(
             "{}",
             serde_json::to_string_pretty(&json!({"moved": args.ids.len()}))?
         );
+    } else if let Some(message) = outcome.message {
+        println!("{}", paint.green(&message));
     } else {
-        println!("{} {} task(s)", paint.green("Moved"), args.ids.len());
+        println!("{} {} tasks", paint.green("Moved"), args.ids.len());
     }
     Ok(())
 }

@@ -378,7 +378,7 @@ impl Command {
                 None => "Edit task".to_string(),
             },
             Command::CompleteTasks { ids, completed } => {
-                let verb = if *completed { "Complete" } else { "Uncomplete" };
+                let verb = if *completed { "Complete" } else { "Reopen" };
                 if ids.len() == 1 {
                     match task_name(&ids[0]) {
                         Some(name) => format!("{verb} task “{name}”"),
@@ -388,32 +388,36 @@ impl Command {
                     format!("{verb} {} tasks", ids.len())
                 }
             }
-            Command::DeleteTasks { ids } => format!("Move {} task(s) to Trash", ids.len()),
-            Command::DeleteTaskSeries { ids } => {
-                format!("Move {} repeating series to Trash", ids.len())
+            Command::DeleteTasks { ids } => {
+                format!("Move {} to Trash", task_count(ids.len()))
             }
-            Command::MoveTasks { ids, .. } => format!("Move {} task(s)", ids.len()),
-            Command::SetTaskTags { ids, .. } => format!("Tag {} task(s)", ids.len()),
+            Command::DeleteTaskSeries { ids } => {
+                format!("Move {} in the series to Trash", task_count(ids.len()))
+            }
+            Command::MoveTasks { ids, .. } => format!("Move {}", task_count(ids.len())),
+            Command::SetTaskTags { ids, .. } => format!("Tag {}", task_count(ids.len())),
             Command::SetTaskFlag { ids, flagged } => {
                 format!(
-                    "{} {} task(s)",
+                    "{} {}",
                     if *flagged { "Flag" } else { "Unflag" },
-                    ids.len()
+                    task_count(ids.len())
                 )
             }
             Command::SetTaskPriority { ids, priority } => format!(
-                "Set {} task(s) to {} priority",
-                ids.len(),
+                "Set {} to {} priority",
+                task_count(ids.len()),
                 priority.map(|p| p.label()).unwrap_or("no")
             ),
-            Command::RestoreTasks { ids } => format!("Restore {} task(s)", ids.len()),
-            Command::PurgeTasks { ids } => format!("Permanently delete {} task(s)", ids.len()),
+            Command::RestoreTasks { ids } => format!("Restore {}", task_count(ids.len())),
+            Command::PurgeTasks { ids } => {
+                format!("Permanently delete {}", task_count(ids.len()))
+            }
             Command::ConvertTaskToProject { .. } => "Convert task to project".to_string(),
             Command::PurgeExpiredTrash { .. } => "Empty expired trash".to_string(),
-            Command::AddChecklistItem { .. } => "Add checklist item".to_string(),
-            Command::UpdateChecklistItem { .. } => "Edit checklist item".to_string(),
-            Command::MoveChecklistItem { .. } => "Reorder checklist item".to_string(),
-            Command::DeleteChecklistItem { .. } => "Delete checklist item".to_string(),
+            Command::AddChecklistItem { .. } => "Add checklist step".to_string(),
+            Command::UpdateChecklistItem { .. } => "Update checklist step".to_string(),
+            Command::MoveChecklistItem { .. } => "Reorder checklist step".to_string(),
+            Command::DeleteChecklistItem { .. } => "Delete checklist step".to_string(),
             Command::CreateProject(project) => format!("Add project “{}”", project.name),
             Command::UpdateProject { id, .. } => match project_name(id) {
                 Some(name) => format!("Edit project “{name}”"),
@@ -464,10 +468,10 @@ impl Command {
                 Some(name) => format!("Delete perspective “{name}”"),
                 None => "Delete perspective".to_string(),
             },
-            Command::UpdateSettings(_) => "Update settings".to_string(),
+            Command::UpdateSettings(_) => "Change settings".to_string(),
             Command::Import { mode, .. } => match mode {
                 ImportMode::Replace => "Import library".to_string(),
-                ImportMode::Merge => "Merge import".to_string(),
+                ImportMode::Merge => "Import and merge".to_string(),
             },
         }
     }
@@ -537,7 +541,7 @@ impl Command {
                 db.insert_task_at(key, id.clone(), new_task.position);
                 db.touch();
                 outcome.created.push(id.to_string());
-                outcome.message = Some(format!("Added “{title}”"));
+                outcome.message = Some(format!("Task “{title}” added"));
             }
             Command::UpdateTask { id, patch } => {
                 // Resolve or create a project path before borrowing the task so
@@ -628,8 +632,20 @@ impl Command {
                 }
                 db.touch();
                 outcome.affected.push(id.to_string());
+                let title = db
+                    .tasks
+                    .get(&id)
+                    .map(|task| task.title.clone())
+                    .unwrap_or_default();
+                outcome.message = Some(if title.is_empty() {
+                    "Task updated".to_string()
+                } else {
+                    format!("Task “{title}” updated")
+                });
             }
             Command::CompleteTasks { ids, completed } => {
+                let mut changed = 0usize;
+                let mut first_title: Option<String> = None;
                 for id in ids {
                     let Some(task) = db.tasks.get(&id) else {
                         continue;
@@ -661,6 +677,10 @@ impl Command {
                             task.repeat_series = Some(series.clone());
                         }
                         task.modified_at = at;
+                    }
+                    changed += 1;
+                    if first_title.is_none() {
+                        first_title = Some(title.clone());
                     }
                     if completed {
                         if let Some(rule) = repeat {
@@ -709,10 +729,21 @@ impl Command {
                     outcome.affected.push(id.to_string());
                 }
                 db.touch();
+                let verb = if completed { "Completed" } else { "Reopened" };
+                outcome.message = Some(if changed == 1 {
+                    format!(
+                        "{verb} task “{}”",
+                        first_title.unwrap_or_else(|| "task".to_string())
+                    )
+                } else if changed > 1 {
+                    format!("{verb} {}", task_count(changed))
+                } else {
+                    "Nothing to change".to_string()
+                });
             }
             Command::DeleteTasks { ids } => {
                 let trashed = trash_tasks(db, &ids, at);
-                outcome.message = Some(format!("Moved {} task(s) to Trash", trashed.len()));
+                outcome.message = Some(format!("Moved {} to Trash", task_count(trashed.len())));
                 db.touch();
             }
             Command::DeleteTaskSeries { ids } => {
@@ -730,8 +761,8 @@ impl Command {
                 }
                 let trashed = trash_tasks(db, &members, at);
                 outcome.message = Some(format!(
-                    "Moved {} task(s) in the series to Trash",
-                    trashed.len()
+                    "Moved {} in the series to Trash",
+                    task_count(trashed.len())
                 ));
                 db.touch();
             }
@@ -750,13 +781,13 @@ impl Command {
                         task.modified_at = at;
                     }
                 }
-                outcome.message = Some(format!("Restored {} task(s)", restored.len()));
+                outcome.message = Some(format!("Restored {}", task_count(restored.len())));
                 outcome.affected.extend(ids.iter().map(|id| id.to_string()));
                 db.touch();
             }
             Command::PurgeTasks { ids } => {
                 let removed = purge_tasks(db, &ids);
-                outcome.message = Some(format!("Permanently deleted {} task(s)", removed));
+                outcome.message = Some(format!("Permanently deleted {}", task_count(removed)));
                 db.touch();
             }
             Command::PurgeExpiredTrash { before } => {
@@ -767,7 +798,11 @@ impl Command {
                     .map(|task| task.id.clone())
                     .collect();
                 let removed = purge_tasks(db, &ids);
-                outcome.message = Some(format!("Emptied {removed} expired task(s) from Trash"));
+                outcome.message = Some(if removed == 0 {
+                    "No expired tasks to empty".to_string()
+                } else {
+                    format!("Emptied {} from Trash", task_count(removed))
+                });
                 db.touch();
             }
             Command::ConvertTaskToProject { id, folder } => {
@@ -830,13 +865,23 @@ impl Command {
                 db.detach_task(&id);
                 db.tasks.remove(&id);
                 outcome.created.push(project_id.to_string());
-                outcome.message = Some(format!("Converted to project {}", project_id));
+                let name = db
+                    .projects
+                    .get(&project_id)
+                    .map(|project| project.name.clone())
+                    .unwrap_or_default();
+                outcome.message = Some(if name.is_empty() {
+                    "Converted to a project".to_string()
+                } else {
+                    format!("Converted to project “{name}”")
+                });
                 db.touch();
             }
             Command::MoveTasks { ids, placement } => {
                 move_tasks(db, &ids, placement)?;
                 outcome.affected.extend(ids.iter().map(|id| id.to_string()));
                 db.touch();
+                outcome.message = Some(format!("Moved {}", task_count(ids.len())));
             }
             Command::SetTaskTags { ids, add, remove } => {
                 for id in &ids {
@@ -851,6 +896,7 @@ impl Command {
                 }
                 outcome.affected.extend(ids.iter().map(|id| id.to_string()));
                 db.touch();
+                outcome.message = Some(format!("Tagged {}", task_count(ids.len())));
             }
             Command::SetTaskFlag { ids, flagged } => {
                 for id in &ids {
@@ -860,6 +906,11 @@ impl Command {
                 }
                 outcome.affected.extend(ids.iter().map(|id| id.to_string()));
                 db.touch();
+                outcome.message = Some(format!(
+                    "{} {}",
+                    if flagged { "Flagged" } else { "Unflagged" },
+                    task_count(ids.len())
+                ));
             }
             Command::SetTaskPriority { ids, priority } => {
                 for id in &ids {
@@ -869,6 +920,14 @@ impl Command {
                 }
                 outcome.affected.extend(ids.iter().map(|id| id.to_string()));
                 db.touch();
+                outcome.message = Some(match priority {
+                    Some(priority) => format!(
+                        "Priority set to {} for {}",
+                        priority.label().to_lowercase(),
+                        task_count(ids.len())
+                    ),
+                    None => format!("Priority cleared for {}", task_count(ids.len())),
+                });
             }
             Command::AddChecklistItem {
                 task: task_id,
@@ -888,6 +947,7 @@ impl Command {
                 outcome.created.push(item.id.to_string());
                 outcome.affected.push(task_id.to_string());
                 db.touch();
+                outcome.message = Some(format!("Checklist step “{title}” added"));
             }
             Command::UpdateChecklistItem {
                 task: task_id,
@@ -910,6 +970,11 @@ impl Command {
                 task.modified_at = at;
                 outcome.affected.push(task_id.to_string());
                 db.touch();
+                outcome.message = Some(match completed {
+                    Some(true) => format!("Checklist step “{title}” completed"),
+                    Some(false) => format!("Checklist step “{title}” reopened"),
+                    None => format!("Checklist step “{title}” updated"),
+                });
             }
             Command::MoveChecklistItem {
                 task: task_id,
@@ -926,6 +991,7 @@ impl Command {
                 task.modified_at = at;
                 outcome.affected.push(task_id.to_string());
                 db.touch();
+                outcome.message = Some("Checklist step reordered".to_string());
             }
             Command::DeleteChecklistItem {
                 task: task_id,
@@ -940,6 +1006,7 @@ impl Command {
                 task.modified_at = at;
                 outcome.affected.push(task_id.to_string());
                 db.touch();
+                outcome.message = Some("Checklist step deleted".to_string());
             }
             Command::CreateProject(new_project) => {
                 let name = new_project.name.trim();
@@ -985,6 +1052,7 @@ impl Command {
                 );
                 db.touch();
                 outcome.created.push(id.to_string());
+                outcome.message = Some(format!("Project “{name}” added"));
             }
             Command::UpdateProject { id, patch } => {
                 if let Some(name) = &patch.name {
@@ -1051,6 +1119,16 @@ impl Command {
                 }
                 db.touch();
                 outcome.affected.push(id.to_string());
+                let name = db
+                    .projects
+                    .get(&id)
+                    .map(|project| project.name.clone())
+                    .unwrap_or_default();
+                outcome.message = Some(if name.is_empty() {
+                    "Project updated".to_string()
+                } else {
+                    format!("Project “{name}” updated")
+                });
             }
             Command::SetProjectStatus { id, status } => {
                 let previous = db.project(&id)?.status;
@@ -1076,7 +1154,16 @@ impl Command {
                 }
                 db.touch();
                 outcome.affected.push(id.to_string());
-                outcome.message = Some(format!("Project marked {}", status.label()));
+                let name = db
+                    .projects
+                    .get(&id)
+                    .map(|project| project.name.clone())
+                    .unwrap_or_default();
+                outcome.message = Some(if name.is_empty() {
+                    format!("Project marked {}", status.label().to_lowercase())
+                } else {
+                    format!("Project “{name}” marked {}", status.label().to_lowercase())
+                });
             }
             Command::CompleteReview { id, reviewed_on } => {
                 let interval = db.project(&id)?.review_interval_days.max(1) as i64;
@@ -1085,6 +1172,16 @@ impl Command {
                 project.modified_at = at;
                 db.touch();
                 outcome.affected.push(id.to_string());
+                let name = db
+                    .projects
+                    .get(&id)
+                    .map(|project| project.name.clone())
+                    .unwrap_or_default();
+                outcome.message = Some(if name.is_empty() {
+                    "Project reviewed".to_string()
+                } else {
+                    format!("Project “{name}” reviewed")
+                });
             }
             Command::MoveProject { id, placement } => {
                 let project = db.project(&id)?;
@@ -1102,13 +1199,29 @@ impl Command {
                 );
                 db.touch();
                 outcome.affected.push(id.to_string());
+                let name = db
+                    .projects
+                    .get(&id)
+                    .map(|project| project.name.clone())
+                    .unwrap_or_default();
+                outcome.message = Some(if name.is_empty() {
+                    "Project moved".to_string()
+                } else {
+                    format!("Project “{name}” moved")
+                });
             }
             Command::DeleteProject { id } => {
-                db.project(&id)?;
+                let name = db.project(&id)?.name.clone();
                 let trashed = trash_project(db, &id, at);
                 db.touch();
-                outcome.message =
-                    Some(format!("Project deleted; {trashed} task(s) moved to Trash"));
+                outcome.message = Some(if trashed == 0 {
+                    format!("Project “{name}” deleted")
+                } else {
+                    format!(
+                        "Project “{name}” deleted; {} moved to Trash",
+                        task_count(trashed)
+                    )
+                });
             }
             Command::CreateFolder {
                 name,
@@ -1130,6 +1243,7 @@ impl Command {
                 db.insert_container(parent, ContainerId::Folder(id.clone()), position);
                 db.touch();
                 outcome.created.push(id.to_string());
+                outcome.message = Some(format!("Folder “{name}” added"));
             }
             Command::RenameFolder { id, name } => {
                 let name = name.trim();
@@ -1141,6 +1255,7 @@ impl Command {
                 db.folder_mut(&id)?.name = name.to_string();
                 db.touch();
                 outcome.affected.push(id.to_string());
+                outcome.message = Some(format!("Folder renamed to “{name}”"));
             }
             Command::MoveFolder { id, placement } => {
                 if let Some(parent) = &placement.parent {
@@ -1160,6 +1275,16 @@ impl Command {
                 );
                 db.touch();
                 outcome.affected.push(id.to_string());
+                let name = db
+                    .folders
+                    .get(&id)
+                    .map(|folder| folder.name.clone())
+                    .unwrap_or_default();
+                outcome.message = Some(if name.is_empty() {
+                    "Folder moved".to_string()
+                } else {
+                    format!("Folder “{name}” moved")
+                });
             }
             Command::DeleteFolder { id } => {
                 db.folder(&id)?;
@@ -1187,10 +1312,15 @@ impl Command {
                 }
                 remove_folder_tree(db, &id);
                 db.touch();
-                outcome.message = Some(format!(
-                    "Folder deleted; {} project(s) and {trashed} task(s) moved to Trash",
-                    projects.len()
-                ));
+                outcome.message = Some(if projects.is_empty() && trashed == 0 {
+                    "Folder deleted".to_string()
+                } else {
+                    format!(
+                        "Folder deleted; {} and {} moved to Trash",
+                        project_count(projects.len()),
+                        task_count(trashed)
+                    )
+                });
             }
             Command::CreateTag {
                 name,
@@ -1239,6 +1369,7 @@ impl Command {
                 }
                 db.touch();
                 outcome.created.push(id.to_string());
+                outcome.message = Some(format!("Tag “{name}” added"));
             }
             Command::UpdateTag { id, patch } => {
                 let old_parent = db.tag(&id)?.parent.clone();
@@ -1303,6 +1434,16 @@ impl Command {
                 }
                 db.touch();
                 outcome.affected.push(id.to_string());
+                let name = db
+                    .tags
+                    .get(&id)
+                    .map(|tag| tag.name.clone())
+                    .unwrap_or_default();
+                outcome.message = Some(if name.is_empty() {
+                    "Tag updated".to_string()
+                } else {
+                    format!("Tag “{name}” updated")
+                });
             }
             Command::DeleteTag { id } => {
                 let tag = db.tag(&id)?.clone();
@@ -1342,6 +1483,7 @@ impl Command {
                 db.tags.remove(&id);
                 db.touch();
                 outcome.affected.push(id.to_string());
+                outcome.message = Some(format!("Tag “{}” deleted", tag.name));
             }
             Command::SavePerspective { mut perspective } => {
                 let name = perspective.name.trim();
@@ -1363,14 +1505,26 @@ impl Command {
                     perspective.position = next;
                 }
                 let id = perspective.id.clone();
+                let name = perspective.name.clone();
                 db.perspectives.insert(id.clone(), perspective);
                 db.touch();
                 outcome.affected.push(id.to_string());
+                outcome.message = Some(format!("Perspective “{name}” saved"));
             }
             Command::DeletePerspective { id } => {
+                let name = db
+                    .perspectives
+                    .get(&id)
+                    .map(|perspective| perspective.name.clone())
+                    .unwrap_or_default();
                 db.perspectives.remove(&id);
                 db.touch();
                 outcome.affected.push(id.to_string());
+                outcome.message = Some(if name.is_empty() {
+                    "Perspective deleted".to_string()
+                } else {
+                    format!("Perspective “{name}” deleted")
+                });
             }
             Command::UpdateSettings(patch) => {
                 let settings = &mut db.settings;
@@ -1405,6 +1559,7 @@ impl Command {
                     settings.sidebar = sidebar;
                 }
                 db.touch();
+                outcome.message = Some("Settings updated".to_string());
             }
             Command::Import { db: imported, mode } => {
                 imported.validate().map_err(|error| {
@@ -1414,13 +1569,15 @@ impl Command {
                     ImportMode::Replace => {
                         *db = imported;
                         db.touch();
-                        outcome.message = Some("Library replaced from import".to_string());
+                        outcome.message = Some("Library imported".to_string());
                     }
                     ImportMode::Merge => {
                         let stats = merge_db(db, imported);
                         outcome.message = Some(format!(
-                            "Merged import: {} new tasks, {} new projects, {} new tags",
-                            stats.tasks, stats.projects, stats.tags
+                            "Library merged: {}, {} and {} added",
+                            task_count(stats.tasks),
+                            project_count(stats.projects),
+                            tag_count(stats.tags)
                         ));
                     }
                 }
@@ -1840,4 +1997,25 @@ fn purge_tasks(db: &mut Db, ids: &[TaskId]) -> usize {
         db.tasks.remove(id);
     }
     removed.len()
+}
+
+fn task_count(count: usize) -> String {
+    match count {
+        1 => "1 task".to_string(),
+        n => format!("{n} tasks"),
+    }
+}
+
+fn project_count(count: usize) -> String {
+    match count {
+        1 => "1 project".to_string(),
+        n => format!("{n} projects"),
+    }
+}
+
+fn tag_count(count: usize) -> String {
+    match count {
+        1 => "1 tag".to_string(),
+        n => format!("{n} tags"),
+    }
 }
