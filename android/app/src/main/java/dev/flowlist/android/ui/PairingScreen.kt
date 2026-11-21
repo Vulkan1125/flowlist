@@ -86,7 +86,7 @@ fun PairingScreen(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Your tasks stay on your Mac. This phone is a remote for that library — no account and nothing sent to a server.",
+            text = "Your tasks stay on your Mac. This phone is a remote for that library — no account and nothing leaves your devices.",
             style = MaterialTheme.typography.bodyMedium,
             color = colors.faint,
             lineHeight = 21.sp,

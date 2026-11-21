@@ -275,7 +275,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Import modal (JSON or TaskPaper, merge or replace)
 - [x] TaskPaper clipboard export (`⇧⌘E`)
 - [x] Settings is a sectioned sheet: Appearance, Sidebar, Workflow, Nearby,
-      Trash and About sit in a fixed rail beside one scrolling pane, with `⌘1`–`⌘6`
+      Trash, Mobile and About sit in a fixed rail beside one scrolling pane, with `⌘1`–`⌘7`
       as the keyboard route. The Sidebar section chooses which rail sections
       appear and which ones carry count badges; the quiet default shows every
       section but only numbers the Library (and Today, which always carries its

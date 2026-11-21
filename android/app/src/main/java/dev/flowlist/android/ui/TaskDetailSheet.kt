@@ -150,7 +150,7 @@ fun TaskDetailSheet(
                 Text("Move to Trash", color = colors.danger, style = MaterialTheme.typography.labelLarge)
             }
             Text(
-                text = "Editing on the phone arrives next; for now changes happen on the Mac.",
+                text = "Changes sync to your Mac as you make them.",
                 style = MaterialTheme.typography.labelSmall,
                 color = colors.faint,
                 modifier = Modifier.fillMaxWidth(),

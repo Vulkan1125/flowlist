@@ -41,6 +41,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -98,9 +101,41 @@ fun MainScreen(
     var project by remember { mutableStateOf<ProjectDto?>(null) }
     val haptics = LocalHapticFeedback.current
     val snapshot = state.snapshot
+    val snackbarHost = remember { SnackbarHostState() }
+
+    val complete: (TaskView, Boolean) -> Unit = { task, done ->
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        scope.launch {
+            repository.complete(task.id, done)
+            val result = snackbarHost.showSnackbar(
+                message = if (done) "Completed “${task.title}”" else "Reopened “${task.title}”",
+                actionLabel = "Undo",
+                withDismissAction = false,
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                repository.complete(task.id, !done)
+            }
+        }
+    }
+    val trash: (TaskView) -> Unit = { task ->
+        scope.launch {
+            val removed = repository.delete(task.id)
+            val result = snackbarHost.showSnackbar(
+                message = "Moved “${task.title}” to Trash",
+                actionLabel = "Undo",
+                withDismissAction = false,
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed && removed != null) {
+                repository.restore(removed)
+            }
+        }
+    }
 
     Scaffold(
         containerColor = colors.background,
+        snackbarHost = { FlowSnackbarHost(snackbarHost) },
         bottomBar = {
             NavigationBar(
                 containerColor = colors.background,
@@ -169,28 +204,19 @@ fun MainScreen(
                 Tab.Inbox -> InboxList(
                     tasks = snapshot?.db?.inbox().orEmpty(),
                     pending = state.pending,
-                    onToggle = { task ->
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        scope.launch { repository.complete(task.id, true) }
-                    },
+                    onToggle = { task -> complete(task, true) },
                     onClick = { detail = it },
                 )
                 Tab.Today -> TodayList(
                     tasks = snapshot?.db?.today().orEmpty(),
                     pending = state.pending,
-                    onToggle = { task ->
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        scope.launch { repository.complete(task.id, true) }
-                    },
+                    onToggle = { task -> complete(task, true) },
                     onClick = { detail = it },
                 )
                 Tab.Forecast -> ForecastList(
                     groups = snapshot?.db?.forecast().orEmpty(),
                     pending = state.pending,
-                    onToggle = { task ->
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        scope.launch { repository.complete(task.id, true) }
-                    },
+                    onToggle = { task -> complete(task, true) },
                     onClick = { detail = it },
                 )
                 Tab.Browse -> BrowseList(
@@ -219,12 +245,11 @@ fun MainScreen(
             pending = task.id in state.pending,
             onDismiss = { detail = null },
             onComplete = {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                scope.launch { repository.complete(task.id, !task.completed) }
+                complete(task, !task.completed)
                 detail = null
             },
             onDelete = {
-                scope.launch { repository.delete(task.id) }
+                trash(task)
                 detail = null
             },
         )
@@ -259,10 +284,7 @@ fun MainScreen(
                 }
                 .orEmpty(),
             onDismiss = { project = null },
-            onToggle = { task ->
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                scope.launch { repository.complete(task.id, true) }
-            },
+            onToggle = { task -> complete(task, true) },
             onClick = { task ->
                 project = null
                 detail = task
@@ -277,7 +299,7 @@ fun MainScreen(
             onSync = { scope.launch { repository.sync() } },
             onSignOut = {
                 settings = false
-                repository.signOut()
+                scope.launch { repository.signOut() }
             },
         )
     }
@@ -421,14 +443,16 @@ private fun TodayList(
                 Hairline(Modifier.padding(start = 58.dp))
             }
         }
-        item { SectionLabel(if (overdue.isEmpty()) "Due today" else "Today") }
-        items(today, key = { it.id }) { task ->
-            TaskRow(
-                task = task.copy(pending = task.id in pending),
-                onToggle = { onToggle(task) },
-                onClick = { onClick(task) },
-            )
-            Hairline(Modifier.padding(start = 58.dp))
+        if (today.isNotEmpty()) {
+            item { SectionLabel(if (overdue.isEmpty()) "Due today" else "Today") }
+            items(today, key = { it.id }) { task ->
+                TaskRow(
+                    task = task.copy(pending = task.id in pending),
+                    onToggle = { onToggle(task) },
+                    onClick = { onClick(task) },
+                )
+                Hairline(Modifier.padding(start = 58.dp))
+            }
         }
     }
 }

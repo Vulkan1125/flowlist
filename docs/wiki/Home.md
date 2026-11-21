@@ -1,8 +1,8 @@
 # Flowlist
 
-**A fast, local-first task manager for macOS.** One window, one library file,
-and the same tasks from the desktop app, the `flowlist` command line and an MCP
-server for AI assistants.
+**A fast, local-first task manager for macOS and Android.** One window, one
+library file, and the same tasks from the desktop app, a phone, the `flowlist`
+command line and an MCP server for AI assistants.
 
 Nothing leaves your Mac. There is no account, no sync service and no telemetry.
 
@@ -18,7 +18,7 @@ are in Settings → Appearance.*
 
 ## Install
 
-1. Download **Flowlist-0.1.5.dmg** (or the zip) from the
+1. Download **Flowlist-0.2.0.dmg** (or the zip) from the
    [latest release](https://github.com/Vulkan1125/flowlist/releases/latest).
 2. Open the DMG and drag **Flowlist** to Applications, or unzip and move the
    app yourself.
@@ -33,16 +33,24 @@ Flowlist keeps its library in
 point Flowlist at it if you want the same library on more than one Mac; do not
 let two machines write to it at the same time.
 
-## Three ways to use it
+## Android
+
+Download **Flowlist-Android-0.2.0.apk** from the same release, install it, then
+open **Settings → Mobile** on the Mac and turn on **Serve to my phone**. Enter
+one of the addresses and the pairing code in the app. See
+[Using the phone](Using-the-Phone) for the full walkthrough.
+
+## Four ways to use it
 
 | Surface | Open it with | Good for |
 | --- | --- | --- |
 | Desktop app | `open /Applications/Flowlist.app` | day-to-day planning, dragging, reviewing |
+| Android | install `Flowlist-Android-0.2.0.apk` | capture and checking off away from the Mac |
 | CLI | `/Applications/Flowlist.app/Contents/MacOS/flowlist` | scripts, terminal habits, bulk edits |
 | MCP server | `…/flowlist mcp` | letting an AI assistant read and change the library |
 
-All three share one library and one undo history: a task captured from the
-floating panel can be completed in the terminal, and `⌘Z` in the app can undo
+All four share one library and one undo history: a task captured on the phone
+can be completed in the terminal, and `⌘Z` in the app can undo
 the terminal's change.
 
 ## Start here

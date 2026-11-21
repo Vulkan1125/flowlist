@@ -271,7 +271,7 @@ library:
   headings, tag ordering by usage, the live-project folder badge, title-bar
   history, Settings visibility and count choices, and that those choices
   survive a relaunch.
-- `scripts/gui/settings-probe.sh` checks the sectioned sheet, the `⌘1`–`⌘6`
+- `scripts/gui/settings-probe.sh` checks the sectioned sheet, the `⌘1`–`⌘7`
   section shortcuts, Plain's keyboard accent presets, Cancel's undo pair, the
   saved accent pair, relaunch persistence and Reset to ink.
 

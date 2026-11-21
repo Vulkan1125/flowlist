@@ -3,6 +3,7 @@
 - [Home](Home)
 - [Using the GUI](Using-the-GUI)
 - [Using the CLI](Using-the-CLI)
+- [Using the phone](Using-the-Phone)
 - [Using the MCP server](Using-the-MCP)
 
 ---

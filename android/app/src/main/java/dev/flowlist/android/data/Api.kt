@@ -52,6 +52,16 @@ class Api(
             json.decodeFromString<PairResponse>(text)
         }
 
+    suspend fun unpair(base: String, token: String) = withContext(Dispatchers.IO) {
+        execute(
+            Request.Builder()
+                .url("${base.trimEnd('/')}/api/v1/unpair")
+                .header("Authorization", "Bearer $token")
+                .post("{}".toRequestBody(mediaType))
+                .build(),
+        )
+    }
+
     suspend fun snapshot(base: String, token: String): Snapshot = withContext(Dispatchers.IO) {
         val text = execute(
             Request.Builder()
@@ -142,6 +152,18 @@ fun completeCommand(ids: List<String>, completed: Boolean): JsonObject = buildJs
 fun deleteCommand(ids: List<String>): JsonObject = buildJsonObject {
     put(
         "delete_tasks",
+        buildJsonObject {
+            put(
+                "ids",
+                buildJsonArray { ids.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } },
+            )
+        },
+    )
+}
+
+fun restoreCommand(ids: List<String>): JsonObject = buildJsonObject {
+    put(
+        "restore_tasks",
         buildJsonObject {
             put(
                 "ids",

@@ -241,7 +241,7 @@ attached to every icon-only control:
 
 The help card (`?`) lists the same routes in one place, so a keyboard user does
 not need to discover a tooltip first. Settings sections are reachable with
-`⌘1`–`⌘6`, `⇥` visits only the fields in the section on screen, and Plain's
+`⌘1`–`⌘7`, `⇥` visits only the fields in the section on screen, and Plain's
 accent presets are the digits `1`–`9` while Appearance is open.
 
 ## Focus and selection visibility

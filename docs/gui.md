@@ -219,7 +219,7 @@ so typing replaces it. The New Project sheet adds Notes and a Review every
 (days) field, so each project can have its own cadence.
 
 Settings is a sectioned sheet: a fixed rail on the left and one section on the
-right. `⌘1`–`⌘6` jump straight to a section, and `⇥` only walks the fields in
+right. `⌘1`–`⌘7` jump straight to a section, and `⇥` only walks the fields in
 the section on screen.
 
 - **Appearance** — theme family, light/dark, follow-system appearance. For

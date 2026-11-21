@@ -1,10 +1,11 @@
 # Flowlist
 
-**A fast, local-first task manager for macOS.** Inbox, projects, tags, repeats,
-reviews and a floating capture panel in one native window. The same library is
-available from the `flowlist` CLI and an MCP server for AI assistants.
+**A fast, local-first task manager for macOS and Android.** Inbox, projects,
+tags, repeats, reviews and a floating capture panel in one native window. A
+phone app uses the same library, and the `flowlist` CLI and MCP server expose it
+to scripts and AI assistants.
 
-**[Download Flowlist 0.1.5](https://github.com/Vulkan1125/flowlist/releases/latest)**
+**[Download Flowlist 0.2.0](https://github.com/Vulkan1125/flowlist/releases/latest)**
 · [Wiki](https://github.com/Vulkan1125/flowlist/wiki)
 · [Using the GUI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-GUI)
 · [CLI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-CLI)
@@ -17,7 +18,7 @@ Settings → Appearance.*
 
 ## Install
 
-1. Download **Flowlist-0.1.5.dmg** (or the zip) from the latest release.
+1. Download **Flowlist-0.2.0.dmg** (or the zip) from the latest release.
 2. Open the DMG and drag **Flowlist** to Applications, or unzip and move the app
    yourself.
 3. The first time, right-click the app and choose **Open**. The build is
@@ -60,10 +61,33 @@ uploaded; there is no account, no sync service and no telemetry.
 | Surface | Start it with | Good for |
 | --- | --- | --- |
 | Desktop app | `open /Applications/Flowlist.app` | planning, dragging, reviewing |
+| Android app | install `Flowlist-Android-0.2.0.apk` | capture and checking off on the go |
 | CLI | `…/Flowlist.app/Contents/MacOS/flowlist` | scripts and terminal habits |
 | MCP server | `…/flowlist mcp` | letting an AI assistant read and change the library |
 
-All three use the same library and the same undo history.
+All four use the same library and the same undo history.
+
+## Android
+
+The phone is a client of the Mac library, not a second one. Nothing syncs
+through a cloud: the app talks to a small server inside Flowlist, on your Wi-Fi
+or over Tailscale.
+
+1. Install `Flowlist-Android-0.2.0.apk` from the release. Android will ask you
+   to allow installs from your browser or file manager.
+2. On the Mac, open **Settings → Mobile** and turn on **Serve to my phone**. The
+   login agent keeps it running after you close the window.
+3. On the phone, enter one of the addresses shown there and the six-digit
+   pairing code.
+
+Captures, completions and deletes appear on the Mac immediately. If the Mac is
+asleep or you are out of range, the phone shows a **Waiting** mark and syncs
+when it can. Everything works offline for reading, capturing and completing.
+
+The app covers Inbox, Today, Forecast, Browse, capture with the same
+`due:`/`#tag`/`::Project` syntax, task detail, complete, trash and undo.
+Editing every field on the phone, a home-screen widget and due notifications are
+next.
 
 ## Capture
 

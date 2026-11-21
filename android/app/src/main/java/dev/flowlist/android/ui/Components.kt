@@ -24,6 +24,9 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -271,6 +274,39 @@ fun EmptyState(
             color = colors.faint,
             lineHeight = 20.sp,
         )
+    }
+}
+
+@Composable
+fun FlowSnackbarHost(hostState: SnackbarHostState) {
+    val colors = flow
+    SnackbarHost(hostState = hostState) { data ->
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(colors.ink)
+                .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = data.visuals.message,
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.background,
+                modifier = Modifier.weight(1f),
+            )
+            data.visuals.actionLabel?.let { label ->
+                TextButton(onClick = { data.performAction() }) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.background,
+                    )
+                }
+            }
+        }
     }
 }
 

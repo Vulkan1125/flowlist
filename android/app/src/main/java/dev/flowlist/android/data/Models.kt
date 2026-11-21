@@ -172,7 +172,15 @@ fun Db.inbox(): List<TaskView> {
     }
     return order
         .mapNotNull { byId[it] }
-        .filter { it.isActive && it.project == null }
+        .filter {
+            // Inbox means unscheduled, exactly as on the Mac: giving a task a
+            // due or defer date moves it to Today or Forecast.
+            it.isActive &&
+                it.project == null &&
+                it.parent == null &&
+                it.due == null &&
+                it.defer == null
+        }
         .map { it.toView(this) }
 }
 

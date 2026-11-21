@@ -566,6 +566,13 @@ fn route(request: &Request, peer: SocketAddr, shared: &Shared) -> Response {
             )
         }
         ("POST", "/api/v1/pair") => pair(request, shared),
+        ("POST", "/api/v1/unpair") => {
+            let token = match authorize(request, shared) {
+                Ok(token) => token,
+                Err(response) => return response,
+            };
+            unpair(shared, &token)
+        }
         ("GET", "/api/v1/snapshot") => {
             if let Err(response) = authorize(request, shared) {
                 return response;
@@ -593,7 +600,7 @@ fn route(request: &Request, peer: SocketAddr, shared: &Shared) -> Response {
     }
 }
 
-fn authorize(request: &Request, shared: &Shared) -> Result<(), Response> {
+fn authorize(request: &Request, shared: &Shared) -> Result<String, Response> {
     let token = request
         .header("authorization")
         .and_then(|value| value.strip_prefix("Bearer "))
@@ -608,10 +615,28 @@ fn authorize(request: &Request, shared: &Shared) -> Result<(), Response> {
         .iter()
         .any(|device| constant_eq(device.token.as_bytes(), token.as_bytes()));
     if known {
-        Ok(())
+        Ok(token.to_string())
     } else {
         Err(Response::error(401, "unknown token; pair again"))
     }
+}
+
+fn unpair(shared: &Shared, token: &str) -> Response {
+    let mut mobile = load_mobile(&shared.paths.root);
+    let before = mobile.devices.len();
+    mobile
+        .devices
+        .retain(|device| !constant_eq(device.token.as_bytes(), token.as_bytes()));
+    if let Err(error) = save_mobile(&shared.paths.root, &mobile) {
+        return Response::error(500, format!("could not save the device list: {error}"));
+    }
+    Response::json(
+        200,
+        json!({
+            "unpaired": before != mobile.devices.len(),
+            "devices": mobile.devices.len(),
+        }),
+    )
 }
 
 fn pair(request: &Request, shared: &Shared) -> Response {
@@ -1050,6 +1075,21 @@ mod tests {
         assert_eq!(value["results"][0]["duplicate"], true, "{value}");
         let tasks = value["db"]["tasks"].as_object().unwrap();
         assert_eq!(tasks.len(), 1, "a retry must not duplicate the capture");
+
+        let (status, body) = http(
+            "POST",
+            &format!("{base}/api/v1/unpair"),
+            Some("{}"),
+            Some(&token),
+        );
+        assert_eq!(status, 200, "{body}");
+        let (status, _) = http(
+            "GET",
+            &format!("{base}/api/v1/snapshot"),
+            None,
+            Some(&token),
+        );
+        assert_eq!(status, 401, "an unpaired token must stop working");
     }
 
     #[test]

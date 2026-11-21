@@ -150,9 +150,9 @@ class Repository(context: Context) {
         sync()
     }
 
-    suspend fun delete(taskId: String) {
-        val snapshot = _state.value.snapshot ?: return
-        val task = snapshot.db.tasks[taskId] ?: return
+    suspend fun delete(taskId: String): TaskDto? {
+        val snapshot = _state.value.snapshot ?: return null
+        val task = snapshot.db.tasks[taskId] ?: return null
         val db = snapshot.db
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks - taskId))
         files.saveSnapshot(updated)
@@ -165,9 +165,40 @@ class Repository(context: Context) {
             ),
         )
         sync()
+        return task
     }
 
-    fun signOut() {
+    suspend fun restore(task: TaskDto) {
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val updated = snapshot.copy(
+            db = db.copy(
+                tasks = db.tasks + (task.id to task),
+                inboxOrder = if (task.project == null && task.parent == null) {
+                    (db.inboxOrder + task.id).distinct()
+                } else {
+                    db.inboxOrder
+                },
+            ),
+        )
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = restoreCommand(listOf(task.id)),
+                label = task.title,
+            ),
+        )
+        sync()
+    }
+
+    suspend fun signOut() {
+        val base = session.baseUrl
+        val token = session.token
+        if (base != null && token != null) {
+            runCatching { api.unpair(base, token) }
+        }
         session.clear()
         files.clear()
         outbox.clear()

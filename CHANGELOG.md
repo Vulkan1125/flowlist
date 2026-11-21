@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.0 — 2026-11-21
+
+- **Flowlist for Android.** A native Compose app that uses the Mac library
+  through a new local server. Inbox, Today, Forecast, Browse, quick capture with
+  the same syntax, task detail, complete, trash, undo, light and dark Plain
+  themes, and an offline outbox that replays when the Mac is reachable.
+- **Settings → Mobile.** Turn the server on, see its LAN and Tailscale
+  addresses, pair with a six-digit code, and revoke phones. **Serve to my
+  phone** installs a login agent that keeps syncing after the window closes; the
+  uninstall path removes it.
+- `flowlist serve` exposes `info`, `pair`, `snapshot`, `ops` and `events`.
+  Operations are `flowlist-core` commands, capture text is parsed by the same
+  quick-entry parser, client-generated ULIDs keep ids stable offline, and op ids
+  are deduplicated so retries never double-capture.
+- The phone's **Unpair this phone** revokes its token on the Mac.
+- Command types are serialisable for the wire, and the smartphone icon joins the
+  built-in set.
+- Release assets now include a signed `Flowlist-Android-0.2.0.apk` beside the
+  DMG and zip.
+
 ## 0.1.5 — 2026-11-21
 
 - **Remove command** in Settings → About takes the `flowlist` link off `PATH`

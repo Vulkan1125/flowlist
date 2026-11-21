@@ -161,7 +161,7 @@ The status bar names the last action and its Undo until the next one.
 
 ## Settings
 
-Press `⌘,`. The sheet has six sections on the left (`⌘1`…`⌘6` jump between
+Press `⌘,`. The sheet has seven sections on the left (`⌘1`…`⌘7` jump between
 them):
 
 - **Appearance** — theme family, light/dark, Plain's accent presets and custom
@@ -170,6 +170,7 @@ them):
 - **Workflow** — Vim mode, macOS due reminders, and the review/changed/completed windows.
 - **Nearby** — the radius used by the Nearby view.
 - **Trash** — how many days deleted tasks stay restorable.
+- **Mobile** — the phone server, pairing code, addresses and paired devices.
 - **About** — version, library folder, GitHub and wiki links, and the update
   check.
 
