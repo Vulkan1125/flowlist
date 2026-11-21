@@ -173,7 +173,10 @@ one order from the attachment badge inwards — attachments, project, `#tag`
 chips, estimate, due, deferred, repeat, checklist — so two tasks with the same
 fields always read the same way. Empty views share one illustrated halo,
 counts read as prose (`1 task`, `6 tasks`), and menus, toasts and sheets fade
-in over 120 ms. Settings previews each theme family as a miniature window.
+in over 120 ms. The toast sits at the bottom-center of the middle pane — the
+same band as the search field, with the inspector's column reserved — so it
+never drifts under a side pane. Settings previews each theme family as a
+miniature window.
 
 ## Projects, review and archive
 

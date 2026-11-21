@@ -5765,10 +5765,15 @@ impl FlowlistApp {
             this.toast_shown = None;
             cx.notify();
         });
+        // Sit over the middle pane, not the window: a toast under the
+        // inspector or the sidebar points at the wrong place.
+        let (band_left, band_width) =
+            content_band(self.window_size.map_or(1254.0, |(width, _)| width));
         div()
             .absolute()
             .bottom(px(38.))
-            .w_full()
+            .left(px(band_left))
+            .w(px(band_width))
             .flex()
             .justify_center()
             .child(fade_in(
@@ -6126,17 +6131,23 @@ pub fn run(paths: DataPaths) -> Result<()> {
     Ok(())
 }
 
+/// The content pane's horizontal band: after the sidebar, stopping before the
+/// inspector. The inspector's width stays reserved even when it is closed, so
+/// anything centered here (the search field, the toast) keeps one place as
+/// panes open and close.
+fn content_band(window_width: f32) -> (f32, f32) {
+    let left = SIDEBAR_WIDTH;
+    let width = (window_width - INSPECTOR_WIDTH - left).max(0.0);
+    (left, width)
+}
+
 /// The title-bar search sits centered on the content pane, not on the whole
-/// window: the sidebar is 240 wide and the inspector 320. The inspector's width
-/// stays reserved even when the inspector is closed, so the field keeps one
-/// place as panes open and close and never slides under the action cluster at
-/// the right edge.
+/// window, and clears the action cluster at the right edge.
 fn search_slot(window_width: f32) -> (f32, f32) {
     const FIELD_MAX: f32 = 420.0;
     const PANE_INSET: f32 = 16.0;
 
-    let pane_left = SIDEBAR_WIDTH;
-    let pane_width = (window_width - INSPECTOR_WIDTH - pane_left).max(0.0);
+    let (pane_left, pane_width) = content_band(window_width);
     let width = FIELD_MAX.min((pane_width - 2.0 * PANE_INSET).max(0.0));
     let left = pane_left + (pane_width - width) / 2.0;
     (left, width)
@@ -6212,6 +6223,20 @@ mod tests {
         assert_eq!(width, 288.0);
         assert!((left + width / 2.0 - 400.0).abs() < 0.01);
         assert!((left + width) <= 880.0 - 300.0 - 8.0 + 0.01);
+    }
+
+    #[test]
+    fn the_toast_band_is_the_middle_pane_and_keeps_the_inspector_reserved() {
+        use super::content_band;
+
+        // Same band the search field sits in, at the working size.
+        let (left, width) = content_band(1254.0);
+        assert_eq!(left, 240.0);
+        assert_eq!(width, 1254.0 - 240.0 - 320.0);
+        // The band never runs under the inspector, and a tiny window clamps
+        // to zero rather than painting outside the window.
+        assert!(left + width <= 1254.0 - 320.0);
+        assert_eq!(content_band(400.0), (240.0, 0.0));
     }
 
     #[test]

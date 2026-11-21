@@ -77,6 +77,9 @@
 - The content header no longer repeats the last action and its Undo sentence;
   the status bar still carries both. The Settings sheet drops its
   library-wide subtitle, since the section rail already names what it holds.
+- The toast now sits in the bottom-center of the middle pane instead of the
+  bottom-center of the whole window, so it lines up under the list and never
+  drifts under the inspector.
 - A Plain accent chosen in one appearance now carries into the other instead
   of resetting to ink: the unset side inherits the chosen hue, clamped by the
   theme builder so text and button labels stay readable there. The accent
