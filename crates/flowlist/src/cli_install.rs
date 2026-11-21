@@ -207,7 +207,9 @@ mod tests {
 
     #[test]
     fn candidate_order_prefers_a_user_local_bin() {
-        let home = PathBuf::from("/Users/example");
+        let home = env::var_os("HOME")
+            .map(PathBuf::from)
+            .expect("HOME is set in the test environment");
         let dirs = candidate_dirs(&[home.join(".local/bin")]);
         assert_eq!(dirs[0].0, home.join(".local/bin"));
         assert!(dirs[0].1);
