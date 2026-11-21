@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.4 — 2026-11-21
+
+- The perspective heading now has a little more air below the search row.
+
 ## 0.8.3 — 2026-11-21
 
 - Removed a duplicated status-bar inset: the header and Settings were being

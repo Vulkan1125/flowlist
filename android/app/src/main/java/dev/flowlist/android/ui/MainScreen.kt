@@ -659,7 +659,7 @@ private fun Header(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(20.dp))
         Text(
             text = tab.label,
             style = MaterialTheme.typography.displaySmall,
