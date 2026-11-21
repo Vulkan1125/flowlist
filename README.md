@@ -12,6 +12,9 @@ available from the `flowlist` CLI and an MCP server for AI assistants.
 
 ![The Flowlist Inbox on a colourful desktop](docs/images/hero.png)
 
+*Pictured in Catppuccin. Plain is the default; all eleven theme families are in
+Settings → Appearance.*
+
 ## Install
 
 1. Download **Flowlist-0.1.0.zip** from the latest release.
