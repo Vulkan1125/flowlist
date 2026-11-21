@@ -19,7 +19,8 @@ The script:
    `Contents/Resources/Flowlist.icns` and `Contents/Info.plist`;
 5. validates the plist and ad-hoc signs the bundle (`codesign --sign -`);
 6. packs `dist/Flowlist-<version>.zip`, the release asset the in-app updater
-   expects.
+   expects, and `dist/Flowlist-<version>.dmg` with a drag-to-Applications
+   shortcut.
 
 The result can be launched from Finder or with:
 
@@ -44,7 +45,7 @@ scripts/package.sh
 # 3. Tag the release commit and publish a normal (not draft or prerelease)
 #    release with the zip attached.
 version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
-gh release create "v$version" "dist/Flowlist-$version.zip" \
+gh release create "v$version" "dist/Flowlist-$version.zip" "dist/Flowlist-$version.dmg" \
   --title "Flowlist $version" \
   --notes-file notes.md \
   --latest
@@ -116,6 +117,23 @@ xattr -d com.apple.quarantine /Applications/Flowlist.app
 
 For distribution, sign with a Developer ID certificate and notarize the bundle
 before attaching it to a release.
+
+### Signing for notifications
+
+macOS refuses `UNUserNotificationCenter` authorization to an ad-hoc signed
+bundle with `Notifications are not allowed for this application`. Notifications
+therefore need an Apple-issued identity. Set the identity when packaging:
+
+```sh
+FLOWLIST_SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" scripts/package.sh
+# or
+FLOWLIST_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" scripts/package.sh
+```
+
+The script signs with hardened runtime when an identity is supplied and falls
+back to ad-hoc, with a warning, otherwise. The app's Settings → Workflow →
+Reminders sheet detects the ad-hoc refusal and explains the signing requirement
+instead of leaving a toggle that silently does nothing.
 
 ## Regenerating the icon
 

@@ -171,6 +171,9 @@ pub struct Session {
     pub show_completed: Option<bool>,
     #[serde(default)]
     pub vim_mode: Option<bool>,
+    /// Due-date reminders on this Mac. Per device, not per library.
+    #[serde(default)]
+    pub notifications: Option<bool>,
     /// Global priority filter, `high`, `medium`, `low`, or absent for all.
     #[serde(default)]
     pub priority_filter: Option<String>,

@@ -63,9 +63,23 @@ cat >"$app/Contents/Info.plist" <<PLIST
 PLIST
 
 plutil -lint "$app/Contents/Info.plist" >/dev/null
-codesign --force --sign - "$app" >/dev/null 2>&1 || {
-	echo "warning: ad-hoc signing failed; the bundle still runs locally" >&2
-}
+# macOS only grants UserNotifications to a non-ad-hoc signature. Set
+# FLOWLIST_SIGN_IDENTITY to an Apple Development or Developer ID identity to
+# produce a build where Settings -> Workflow -> Reminders can actually ask for
+# permission. Without it the app is ad-hoc signed and notifications are
+# refused by the system.
+if [ -n "${FLOWLIST_SIGN_IDENTITY:-}" ]; then
+	if ! codesign --force --options runtime --sign "$FLOWLIST_SIGN_IDENTITY" "$app" >/dev/null; then
+		echo "error: could not sign with $FLOWLIST_SIGN_IDENTITY" >&2
+		exit 1
+	fi
+	echo "signed with: $FLOWLIST_SIGN_IDENTITY"
+else
+	codesign --force --sign - "$app" >/dev/null 2>&1 || {
+		echo "warning: ad-hoc signing failed; the bundle still runs locally" >&2
+	}
+	echo "warning: ad-hoc signed; notifications need FLOWLIST_SIGN_IDENTITY" >&2
+fi
 
 echo "packaged $app ($version)"
 
@@ -76,4 +90,18 @@ zip="dist/Flowlist-$version.zip"
 rm -f "$zip"
 ditto -c -k --sequesterRsrc --keepParent "$app" "$zip"
 echo "release asset: $zip"
+
+# A drag-to-Applications disk image for people who prefer not to unzip.
+dmg="dist/Flowlist-$version.dmg"
+rm -rf dist/dmg-root
+mkdir -p dist/dmg-root
+cp -R "$app" dist/dmg-root/Flowlist.app
+ln -s /Applications dist/dmg-root/Applications
+rm -f "$dmg"
+if hdiutil create -volname "Flowlist" -srcfolder dist/dmg-root -ov -format UDZO "$dmg" >/dev/null; then
+	echo "release image: $dmg"
+else
+	echo "warning: could not create $dmg" >&2
+fi
+rm -rf dist/dmg-root
 echo "launch with: open $app"

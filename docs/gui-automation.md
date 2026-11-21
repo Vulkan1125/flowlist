@@ -122,8 +122,13 @@ under the folder.
 `history_rows` maps the header arrows (`history-back`, `history-forward`) to
 boxes, and `can_go_back` / `can_go_forward` report whether a valid view lies
 that way.
-`preview` is the attachment card on screen, or null: `path`, `name`, `kind`
-(`image` or `pdf`) and, for PDFs, the one-based `page` visible. `update` is
+`notifications` reports `enabled`, `permission` (`Allowed`, `Denied in System
+Settings`, `Not asked yet`, …), `scheduled` (how many reminders the last pass
+added), `requested` and `error`. `FLOWLIST_TEST_NOTIFY=1` makes the scheduler
+treat permission as granted so a probe can exercise the due-date selection
+without clicking a system prompt; delivery still needs a signed build and real
+permission. `preview` is the attachment card on screen, or null: `path`, `name`,
+`kind` (`image` or `pdf`) and, for PDFs, the one-based `page` visible. `update` is
 the Settings → About check state (`idle`, `checking`, `up-to-date`,
 `available`, `installing`, `ready` or `failed`); the check only runs when its
 button is clicked, so a probe can assert the idle sheet without a network. `content_rows`

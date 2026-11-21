@@ -11,6 +11,7 @@ mod hotkey;
 mod icons;
 mod inspector;
 mod modals;
+mod notifications;
 mod perspective;
 mod preview;
 mod quick_capture;
@@ -452,6 +453,15 @@ pub struct FlowlistApp {
     show_inspector: bool,
     show_completed: bool,
     vim_mode: bool,
+    /// Send macOS notifications for upcoming due dates (this device only).
+    due_notifications: bool,
+    notification_permission: notifications::Permission,
+    /// How many reminders the last scheduling pass added.
+    notification_scheduled: usize,
+    /// Store revision reflected in the pending notifications.
+    notified_revision: Option<u64>,
+    /// Whether the current launch already asked for notification permission.
+    notification_requested: bool,
     vim: vim::VimState,
     sidebar_cursor: Option<sidebar::SidebarTarget>,
     /// The sidebar row under the pointer, if any. Hover-only row actions
@@ -566,6 +576,7 @@ impl FlowlistApp {
         let show_completed = session.show_completed.unwrap_or(false);
         let show_inspector = session.inspector.unwrap_or(true);
         let vim_mode = session.vim_mode.unwrap_or(true);
+        let due_notifications = session.notifications.unwrap_or(false);
         let priority_filter = session.priority_filter();
         let only_available = session.only_available.unwrap_or(false);
         let follow_system = session.follow_system.unwrap_or(false);
@@ -575,15 +586,23 @@ impl FlowlistApp {
         let focus_handle = cx.focus_handle();
         let toast = store_warning(&store);
         let initial_view = view.key();
+        notifications::install();
+        notifications::refresh_permission();
 
         cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(Duration::from_secs(1)).await;
                 let alive = this.update(cx, |this, cx| {
+                    if this.due_notifications
+                        || matches!(this.modal, Some(modals::Modal::Settings { .. }))
+                    {
+                        notifications::refresh_permission();
+                    }
                     if this.store.reload_if_changed().unwrap_or(false) {
                         this.prune_selection();
                         cx.notify();
                     }
+                    this.sync_notifications(cx);
                 });
                 if alive.is_err() {
                     break;
@@ -669,6 +688,11 @@ impl FlowlistApp {
             show_inspector,
             show_completed,
             vim_mode,
+            due_notifications,
+            notification_permission: notifications::Permission::Unknown,
+            notification_scheduled: 0,
+            notified_revision: None,
+            notification_requested: false,
             vim: vim::VimState::default(),
             sidebar_cursor: None,
             checklist_cursor: None,
@@ -762,6 +786,44 @@ impl FlowlistApp {
         }
     }
 
+    /// Keep the pending macOS reminders in step with the library, the toggle
+    /// and the permission the user granted. Cheap when nothing changed: one
+    /// revision comparison.
+    fn sync_notifications(&mut self, cx: &mut Context<Self>) {
+        let permission = notifications::permission();
+        if permission != self.notification_permission {
+            self.notification_permission = permission;
+            cx.notify();
+        }
+        if self.due_notifications
+            && permission == notifications::Permission::NotDetermined
+            && !self.notification_requested
+        {
+            notifications::request_permission();
+            self.notification_requested = true;
+        }
+        if !self.due_notifications || !permission.allowed() {
+            if self.notified_revision.take().is_some() {
+                notifications::clear();
+                if self.notification_scheduled != 0 {
+                    self.notification_scheduled = 0;
+                    cx.notify();
+                }
+            }
+            return;
+        }
+        let revision = self.store.revision();
+        if self.notified_revision == Some(revision) {
+            return;
+        }
+        let count = notifications::schedule(self.store.db());
+        self.notified_revision = Some(revision);
+        if self.notification_scheduled != count {
+            self.notification_scheduled = count;
+            cx.notify();
+        }
+    }
+
     fn save_session(&self) {
         let session = Session {
             view: Some(self.view.key()),
@@ -776,6 +838,7 @@ impl FlowlistApp {
             group: self.group.map(|group| group_slug(group).to_string()),
             show_completed: Some(self.show_completed),
             vim_mode: Some(self.vim_mode),
+            notifications: Some(self.due_notifications),
             priority_filter: self.priority_filter.map(|p| p.slug().to_string()),
             only_available: Some(self.only_available),
             follow_system: Some(self.follow_system),
@@ -984,24 +1047,19 @@ impl FlowlistApp {
             // Fuzzy scoring subsumes plain substring matching ("lauch"
             // still finds "Launch"), and relevance puts the closest row
             // first without changing which group it belongs to.
-            let mut scored: Vec<(i64, TaskRow)> = group
+            let mut scored: Vec<(i64, String, TaskRow)> = group
                 .rows
                 .into_iter()
                 .filter_map(|row| {
                     let task = db.tasks.get(&row.id)?;
-                    let score = flowlist_core::search::task_score(db, task, &needle);
-                    (score > 0).then_some((score, row))
+                    let score = flowlist_core::search::task_score_normalized(db, task, &needle);
+                    (score > 0).then_some((score, task.title.to_lowercase(), row))
                 })
                 .collect();
-            scored.sort_by(|(a_score, a), (b_score, b)| {
-                b_score.cmp(a_score).then_with(|| {
-                    db.tasks
-                        .get(&a.id)
-                        .map(|task| task.title.to_lowercase())
-                        .cmp(&db.tasks.get(&b.id).map(|task| task.title.to_lowercase()))
-                })
+            scored.sort_by(|(a_score, a_title, _), (b_score, b_title, _)| {
+                b_score.cmp(a_score).then_with(|| a_title.cmp(b_title))
             });
-            group.rows = scored.into_iter().map(|(_, row)| row).collect();
+            group.rows = scored.into_iter().map(|(_, _, row)| row).collect();
             if !group.rows.is_empty() {
                 out.push(group);
             }
@@ -1015,26 +1073,21 @@ impl FlowlistApp {
         let db = self.store.db();
         let needle = self.search.text().trim().to_lowercase();
         let at = now();
-        let mut scored: Vec<(i64, TaskId)> = db
+        let mut scored: Vec<(i64, String, TaskId)> = db
             .tasks
             .values()
             .filter(|task| !task.is_trashed())
             .filter_map(|task| {
-                let score = flowlist_core::search::task_score(db, task, &needle);
-                (score > 0).then_some((score, task.id.clone()))
+                let score = flowlist_core::search::task_score_normalized(db, task, &needle);
+                (score > 0).then_some((score, task.title.to_lowercase(), task.id.clone()))
             })
             .collect();
-        scored.sort_by(|(a_score, a), (b_score, b)| {
-            b_score.cmp(a_score).then_with(|| {
-                db.tasks
-                    .get(a)
-                    .map(|task| task.title.to_lowercase())
-                    .cmp(&db.tasks.get(b).map(|task| task.title.to_lowercase()))
-            })
+        scored.sort_by(|(a_score, a_title, _), (b_score, b_title, _)| {
+            b_score.cmp(a_score).then_with(|| a_title.cmp(b_title))
         });
         let rows = scored
             .into_iter()
-            .map(|(_, id)| query::row_for(db, &id, at))
+            .map(|(_, _, id)| query::row_for(db, &id, at))
             .collect();
         vec![Group {
             key: "search:library".to_string(),
@@ -2982,6 +3035,7 @@ impl FlowlistApp {
                 self.modal = None;
                 self.modal_focus = 0;
                 self.focus = FocusArea::Content;
+                self.sync_notifications(cx);
                 // The previewed theme is now committed; drop the undo copy.
                 self.theme_on_open = None;
                 self.accent_on_open = None;
@@ -3316,6 +3370,7 @@ impl FlowlistApp {
                 radius,
                 trash_days,
                 vim_mode,
+                notifications,
                 follow_system,
                 theme,
                 appearance,
@@ -3363,6 +3418,14 @@ impl FlowlistApp {
                     self.toast = Some(format!("Could not empty expired trash: {error}"));
                 }
                 self.vim_mode = *vim_mode;
+                self.due_notifications = *notifications;
+                self.notification_requested = false;
+                if self.due_notifications && !notifications::permission().allowed() {
+                    notifications::request_permission();
+                    self.notification_requested = true;
+                }
+                notifications::refresh_permission();
+                self.notified_revision = None;
                 self.follow_system = *follow_system;
                 self.traffic_lights_visible = *traffic_lights;
                 self.plain_accent_light = *accent_light;
@@ -5257,6 +5320,14 @@ impl FlowlistApp {
             update::UpdateState::Installing => "installing",
             update::UpdateState::Ready { .. } => "ready",
             update::UpdateState::Failed(_) => "failed",
+        });
+        state["notifications"] = serde_json::json!({
+            "enabled": self.due_notifications,
+            "permission": self.notification_permission.label(),
+            "scheduled": self.notification_scheduled,
+            "requested": self.notification_requested,
+            "error": notifications::last_error(),
+            "supported": notifications::supported(),
         });
         state["preview"] = serde_json::json!(self.preview.as_ref().map(|preview| {
             serde_json::json!({

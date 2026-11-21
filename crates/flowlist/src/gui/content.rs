@@ -65,7 +65,7 @@ impl FlowlistApp {
                     }
                 }),
             )
-            .child(self.render_content_header(window, cx))
+            .child(self.render_content_header(&groups, window, cx))
             .when(self.view.shows_capture(), |this| {
                 this.child(self.render_capture_bar(cx))
             });
@@ -582,6 +582,7 @@ impl FlowlistApp {
 
     fn render_content_header(
         &self,
+        groups: &[Group],
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -629,13 +630,12 @@ impl FlowlistApp {
             )
         });
         let is_archive = matches!(self.view, View::Builtin(BuiltinPerspective::Archive));
+        // The caller already ran the query for the list; reuse it instead of
+        // running the whole view a second time just to count the rows.
         let count = if is_archive {
             query::archived_projects(self.store.db()).len()
         } else {
-            self.current_groups()
-                .into_iter()
-                .map(|group| group.rows.len())
-                .sum::<usize>()
+            groups.iter().map(|group| group.rows.len()).sum::<usize>()
         };
         let shows_completed =
             matches!(self.view, View::Project(_) | View::Folder(_) | View::Tag(_));

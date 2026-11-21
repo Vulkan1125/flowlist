@@ -1797,7 +1797,7 @@ checksum = "8bf7cc16383c4b8d58b9905a8509f02926ce3058053c056376248d958c9df1e8"
 
 [[package]]
 name = "flowlist"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "block",
@@ -1807,18 +1807,16 @@ dependencies = [
  "futures",
  "gpui",
  "objc",
- "owo-colors",
  "raw-window-handle",
  "schemars",
  "serde",
  "serde_json",
  "tempfile",
- "unicode-segmentation",
 ]
 
 [[package]]
 name = "flowlist-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "fs2",
@@ -3840,12 +3838,6 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
 ]
-
-[[package]]
-name = "owo-colors"
-version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13c45bb4a6ae1280ec0803b1ef9d3455eb50f01efbbe1447ab020f1d54fba9d8"
 
 [[package]]
 name = "parking"

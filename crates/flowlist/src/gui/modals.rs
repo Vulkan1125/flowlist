@@ -124,6 +124,8 @@ pub enum Modal {
         radius: TextBuffer,
         trash_days: TextBuffer,
         vim_mode: bool,
+        /// Due-date reminders, per device.
+        notifications: bool,
         follow_system: bool,
         theme: ThemeKind,
         appearance: Appearance,
@@ -230,7 +232,7 @@ impl SettingsSection {
                 "Theme, accent, window controls and how light and dark are chosen."
             }
             SettingsSection::Sidebar => "Which sections and counts the rail shows.",
-            SettingsSection::Workflow => "Keyboard behaviour, review cadence and history windows.",
+            SettingsSection::Workflow => "Keyboard, reminders, review cadence and history windows.",
             SettingsSection::Nearby => "How distance ranks tasks with tagged locations.",
             SettingsSection::Trash => "How long deleted tasks stay restorable.",
             SettingsSection::About => "Version, library location and update checks.",
@@ -372,6 +374,7 @@ impl Modal {
             radius: TextBuffer::new(settings.nearby_radius_km.to_string()),
             trash_days: TextBuffer::new(settings.trash_retention_days.to_string()),
             vim_mode: app.vim_mode,
+            notifications: app.due_notifications,
             follow_system: app.follow_system,
             theme: app.theme.kind(),
             appearance: app.theme.appearance(),
@@ -2756,11 +2759,119 @@ impl FlowlistApp {
             .child(div().text_xs().text_color(theme.text_faint).child(
                 "hjkl motions, counts, operators and pane focus. ⌘ shortcuts stay available.",
             ));
+        // Reminders are a per-device setting, unlike the library defaults in
+        // the next card. The toggle is a draft until Save, matching Vim mode.
+        let reminders = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                notifications: true,
+                ..
+            })
+        );
+        let permission = self.notification_permission;
+        let supported = super::notifications::supported();
+        let blocked = super::notifications::signature_blocked();
+        let status = if !supported {
+            "Notifications need the packaged Flowlist.app."
+        } else if blocked {
+            "Blocked for this ad-hoc build"
+        } else if permission.allowed() {
+            permission.label()
+        } else if permission == super::notifications::Permission::Denied {
+            "Denied in System Settings"
+        } else if reminders {
+            "Save to ask macOS for permission."
+        } else {
+            "Off"
+        };
+        let mut actions = div().flex().items_center().gap_2();
+        if supported && permission.allowed() && !blocked {
+            actions = actions.child(
+                div()
+                    .on_children_prepainted(self.theme_probe("notify-test".to_string()))
+                    .id("notify-test")
+                    .child(widgets::button(theme, "Send test", false))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if super::notifications::send_test() {
+                            this.toast = Some("Test notification sent".to_string());
+                        } else {
+                            this.toast = Some("Allow notifications first".to_string());
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        if supported && !blocked && permission == super::notifications::Permission::Denied {
+            actions = actions.child(
+                div()
+                    .on_children_prepainted(self.theme_probe("notify-settings".to_string()))
+                    .id("notify-settings")
+                    .child(widgets::button(theme, "Open System Settings", false))
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        super::notifications::open_settings();
+                        cx.notify();
+                    })),
+            );
+        }
+        let reminders_card = self.settings_card(
+            "Reminders",
+            Some(
+                "Due dates can send a macOS notification, even when Flowlist is in the background.",
+            ),
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .on_children_prepainted(self.theme_probe("notify-toggle".to_string()))
+                                .id("notify-toggle")
+                                .child(widgets::button(
+                                    theme,
+                                    if reminders {
+                                        "Due reminders ✓"
+                                    } else {
+                                        "Due reminders off"
+                                    },
+                                    reminders,
+                                ))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Settings { notifications, .. }) =
+                                        &mut this.modal
+                                    {
+                                        *notifications = !*notifications;
+                                    }
+                                    cx.notify();
+                                })),
+                        )
+                        .child(div().text_xs().text_color(theme.text_faint).child(status)),
+                )
+                .child(div().text_xs().text_color(theme.text_faint).child(
+                    "Date-only tasks remind at 09:00; timestamped tasks at their time. The next 30 days are scheduled.",
+                ))
+                .child(actions)
+                .when(blocked, |this| {
+                    this.child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.danger)
+                            .child(
+                                "macOS only grants notifications to a signed app. Build with an Apple Development or Developer ID certificate to enable reminders (see docs/packaging.md).",
+                            ),
+                    )
+                }),
+        );
         div()
             .flex()
             .flex_col()
             .gap_3()
             .child(self.settings_card("Keyboard", None, keyboard))
+            .child(reminders_card)
             .child(
                 self.settings_card(
                     "Review and history",

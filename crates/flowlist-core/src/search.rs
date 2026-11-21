@@ -56,7 +56,7 @@ pub fn search(db: &Db, query: &str, limit: usize) -> Vec<SearchHit> {
         if task.is_trashed() {
             continue;
         }
-        let total = task_score(db, task, &needle);
+        let total = task_score_normalized(db, task, &needle);
         if total == 0 {
             continue;
         }
@@ -146,27 +146,34 @@ pub fn search(db: &Db, query: &str, limit: usize) -> Vec<SearchHit> {
 /// its tasks. `0` means the task does not match at all.
 pub fn task_score(db: &Db, task: &crate::model::Task, needle: &str) -> i64 {
     let needle = needle.trim().to_lowercase();
+    task_score_normalized(db, task, &needle)
+}
+
+/// The per-task half of `task_score`, for callers that already normalised the
+/// needle once and are scoring a whole list. Saves one lowercase allocation
+/// per task on every keystroke.
+pub fn task_score_normalized(db: &Db, task: &crate::model::Task, needle: &str) -> i64 {
     if needle.is_empty() {
         return 0;
     }
-    let title_score = score(&task.title, &needle) * 3;
-    let notes_score = score(&task.notes, &needle);
+    let title_score = score(&task.title, needle) * 3;
+    let notes_score = score(&task.notes, needle);
     let checklist_score = task
         .checklist
         .iter()
-        .map(|item| score(&item.title, &needle))
+        .map(|item| score(&item.title, needle))
         .max()
         .unwrap_or(0);
     let tag_score = task
         .tags
         .iter()
         .filter_map(|id| db.tags.get(id))
-        .map(|tag| score(&tag.name, &needle))
+        .map(|tag| score(&tag.name, needle))
         .max()
         .unwrap_or(0);
     let project_score = db
         .effective_project(&task.id)
-        .map(|project| score(&db.project_path(&project), &needle))
+        .map(|project| score(&db.project_path(&project), needle))
         .unwrap_or(0);
     title_score + notes_score + checklist_score + tag_score + project_score
 }

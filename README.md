@@ -4,7 +4,7 @@
 reviews and a floating capture panel in one native window. The same library is
 available from the `flowlist` CLI and an MCP server for AI assistants.
 
-**[Download Flowlist 0.1.0](https://github.com/Vulkan1125/flowlist/releases/latest)**
+**[Download Flowlist 0.1.1](https://github.com/Vulkan1125/flowlist/releases/latest)**
 · [Wiki](https://github.com/Vulkan1125/flowlist/wiki)
 · [Using the GUI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-GUI)
 · [CLI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-CLI)
@@ -17,8 +17,9 @@ Settings → Appearance.*
 
 ## Install
 
-1. Download **Flowlist-0.1.0.zip** from the latest release.
-2. Unzip it and move **Flowlist.app** to `/Applications`.
+1. Download **Flowlist-0.1.1.dmg** (or the zip) from the latest release.
+2. Open the DMG and drag **Flowlist** to Applications, or unzip and move the app
+   yourself.
 3. The first time, right-click the app and choose **Open**. The build is
    ad-hoc signed and not notarised, so macOS asks once.
 4. Requires macOS 13 or later.
@@ -46,6 +47,10 @@ uploaded; there is no account, no sync service and no telemetry.
   edit, drag, import and tool call is one `⌘Z` away.
 - **Updates in the app.** Settings → About checks the latest release and
   installs it in place.
+- **Due reminders.** Settings → Workflow schedules macOS notifications for
+  upcoming due dates. macOS only grants notification permission to a signed
+  build; the ad-hoc download explains this in place, and packaging with an
+  Apple Development or Developer ID identity enables it.
 
 ## Three ways to use it
 

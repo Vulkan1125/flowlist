@@ -73,7 +73,8 @@ impl Store {
         }
 
         let history = persist::load_history(&paths, &data.db);
-        persist::save_history(&paths, &history)?;
+        // A fresh history is written by the first mutation. Rewriting the whole
+        // undo log on every launch was a needless write (and it can be large).
         let last_mtime = mtime(&paths.data());
         let mut store = Self {
             paths,

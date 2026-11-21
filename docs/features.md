@@ -244,6 +244,11 @@ working domain and GUI. This page tracks what is implemented and verified.
       restores the row.
 - [x] Image and PDF attachments preview inside the window, with PDF page
       stepping, and `o` still opens the file externally.
+- [x] Due reminders through macOS UserNotifications, with date-only tasks at
+      09:00 and a 30-day horizon. The permission is requested on enable; an
+      ad-hoc build shows the signing requirement, while an Apple Development or
+      Developer ID signature enables delivery.
+- [x] Releases ship a drag-to-Applications DMG beside the updater's zip.
 - [x] The plus opens the capture panel over the window (the global shortcut
       stays screen-centered), the toast follows the visible middle pane, and
       inspector boxes sit on a solid surface with visible rounded borders.

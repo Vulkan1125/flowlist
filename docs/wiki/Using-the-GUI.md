@@ -167,13 +167,25 @@ them):
 - **Appearance** — theme family, light/dark, Plain's accent presets and custom
   colour picker, screen eyedropper, and the window controls.
 - **Sidebar** — which rail sections appear and which rows carry counts.
-- **Workflow** — Vim mode and the review/changed/completed windows.
+- **Workflow** — Vim mode, macOS due reminders, and the review/changed/completed windows.
 - **Nearby** — the radius used by the Nearby view.
 - **Trash** — how many days deleted tasks stay restorable.
 - **About** — version, library folder, GitHub and wiki links, and the update
   check.
 
 ![Settings on the Appearance section](images/gui-settings.png)
+
+### Reminders
+
+**Settings → Workflow → Reminders** can schedule a macOS notification for every
+task due in the next 30 days. Timestamped tasks remind at their time; date-only
+tasks remind at 09:00 local. Toggling it on asks macOS for permission, and
+**Send test** checks that banners are working.
+
+macOS only grants notification permission to a signed app. The downloadable
+build is ad-hoc signed, so this sheet shows **Blocked for this ad-hoc build**.
+Use an Apple Development or Developer ID certificate when packaging (`set
+FLOWLIST_SIGN_IDENTITY=…` before `scripts/package.sh`) to enable reminders.
 
 Changes preview live. **Cancel** puts back the theme, accent and window
 controls the sheet opened with; **Save** keeps them.

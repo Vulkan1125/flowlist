@@ -1,6 +1,34 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — 2026-11-21
+
+### Notifications and distribution
+
+- Due reminders on macOS: **Settings → Workflow → Reminders** schedules a
+  notification for every task due in the next 30 days. Date-only tasks remind
+  at 09:00 local, timestamped tasks at their exact time. The system permission
+  is requested when the toggle is saved, **Send test** schedules a one-off
+  banner, and the settings sheet reports the live authorization state.
+  Foreground banners are shown through a `UserNotifications` delegate.
+- macOS only grants notifications to a signed app. The downloadable build is
+  ad-hoc signed, so the sheet reports the signing block instead of failing
+  silently; package with `FLOWLIST_SIGN_IDENTITY` set to an Apple Development
+  or Developer ID identity to enable reminders.
+- Releases now include a drag-to-Applications **DMG** beside the updater's
+  zip. `scripts/package.sh` builds both, and the signing identity is
+  configurable for notifications.
+
+### Performance and build
+
+- The content header reuses the task groups the list already queried instead
+  of running the whole view a second time to count rows.
+- Search normalises the needle once per query and sorts by precomputed titles,
+  removing a lowercase allocation per task and per comparison.
+- `Store::open` no longer rewrites the undo history on every launch.
+- Removed unused `owo-colors` and `unicode-segmentation` dependencies and the
+  unused workspace `authors` field.
+
+## 0.1.0 — 2026-11-21
 
 ### Interface
 
@@ -371,7 +399,7 @@
 - Added a task-manager comparison and the next adopted gaps to
   `docs/backlog.md`.
 
-## 0.1.0 — 2026-11-13
+## 0.1.0-beta.1 — 2026-11-13
 
 First complete release of Flowlist: one Rust library and three front ends.
 

@@ -18,9 +18,10 @@ are in Settings → Appearance.*
 
 ## Install
 
-1. Download **Flowlist-0.1.0.zip** from the
+1. Download **Flowlist-0.1.1.dmg** (or the zip) from the
    [latest release](https://github.com/Vulkan1125/flowlist/releases/latest).
-2. Unzip it and move **Flowlist.app** to `/Applications`.
+2. Open the DMG and drag **Flowlist** to Applications, or unzip and move the
+   app yourself.
 3. The first time, right-click the app and choose **Open**. The build is
    ad-hoc signed and not notarised, so macOS asks once.
 4. Requires macOS 13 or later.
