@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.1 — 2026-11-21
+
+- The phone header is a TickTick-style two-row header: hamburger and a full
+  search field on the first line, the perspective title and date underneath.
+- The drawer is square-edged, 310 dp wide and starts straight at **Library**;
+  the app name and logo header are gone. Settings and connection status sit at
+  the bottom.
+- The Settings home no longer repeats the title.
+
 ## 0.8.0 — 2026-11-21
 
 - **Settings is a destination, not a sheet.** The fifth tab opens a settings

@@ -8,12 +8,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +29,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.rounded.Add
@@ -193,9 +197,14 @@ fun MainScreen(
     ModalNavigationDrawer(
         drawerState = drawer,
         drawerContent = {
-            ModalDrawerSheet(drawerContainerColor = colors.background) {
+            ModalDrawerSheet(
+                modifier = Modifier.width(310.dp).fillMaxHeight(),
+                drawerShape = androidx.compose.ui.graphics.RectangleShape,
+                drawerContainerColor = colors.background,
+            ) {
                 LibraryDrawer(
                     tab = tab,
+                    state = state,
                     onTab = { item ->
                         tab = item
                         scope.launch { drawer.close() }
@@ -491,52 +500,115 @@ fun MainScreen(
 @Composable
 private fun LibraryDrawer(
     tab: Tab,
+    state: AppState,
     onTab: (Tab) -> Unit,
     onMore: (MoreView) -> Unit,
 ) {
     val colors = flow
-    Column(modifier = Modifier.statusBarsPadding().padding(vertical = 12.dp)) {
-        Text(
-            text = "Library",
-            style = MaterialTheme.typography.titleMedium,
-            color = colors.ink,
-            modifier = Modifier.padding(horizontal = 28.dp, vertical = 14.dp),
-        )
-        Tab.entries.filter { it != Tab.Settings }.forEach { item ->
-            NavigationDrawerItem(
-                label = { Text(item.label) },
-                icon = { Icon(item.icon, null, modifier = Modifier.size(19.dp)) },
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 10.dp),
+    ) {
+        DrawerLabel("Library", colors)
+        listOf(Tab.Inbox, Tab.Today, Tab.Forecast, Tab.Browse).forEach { item ->
+            DrawerRow(
+                label = item.label,
+                icon = item.icon,
                 selected = tab == item,
                 onClick = { onTab(item) },
-                modifier = Modifier.padding(horizontal = 12.dp),
-                colors = androidx.compose.material3.NavigationDrawerItemDefaults.colors(
-                    selectedContainerColor = colors.field,
-                    selectedIconColor = colors.accent,
-                    selectedTextColor = colors.accent,
-                    unselectedIconColor = colors.faint,
-                    unselectedTextColor = colors.ink,
-                ),
             )
         }
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 28.dp, vertical = 10.dp),
-            color = colors.hairline,
-        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider(color = colors.hairline, modifier = Modifier.padding(horizontal = 8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        DrawerLabel("Perspectives", colors)
         MoreView.entries.forEach { view ->
-            NavigationDrawerItem(
-                label = { Text(view.label) },
-                icon = { Icon(view.icon, null, modifier = Modifier.size(19.dp)) },
+            DrawerRow(
+                label = view.label,
+                icon = view.icon,
                 selected = false,
                 onClick = { onMore(view) },
-                modifier = Modifier.padding(horizontal = 12.dp),
-                colors = androidx.compose.material3.NavigationDrawerItemDefaults.colors(
-                    unselectedIconColor = colors.faint,
-                    unselectedTextColor = colors.ink,
-                ),
+            )
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+        HorizontalDivider(color = colors.hairline, modifier = Modifier.padding(horizontal = 8.dp))
+        DrawerRow(
+            label = "Settings",
+            icon = Icons.Outlined.Settings,
+            selected = tab == Tab.Settings,
+            onClick = { onTab(Tab.Settings) },
+        )
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(if (state.online) colors.success else colors.danger),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = if (state.online) "Connected to Mac" else "Offline",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.faint,
+                maxLines = 1,
             )
         }
     }
 }
+
+@Composable
+private fun DrawerLabel(text: String, colors: FlowColors) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.7.sp,
+        color = colors.faint,
+        modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 6.dp),
+    )
+}
+
+@Composable
+private fun DrawerRow(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = flow
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 42.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) colors.field else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (selected) colors.accent else colors.faint,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (selected) colors.accent else colors.ink,
+        )
+    }
+}
+
 
 @Composable
 private fun Header(
@@ -548,51 +620,72 @@ private fun Header(
 ) {
     val colors = flow
     val today = LocalDate.now()
-    Column(modifier = modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 18.dp, bottom = 12.dp)) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 14.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onMenu, modifier = Modifier.padding(end = 4.dp)) {
+            IconButton(onClick = onMenu, modifier = Modifier.size(32.dp)) {
                 Icon(
                     imageVector = Icons.Rounded.Menu,
                     contentDescription = "Library",
                     tint = colors.faint,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(21.dp),
                 )
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = tab.label,
-                    style = MaterialTheme.typography.displaySmall,
-                    color = colors.ink,
+            Spacer(modifier = Modifier.width(8.dp))
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(38.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.field)
+                    .clickable(onClick = onSearch)
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Search,
+                    contentDescription = null,
+                    tint = colors.faint,
+                    modifier = Modifier.size(18.dp),
                 )
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = when (tab) {
-                        Tab.Inbox -> state.snapshot?.let { snapshot ->
-                            val count = snapshot.db.inbox().size
-                            if (count == 0) "Nothing waiting" else "$count to sort"
-                        } ?: "Loading your library"
-
-                        Tab.Today -> today.format(
-                            DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()),
-                        )
-
-                        Tab.Forecast -> "The next two weeks"
-                        Tab.Browse -> "${state.snapshot?.db?.projects?.size ?: 0} projects"
-                        Tab.Settings -> "Appearance, tasks, sync and about"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
+                    text = "Search tasks",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = colors.faint,
                 )
             }
-            IconButton(onClick = onSearch) {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = "Search",
-                    tint = colors.faint,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = tab.label,
+            style = MaterialTheme.typography.displaySmall,
+            color = colors.ink,
+            modifier = Modifier.padding(start = 8.dp),
+        )
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(
+            text = when (tab) {
+                Tab.Inbox -> state.snapshot?.let { snapshot ->
+                    val count = snapshot.db.inbox().size
+                    if (count == 0) "Nothing waiting" else "$count to sort"
+                } ?: "Loading your library"
+
+                Tab.Today -> today.format(
+                    DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()),
+                )
+
+                Tab.Forecast -> "The next two weeks"
+                Tab.Browse -> "${state.snapshot?.db?.projects?.size ?: 0} projects"
+                Tab.Settings -> "Appearance, tasks, sync and about"
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = colors.faint,
+        )
     }
 }
 
