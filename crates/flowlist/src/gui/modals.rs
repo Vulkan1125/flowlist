@@ -2261,10 +2261,10 @@ impl FlowlistApp {
             return div().into_any_element();
         };
         let appearance = *appearance;
-        let current = match appearance {
-            Appearance::Light => *accent_light,
-            Appearance::Dark => *accent_dark,
-        };
+        // An accent set for one appearance is inherited by the other until it
+        // gets a tone of its own, so the swatch and hex must show the colour
+        // the window is actually painting, not a reset to ink.
+        let current = super::accent_for(appearance, *accent_light, *accent_dark);
         // With no custom tone the accent is Plain's ink, and the row has to
         // say so: the swatch, hex and marker all follow the painted colour.
         let ink = match appearance {

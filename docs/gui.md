@@ -213,8 +213,10 @@ the section on screen.
   Plain only: nine accent presets (`1`–`9` while the section is open), a
   saturation/brightness square and hue strip for a custom tone per appearance,
   and a system eyedropper that samples any pixel, wallpaper included. The
-  picker edits the appearance on screen; presets set both tones together. With
-  no custom tone the row shows Plain's ink and marks Ink as selected, while the
+  picker edits the appearance on screen; presets set both tones together, and
+  a custom tone carries into the other appearance until that side gets a tone
+  of its own, clamped so it stays readable on that background. With no custom
+  tone at all the row shows Plain's ink and marks Ink as selected, while the
   picker's strip parks on blue so the first drag produces a colour. Picking a
   light/dark mode while following macOS stops following, so the choice takes
   effect. A Window controls row below the accent card shows or hides the macOS

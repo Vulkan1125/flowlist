@@ -514,6 +514,21 @@ pub struct FlowlistApp {
     traffic_lights_on_open: Option<bool>,
 }
 
+/// Plain keeps one accent per appearance so each background can carry its own
+/// tone, but an accent chosen for one mode should not disappear in the other.
+/// When only one side has been set, the other side inherits it, clamped by the
+/// theme builder so text and button labels stay readable on that background.
+fn accent_for(appearance: theme::Appearance, light: Option<u32>, dark: Option<u32>) -> Option<u32> {
+    match appearance {
+        theme::Appearance::Light => {
+            light.or_else(|| dark.map(|value| theme::readable_plain_accent(value, appearance)))
+        }
+        theme::Appearance::Dark => {
+            dark.or_else(|| light.map(|value| theme::readable_plain_accent(value, appearance)))
+        }
+    }
+}
+
 impl FlowlistApp {
     fn new(store: Store, cx: &mut Context<Self>) -> Self {
         let session: Session = store.read_session().unwrap_or_default();
@@ -694,7 +709,11 @@ impl FlowlistApp {
     /// of following the system appearance; otherwise the next frame would put
     /// the old appearance straight back.
     fn toggle_appearance(&mut self) {
-        self.theme = self.theme.toggled();
+        // Rebuild through the saved accents instead of flipping the palette in
+        // place: Plain stores one accent per appearance, and the previous
+        // `Theme::toggled` dropped it on the floor.
+        let appearance = self.theme.appearance().toggled();
+        self.theme = self.build_theme(self.theme.kind(), appearance);
         self.follow_system = false;
         self.toast = Some(format!(
             "{} · {}",
@@ -706,10 +725,7 @@ impl FlowlistApp {
 
     /// Build the window palette from the saved family, mode and Plain accent.
     fn build_theme(&self, kind: theme::ThemeKind, appearance: theme::Appearance) -> Theme {
-        let accent = match appearance {
-            theme::Appearance::Light => self.plain_accent_light,
-            theme::Appearance::Dark => self.plain_accent_dark,
-        };
+        let accent = accent_for(appearance, self.plain_accent_light, self.plain_accent_dark);
         Theme::with_accent(kind, appearance, accent)
     }
 
@@ -727,10 +743,7 @@ impl FlowlistApp {
             ..
         }) = &self.modal
         {
-            let accent = match appearance {
-                theme::Appearance::Light => *accent_light,
-                theme::Appearance::Dark => *accent_dark,
-            };
+            let accent = accent_for(appearance, *accent_light, *accent_dark);
             Theme::with_accent(kind, appearance, accent)
         } else {
             self.build_theme(kind, appearance)
@@ -3834,11 +3847,14 @@ impl FlowlistApp {
                 }
                 "t" => {
                     if mods.shift || mods.alt {
-                        self.theme = if mods.shift {
-                            self.theme.next_theme()
+                        // Step the family but rebuild through the saved Plain
+                        // accent, so returning to Plain keeps its colour.
+                        let kind = if mods.shift {
+                            self.theme.kind().next()
                         } else {
-                            self.theme.previous_theme()
+                            self.theme.kind().previous()
                         };
+                        self.theme = self.build_theme(kind, self.theme.appearance());
                         self.toast = Some(format!(
                             "{} · {}",
                             self.theme.kind().label(),
@@ -6129,10 +6145,11 @@ fn search_slot(window_width: f32) -> (f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::rank_suggestions;
+    use super::theme::Appearance;
     use super::{
-        DATE_PICKER_HEIGHT, DATE_PICKER_WIDTH, DateField, View, clock_dial_position, clock_hour_12,
-        clock_hour_24, date_picker_position, effective_priority_filter, first_of_month,
-        picker_default_time, picker_stamp, stepped_time,
+        DATE_PICKER_HEIGHT, DATE_PICKER_WIDTH, DateField, View, accent_for, clock_dial_position,
+        clock_hour_12, clock_hour_24, date_picker_position, effective_priority_filter,
+        first_of_month, picker_default_time, picker_stamp, stepped_time,
     };
     use chrono::{NaiveDate, NaiveTime};
     use flowlist_core::model::{BuiltinPerspective, Priority};
@@ -6358,5 +6375,19 @@ mod tests {
             first_of_month(date),
             NaiveDate::from_ymd_opt(2026, 12, 1).unwrap()
         );
+    }
+    #[test]
+    fn an_accent_chosen_in_one_appearance_carries_to_the_other() {
+        let red = 0xB42828;
+        assert_eq!(accent_for(Appearance::Light, Some(red), None), Some(red));
+        let carried = accent_for(Appearance::Dark, Some(red), None).expect("dark inherits");
+        assert_ne!(carried, 0x181818, "must not fall back to ink");
+        // An explicit tone for the other appearance always wins.
+        assert_eq!(
+            accent_for(Appearance::Dark, Some(red), Some(0x4C7DFF)),
+            Some(0x4C7DFF)
+        );
+        // Clearing both sides really does return to ink.
+        assert_eq!(accent_for(Appearance::Light, None, None), None);
     }
 }

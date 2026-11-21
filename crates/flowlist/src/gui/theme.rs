@@ -911,21 +911,6 @@ impl Theme {
             gpui::linear_color_stop(self.glass_bottom, 1.0),
         )
     }
-
-    /// Light/dark within the current theme family.
-    pub fn toggled(self) -> Self {
-        Self::new(self.kind, self.appearance.toggled())
-    }
-
-    /// The next theme family, keeping the current light/dark mode.
-    pub fn next_theme(self) -> Self {
-        Self::new(self.kind.next(), self.appearance)
-    }
-
-    /// The previous theme family, keeping the current light/dark mode.
-    pub fn previous_theme(self) -> Self {
-        Self::new(self.kind.previous(), self.appearance)
-    }
 }
 
 #[cfg(test)]

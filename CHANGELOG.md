@@ -77,6 +77,12 @@
 - The content header no longer repeats the last action and its Undo sentence;
   the status bar still carries both. The Settings sheet drops its
   library-wide subtitle, since the section rail already names what it holds.
+- A Plain accent chosen in one appearance now carries into the other instead
+  of resetting to ink: the unset side inherits the chosen hue, clamped by the
+  theme builder so text and button labels stay readable there. The accent
+  panel shows the inherited tone, and setting a tone for that appearance (a
+  preset, the picker or the eyedropper) still overrides it. Toggling the theme
+  or switching family no longer drops the accent either.
 - Icon tooltips now wait three seconds instead of about five.
 - Nested folder rows show just the folder's own name; indentation carries the
   path instead of printing `Parent / Child` on every row.
