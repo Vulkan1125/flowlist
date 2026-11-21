@@ -6,7 +6,6 @@
 
 mod blur;
 mod content;
-mod doodles;
 mod drag;
 mod hotkey;
 mod icons;
@@ -6042,11 +6041,6 @@ impl FlowlistApp {
         let theme = self.theme;
         // Recorded for the GUI probe, which cannot read text off the screen.
         *self.empty_note.borrow_mut() = Some(title.to_string());
-        let kind = match &self.view {
-            View::Builtin(BuiltinPerspective::Today) => Some(doodles::DoodleKind::Today),
-            View::Builtin(BuiltinPerspective::Forecast) => Some(doodles::DoodleKind::Forecast),
-            _ => None,
-        };
         div()
             .flex()
             .flex_col()
@@ -6055,12 +6049,9 @@ impl FlowlistApp {
             .flex_1()
             .gap_3()
             .py_12()
-            .child(if let Some(kind) = kind {
-                doodles::doodle(kind, theme).into_any_element()
-            } else {
-                // A soft halo keeps other empty views from reading as a
-                // missing image without turning every perspective into an
-                // illustrated page.
+            .child(
+                // A soft halo keeps an empty view from reading as a missing
+                // image while staying quieter than a full illustration.
                 div()
                     .flex()
                     .items_center()
@@ -6070,9 +6061,8 @@ impl FlowlistApp {
                     .bg(theme.field)
                     .border_1()
                     .border_color(theme.border_soft)
-                    .child(icons::icon(Icon::CircleDashed, 30.0, theme.text_faint))
-                    .into_any_element()
-            })
+                    .child(icons::icon(Icon::CircleDashed, 30.0, theme.text_faint)),
+            )
             .child(
                 div()
                     .text_base()

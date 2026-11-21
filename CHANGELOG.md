@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.1 — 2026-11-21
+
+- **Mac empty states return to the quiet halo.** All hand-drawn illustrations
+  are gone, including the Today sun and Forecast calendar; the perspective
+  titles remain.
+- The phone's **Add subtask** field focuses itself when opened, so typing
+  starts immediately after tapping Add subtask.
+- 0.6.0 remains in this release: indented subtasks, subtask creation, the
+  in-app update check, search and checklist steps.
+
 ## 0.6.0 — 2026-11-21
 
 - **Subtasks on the phone.** Child tasks sit indented under their parent in

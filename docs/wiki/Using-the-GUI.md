@@ -230,7 +230,6 @@ Flowlist quits, a helper removes the files, and the result is logged to
 
 ## Empty states
 
-Today and Forecast draw a small hand-drawn illustration when they are empty: a
-sun with a drifting cloud, and a calendar with a bouncing accent dot. Both use
-the active theme's colours and move slowly without demanding attention. Other
-views keep a quiet halo instead of an illustration.
+Every empty view uses a quiet circular halo and a specific title, with no
+illustration. The title names the view (“Inbox zero”, “Nothing flagged”, “Trash
+is empty”) and the line below explains what will appear there.
