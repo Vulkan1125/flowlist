@@ -34,6 +34,7 @@ data class AppState(
     val offlineSince: Long? = null,
     /// Attachment paths with a durable copy on this phone.
     val savedAttachments: Set<String> = emptySet(),
+    val savingAttachments: Boolean = false,
 )
 
 class Repository(context: Context) {
@@ -529,6 +530,36 @@ class Repository(context: Context) {
         }
     }
 
+    suspend fun saveAllAttachments(): Pair<Int, Int> {
+        val snapshot = _state.value.snapshot ?: return 0 to 0
+        val paths = (
+            snapshot.db.tasks.values.flatMap { it.attachments } +
+                snapshot.db.projects.values.flatMap { it.attachments }
+            ).filter { it.startsWith("/") }.distinct()
+        _state.update { it.copy(savingAttachments = true) }
+        var saved = 0
+        var failed = 0
+        for (path in paths) {
+            if (path in savedPaths) {
+                saved++
+            } else if (saveAttachmentForOffline(path)) {
+                saved++
+            } else {
+                failed++
+            }
+        }
+        _state.update { it.copy(savingAttachments = false) }
+        return saved to failed
+    }
+
+    suspend fun removeAllSavedAttachments() {
+        savedDir.listFiles()
+            ?.filter { it.isFile && it.name != "index.txt" }
+            ?.forEach { it.delete() }
+        savedPaths.clear()
+        persistSaved()
+    }
+
     suspend fun removeAttachment(taskId: String, path: String) {
         val next = currentAttachments(taskId).filterNot { it == path }
         updateAttachments(taskId, next)
@@ -553,6 +584,7 @@ class Repository(context: Context) {
             persistSaved()
             true
         } catch (error: Exception) {
+            android.util.Log.w("FlowlistAttachments", "Could not save $path", error)
             _state.update { it.copy(error = friendly(error)) }
             false
         }

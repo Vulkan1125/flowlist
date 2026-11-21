@@ -208,6 +208,17 @@ fun MainScreen(
         if (initialTab != null) onTabConsumed()
     }
     val snapshot = state.snapshot
+    LaunchedEffect(preferences.saveAllAttachments, snapshot?.revision, state.online) {
+        if (preferences.saveAllAttachments && state.online) {
+            val paths = (
+                snapshot?.db?.tasks?.values?.flatMap { it.attachments }.orEmpty() +
+                    snapshot?.db?.projects?.values?.flatMap { it.attachments }.orEmpty()
+                ).filter { it.startsWith("/") }.distinct()
+            if (paths.any { it !in state.savedAttachments }) {
+                repository.saveAllAttachments()
+            }
+        }
+    }
     val children = remember(snapshot?.revision) {
         snapshot?.db?.taskViews()
             ?.filter { it.parent != null }
@@ -558,6 +569,19 @@ fun MainScreen(
                     },
                     onSync = { scope.launch { repository.sync() } },
                     onSignOut = { scope.launch { repository.signOut() } },
+                    onSaveAllPreference = { enabled ->
+                        onPreferencesChange(preferences.copy(saveAllAttachments = enabled))
+                    },
+                    onRemoveAllSaved = {
+                        onPreferencesChange(preferences.copy(saveAllAttachments = false))
+                        scope.launch {
+                            repository.removeAllSavedAttachments()
+                            snackbarHost.showSnackbar(
+                                message = "Offline attachment copies removed",
+                                duration = SnackbarDuration.Short,
+                            )
+                        }
+                    },
                 )
             }
         }

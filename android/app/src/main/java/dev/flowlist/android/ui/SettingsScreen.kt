@@ -45,6 +45,8 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Settings as SettingsIcon
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -104,6 +106,8 @@ fun SettingsScreen(
     onLibrarySettings: (SettingsDto) -> Unit,
     onSync: () -> Unit,
     onSignOut: () -> Unit,
+    onSaveAllPreference: (Boolean) -> Unit,
+    onRemoveAllSaved: () -> Unit,
 ) {
     val context = LocalContext.current
     var section by rememberSaveable { mutableStateOf<String?>(null) }
@@ -157,7 +161,22 @@ fun SettingsScreen(
                         onPreferencesChange = onPreferencesChange,
                     )
                     SettingsSection.Tasks -> TaskSettings(preferences, onPreferencesChange)
-                    SettingsSection.Library -> LibrarySettings(librarySettings, onLibrarySettings)
+                    SettingsSection.Library -> {
+                        val attachmentPaths = (
+                            state.snapshot?.db?.tasks?.values?.flatMap { it.attachments }.orEmpty() +
+                                state.snapshot?.db?.projects?.values?.flatMap { it.attachments }.orEmpty()
+                            ).filter { it.startsWith("/") }.distinct()
+                        LibrarySettings(
+                            settings = librarySettings,
+                            onChange = onLibrarySettings,
+                            attachmentTotal = attachmentPaths.size,
+                            attachmentSaved = attachmentPaths.count { it in state.savedAttachments },
+                            savingAttachments = state.savingAttachments,
+                            saveAllAttachments = preferences.saveAllAttachments,
+                            onSaveAllPreference = onSaveAllPreference,
+                            onRemoveAllSaved = onRemoveAllSaved,
+                        )
+                    }
                     SettingsSection.Notifications -> NotificationSettings()
                     SettingsSection.Connection -> ConnectionSettings(state, onSync, onSignOut)
                     SettingsSection.About -> AboutSettings(state)
@@ -382,7 +401,17 @@ private fun TaskSettings(preferences: AppPreferences, onChange: (AppPreferences)
 }
 
 @Composable
-private fun LibrarySettings(settings: SettingsDto, onChange: (SettingsDto) -> Unit) {
+private fun LibrarySettings(
+    settings: SettingsDto,
+    onChange: (SettingsDto) -> Unit,
+    attachmentTotal: Int,
+    attachmentSaved: Int,
+    savingAttachments: Boolean,
+    saveAllAttachments: Boolean,
+    onSaveAllPreference: (Boolean) -> Unit,
+    onRemoveAllSaved: () -> Unit,
+) {
+    var confirmRemove by remember { mutableStateOf(false) }
     SettingsCard("Review") {
         SmallLabel("Default review interval")
         ChoiceRow {
@@ -428,6 +457,69 @@ private fun LibrarySettings(settings: SettingsDto, onChange: (SettingsDto) -> Un
             text = "These defaults live in the library, so the Mac sees them too.",
             style = MaterialTheme.typography.labelSmall,
             color = flow.faint,
+        )
+    }
+    Spacer(modifier = Modifier.height(14.dp))
+    SettingsCard("Offline files") {
+        ToggleRow(
+            title = "Save all attachments",
+            detail = "Keep every attachment available offline",
+            checked = saveAllAttachments,
+        ) {
+            onSaveAllPreference(it)
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = when {
+                savingAttachments -> "Saving attachments…"
+                attachmentTotal == 0 -> "No attachments in the library yet."
+                attachmentSaved >= attachmentTotal -> "All $attachmentTotal attachments are saved on this phone."
+                else -> "$attachmentSaved of $attachmentTotal attachments saved on this phone."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = flow.faint,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(
+            onClick = { confirmRemove = true },
+            enabled = attachmentSaved > 0 && !savingAttachments,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = flow.danger.copy(alpha = 0.12f),
+                contentColor = flow.danger,
+                disabledContainerColor = flow.field,
+                disabledContentColor = flow.faint,
+            ),
+        ) {
+            Text("Remove all offline copies")
+        }
+    }
+
+    if (confirmRemove) {
+        AlertDialog(
+            onDismissRequest = { confirmRemove = false },
+            title = { Text("Remove all offline copies?") },
+            text = {
+                Text(
+                    "Every saved attachment is deleted from this phone. " +
+                        "The files on the Mac are not touched.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmRemove = false
+                        onRemoveAllSaved()
+                    },
+                ) {
+                    Text("Remove", color = flow.danger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRemove = false }) {
+                    Text("Cancel", color = flow.faint)
+                }
+            },
+            containerColor = flow.background,
         )
     }
 }

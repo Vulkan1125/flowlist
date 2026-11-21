@@ -133,6 +133,16 @@ Both require the paired token. Files are capped at 40 MB, and the Mac only
 serves paths inside its attachments folder or paths already listed on a task or
 project.
 
+### Save everything
+
+**Settings → Library → Offline files** has a **Save all attachments** toggle.
+Turning it on downloads every attachment in the library, including project
+attachments, and new attachments are saved as the library syncs.
+
+**Remove all offline copies** deletes every saved file from the phone after a
+confirmation warning and switches the toggle off. Files on the Mac are never
+touched.
+
 ## Checklists
 
 **Add checklist item** appends a step to the current task. Every step has up

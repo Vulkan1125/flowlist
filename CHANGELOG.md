@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.6 — 2026-11-21
+
+- **Settings → Library → Offline files** has a **Save all attachments** toggle.
+  Turning it on saves every attachment in the library, including project
+  attachments, and keeps new ones saved as the library syncs.
+- **Remove all offline copies** sits below it, with a confirmation warning;
+  removing them also turns the toggle off.
+- Fixed large file downloads truncating because accepted sockets inherited the
+  listener's non-blocking mode. Transfers now complete for 20 MB+ files.
+
 ## 0.9.5 — 2026-11-21
 
 - **Attachments can be saved for offline use.** The download button on each

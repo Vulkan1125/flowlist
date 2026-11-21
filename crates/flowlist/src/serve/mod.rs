@@ -442,8 +442,9 @@ impl Response {
 }
 
 fn handle(mut stream: TcpStream, peer: SocketAddr, shared: Arc<Shared>) -> Result<()> {
+    let _ = stream.set_nonblocking(false);
     let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-    let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(180)));
     let Some(request) = read_request(&mut stream)? else {
         return Ok(());
     };

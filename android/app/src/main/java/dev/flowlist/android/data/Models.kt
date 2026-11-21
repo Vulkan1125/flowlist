@@ -90,6 +90,7 @@ data class ProjectDto(
     @SerialName("next_review") val nextReview: String? = null,
     @SerialName("review_interval_days") val reviewIntervalDays: Int = 7,
     @SerialName("task_order") val taskOrder: List<String> = emptyList(),
+    val attachments: List<String> = emptyList(),
     @SerialName("modified_at") val modifiedAt: String = "",
 )
 
