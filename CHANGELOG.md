@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.2 — 2026-11-21
+
+- **Forecast has a month grid.** Days show how many tasks are due, with
+  previous/next month and Today controls; tapping a day lists its tasks.
+- **Agenda** keeps the original rolling two-week list one tap away.
+- **Saved perspectives** live in the drawer. Build one from text, project,
+  tag, priority and due filters, with grouping, sorting and show-completed.
+  They use the Mac's `save_perspective` command and can be edited or deleted.
+
 ## 0.9.1 — 2026-11-21
 
 - **Checklist steps can be added, reordered and deleted** in the task editor.

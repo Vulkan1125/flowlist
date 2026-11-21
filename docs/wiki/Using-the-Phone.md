@@ -144,6 +144,21 @@ deletes it from every task and project. Tag names and sibling uniqueness follow
 the same rules as the Mac. From the task editor you can move a task to any
 open project or toggle its tags.
 
+## Forecast
+
+Forecast opens on a **month grid**. Each day shows how many tasks are due, with
+previous/next month and **Today** controls. Tapping a day lists its tasks below
+the grid. **Agenda** switches back to the rolling two-week list.
+
+## Saved perspectives
+
+The drawer has a **Saved** section. **New perspective** builds a view from any
+combination of text, project, tag, priority and due window, then chooses
+grouping (project, due date, tag, folder), sorting (due, name, priority,
+flagged, estimate) and whether completed tasks appear. Saved perspectives use
+the Mac's `save_perspective` command, so they appear there too; the row menu
+edits or deletes them.
+
 ## Perspectives and the drawer
 
 The bottom bar holds four perspectives and **Settings** on the far right.

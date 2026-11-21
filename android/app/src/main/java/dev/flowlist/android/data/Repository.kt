@@ -484,6 +484,26 @@ class Repository(context: Context) {
         sync()
     }
 
+    suspend fun savePerspective(
+        id: String,
+        name: String,
+        filter: kotlinx.serialization.json.JsonElement,
+        groupBy: String,
+        sort: String,
+        showCompleted: Boolean,
+    ) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        send(
+            savePerspectiveCommand(id, trimmed, filter, groupBy, sort, showCompleted),
+            "Save perspective “$trimmed”",
+        )
+    }
+
+    suspend fun deletePerspective(perspective: PerspectiveDto) {
+        send(deletePerspectiveCommand(perspective.id), "Delete perspective “${perspective.name}”")
+    }
+
     suspend fun createProject(name: String, folder: String?) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return

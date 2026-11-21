@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
@@ -88,6 +89,7 @@ import androidx.compose.ui.unit.sp
 import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.AppState
 import dev.flowlist.android.data.FolderDto
+import dev.flowlist.android.data.PerspectiveDto
 import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.Repository
 import dev.flowlist.android.data.TaskView
@@ -179,8 +181,11 @@ fun MainScreen(
     var projectEditor by remember { mutableStateOf<ProjectEditorTarget?>(null) }
     var folderEditor by remember { mutableStateOf<FolderEditorTarget?>(null) }
     var tagEditor by remember { mutableStateOf<TagEditorTarget?>(null) }
+    var perspectiveEditor by remember { mutableStateOf<PerspectiveEditorTarget?>(null) }
+    var savedPerspective by remember { mutableStateOf<PerspectiveDto?>(null) }
     var confirm by remember { mutableStateOf<ConfirmRequest?>(null) }
     BackHandler(enabled = moreView != null) { moreView = null }
+    BackHandler(enabled = savedPerspective != null) { savedPerspective = null }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val haptics = LocalHapticFeedback.current
     var offlineWarning by remember { mutableStateOf(false) }
@@ -219,6 +224,7 @@ fun MainScreen(
         resolveBottomBar(preferences.bottomBar)
     }
     val openPerspective: (Perspective) -> Unit = { item ->
+        savedPerspective = null
         val targetTab = item.tab
         if (targetTab != null) {
             tab = targetTab
@@ -272,6 +278,9 @@ fun MainScreen(
                     tab = tab,
                     more = moreView,
                     bottom = bottomPerspectives,
+                    saved = snapshot?.db?.perspectives?.values
+                        ?.sortedBy { it.position }
+                        .orEmpty(),
                     state = state,
                     onPerspective = { item ->
                         val targetTab = item.tab
@@ -281,7 +290,31 @@ fun MainScreen(
                         } else {
                             moreView = item.more
                         }
+                        savedPerspective = null
                         scope.launch { drawer.close() }
+                    },
+                    onSaved = { item ->
+                        moreView = null
+                        savedPerspective = item
+                        scope.launch { drawer.close() }
+                    },
+                    onNewPerspective = {
+                        perspectiveEditor = PerspectiveEditorTarget()
+                        scope.launch { drawer.close() }
+                    },
+                    onEditPerspective = { item ->
+                        perspectiveEditor = PerspectiveEditorTarget(item)
+                        scope.launch { drawer.close() }
+                    },
+                    onDeletePerspective = { item ->
+                        confirm = ConfirmRequest(
+                            title = "Delete perspective?",
+                            body = "“${item.name}” is removed from the drawer.",
+                            confirmLabel = "Delete",
+                        ) {
+                            if (savedPerspective?.id == item.id) savedPerspective = null
+                            scope.launch { repository.deletePerspective(item) }
+                        }
                     },
                 )
             }
@@ -296,9 +329,10 @@ fun MainScreen(
                 tonalElevation = 0.dp,
             ) {
                 bottomPerspectives.forEach { item ->
-                    val selected =
+                    val selected = savedPerspective == null && (
                         (item.tab != null && moreView == null && tab == item.tab) ||
                             (item.more != null && moreView == item.more)
+                        )
                     NavigationBarItem(
                         selected = selected,
                         onClick = { openPerspective(item) },
@@ -322,10 +356,11 @@ fun MainScreen(
                     )
                 }
                 NavigationBarItem(
-                    selected = tab == Tab.Settings && moreView == null,
+                    selected = tab == Tab.Settings && moreView == null && savedPerspective == null,
                     onClick = {
                         tab = Tab.Settings
                         moreView = null
+                        savedPerspective = null
                     },
                     icon = {
                         Icon(
@@ -378,16 +413,30 @@ fun MainScreen(
         ) {
             HorizontalDivider(thickness = 1.dp, color = colors.background)
             val activeMore = moreView
+            val activeSaved = savedPerspective
             Header(
-                title = activeMore?.label ?: tab.label,
-                subtitle = headerSubtitle(activeMore, tab, state),
+                title = activeSaved?.name ?: activeMore?.label ?: tab.label,
+                subtitle = when {
+                    activeSaved != null -> "Saved perspective"
+                    else -> headerSubtitle(activeMore, tab, state)
+                },
                 onMenu = { scope.launch { drawer.open() } },
                 onSearch = { search = true },
             )
             if (offlineWarning) {
                 OfflineNotice(onRetry = { scope.launch { repository.sync() } })
             }
-            if (activeMore != null) {
+            if (activeSaved != null) {
+                SavedPerspectiveView(
+                    perspective = activeSaved,
+                    snapshot = snapshot,
+                    swipeActions = preferences.swipeActions,
+                    pending = state.pending,
+                    onToggle = { task -> complete(task, true) },
+                    onClick = { detail = it },
+                    onTrash = trash,
+                )
+            } else if (activeMore != null) {
                 val db = snapshot?.db
                 if (db != null) {
                     MoreDestination(
@@ -436,10 +485,11 @@ fun MainScreen(
                     onClick = { detail = it },
                     onTrash = trash,
                 )
-                Tab.Forecast -> ForecastList(
+                Tab.Forecast -> ForecastScreen(
+                    snapshot = snapshot,
+                    weekStartsMonday = preferences.weekStartsMonday,
                     swipeActions = preferences.swipeActions,
                     children = children,
-                    groups = snapshot?.db?.forecast().orEmpty(),
                     pending = state.pending,
                     onToggle = { task -> complete(task, true) },
                     onClick = { detail = it },
@@ -710,6 +760,42 @@ fun MainScreen(
         )
     }
 
+    perspectiveEditor?.let { target ->
+        val editing = target.perspective
+        PerspectiveEditorSheet(
+            target = target,
+            projects = snapshot?.db?.projects?.values?.toList().orEmpty(),
+            tags = snapshot?.db?.tags?.values?.toList().orEmpty(),
+            onDismiss = { perspectiveEditor = null },
+            onSave = { draft ->
+                perspectiveEditor = null
+                scope.launch {
+                    repository.savePerspective(
+                        id = editing?.id.orEmpty(),
+                        name = draft.name,
+                        filter = draft.toFilter(),
+                        groupBy = draft.group,
+                        sort = draft.sort,
+                        showCompleted = draft.showCompleted,
+                    )
+                }
+            },
+            onDelete = editing?.let { item ->
+                {
+                    perspectiveEditor = null
+                    confirm = ConfirmRequest(
+                        title = "Delete perspective?",
+                        body = "“${item.name}” is removed from the drawer.",
+                        confirmLabel = "Delete",
+                    ) {
+                        if (savedPerspective?.id == item.id) savedPerspective = null
+                        scope.launch { repository.deletePerspective(item) }
+                    }
+                }
+            },
+        )
+    }
+
     confirm?.let { request ->
         ConfirmDialog(
             title = request.title,
@@ -757,8 +843,13 @@ private fun LibraryDrawer(
     tab: Tab,
     more: MoreView?,
     bottom: List<Perspective>,
+    saved: List<PerspectiveDto>,
     state: AppState,
     onPerspective: (Perspective) -> Unit,
+    onSaved: (PerspectiveDto) -> Unit,
+    onNewPerspective: () -> Unit,
+    onEditPerspective: (PerspectiveDto) -> Unit,
+    onDeletePerspective: (PerspectiveDto) -> Unit,
 ) {
     val colors = flow
     val remaining = Perspective.entries.filterNot { it in bottom }
@@ -787,6 +878,116 @@ private fun LibraryDrawer(
                 selected = selected,
                 onClick = { onPerspective(item) },
             )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider(color = colors.hairline, modifier = Modifier.padding(horizontal = 8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "SAVED",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.7.sp,
+                color = colors.faint,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onNewPerspective, modifier = Modifier.size(30.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.Add,
+                    contentDescription = "New perspective",
+                    tint = colors.faint,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+        if (saved.isEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(onClick = onNewPerspective)
+                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.BookmarkBorder,
+                    contentDescription = null,
+                    tint = colors.faint,
+                    modifier = Modifier.size(17.dp),
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "New perspective",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.faint,
+                )
+            }
+        }
+        saved.forEach { item ->
+            var menu by remember { mutableStateOf(false) }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 40.dp)
+                    .clip(RoundedCornerShape(10.dp)),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onSaved(item) }
+                        .padding(start = 12.dp, top = 7.dp, bottom = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.BookmarkBorder,
+                        contentDescription = null,
+                        tint = colors.faint,
+                        modifier = Modifier.size(17.dp),
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = item.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Box {
+                    IconButton(onClick = { menu = true }, modifier = Modifier.size(30.dp)) {
+                        Icon(
+                            imageVector = Icons.Rounded.MoreVert,
+                            contentDescription = "Perspective actions",
+                            tint = colors.faint,
+                            modifier = Modifier.size(17.dp),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menu,
+                        onDismissRequest = { menu = false },
+                        containerColor = colors.raised,
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Edit perspective") },
+                            onClick = {
+                                menu = false
+                                onEditPerspective(item)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete perspective", color = colors.danger) },
+                            onClick = {
+                                menu = false
+                                onDeletePerspective(item)
+                            },
+                        )
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.weight(1f))
@@ -933,7 +1134,7 @@ private fun headerSubtitle(more: MoreView?, tab: Tab, state: AppState): String {
             DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()),
         )
 
-        Tab.Forecast -> "The next two weeks"
+        Tab.Forecast -> "Your month at a glance"
         Tab.Browse -> "${state.snapshot?.db?.projects?.size ?: 0} projects"
         Tab.Settings -> "Appearance, tasks, sync and about"
     }
@@ -1074,7 +1275,8 @@ private fun TodayList(
 }
 
 @Composable
-private fun ForecastList(
+fun ForecastList(
+    modifier: Modifier = Modifier,
     swipeActions: Boolean,
     children: Map<String, List<TaskView>>,
     groups: Map<LocalDate, List<TaskView>>,
@@ -1083,7 +1285,7 @@ private fun ForecastList(
     onClick: (TaskView) -> Unit,
     onTrash: (TaskView) -> Unit,
 ) {
-    LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
+    LazyColumn(modifier = modifier, contentPadding = PaddingValues(bottom = 100.dp)) {
         if (groups.values.all { it.isEmpty() }) {
             item(key = "empty") {
                 Box(

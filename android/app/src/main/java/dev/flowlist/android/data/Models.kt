@@ -23,6 +23,7 @@ data class Db(
     val projects: Map<String, ProjectDto> = emptyMap(),
     val folders: Map<String, FolderDto> = emptyMap(),
     val tags: Map<String, TagDto> = emptyMap(),
+    val perspectives: Map<String, PerspectiveDto> = emptyMap(),
     @SerialName("inbox_order") val inboxOrder: List<String> = emptyList(),
     val root: List<JsonElement> = emptyList(),
     val settings: SettingsDto = SettingsDto(),
@@ -105,6 +106,17 @@ data class TagDto(
     val id: String,
     val name: String = "",
     val parent: String? = null,
+)
+
+@Serializable
+data class PerspectiveDto(
+    val id: String = "",
+    val name: String = "",
+    val filter: JsonElement? = null,
+    @SerialName("group_by") val groupBy: String = "none",
+    val sort: String = "manual",
+    @SerialName("show_completed") val showCompleted: Boolean = false,
+    val position: Int = 0,
 )
 
 @Serializable

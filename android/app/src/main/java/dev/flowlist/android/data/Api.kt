@@ -446,3 +446,34 @@ fun moveSubtaskCommand(childId: String, parentId: String): JsonObject = buildJso
         },
     )
 }
+
+fun savePerspectiveCommand(
+    id: String,
+    name: String,
+    filter: kotlinx.serialization.json.JsonElement,
+    groupBy: String,
+    sort: String,
+    showCompleted: Boolean,
+): JsonObject = buildJsonObject {
+    put(
+        "save_perspective",
+        buildJsonObject {
+            put(
+                "perspective",
+                buildJsonObject {
+                    put("id", id)
+                    put("name", name)
+                    put("filter", filter)
+                    put("group_by", groupBy)
+                    put("sort", sort)
+                    put("show_completed", showCompleted)
+                    put("position", 0)
+                },
+            )
+        },
+    )
+}
+
+fun deletePerspectiveCommand(id: String): JsonObject = buildJsonObject {
+    put("delete_perspective", buildJsonObject { put("id", id) })
+}
