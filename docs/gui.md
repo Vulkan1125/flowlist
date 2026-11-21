@@ -130,7 +130,11 @@ its Delete and Complete actions stay hidden while you are still filling it in.
 Attachments take local file paths and http(s) links side by side: **Attach
 file…** opens the macOS picker and **Add link…** takes a pasted address. The ×
 on an attachment row asks before unlinking it, and the sheet says that the
-file itself stays where it is; Undo restores the attachment.
+file itself stays where it is; Undo restores the attachment. Clicking an
+image's or PDF's name previews it in a card over the list — PDFs step with
+`←` / `→` or the footer arrows — while **open** (or `o` in the card) still
+hands the file to its default app. Links and other file types keep opening
+externally. `Esc` or **Done** closes the card.
 Checklist steps are lightweight and never appear as tasks; completing a
 repeating task copies the checklist with every step unchecked. The last number
 in a repeating title moves on with each occurrence, so “Week 3 review” spawns

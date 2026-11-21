@@ -240,6 +240,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       the same value for later edits.
 - [x] Removing an attachment asks first and leaves the file on disk; Undo
       restores the row.
+- [x] Image and PDF attachments preview inside the window, with PDF page
+      stepping, and `o` still opens the file externally.
 - [x] Rich custom-perspective editor laid out like settings: labelled filter
       and layout rows that each open a menu of every value, a live match count,
       an explicit Clear filters, and unknown CLI conditions kept and counted

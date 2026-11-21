@@ -12,6 +12,7 @@ mod icons;
 mod inspector;
 mod modals;
 mod perspective;
+mod preview;
 mod quick_capture;
 mod screen_picker;
 mod session;
@@ -459,6 +460,8 @@ pub struct FlowlistApp {
     focus_handle: FocusHandle,
     capture: text::TextBuffer,
     search: text::TextBuffer,
+    /// An image or PDF shown over the list, closed with Esc.
+    preview: Option<preview::Preview>,
     /// Whether the search field filters the current view or matches across the
     /// whole library. Transient: a new session starts on the current view.
     search_library: bool,
@@ -670,6 +673,7 @@ impl FlowlistApp {
             focus_handle,
             capture: text::TextBuffer::empty(),
             search: text::TextBuffer::empty(),
+            preview: None,
             search_library: false,
             field: text::TextBuffer::empty(),
             tag_buffer: text::TextBuffer::empty(),
@@ -3418,6 +3422,23 @@ impl FlowlistApp {
             return;
         }
 
+        // A preview owns the keyboard while it is open: nothing should type
+        // into the list behind it.
+        if self.preview.is_some() {
+            match stroke.key.as_str() {
+                "escape" => self.close_preview(cx),
+                "o" if !mods.platform && !mods.control && !mods.alt => {
+                    self.open_preview_external(cx);
+                }
+                "right" | "down" | "pagedown" | "j" => self.step_preview_page(1, cx),
+                "left" | "up" | "pageup" | "k" => self.step_preview_page(-1, cx),
+                _ => {}
+            }
+            window.focus(&self.focus_handle);
+            cx.notify();
+            return;
+        }
+
         if self.focus == FocusArea::Modal {
             if mods.platform {
                 // Settings sections are one keystroke away. The digits do not
@@ -5219,6 +5240,20 @@ impl FlowlistApp {
         // json! recursion limit, so new debug fields go in one at a time.
         state["project_badges"] = serde_json::json!(project_badges);
         state["toast"] = serde_json::json!(self.toast);
+        state["preview"] = serde_json::json!(self.preview.as_ref().map(|preview| {
+            serde_json::json!({
+                "path": preview.path,
+                "name": preview.name,
+                "kind": match preview.kind {
+                    preview::PreviewKind::Image => "image",
+                    preview::PreviewKind::Pdf { .. } => "pdf",
+                },
+                "page": match preview.kind {
+                    preview::PreviewKind::Pdf { at, .. } => Some(at + 1),
+                    preview::PreviewKind::Image => None,
+                },
+            })
+        }));
         state["modal_fields"] = serde_json::json!(match &self.modal {
             Some(modal) => (0..modal.field_count())
                 .map(|index| {
@@ -6095,6 +6130,9 @@ impl Render for FlowlistApp {
         }
         if self.toast.is_some() {
             root = root.child(self.render_toast(cx));
+        }
+        if self.preview.is_some() {
+            root = root.child(self.render_preview(window, cx));
         }
         if self.modal.is_some() {
             root = root.child(self.render_modal(window, cx));

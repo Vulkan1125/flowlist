@@ -77,6 +77,11 @@
 - The content header no longer repeats the last action and its Undo sentence;
   the status bar still carries both. The Settings sheet drops its
   library-wide subtitle, since the section rail already names what it holds.
+- Image and PDF attachments can preview inside the window: clicking a file's
+  name opens a card over the list instead of handing it to another app. Images
+  fit the card; a PDF opens on its first page and steps with ←/→ or the footer
+  arrows. `o` still opens the file in its default app, `Esc` closes the card,
+  and links and unknown file types keep the old open behaviour.
 - Search is fuzzy now: missing letters still find a task (`bcf` finds “Buy
   coffee filters”), and the fields behind a row — title, notes, checklist,
   tags, project path — all count, with the closest match first. A scope chip

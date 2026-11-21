@@ -122,7 +122,9 @@ under the folder.
 `history_rows` maps the header arrows (`history-back`, `history-forward`) to
 boxes, and `can_go_back` / `can_go_forward` report whether a valid view lies
 that way.
-`content_rows` lists the task rows
+`preview` is the attachment card on screen, or null: `path`, `name`, `kind`
+(`image` or `pdf`) and, for PDFs, the one-based `page` visible. `content_rows`
+lists the task rows
 actually painted on the last frame, in order, with `id`, `title`, `depth` and
 `has_children`; hidden descendants are absent, so a probe can assert what a
 disclosure reveals. `task_disclosures` maps each parent id to its chevron box

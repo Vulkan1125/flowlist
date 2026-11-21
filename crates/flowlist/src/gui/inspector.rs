@@ -1870,6 +1870,8 @@ impl FlowlistApp {
             );
             let open_path = path.clone();
             let remove_path = path.clone();
+            let preview_path = path.clone();
+            let can_preview = super::preview::previewable(path);
             rows = rows.child(
                 div()
                     .id(super::sid(format!("attachment:{index}")))
@@ -1895,7 +1897,28 @@ impl FlowlistApp {
                             .truncate()
                             .text_xs()
                             .text_color(theme.text)
-                            .flow_tip(self, cx, theme, path.clone())
+                            .flow_tip(
+                                self,
+                                cx,
+                                theme,
+                                if can_preview {
+                                    format!("Preview {path}")
+                                } else if link {
+                                    path.clone()
+                                } else {
+                                    format!("Open {path}")
+                                },
+                            )
+                            .cursor_pointer()
+                            .hover(|style| style.text_color(theme.accent))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if can_preview {
+                                    this.preview_attachment(preview_path.clone(), cx);
+                                } else {
+                                    this.open_attachment(preview_path.clone());
+                                    cx.notify();
+                                }
+                            }))
                             .child(name),
                     )
                     .child(
