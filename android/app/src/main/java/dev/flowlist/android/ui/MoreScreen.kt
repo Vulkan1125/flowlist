@@ -31,7 +31,11 @@ import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.RateReview
 import androidx.compose.material.icons.outlined.Tag
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -156,6 +160,9 @@ fun MoreDestination(
     onPurge: (String) -> Unit,
     onReview: (ProjectDto) -> Unit,
     onProject: (ProjectDto) -> Unit,
+    onNewTag: () -> Unit,
+    onEditTag: (TagDto) -> Unit,
+    onDeleteTag: (TagDto) -> Unit,
 ) {
     val colors = flow
     var tag by remember { mutableStateOf<TagDto?>(null) }
@@ -271,6 +278,29 @@ fun MoreDestination(
                 }
             }
             view == MoreView.Tags -> LazyColumn {
+                item(key = "new-tag") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onNewTag)
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = null,
+                            tint = colors.accent,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "New tag",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.accent,
+                        )
+                    }
+                    Hairline(Modifier.padding(start = 20.dp))
+                }
                 if (db.tags.isEmpty()) {
                     item(key = "tags-empty") {
                         EmptyLine("No tags yet.")
@@ -284,19 +314,65 @@ fun MoreDestination(
                     ),
                     key = { it.id },
                 ) { item ->
+                    var menu by remember { mutableStateOf(false) }
                     val count = db.tagUsageCount(item.id)
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { tag = item }
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            "#${item.name}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.ink,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text("$count", style = MaterialTheme.typography.labelMedium, color = colors.faint)
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { tag = item }
+                                .padding(start = 20.dp, top = 14.dp, bottom = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "#${item.name}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.ink,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                "$count",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.faint,
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+                        Box {
+                            IconButton(
+                                onClick = { menu = true },
+                                modifier = Modifier.size(38.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.MoreVert,
+                                    contentDescription = "Tag actions",
+                                    tint = colors.faint,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = menu,
+                                onDismissRequest = { menu = false },
+                                containerColor = colors.raised,
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Edit tag") },
+                                    onClick = {
+                                        menu = false
+                                        onEditTag(item)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Delete tag", color = colors.danger) },
+                                    onClick = {
+                                        menu = false
+                                        onDeleteTag(item)
+                                    },
+                                )
+                            }
+                        }
                     }
                     Hairline(Modifier.padding(start = 20.dp))
                 }

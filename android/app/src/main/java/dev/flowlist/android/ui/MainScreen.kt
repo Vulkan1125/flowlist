@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -24,19 +23,26 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -81,6 +87,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.ui.unit.sp
 import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.AppState
+import dev.flowlist.android.data.FolderDto
 import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.Repository
 import dev.flowlist.android.data.TaskView
@@ -169,6 +176,10 @@ fun MainScreen(
     var detail by remember { mutableStateOf<TaskView?>(null) }
     var project by remember { mutableStateOf<ProjectDto?>(null) }
     var moreView by remember { mutableStateOf<MoreView?>(null) }
+    var projectEditor by remember { mutableStateOf<ProjectEditorTarget?>(null) }
+    var folderEditor by remember { mutableStateOf<FolderEditorTarget?>(null) }
+    var tagEditor by remember { mutableStateOf<TagEditorTarget?>(null) }
+    var confirm by remember { mutableStateOf<ConfirmRequest?>(null) }
     BackHandler(enabled = moreView != null) { moreView = null }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val haptics = LocalHapticFeedback.current
@@ -197,6 +208,13 @@ fun MainScreen(
             .orEmpty()
     }
     val snackbarHost = remember { SnackbarHostState() }
+    LaunchedEffect(state.error, state.online) {
+        val message = state.error
+        if (message != null && state.online) {
+            snackbarHost.showSnackbar(message, duration = SnackbarDuration.Short)
+            repository.clearError()
+        }
+    }
     val bottomPerspectives = remember(preferences.bottomBar) {
         resolveBottomBar(preferences.bottomBar)
     }
@@ -386,6 +404,17 @@ fun MainScreen(
                             scope.launch { repository.reviewProject(projectItem) }
                         },
                         onProject = { projectItem -> project = projectItem },
+                        onNewTag = { tagEditor = TagEditorTarget() },
+                        onEditTag = { item -> tagEditor = TagEditorTarget(item, item.parent) },
+                        onDeleteTag = { item ->
+                            confirm = ConfirmRequest(
+                                title = "Delete tag?",
+                                body = "“#${item.name}” is removed from every task and project.",
+                                confirmLabel = "Delete",
+                            ) {
+                                scope.launch { repository.deleteTag(item) }
+                            }
+                        },
                     )
                 }
             } else when (tab) {
@@ -417,9 +446,39 @@ fun MainScreen(
                     onTrash = trash,
                 )
                 Tab.Browse -> BrowseList(
-                    projects = snapshot?.db?.projects?.values?.sortedBy { it.name.lowercase() }.orEmpty(),
                     snapshot = snapshot,
                     onOpen = { project = it },
+                    onNewProject = { folder -> projectEditor = ProjectEditorTarget(null, folder) },
+                    onNewFolder = { parent -> folderEditor = FolderEditorTarget(null, parent) },
+                    onEditProject = { projectEditor = ProjectEditorTarget(it, it.folder) },
+                    onArchiveProject = { item ->
+                        scope.launch {
+                            repository.setProjectStatus(item, "done")
+                            snackbarHost.showSnackbar(
+                                message = "Archived “${item.name}”",
+                                duration = SnackbarDuration.Short,
+                            )
+                        }
+                    },
+                    onDeleteProject = { item ->
+                        confirm = ConfirmRequest(
+                            title = "Delete project?",
+                            body = "“${item.name}” and its tasks move to Trash. You can restore them from Trash.",
+                            confirmLabel = "Delete",
+                        ) {
+                            scope.launch { repository.deleteProject(item) }
+                        }
+                    },
+                    onEditFolder = { folderEditor = FolderEditorTarget(it, it.parent) },
+                    onDeleteFolder = { item ->
+                        confirm = ConfirmRequest(
+                            title = "Delete folder?",
+                            body = "“${item.name}”, anything inside it, and its tasks move to Trash.",
+                            confirmLabel = "Delete",
+                        ) {
+                            scope.launch { repository.deleteFolder(item) }
+                        }
+                    },
                 )
                 Tab.Settings -> SettingsScreen(
                     state = state,
@@ -530,11 +589,122 @@ fun MainScreen(
                 }
                 .orEmpty(),
             onDismiss = { project = null },
+            onEdit = {
+                val editing = value
+                project = null
+                projectEditor = ProjectEditorTarget(editing, editing.folder)
+            },
             onToggle = { task -> complete(task, true) },
             onClick = { task ->
                 project = null
                 detail = task
             },
+        )
+    }
+
+    projectEditor?.let { target ->
+        val editing = target.project
+        ProjectEditorSheet(
+            target = target,
+            folders = snapshot?.db?.folders?.values?.toList().orEmpty(),
+            onDismiss = { projectEditor = null },
+            onSave = { name, folder, status ->
+                projectEditor = null
+                scope.launch {
+                    if (editing == null) {
+                        repository.createProject(name, folder)
+                    } else {
+                        repository.updateProject(editing, name, folder, status)
+                    }
+                }
+            },
+            onDelete = editing?.let { item ->
+                {
+                    projectEditor = null
+                    confirm = ConfirmRequest(
+                        title = "Delete project?",
+                        body = "“${item.name}” and its tasks move to Trash.",
+                        confirmLabel = "Delete",
+                    ) {
+                        scope.launch { repository.deleteProject(item) }
+                    }
+                }
+            },
+        )
+    }
+
+    folderEditor?.let { target ->
+        val editing = target.folder
+        FolderEditorDialog(
+            target = target,
+            folders = snapshot?.db?.folders?.values?.toList().orEmpty(),
+            onDismiss = { folderEditor = null },
+            onSave = { name, parent ->
+                folderEditor = null
+                scope.launch {
+                    if (editing == null) {
+                        repository.createFolder(name, parent)
+                    } else {
+                        repository.updateFolder(editing, name, parent)
+                    }
+                }
+            },
+            onDelete = editing?.let { item ->
+                {
+                    folderEditor = null
+                    confirm = ConfirmRequest(
+                        title = "Delete folder?",
+                        body = "“${item.name}”, anything inside it, and its tasks move to Trash.",
+                        confirmLabel = "Delete",
+                    ) {
+                        scope.launch { repository.deleteFolder(item) }
+                    }
+                }
+            },
+        )
+    }
+
+    tagEditor?.let { target ->
+        val editing = target.tag
+        TagEditorDialog(
+            target = target,
+            tags = snapshot?.db?.tags?.values?.toList().orEmpty(),
+            onDismiss = { tagEditor = null },
+            onSave = { name, parent ->
+                tagEditor = null
+                scope.launch {
+                    if (editing == null) {
+                        repository.createTag(name, parent)
+                    } else {
+                        repository.updateTag(editing, name, parent)
+                    }
+                }
+            },
+            onDelete = editing?.let { item ->
+                {
+                    tagEditor = null
+                    confirm = ConfirmRequest(
+                        title = "Delete tag?",
+                        body = "“#${item.name}” is removed from every task and project.",
+                        confirmLabel = "Delete",
+                    ) {
+                        scope.launch { repository.deleteTag(item) }
+                    }
+                }
+            },
+        )
+    }
+
+    confirm?.let { request ->
+        ConfirmDialog(
+            title = request.title,
+            body = request.body,
+            confirmLabel = request.confirmLabel,
+            onConfirm = {
+                confirm = null
+                request.action()
+            },
+            onDismiss = { confirm = null },
         )
     }
 
@@ -961,60 +1131,268 @@ private fun ForecastHeader(date: LocalDate, count: Int) {
     }
 }
 
+private data class ConfirmRequest(
+    val title: String,
+    val body: String,
+    val confirmLabel: String,
+    val action: () -> Unit,
+)
+
+private sealed interface BrowseEntry {
+    data class Folder(val folder: FolderDto, val depth: Int) : BrowseEntry
+    data class Project(val project: ProjectDto, val depth: Int) : BrowseEntry
+}
+
 @Composable
 private fun BrowseList(
-    projects: List<ProjectDto>,
     snapshot: dev.flowlist.android.data.Snapshot?,
     onOpen: (ProjectDto) -> Unit,
+    onNewProject: (String?) -> Unit,
+    onNewFolder: (String?) -> Unit,
+    onEditProject: (ProjectDto) -> Unit,
+    onArchiveProject: (ProjectDto) -> Unit,
+    onDeleteProject: (ProjectDto) -> Unit,
+    onEditFolder: (FolderDto) -> Unit,
+    onDeleteFolder: (FolderDto) -> Unit,
 ) {
     val colors = flow
-    if (projects.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            EmptyState(
-                title = "No projects yet",
-                body = "Projects created on the Mac appear here with their open tasks.",
-                doodle = { BrowseDoodle() },
-            )
+    val db = snapshot?.db
+    val projects = db?.projects?.values.orEmpty()
+    val folders = db?.folders?.values.orEmpty()
+    val entries = remember(snapshot?.revision) {
+        val open = projects
+            .filter { it.status == "active" || it.status == "on_hold" }
+            .sortedBy { it.name.lowercase() }
+        val orderedFolders = folders.sortedBy { it.name.lowercase() }
+
+        fun collect(folderId: String?, depth: Int): List<BrowseEntry> {
+            val rows = mutableListOf<BrowseEntry>()
+            open.filter { it.folder == folderId }.forEach {
+                rows += BrowseEntry.Project(it, depth)
+            }
+            orderedFolders.filter { it.parent == folderId }.forEach { folder ->
+                rows += BrowseEntry.Folder(folder, depth)
+                rows += collect(folder.id, depth + 1)
+            }
+            return rows
         }
-        return
+        collect(null, 0)
     }
-    LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
-        items(projects, key = { it.id }) { project ->
-            val active = snapshot?.db?.tasks?.values?.count {
-                it.project == project.id && it.isActive
-            } ?: 0
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpen(project) }
-                    .padding(horizontal = 20.dp, vertical = 15.dp),
-                verticalAlignment = Alignment.CenterVertically,
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = { onNewProject(null) }) {
+                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(17.dp))
+                Spacer(modifier = Modifier.width(5.dp))
+                Text("New project")
+            }
+            TextButton(onClick = { onNewFolder(null) }) {
+                Icon(
+                    Icons.Outlined.CreateNewFolder,
+                    contentDescription = null,
+                    modifier = Modifier.size(17.dp),
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text("New folder")
+            }
+        }
+
+        if (entries.isEmpty()) {
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(if (active == 0) colors.hairline else colors.accent),
-                )
-                Spacer(modifier = Modifier.width(14.dp))
-                Text(
-                    text = project.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = if (active == 0) "Done" else "$active",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = colors.faint,
+                EmptyState(
+                    title = "No projects yet",
+                    body = "Create a project here and it syncs straight to the Mac.",
+                    doodle = { BrowseDoodle() },
                 )
             }
-            Hairline(Modifier.padding(start = 42.dp))
+            return@Column
+        }
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(bottom = 100.dp),
+        ) {
+            items(entries) { entry ->
+                when (entry) {
+                    is BrowseEntry.Folder -> {
+                        var menu by remember { mutableStateOf(false) }
+                        val projectCount = projects.count {
+                            it.folder == entry.folder.id &&
+                                (it.status == "active" || it.status == "on_hold")
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = 20.dp + (entry.depth * 16).dp,
+                                    end = 8.dp,
+                                    top = 14.dp,
+                                    bottom = 6.dp,
+                                ),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.FolderOpen,
+                                contentDescription = null,
+                                tint = colors.faint,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = entry.folder.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.ink,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = "$projectCount",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.faint,
+                            )
+                            Box {
+                                IconButton(
+                                    onClick = { menu = true },
+                                    modifier = Modifier.size(32.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.MoreVert,
+                                        contentDescription = "Folder actions",
+                                        tint = colors.faint,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = menu,
+                                    onDismissRequest = { menu = false },
+                                    containerColor = colors.raised,
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Edit folder") },
+                                        onClick = {
+                                            menu = false
+                                            onEditFolder(entry.folder)
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("New project here") },
+                                        onClick = {
+                                            menu = false
+                                            onNewProject(entry.folder.id)
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("New folder inside") },
+                                        onClick = {
+                                            menu = false
+                                            onNewFolder(entry.folder.id)
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Delete folder", color = colors.danger) },
+                                        onClick = {
+                                            menu = false
+                                            onDeleteFolder(entry.folder)
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        Hairline(Modifier.padding(start = (20 + entry.depth * 16).dp))
+                    }
+
+                    is BrowseEntry.Project -> {
+                        var menu by remember { mutableStateOf(false) }
+                        val active = db?.tasks?.values?.count {
+                            it.project == entry.project.id && it.isActive
+                        } ?: 0
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpen(entry.project) }
+                                .padding(
+                                    start = 20.dp + (entry.depth * 16).dp,
+                                    end = 8.dp,
+                                    top = 4.dp,
+                                    bottom = 4.dp,
+                                ),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (active == 0) colors.hairline else colors.accent),
+                            )
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Text(
+                                text = entry.project.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.ink,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = if (active == 0) "Done" else "$active",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.faint,
+                            )
+                            Box {
+                                IconButton(
+                                    onClick = { menu = true },
+                                    modifier = Modifier.size(32.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.MoreVert,
+                                        contentDescription = "Project actions",
+                                        tint = colors.faint,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = menu,
+                                    onDismissRequest = { menu = false },
+                                    containerColor = colors.raised,
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Edit project") },
+                                        onClick = {
+                                            menu = false
+                                            onEditProject(entry.project)
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Archive") },
+                                        onClick = {
+                                            menu = false
+                                            onArchiveProject(entry.project)
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Delete project", color = colors.danger) },
+                                        onClick = {
+                                            menu = false
+                                            onDeleteProject(entry.project)
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        Hairline(Modifier.padding(start = (42 + entry.depth * 16).dp))
+                    }
+                }
+            }
         }
     }
 }
@@ -1025,6 +1403,7 @@ private fun ProjectSheet(
     project: ProjectDto,
     tasks: List<TaskView>,
     onDismiss: () -> Unit,
+    onEdit: () -> Unit,
     onToggle: (TaskView) -> Unit,
     onClick: (TaskView) -> Unit,
 ) {
@@ -1037,12 +1416,25 @@ private fun ProjectSheet(
         dragHandle = { SheetHandle() },
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 28.dp)) {
-            Text(
-                text = project.name,
-                style = MaterialTheme.typography.headlineMedium,
-                color = colors.ink,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = project.name,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = colors.ink,
+                    modifier = Modifier.weight(1f).padding(start = 8.dp),
+                )
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = "Edit project",
+                        tint = colors.faint,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
             Text(
                 text = if (tasks.isEmpty()) "Everything is done" else "${tasks.size} open",
                 style = MaterialTheme.typography.labelMedium,

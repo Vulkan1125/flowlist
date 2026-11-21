@@ -1014,6 +1014,53 @@ fn tag_location_edit_is_undoable() {
 }
 
 #[test]
+fn moving_root_tag_under_parent_updates_both_lists() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let parent = store
+        .execute(Command::CreateTag {
+            name: "Parent".into(),
+            parent: None,
+            status: TagStatus::Available,
+            location: None,
+            position: Position::End,
+        })
+        .unwrap()
+        .created[0]
+        .clone();
+    let parent_id = store.db().resolve_tag(&parent).unwrap();
+    let child = store
+        .execute(Command::CreateTag {
+            name: "Child".into(),
+            parent: None,
+            status: TagStatus::Available,
+            location: None,
+            position: Position::End,
+        })
+        .unwrap()
+        .created[0]
+        .clone();
+    let child_id = store.db().resolve_tag(&child).unwrap();
+
+    store
+        .execute(Command::UpdateTag {
+            id: child_id.clone(),
+            patch: flowlist_core::command::TagPatch {
+                parent: Some(Some(parent_id.clone())),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+
+    assert_eq!(store.db().tags[&child_id].parent, Some(parent_id.clone()));
+    assert!(store.db().tags[&parent_id].child_order.contains(&child_id));
+    assert!(store.db().tag_roots.contains(&parent_id));
+    assert!(!store.db().tag_roots.contains(&child_id));
+    store.db().validate().unwrap();
+}
+
+#[test]
 fn trashed_tasks_stay_out_of_every_other_perspective() {
     use flowlist_core::model::{BuiltinPerspective, Priority};
     use flowlist_core::query;

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.0 — 2026-11-21
+
+- **Library management on the phone.** Browse now groups projects under
+  folders, with New project and New folder actions. Project menus edit the
+  name, folder and status, archive, or delete with its tasks. Folder menus
+  rename, nest, add a project or folder inside, or delete the tree.
+- **Tags can be created, renamed, re-parented and deleted** from the Tags
+  perspective, using the same hierarchy rules as the Mac.
+- **Moving a root tag under another tag** no longer leaves it duplicated in
+  the root list; fixed in `flowlist-core` with a regression test.
+- Removed the dead `SettingsSheet` composable left over from 0.8.
+
 ## 0.8.9 — 2026-11-21
 
 - Tag counts now match the tag view: active tasks only, including child tags,

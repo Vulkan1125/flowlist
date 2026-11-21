@@ -406,6 +406,116 @@ class Repository(context: Context) {
         sync()
     }
 
+    suspend fun createProject(name: String, folder: String?) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        send(createProjectCommand(trimmed, folder), "New project “$trimmed”")
+    }
+
+    suspend fun updateProject(project: ProjectDto, name: String, folder: String?, status: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        var queued = false
+        val patch = buildJsonObject {
+            if (trimmed != project.name) put("name", trimmed)
+            if (folder != project.folder) put("folder", folder?.let { JsonPrimitive(it) } ?: JsonNull)
+        }
+        if (patch.isNotEmpty()) {
+            enqueue(
+                PendingOp(
+                    id = "op_${UUID.randomUUID()}",
+                    command = updateProjectCommand(project.id, patch),
+                    label = "Edit project “${project.name}”",
+                ),
+            )
+            queued = true
+        }
+        if (status != project.status) {
+            enqueue(
+                PendingOp(
+                    id = "op_${UUID.randomUUID()}",
+                    command = setProjectStatusCommand(project.id, status),
+                    label = "Set project “${project.name}” to $status",
+                ),
+            )
+            queued = true
+        }
+        if (queued) sync()
+    }
+
+    suspend fun setProjectStatus(project: ProjectDto, status: String) {
+        send(setProjectStatusCommand(project.id, status), "Set project “${project.name}” to $status")
+    }
+
+    suspend fun deleteProject(project: ProjectDto) {
+        send(deleteProjectCommand(project.id), "Delete project “${project.name}”")
+    }
+
+    suspend fun createFolder(name: String, parent: String?) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        send(createFolderCommand(trimmed, parent), "New folder “$trimmed”")
+    }
+
+    suspend fun updateFolder(folder: FolderDto, name: String, parent: String?) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        var queued = false
+        if (trimmed != folder.name) {
+            enqueue(
+                PendingOp(
+                    id = "op_${UUID.randomUUID()}",
+                    command = renameFolderCommand(folder.id, trimmed),
+                    label = "Rename folder “${folder.name}”",
+                ),
+            )
+            queued = true
+        }
+        if (parent != folder.parent) {
+            enqueue(
+                PendingOp(
+                    id = "op_${UUID.randomUUID()}",
+                    command = moveFolderCommand(folder.id, parent),
+                    label = "Move folder “${folder.name}”",
+                ),
+            )
+            queued = true
+        }
+        if (queued) sync()
+    }
+
+    suspend fun deleteFolder(folder: FolderDto) {
+        send(deleteFolderCommand(folder.id), "Delete folder “${folder.name}”")
+    }
+
+    suspend fun createTag(name: String, parent: String?) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        send(createTagCommand(trimmed, parent), "New tag “$trimmed”")
+    }
+
+    suspend fun updateTag(tag: TagDto, name: String, parent: String?) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        if (trimmed == tag.name && parent == tag.parent) return
+        send(updateTagCommand(tag.id, trimmed, parent), "Edit tag “${tag.name}”")
+    }
+
+    suspend fun deleteTag(tag: TagDto) {
+        send(deleteTagCommand(tag.id), "Delete tag “${tag.name}”")
+    }
+
+    private suspend fun send(command: kotlinx.serialization.json.JsonObject, label: String) {
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = command,
+                label = label,
+            ),
+        )
+        sync()
+    }
+
     suspend fun signOut() {
         val base = session.baseUrl
         val token = session.token

@@ -1438,12 +1438,16 @@ impl Command {
                         }
                         None => db.tag_roots = list,
                     }
-                    if let Some(parent) = old_parent {
-                        if Some(&parent) != new_parent.as_ref() {
-                            if let Some(old) = db.tags.get_mut(&parent) {
+                    match &old_parent {
+                        Some(parent) if Some(parent) != new_parent.as_ref() => {
+                            if let Some(old) = db.tags.get_mut(parent) {
                                 old.child_order.retain(|child| child != &id);
                             }
                         }
+                        None if new_parent.is_some() => {
+                            db.tag_roots.retain(|child| child != &id);
+                        }
+                        _ => {}
                     }
                     db.tag_mut(&id)?.parent = new_parent;
                 }

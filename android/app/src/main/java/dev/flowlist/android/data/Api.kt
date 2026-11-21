@@ -292,3 +292,104 @@ fun patchCommand(id: String, patch: JsonObject): JsonObject = buildJsonObject {
 
 fun jsonString(value: String?): kotlinx.serialization.json.JsonElement? =
     value?.let { kotlinx.serialization.json.JsonPrimitive(it) }
+
+fun createProjectCommand(name: String, folder: String?): JsonObject = buildJsonObject {
+    put(
+        "create_project",
+        buildJsonObject {
+            put("name", name)
+            put("notes", "")
+            put("folder", folder?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("tags", buildJsonArray {})
+            put("due", JsonNull)
+            put("defer", JsonNull)
+            put("review_interval_days", JsonNull)
+            put("next_review", JsonNull)
+            put("sequential", false)
+            put("kind", "parallel")
+            put("icon", "project")
+            put("attachments", buildJsonArray {})
+            put("position", "end")
+        },
+    )
+}
+
+fun updateProjectCommand(id: String, patch: JsonObject): JsonObject = buildJsonObject {
+    put("update_project", buildJsonObject { put("id", id); put("patch", patch) })
+}
+
+fun setProjectStatusCommand(id: String, status: String): JsonObject = buildJsonObject {
+    put("set_project_status", buildJsonObject { put("id", id); put("status", status) })
+}
+
+fun deleteProjectCommand(id: String): JsonObject = buildJsonObject {
+    put("delete_project", buildJsonObject { put("id", id) })
+}
+
+fun createFolderCommand(name: String, parent: String?): JsonObject = buildJsonObject {
+    put(
+        "create_folder",
+        buildJsonObject {
+            put("name", name)
+            put("parent", parent?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("position", "end")
+        },
+    )
+}
+
+fun renameFolderCommand(id: String, name: String): JsonObject = buildJsonObject {
+    put("rename_folder", buildJsonObject { put("id", id); put("name", name) })
+}
+
+fun moveFolderCommand(id: String, parent: String?): JsonObject = buildJsonObject {
+    put(
+        "move_folder",
+        buildJsonObject {
+            put("id", id)
+            put(
+                "placement",
+                buildJsonObject {
+                    put("parent", parent?.let { JsonPrimitive(it) } ?: JsonNull)
+                    put("position", "end")
+                },
+            )
+        },
+    )
+}
+
+fun deleteFolderCommand(id: String): JsonObject = buildJsonObject {
+    put("delete_folder", buildJsonObject { put("id", id) })
+}
+
+fun createTagCommand(name: String, parent: String?): JsonObject = buildJsonObject {
+    put(
+        "create_tag",
+        buildJsonObject {
+            put("name", name)
+            put("parent", parent?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("status", "available")
+            put("location", JsonNull)
+            put("position", "end")
+        },
+    )
+}
+
+fun updateTagCommand(id: String, name: String, parent: String?): JsonObject = buildJsonObject {
+    put(
+        "update_tag",
+        buildJsonObject {
+            put("id", id)
+            put(
+                "patch",
+                buildJsonObject {
+                    put("name", name)
+                    put("parent", parent?.let { JsonPrimitive(it) } ?: JsonNull)
+                },
+            )
+        },
+    )
+}
+
+fun deleteTagCommand(id: String): JsonObject = buildJsonObject {
+    put("delete_tag", buildJsonObject { put("id", id) })
+}

@@ -117,6 +117,23 @@ subtask uses the same optimistic offline queue.
 Settings → About → **Check for updates** reads the latest GitHub release and
 offers the APK when a newer version exists.
 
+## Projects, folders and tags
+
+**Browse** groups open projects under their folders. **New project** and
+**New folder** sit at the top of the list. A folder is a section header with
+its own menu: edit it, create a project or child folder inside, or delete the
+whole tree. A project's menu edits its name, folder and status, archives it, or
+deletes it and moves its tasks to Trash.
+
+The project editor also opens from the pencil beside a project's name. Status
+choices are Active, On Hold, Done and Dropped; Done and Dropped leave Browse
+and appear in Archive.
+
+**Tags** has a New tag row. Each tag's menu renames or re-parents it, or
+deletes it from every task and project. Tag names and sibling uniqueness follow
+the same rules as the Mac. From the task editor you can move a task to any
+open project or toggle its tags.
+
 ## Perspectives and the drawer
 
 The bottom bar holds four perspectives and **Settings** on the far right.
