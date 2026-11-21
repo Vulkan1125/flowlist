@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.1 — 2026-11-21
+
+- **Compact due/defer picker.** The huge Material date dialog is gone. A
+  bottom sheet now shows Today / Tomorrow / Next week / No date chips, a
+  month calendar with today and the chosen day highlighted, and time chips
+  (All day, 09:00, 13:00, 18:00, Custom) in the app's accent colour. Custom
+  opens a compact keyboard time input.
+- The picker follows the active theme and accent, including wallpaper and
+  custom tones, instead of Android's green system accent.
+- Empty-state doodles stay at their original size; the earlier reduction was
+  reverted.
+- The Settings sheet keeps its space below the status bar.
+
 ## 0.3.0 — 2026-11-21
 
 - **A Todoist-shaped app.** Red accent by default, a round capture button, an

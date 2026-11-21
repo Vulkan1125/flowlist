@@ -1,7 +1,5 @@
 package dev.flowlist.android.ui
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -49,7 +47,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -64,10 +61,6 @@ import dev.flowlist.android.data.TaskEdit
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.isToday
 import dev.flowlist.android.data.label
-import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZoneId
-import java.time.ZonedDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,7 +75,6 @@ fun TaskEditSheet(
     onDelete: () -> Unit,
 ) {
     val colors = flow
-    val context = LocalContext.current
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var title by remember(task.id) { mutableStateOf(task.title) }
     var notes by remember(task.id) { mutableStateOf(task.notes) }
@@ -97,31 +89,11 @@ fun TaskEditSheet(
     var selectedTags by remember(task.id) { mutableStateOf(task.tags.toSet()) }
     var projectMenu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var datePickerForDue by remember { mutableStateOf(true) }
+    var showDueSheet by remember { mutableStateOf(false) }
 
-    fun pickStamp(current: StampDto?, onPicked: (StampDto?) -> Unit) {
-        val now = current?.local() ?: ZonedDateTime.now()
-        DatePickerDialog(
-            context,
-            { _, year, month, day ->
-                TimePickerDialog(
-                    context,
-                    { _, hour, minute ->
-                        val moment = ZonedDateTime.of(
-                            LocalDate.of(year, month + 1, day),
-                            LocalTime.of(hour, minute),
-                            ZoneId.systemDefault(),
-                        )
-                        onPicked(StampDto(moment.toInstant().toString(), true))
-                    },
-                    now.hour,
-                    now.minute,
-                    true,
-                ).show()
-            },
-            now.year,
-            now.monthValue - 1,
-            now.dayOfMonth,
-        ).show()
+    fun applyStamp(value: StampDto?) {
+        if (datePickerForDue) due = value else defer = value
     }
 
     ModalBottomSheet(
@@ -184,7 +156,10 @@ fun TaskEditSheet(
                 },
                 clearable = due != null,
                 onClear = { due = null },
-                onClick = { pickStamp(due) { due = it } },
+                onClick = {
+                    datePickerForDue = true
+                    showDueSheet = true
+                },
             )
             EditRow(
                 label = "Defer",
@@ -192,7 +167,10 @@ fun TaskEditSheet(
                 valueColor = if (defer != null) colors.ink else colors.faint,
                 clearable = defer != null,
                 onClear = { defer = null },
-                onClick = { pickStamp(defer) { defer = it } },
+                onClick = {
+                    datePickerForDue = false
+                    showDueSheet = true
+                },
             )
 
             Box {
@@ -357,6 +335,18 @@ fun TaskEditSheet(
                 Text("Move to Trash", color = colors.danger)
             }
         }
+    }
+
+    if (showDueSheet) {
+        DueDateSheet(
+            title = if (datePickerForDue) "Due date" else "Defer date",
+            initial = if (datePickerForDue) due else defer,
+            onDismiss = { showDueSheet = false },
+            onSet = { value ->
+                applyStamp(value)
+                showDueSheet = false
+            },
+        )
     }
 
     if (confirmDelete) {
