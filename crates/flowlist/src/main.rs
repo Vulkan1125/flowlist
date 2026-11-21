@@ -6,6 +6,7 @@
 
 mod cli;
 mod cli_install;
+mod uninstall;
 
 #[cfg(feature = "gui")]
 mod gui;

@@ -4,7 +4,7 @@
 reviews and a floating capture panel in one native window. The same library is
 available from the `flowlist` CLI and an MCP server for AI assistants.
 
-**[Download Flowlist 0.1.4](https://github.com/Vulkan1125/flowlist/releases/latest)**
+**[Download Flowlist 0.1.5](https://github.com/Vulkan1125/flowlist/releases/latest)**
 · [Wiki](https://github.com/Vulkan1125/flowlist/wiki)
 · [Using the GUI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-GUI)
 · [CLI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-CLI)
@@ -17,7 +17,7 @@ Settings → Appearance.*
 
 ## Install
 
-1. Download **Flowlist-0.1.4.dmg** (or the zip) from the latest release.
+1. Download **Flowlist-0.1.5.dmg** (or the zip) from the latest release.
 2. Open the DMG and drag **Flowlist** to Applications, or unzip and move the app
    yourself.
 3. The first time, right-click the app and choose **Open**. The build is
@@ -97,8 +97,20 @@ flowlist undo
 
 The installer puts a link in the first writable folder on your `PATH` and
 prefers `~/.local/bin`. If that folder is not on `PATH`, the sheet offers a
-one-click `~/.zshrc` line. You can always use the full path instead:
+one-click `~/.zshrc` line. **Remove command** takes the link away again without
+touching the app or your library. You can always use the full path instead:
 `/Applications/Flowlist.app/Contents/MacOS/flowlist`.
+
+### Uninstall
+
+**Settings → About → Danger zone → Uninstall Flowlist…** removes the app and
+the `flowlist` command. The sheet asks whether your library stays at
+`~/Library/Application Support/Flowlist` or is deleted with everything else.
+The CLI does the same and prints what it will remove first:
+
+```sh
+flowlist uninstall --keep-data           # or --purge-data, add --dry-run
+```
 
 Add `--json` to any command for scripts. `FLOWLIST_HOME` or `--data-dir` points
 the CLI at another library. The full command reference is in the

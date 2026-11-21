@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.5 — 2026-11-21
+
+- **Remove command** in Settings → About takes the `flowlist` link off `PATH`
+  without touching the app or the library. `flowlist uninstall-cli` does the
+  same from a terminal.
+- **Uninstall** lives in a red **Danger zone** card at the end of About. The
+  sheet asks whether to **Keep my library** or **Delete the app and all data**,
+  then quits and removes the app, the command and macOS support files. A log is
+  written to `~/Library/Logs/Flowlist-uninstall.log` if a path cannot be
+  deleted.
+- `flowlist uninstall --keep-data|--purge-data` mirrors the sheet, with
+  `--dry-run` to print the paths and `--yes` for scripts. Without `--yes` it
+  asks you to type `uninstall`.
+- The uninstall sheet is keyboard-driven: Tab or the arrow keys switch the
+  choice, Return confirms and Escape cancels.
+
 ## 0.1.4 — 2026-11-21
 
 - The app can install its own command-line tool. **Settings → About → Command

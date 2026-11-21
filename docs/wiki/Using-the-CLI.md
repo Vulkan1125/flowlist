@@ -24,8 +24,27 @@ terminal once:
 ```
 
 After moving the app to another folder, run the installer again so the link
-points at the new bundle. The full path always works as a fallback:
-`/Applications/Flowlist.app/Contents/MacOS/flowlist`.
+points at the new bundle. To remove just the command, use **Remove command** in
+Settings or `flowlist uninstall-cli`; the app and library stay put.
+
+## Uninstall Flowlist
+
+Settings → About → **Danger zone → Uninstall Flowlist…** removes the app, the
+`flowlist` command and macOS support files. Choose **Keep my library** to leave
+tasks, history and backups in place, or **Delete the app and all data** to
+remove the library as well. This cannot be undone.
+
+From a terminal:
+
+```sh
+flowlist uninstall --keep-data            # remove app and command, keep library
+flowlist uninstall --purge-data --yes     # remove everything
+flowlist uninstall --purge-data --dry-run # print the paths first
+```
+
+Without `--yes` the command asks you to type `uninstall`, and refuses to run in
+a non-interactive shell. A helper finishes the deletion after the app quits,
+because a running process cannot delete its own bundle.
 
 Every command accepts `--json` and `--data-dir <DIR>`. The library defaults to
 `~/Library/Application Support/Flowlist`; set `FLOWLIST_HOME` to point the CLI

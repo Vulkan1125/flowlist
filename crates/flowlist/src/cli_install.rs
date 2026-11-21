@@ -47,6 +47,29 @@ pub fn status() -> Status {
     Status::Missing
 }
 
+/// Every `flowlist` symlink on PATH (or in a candidate folder) that points at
+/// this executable.
+pub fn links_for(exe: &Path) -> Vec<PathBuf> {
+    let path_dirs = path_dirs();
+    candidate_dirs(&path_dirs)
+        .into_iter()
+        .map(|(dir, _)| dir.join("flowlist"))
+        .filter(|link| points_to(link, exe))
+        .collect()
+}
+
+/// Remove the command-line links without touching the app or the library.
+pub fn remove() -> Result<Vec<PathBuf>, String> {
+    let exe = executable()?;
+    let mut removed = Vec::new();
+    for link in links_for(&exe) {
+        fs::remove_file(&link)
+            .map_err(|error| format!("Could not remove {}: {error}", link.display()))?;
+        removed.push(link);
+    }
+    Ok(removed)
+}
+
 /// Install or repair the link. Returns the chosen path and whether that
 /// directory is currently on PATH.
 pub fn install() -> Result<Installed, String> {

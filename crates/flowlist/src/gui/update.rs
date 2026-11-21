@@ -188,6 +188,32 @@ impl FlowlistApp {
                     cx.notify();
                 })),
         );
+        if cli_path.is_some() {
+            cli_actions = cli_actions.child(
+                div()
+                    .id("cli-remove")
+                    .child(widgets::button(theme, "Remove command", false))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        match crate::cli_install::remove() {
+                            Ok(removed) if removed.is_empty() => {
+                                this.toast = Some("No flowlist command was installed".to_string())
+                            }
+                            Ok(removed) => {
+                                this.toast = Some(format!(
+                                    "Removed {}",
+                                    removed
+                                        .iter()
+                                        .map(|path| path.display().to_string())
+                                        .collect::<Vec<_>>()
+                                        .join(", ")
+                                ))
+                            }
+                            Err(error) => this.toast = Some(error),
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
         if let Some(path) = &cli_path
             && !cli_on_path
             && let Some(dir) = std::path::Path::new(path).parent()
@@ -245,6 +271,19 @@ impl FlowlistApp {
                         }),
                 )
                 .child(cli_actions),
+        );
+        let uninstall = self.danger_card(
+            "Danger zone",
+            Some("Removing Flowlist also removes the flowlist command. You choose whether the library stays."),
+            div().flex().child(
+                div()
+                    .on_children_prepainted(self.theme_probe("uninstall-open".to_string()))
+                    .id("uninstall-open")
+                    .child(widgets::danger_button(theme, Icon::Skull, "Uninstall Flowlist…"))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.open_modal(super::modals::Modal::uninstall(), cx)
+                    })),
+            ),
         );
         let links = self.settings_card(
             "Links",
@@ -318,6 +357,7 @@ impl FlowlistApp {
             .child(command_line)
             .child(updates)
             .child(links)
+            .child(uninstall)
             .into_any_element()
     }
 

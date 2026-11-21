@@ -97,6 +97,11 @@ pub enum Modal {
         path: String,
         name: String,
     },
+    /// Remove the app and its command. The sheet chooses whether the library
+    /// stays; confirming schedules a cleanup helper and quits.
+    Uninstall {
+        purge: bool,
+    },
     /// Adding an http(s) link to a task or project. Links share the attachment
     /// list with file paths, so the row badge and the Attachments view already
     /// include them.
@@ -409,6 +414,10 @@ impl Modal {
         Modal::RemoveAttachment { target, path, name }
     }
 
+    pub fn uninstall() -> Self {
+        Modal::Uninstall { purge: false }
+    }
+
     pub fn review_interval(app: &FlowlistApp, id: ProjectId) -> Self {
         let project = app.store.db().projects.get(&id);
         let name = project
@@ -434,6 +443,7 @@ impl Modal {
             Modal::DeleteFolder { .. } => "Delete folder",
             Modal::DeleteTask { .. } => "Delete repeating task",
             Modal::RemoveAttachment { .. } => "Remove attachment",
+            Modal::Uninstall { .. } => "Uninstall Flowlist",
             Modal::AttachLink { .. } => "Attach link",
             Modal::NewFolder { .. } => "New folder",
             Modal::NewTag { .. } => "New tag",
@@ -467,6 +477,9 @@ impl Modal {
             }
             Modal::RemoveAttachment { .. } => {
                 "Only the link on this item goes away; the file stays on disk."
+            }
+            Modal::Uninstall { .. } => {
+                "Remove the app and the flowlist command. Choose whether your library stays."
             }
             Modal::AttachLink { .. } => {
                 "Paste an http(s) address; it opens in your browser. Undo removes it."
@@ -502,6 +515,7 @@ impl Modal {
             Modal::DeleteFolder { .. } => "Delete",
             Modal::DeleteTask { .. } => "Delete",
             Modal::RemoveAttachment { .. } => "Remove",
+            Modal::Uninstall { .. } => "Uninstall",
             Modal::AttachLink { .. } => "Attach",
             _ => "Save",
         }
@@ -517,6 +531,7 @@ impl Modal {
             Modal::DeleteFolder { .. } => 0,
             Modal::DeleteTask { .. } => 0,
             Modal::RemoveAttachment { .. } => 0,
+            Modal::Uninstall { .. } => 0,
             Modal::AttachLink { .. } => 1,
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
             Modal::Perspective { .. } => 1,
@@ -546,7 +561,7 @@ impl Modal {
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
             Modal::DeleteTask { .. } => None,
-            Modal::RemoveAttachment { .. } => None,
+            Modal::RemoveAttachment { .. } | Modal::Uninstall { .. } => None,
             Modal::AttachLink { url, .. } => (index == 0).then_some(url),
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&form.name),
@@ -595,7 +610,7 @@ impl Modal {
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
             Modal::DeleteTask { .. } => None,
-            Modal::RemoveAttachment { .. } => None,
+            Modal::RemoveAttachment { .. } | Modal::Uninstall { .. } => None,
             Modal::AttachLink { url, .. } => (index == 0).then_some(url),
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&mut form.name),
@@ -639,7 +654,7 @@ impl Modal {
             Modal::DeleteProject { .. } => "",
             Modal::DeleteFolder { .. } => "",
             Modal::DeleteTask { .. } => "",
-            Modal::RemoveAttachment { .. } => "",
+            Modal::RemoveAttachment { .. } | Modal::Uninstall { .. } => "",
             Modal::AttachLink { .. } => "Address",
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
             Modal::Perspective { .. } => "Name",
@@ -676,6 +691,7 @@ impl Modal {
             Modal::DeleteTask { .. } => 500.0,
             Modal::Perspective { .. } => 680.0,
             Modal::Settings { .. } => 880.0,
+            Modal::Uninstall { .. } => 560.0,
             _ => 460.0,
         }
     }
@@ -701,6 +717,7 @@ impl FlowlistApp {
         let is_import = matches!(modal, Modal::Import { .. });
         let is_settings = matches!(modal, Modal::Settings { .. });
         let is_new_project = matches!(modal, Modal::NewProject { .. });
+        let is_uninstall = matches!(modal, Modal::Uninstall { .. });
         // Project creation already has Cancel and Create at the bottom, so a
         // second close control in the corner is redundant.
         let shows_close = modal.shows_close();
@@ -761,6 +778,10 @@ impl FlowlistApp {
             // without scrolling on a normal window.
             if is_settings {
                 body = body.child(self.render_settings_sheet(cx));
+            }
+            if is_uninstall {
+                let purge = matches!(modal, Modal::Uninstall { purge: true, .. });
+                body = body.child(self.render_uninstall_choices(purge, cx));
             }
             if let Modal::CreateProject { path, .. } = modal {
                 body = body.child(
@@ -1048,6 +1069,100 @@ impl FlowlistApp {
                         720.0
                     }))
                     .child(card),
+            ))
+            .into_any_element()
+    }
+
+    fn render_uninstall_choices(&self, purge: bool, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let library = self.store.paths().root.display().to_string();
+        let choice = |key: &'static str,
+                      selected: bool,
+                      title: &'static str,
+                      detail: String,
+                      danger: bool,
+                      cx: &mut Context<Self>| {
+            div()
+                .id(key)
+                .flex()
+                .items_start()
+                .gap_2()
+                .p_2()
+                .rounded_md()
+                .border_1()
+                .border_color(if selected {
+                    if danger { theme.danger } else { theme.accent }
+                } else {
+                    theme.border
+                })
+                .bg(if selected { theme.field } else { theme.clear })
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover))
+                .child(icons::icon(
+                    if selected {
+                        Icon::Check
+                    } else {
+                        Icon::CircleDashed
+                    },
+                    14.0,
+                    if danger { theme.danger } else { theme.accent },
+                ))
+                .child(
+                    div()
+                        .flex()
+                        .flex_1()
+                        .min_w_0()
+                        .flex_col()
+                        .gap_0p5()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(if danger { theme.danger } else { theme.text })
+                                .child(title),
+                        )
+                        .child(div().text_xs().text_color(theme.text_faint).child(detail)),
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if let Some(Modal::Uninstall { purge: current }) = &mut this.modal {
+                        *current = matches!(key, "uninstall-purge");
+                    }
+                    cx.notify();
+                }))
+                .into_any_element()
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .p_2()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.field)
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(
+                        "Flowlist will quit, remove the app and the flowlist command, then delete the files below. This cannot be undone.",
+                    ),
+            )
+            .child(choice(
+                "uninstall-keep",
+                !purge,
+                "Keep my library",
+                format!("Tasks, history and backups stay at {library}."),
+                false,
+                cx,
+            ))
+            .child(choice(
+                "uninstall-purge",
+                purge,
+                "Delete the app and all data",
+                format!("Removes the library, history and backups at {library}."),
+                true,
+                cx,
             ))
             .into_any_element()
     }
@@ -1982,6 +2097,39 @@ impl FlowlistApp {
 
     /// One bordered group inside a section. Grouping is the main defence
     /// against a settings sheet turning into a wall of controls.
+    /// The destructive card at the end of Settings. It looks like every other
+    /// card except the heading and border are red, so removal is visibly
+    /// separate from ordinary preferences.
+    pub(super) fn danger_card(
+        &self,
+        title: &'static str,
+        hint: Option<&'static str>,
+        body: impl IntoElement,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let mut card = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_2()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.danger)
+            .bg(theme.field)
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(theme.danger)
+                    .child(title),
+            )
+            .child(body);
+        if let Some(hint) = hint {
+            card = card.child(div().text_xs().text_color(theme.text_faint).child(hint));
+        }
+        card.into_any_element()
+    }
+
     pub(super) fn settings_card(
         &self,
         title: &'static str,
@@ -3069,7 +3217,7 @@ impl FlowlistApp {
     }
 
     /// Record where a theme control painted so a GUI probe can click it.
-    fn theme_probe(
+    pub(super) fn theme_probe(
         &self,
         key: String,
     ) -> impl Fn(Vec<gpui::Bounds<gpui::Pixels>>, &mut Window, &mut gpui::App) + 'static {

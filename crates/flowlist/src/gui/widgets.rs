@@ -552,6 +552,28 @@ pub fn button_with_icon(
         .child(label)
 }
 
+/// A destructive action, tinted red so it never reads like a routine button.
+pub fn danger_button(theme: Theme, icon: Icon, label: impl Into<String>) -> impl IntoElement {
+    let label = label.into();
+    div()
+        .h(px(26.))
+        .px_3()
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap_1p5()
+        .rounded_md()
+        .border_1()
+        .border_color(theme.danger)
+        .bg(theme.raised)
+        .text_color(theme.danger)
+        .text_sm()
+        .cursor_pointer()
+        .hover(|style| style.bg(theme.hover))
+        .child(icons::icon(icon, 13.0, theme.danger))
+        .child(label)
+}
+
 pub fn icon_button(theme: Theme, icon: Icon, active: bool) -> impl IntoElement {
     div()
         .flex()

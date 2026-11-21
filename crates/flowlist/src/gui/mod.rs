@@ -3027,6 +3027,7 @@ impl FlowlistApp {
         let Some(modal) = self.modal.take() else {
             return;
         };
+        let uninstall = matches!(modal, modals::Modal::Uninstall { .. });
         self.view_menu = None;
         self.view_menu_cursor = 0;
         let result = self.apply_modal(&modal);
@@ -3040,6 +3041,9 @@ impl FlowlistApp {
                 self.theme_on_open = None;
                 self.accent_on_open = None;
                 self.traffic_lights_on_open = None;
+                if uninstall {
+                    cx.quit();
+                }
             }
             Err(message) => {
                 self.modal = Some(modal);
@@ -3312,6 +3316,11 @@ impl FlowlistApp {
                     });
                 }
             },
+            modals::Modal::Uninstall { purge } => {
+                let root = self.store.paths().root.clone();
+                let plan = crate::uninstall::plan(*purge, &root);
+                crate::uninstall::schedule(&plan)?;
+            }
             modals::Modal::ReviewInterval { id, days, .. } => {
                 let value = days
                     .text()
@@ -3688,6 +3697,27 @@ impl FlowlistApp {
                     "tab" | "left" | "right" | "up" | "down" => {
                         if let Some(modals::Modal::DeleteTask { whole, .. }) = &mut self.modal {
                             *whole = !*whole;
+                        }
+                        cx.notify();
+                        return;
+                    }
+                    "escape" => {
+                        self.close_modal(cx);
+                        return;
+                    }
+                    "enter" | "return" => {
+                        self.commit_modal(cx);
+                        return;
+                    }
+                    _ => {}
+                }
+            }
+            // The uninstall sheet is also a two-choice switch.
+            if matches!(self.modal, Some(modals::Modal::Uninstall { .. })) {
+                match stroke.key.as_str() {
+                    "tab" | "left" | "right" | "up" | "down" => {
+                        if let Some(modals::Modal::Uninstall { purge }) = &mut self.modal {
+                            *purge = !*purge;
                         }
                         cx.notify();
                         return;

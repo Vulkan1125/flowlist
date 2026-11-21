@@ -111,10 +111,30 @@ pub enum CliCommand {
     Where,
     /// Put the flowlist executable on PATH.
     InstallCli,
+    /// Remove the flowlist command from PATH.
+    UninstallCli,
+    /// Remove the app and its command, keeping or deleting the library.
+    Uninstall(UninstallArgs),
     /// Run the MCP server on stdio.
     Mcp,
     /// Open the graphical application.
     Gui,
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct UninstallArgs {
+    /// Keep the library, backups and history.
+    #[arg(long, conflicts_with = "purge_data")]
+    pub keep_data: bool,
+    /// Delete the library, backups and history as well.
+    #[arg(long, conflicts_with = "keep_data")]
+    pub purge_data: bool,
+    /// Do not ask for confirmation.
+    #[arg(long, short = 'y')]
+    pub yes: bool,
+    /// Print what would be removed without removing it.
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 #[derive(Args, Debug, Clone, Default)]
@@ -680,6 +700,8 @@ fn try_run() -> Result<()> {
         CliCommand::Doctor(args) => cmd_doctor(&cli, args, &paint),
         CliCommand::Where => cmd_where(&cli, &paint),
         CliCommand::InstallCli => cmd_install_cli(&paint),
+        CliCommand::UninstallCli => cmd_uninstall_cli(&paint),
+        CliCommand::Uninstall(args) => cmd_uninstall(&cli, args, &paint),
         CliCommand::Mcp => {
             let paths = DataPaths::discover(cli.data_dir.clone())?;
             crate::mcp::serve(paths)
@@ -703,6 +725,52 @@ fn cmd_install_cli(paint: &Paint) -> Result<()> {
         }
         Err(error) => bail!("{error}"),
     }
+    Ok(())
+}
+
+fn cmd_uninstall_cli(paint: &Paint) -> Result<()> {
+    let removed = crate::cli_install::remove().map_err(|error| anyhow!("{error}"))?;
+    if removed.is_empty() {
+        println!("{}", paint.dim("No flowlist command was installed."));
+    } else {
+        for path in removed {
+            println!("{} {}", paint.green("Removed"), path.display());
+        }
+    }
+    Ok(())
+}
+
+fn cmd_uninstall(cli: &Cli, args: UninstallArgs, paint: &Paint) -> Result<()> {
+    if !args.keep_data && !args.purge_data {
+        bail!("choose --keep-data or --purge-data");
+    }
+    let root = DataPaths::discover(cli.data_dir.clone())
+        .context("locating the library")?
+        .root;
+    let plan = crate::uninstall::plan(args.purge_data, &root);
+    for line in crate::uninstall::describe(&plan) {
+        println!("{line}");
+    }
+    if args.dry_run {
+        return Ok(());
+    }
+    if !args.yes {
+        if !std::io::stdin().is_terminal() {
+            bail!("refusing to uninstall without --yes in a non-interactive shell");
+        }
+        print!("Type 'uninstall' to continue: ");
+        std::io::Write::flush(&mut std::io::stdout())?;
+        let mut answer = String::new();
+        std::io::stdin().read_line(&mut answer)?;
+        if answer.trim() != "uninstall" {
+            bail!("cancelled");
+        }
+    }
+    crate::uninstall::schedule(&plan).map_err(|error| anyhow!("{error}"))?;
+    println!(
+        "{}",
+        paint.green("Flowlist is closing and the selected files will be removed.")
+    );
     Ok(())
 }
 

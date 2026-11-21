@@ -213,3 +213,15 @@ Press **`?`** for the full keyboard and mouse help. The essentials:
 Vim mode is on by default and covers the list, sidebar and checklist: `j`/`k`,
 `h`/`l`, `gg`/`G`, `o`/`O`, `x`, `dd`, `yy`, `p`, `u`, `Ctrl-r`, counts and
 `/` all work. Turn it off in **Settings → Workflow**.
+
+## Remove Flowlist
+
+Settings → About ends with a red **Danger zone** card. **Uninstall Flowlist…**
+opens a sheet with two choices:
+
+- **Keep my library** removes the app, the `flowlist` command and macOS
+  support files, but leaves your tasks, history and backups in place.
+- **Delete the app and all data** removes the library too.
+
+Flowlist quits, a helper removes the files, and the result is logged to
+`~/Library/Logs/Flowlist-uninstall.log` if anything could not be deleted.
