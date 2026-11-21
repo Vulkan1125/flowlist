@@ -77,6 +77,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.unit.sp
 import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.AppState
@@ -97,12 +98,46 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private enum class Tab(val label: String, val icon: ImageVector) {
+enum class Tab(val label: String, val icon: ImageVector) {
     Inbox("Inbox", Icons.Outlined.Inbox),
     Today("Today", Icons.Outlined.WbSunny),
     Forecast("Forecast", Icons.Outlined.CalendarMonth),
     Browse("Browse", Icons.Outlined.FolderOpen),
     Settings("Settings", Icons.Outlined.Settings),
+}
+
+enum class Perspective(
+    val key: String,
+    val label: String,
+    val icon: ImageVector,
+    val tab: Tab? = null,
+    val more: MoreView? = null,
+) {
+    Inbox("inbox", "Inbox", Icons.Outlined.Inbox, tab = Tab.Inbox),
+    Today("today", "Today", Icons.Outlined.WbSunny, tab = Tab.Today),
+    Forecast("forecast", "Forecast", Icons.Outlined.CalendarMonth, tab = Tab.Forecast),
+    Library("browse", "Library", Icons.Outlined.FolderOpen, tab = Tab.Browse),
+    Review("review", "Review", MoreView.Review.icon, more = MoreView.Review),
+    Completed("completed", "Completed", MoreView.Completed.icon, more = MoreView.Completed),
+    Archive("archive", "Archive", MoreView.Archive.icon, more = MoreView.Archive),
+    Trash("trash", "Trash", MoreView.Trash.icon, more = MoreView.Trash),
+    Tags("tags", "Tags", MoreView.Tags.icon, more = MoreView.Tags),
+    Priorities("priorities", "Priorities", MoreView.Priorities.icon, more = MoreView.Priorities),
+    Changed("changed", "Changed", MoreView.Changed.icon, more = MoreView.Changed),
+    Attachments("attachments", "Attachments", MoreView.Attachments.icon, more = MoreView.Attachments),
+}
+
+fun resolveBottomBar(keys: List<String>): List<Perspective> {
+    val chosen = keys
+        .mapNotNull { key -> Perspective.entries.firstOrNull { it.key == key } }
+        .distinct()
+        .take(4)
+        .toMutableList()
+    for (item in Perspective.entries) {
+        if (chosen.size >= 4) break
+        if (item !in chosen) chosen.add(item)
+    }
+    return chosen
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -134,6 +169,7 @@ fun MainScreen(
     var detail by remember { mutableStateOf<TaskView?>(null) }
     var project by remember { mutableStateOf<ProjectDto?>(null) }
     var moreView by remember { mutableStateOf<MoreView?>(null) }
+    BackHandler(enabled = moreView != null) { moreView = null }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val haptics = LocalHapticFeedback.current
     var offlineWarning by remember { mutableStateOf(false) }
@@ -161,6 +197,18 @@ fun MainScreen(
             .orEmpty()
     }
     val snackbarHost = remember { SnackbarHostState() }
+    val bottomPerspectives = remember(preferences.bottomBar) {
+        resolveBottomBar(preferences.bottomBar)
+    }
+    val openPerspective: (Perspective) -> Unit = { item ->
+        val targetTab = item.tab
+        if (targetTab != null) {
+            tab = targetTab
+            moreView = null
+        } else {
+            moreView = item.more
+        }
+    }
 
     val complete: (TaskView, Boolean) -> Unit = { task, done ->
         if (preferences.haptics) {
@@ -204,13 +252,17 @@ fun MainScreen(
             ) {
                 LibraryDrawer(
                     tab = tab,
+                    more = moreView,
+                    bottom = bottomPerspectives,
                     state = state,
-                    onTab = { item ->
-                        tab = item
-                        scope.launch { drawer.close() }
-                    },
-                    onMore = { view ->
-                        moreView = view
+                    onPerspective = { item ->
+                        val targetTab = item.tab
+                        if (targetTab != null) {
+                            tab = targetTab
+                            moreView = null
+                        } else {
+                            moreView = item.more
+                        }
                         scope.launch { drawer.close() }
                     },
                 )
@@ -225,10 +277,13 @@ fun MainScreen(
                 containerColor = colors.background,
                 tonalElevation = 0.dp,
             ) {
-                Tab.entries.forEach { item ->
+                bottomPerspectives.forEach { item ->
+                    val selected =
+                        (item.tab != null && moreView == null && tab == item.tab) ||
+                            (item.more != null && moreView == item.more)
                     NavigationBarItem(
-                        selected = tab == item,
-                        onClick = { tab = item },
+                        selected = selected,
+                        onClick = { openPerspective(item) },
                         icon = {
                             Icon(
                                 imageVector = item.icon,
@@ -248,6 +303,30 @@ fun MainScreen(
                         ),
                     )
                 }
+                NavigationBarItem(
+                    selected = tab == Tab.Settings && moreView == null,
+                    onClick = {
+                        tab = Tab.Settings
+                        moreView = null
+                    },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = "Settings",
+                            modifier = Modifier.size(21.dp),
+                        )
+                    },
+                    label = {
+                        Text("Settings", style = MaterialTheme.typography.labelSmall)
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = colors.accent,
+                        selectedTextColor = colors.accent,
+                        unselectedIconColor = colors.faint,
+                        unselectedTextColor = colors.faint,
+                        indicatorColor = Color.Transparent,
+                    ),
+                )
             }
         },
         floatingActionButton = {
@@ -280,16 +359,36 @@ fun MainScreen(
                 .background(colors.background),
         ) {
             HorizontalDivider(thickness = 1.dp, color = colors.background)
+            val activeMore = moreView
             Header(
-                tab = tab,
-                state = state,
+                title = activeMore?.label ?: tab.label,
+                subtitle = headerSubtitle(activeMore, tab, state),
                 onMenu = { scope.launch { drawer.open() } },
                 onSearch = { search = true },
             )
             if (offlineWarning) {
                 OfflineNotice(onRetry = { scope.launch { repository.sync() } })
             }
-            when (tab) {
+            if (activeMore != null) {
+                val db = snapshot?.db
+                if (db != null) {
+                    MoreDestination(
+                        view = activeMore,
+                        db = db,
+                        pending = state.pending,
+                        onTask = { task -> detail = task },
+                        onToggle = { task -> complete(task, !task.completed) },
+                        onRestore = { id ->
+                            db.tasks[id]?.let { dto -> scope.launch { repository.restore(dto) } }
+                        },
+                        onPurge = { id -> scope.launch { repository.purge(id) } },
+                        onReview = { projectItem ->
+                            scope.launch { repository.reviewProject(projectItem) }
+                        },
+                        onProject = { projectItem -> project = projectItem },
+                    )
+                }
+            } else when (tab) {
                 Tab.Inbox -> InboxList(
                     swipeActions = preferences.swipeActions,
                     children = children,
@@ -439,34 +538,6 @@ fun MainScreen(
         )
     }
 
-    moreView?.let { view ->
-        val db = snapshot?.db
-        if (db != null) {
-            MoreSheet(
-                view = view,
-                db = db,
-                pending = state.pending,
-                onDismiss = { moreView = null },
-                onTask = { task ->
-                    moreView = null
-                    detail = task
-                },
-                onToggle = { task -> complete(task, !task.completed) },
-                onRestore = { id ->
-                    db.tasks[id]?.let { dto -> scope.launch { repository.restore(dto) } }
-                },
-                onPurge = { id -> scope.launch { repository.purge(id) } },
-                onReview = { projectItem ->
-                    scope.launch { repository.reviewProject(projectItem) }
-                },
-                onProject = { projectItem ->
-                    moreView = null
-                    project = projectItem
-                },
-            )
-        }
-    }
-
     if (search) {
         SearchSheet(
             db = snapshot?.db ?: dev.flowlist.android.data.Db(),
@@ -499,49 +570,42 @@ fun MainScreen(
 @Composable
 private fun LibraryDrawer(
     tab: Tab,
+    more: MoreView?,
+    bottom: List<Perspective>,
     state: AppState,
-    onTab: (Tab) -> Unit,
-    onMore: (MoreView) -> Unit,
+    onPerspective: (Perspective) -> Unit,
 ) {
     val colors = flow
+    val remaining = Perspective.entries.filterNot { it in bottom }
     Column(
         modifier = Modifier
             .fillMaxHeight()
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 12.dp),
     ) {
-        DrawerLabel("Library", colors)
-        listOf(Tab.Inbox, Tab.Today, Tab.Forecast, Tab.Browse).forEach { item ->
+        Text(
+            text = "Perspectives",
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.ink,
+            modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 12.dp),
+        )
+        remaining.forEach { item ->
+            val selected = if (item.tab != null) {
+                more == null && tab == item.tab
+            } else {
+                more == item.more
+            }
             DrawerRow(
                 label = item.label,
                 icon = item.icon,
-                selected = tab == item,
-                onClick = { onTab(item) },
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        HorizontalDivider(color = colors.hairline, modifier = Modifier.padding(horizontal = 8.dp))
-        Spacer(modifier = Modifier.height(8.dp))
-        DrawerLabel("Perspectives", colors)
-        MoreView.entries.forEach { view ->
-            DrawerRow(
-                label = view.label,
-                icon = view.icon,
-                selected = false,
-                onClick = { onMore(view) },
+                selected = selected,
+                onClick = { onPerspective(item) },
             )
         }
 
         Spacer(modifier = Modifier.weight(1f))
         HorizontalDivider(color = colors.hairline, modifier = Modifier.padding(horizontal = 8.dp))
-        DrawerRow(
-            label = "Settings",
-            icon = Icons.Outlined.Settings,
-            selected = tab == Tab.Settings,
-            onClick = { onTab(Tab.Settings) },
-        )
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -561,18 +625,6 @@ private fun LibraryDrawer(
             )
         }
     }
-}
-
-@Composable
-private fun DrawerLabel(text: String, colors: FlowColors) {
-    Text(
-        text = text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.SemiBold,
-        letterSpacing = 0.7.sp,
-        color = colors.faint,
-        modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 6.dp),
-    )
 }
 
 @Composable
@@ -611,14 +663,13 @@ private fun DrawerRow(
 
 @Composable
 private fun Header(
-    tab: Tab,
-    state: AppState,
+    title: String,
+    subtitle: String,
     onMenu: () -> Unit,
     onSearch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = flow
-    val today = LocalDate.now()
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -661,30 +712,45 @@ private fun Header(
 
         Spacer(modifier = Modifier.height(20.dp))
         Text(
-            text = tab.label,
+            text = title,
             style = MaterialTheme.typography.displaySmall,
             color = colors.ink,
-            modifier = Modifier.padding(start = 8.dp),
         )
         Spacer(modifier = Modifier.height(3.dp))
         Text(
-            text = when (tab) {
-                Tab.Inbox -> state.snapshot?.let { snapshot ->
-                    val count = snapshot.db.inbox().size
-                    if (count == 0) "Nothing waiting" else "$count to sort"
-                } ?: "Loading your library"
-
-                Tab.Today -> today.format(
-                    DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()),
-                )
-
-                Tab.Forecast -> "The next two weeks"
-                Tab.Browse -> "${state.snapshot?.db?.projects?.size ?: 0} projects"
-                Tab.Settings -> "Appearance, tasks, sync and about"
-            },
+            text = subtitle,
             style = MaterialTheme.typography.labelMedium,
             color = colors.faint,
         )
+    }
+}
+
+private fun headerSubtitle(more: MoreView?, tab: Tab, state: AppState): String {
+    if (more != null) {
+        return when (more) {
+            MoreView.Review -> "Projects due for a check-in"
+            MoreView.Completed -> "Recently finished"
+            MoreView.Archive -> "Projects put away"
+            MoreView.Trash -> "Deleted tasks, still recoverable"
+            MoreView.Tags -> "Browse the library by tag"
+            MoreView.Priorities -> "Flagged and high-priority work"
+            MoreView.Changed -> "Edited in the last few weeks"
+            MoreView.Attachments -> "Files attached to tasks"
+        }
+    }
+    return when (tab) {
+        Tab.Inbox -> state.snapshot?.let { snapshot ->
+            val count = snapshot.db.inbox().size
+            if (count == 0) "Nothing waiting" else "$count to sort"
+        } ?: "Loading your library"
+
+        Tab.Today -> LocalDate.now().format(
+            DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()),
+        )
+
+        Tab.Forecast -> "The next two weeks"
+        Tab.Browse -> "${state.snapshot?.db?.projects?.size ?: 0} projects"
+        Tab.Settings -> "Appearance, tasks, sync and about"
     }
 }
 
@@ -726,11 +792,16 @@ private fun InboxList(
     LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
         if (tasks.isEmpty()) {
             item(key = "empty") {
-                EmptyState(
-                    title = "Inbox zero",
-                    body = "A clean slate. Capture something and it lands here until you give it a date or project.",
-                    doodle = { InboxDoodle() },
-                )
+                Box(
+                    modifier = Modifier.fillParentMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    EmptyState(
+                        title = "Inbox zero",
+                        body = "A clean slate. Capture something and it lands here until you give it a date or project.",
+                        doodle = { InboxDoodle() },
+                    )
+                }
             }
         }
         items(tasks, key = { it.id }) { task ->
@@ -772,11 +843,16 @@ private fun TodayList(
     LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
         if (tasks.isEmpty()) {
             item(key = "empty") {
-                EmptyState(
-                    title = "Nothing due today",
-                    body = "Enjoy the quiet, or look ahead in Forecast.",
-                    doodle = { TodayDoodle() },
-                )
+                Box(
+                    modifier = Modifier.fillParentMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    EmptyState(
+                        title = "Nothing due today",
+                        body = "Enjoy the quiet, or look ahead in Forecast.",
+                        doodle = { TodayDoodle() },
+                    )
+                }
             }
         }
         if (overdue.isNotEmpty()) {
@@ -825,11 +901,16 @@ private fun ForecastList(
     LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
         if (groups.values.all { it.isEmpty() }) {
             item(key = "empty") {
-                EmptyState(
-                    title = "An open fortnight",
-                    body = "Give a task a date and it appears here, grouped by the day it is due.",
-                    doodle = { ForecastDoodle() },
-                )
+                Box(
+                    modifier = Modifier.fillParentMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    EmptyState(
+                        title = "An open fortnight",
+                        body = "Give a task a date and it appears here, grouped by the day it is due.",
+                        doodle = { ForecastDoodle() },
+                    )
+                }
             }
         }
         groups.forEach { (date, tasks) ->
@@ -888,11 +969,16 @@ private fun BrowseList(
 ) {
     val colors = flow
     if (projects.isEmpty()) {
-        EmptyState(
-            title = "No projects yet",
-            body = "Projects created on the Mac appear here with their open tasks.",
-            doodle = { BrowseDoodle() },
-        )
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            EmptyState(
+                title = "No projects yet",
+                body = "Projects created on the Mac appear here with their open tasks.",
+                doodle = { BrowseDoodle() },
+            )
+        }
         return
     }
     LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {

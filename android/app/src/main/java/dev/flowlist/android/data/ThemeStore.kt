@@ -19,6 +19,7 @@ class ThemeStore(context: Context) {
             it.name == prefs.getString("accent_mode", null)
         } ?: AccentMode.Theme,
         customAccent = AccentPreset.fromKey(prefs.getString("accent", null)),
+        amoled = prefs.getBoolean("amoled", false),
     )
 
     fun save(settings: ThemeSettings) {
@@ -27,6 +28,7 @@ class ThemeStore(context: Context) {
             .putString("mode", settings.mode.name)
             .putString("accent_mode", settings.accentMode.name)
             .putString("accent", settings.customAccent.key)
+            .putBoolean("amoled", settings.amoled)
             .apply()
     }
 }

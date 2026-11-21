@@ -1,5 +1,6 @@
 package dev.flowlist.android.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +63,7 @@ import dev.flowlist.android.data.completedTasks
 import dev.flowlist.android.data.priorityGroups
 import dev.flowlist.android.data.reviewProjects
 import dev.flowlist.android.data.tasksForTag
+import dev.flowlist.android.data.tagUsageCount
 import dev.flowlist.android.data.trashedTasks
 
 enum class MoreView(val label: String, val icon: ImageVector) {
@@ -142,13 +145,11 @@ fun MoreScreen(db: Db?, onOpen: (MoreView) -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreSheet(
+fun MoreDestination(
     view: MoreView,
     db: Db,
     pending: Set<String>,
-    onDismiss: () -> Unit,
     onTask: (TaskView) -> Unit,
     onToggle: (TaskView) -> Unit,
     onRestore: (String) -> Unit,
@@ -157,183 +158,190 @@ fun MoreSheet(
     onProject: (ProjectDto) -> Unit,
 ) {
     val colors = flow
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var tag by remember { mutableStateOf<TagDto?>(null) }
     var purgeTarget by remember { mutableStateOf<TaskView?>(null) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheet,
-        containerColor = colors.background,
-        dragHandle = { SheetHandle() },
+    LaunchedEffect(view) {
+        tag = null
+        purgeTarget = null
+    }
+    BackHandler(enabled = tag != null) { tag = null }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 4.dp, bottom = 20.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .padding(bottom = 20.dp),
-        ) {
+        if (tag != null) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = tag?.let { "#${it.name}" } ?: view.label,
-                    style = MaterialTheme.typography.headlineMedium,
+                    text = "#${tag!!.name}",
+                    style = MaterialTheme.typography.titleLarge,
                     color = colors.ink,
                     modifier = Modifier.weight(1f),
                 )
-                if (tag != null) {
-                    TextButton(onClick = { tag = null }) {
-                        Text("Back", color = colors.accent)
-                    }
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Rounded.Close, contentDescription = "Close", tint = colors.faint)
+                TextButton(onClick = { tag = null }) {
+                    Text("All tags", color = colors.accent)
                 }
             }
-            Spacer(modifier = Modifier.height(6.dp))
-            when {
-                tag != null -> TaskList(db.tasksForTag(tag!!.id), pending, onToggle, onTask)
-                view == MoreView.Review -> LazyColumn {
-                    if (db.reviewProjects().isEmpty()) {
-                        item(key = "review-empty") {
-                            EmptyLine("No projects are due for review.")
-                        }
-                    }
-                    items(db.reviewProjects(), key = { it.id }) { project ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(project.name, style = MaterialTheme.typography.bodyMedium, color = colors.ink)
-                                Text(
-                                    text = project.nextReview?.let { "Review due $it" } ?: "Review due",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = colors.warning,
-                                )
-                            }
-                            TextButton(onClick = { onReview(project) }) {
-                                Text("Reviewed", color = colors.accent)
-                            }
-                        }
-                        Hairline(Modifier.padding(horizontal = 20.dp))
+        }
+        when {
+            tag != null -> TaskList(db.tasksForTag(tag!!.id), pending, onToggle, onTask)
+            view == MoreView.Review -> LazyColumn {
+                if (db.reviewProjects().isEmpty()) {
+                    item(key = "review-empty") {
+                        EmptyLine("No projects are due for review.")
                     }
                 }
-                view == MoreView.Completed -> TaskList(db.completedTasks(), pending, onToggle, onTask)
-                view == MoreView.Archive -> LazyColumn {
-                    if (db.archivedProjects().isEmpty()) {
-                        item(key = "archive-empty") {
-                            EmptyLine("No archived projects yet.")
-                        }
-                    }
-                    items(db.archivedProjects(), key = { it.id }) { project ->
-                        val count = db.tasks.values.count { it.project == project.id && !it.completed }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable { onProject(project) }
-                                .padding(horizontal = 20.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(project.name, style = MaterialTheme.typography.bodyMedium, color = colors.ink, modifier = Modifier.weight(1f))
-                            Text("$count", style = MaterialTheme.typography.labelMedium, color = colors.faint)
-                        }
-                        Hairline(Modifier.padding(start = 20.dp))
-                    }
-                }
-                view == MoreView.Trash -> LazyColumn {
-                    if (db.trashedTasks().isEmpty()) {
-                        item(key = "trash-empty") {
-                            EmptyLine("Trash is empty.")
-                        }
-                    }
-                    items(db.trashedTasks(), key = { it.id }) { task ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(task.title, style = MaterialTheme.typography.bodyMedium, color = colors.ink)
-                                Text(
-                                    text = listOfNotNull(task.projectName, "In Trash").joinToString(" · "),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = colors.faint,
-                                )
-                            }
-                            TextButton(onClick = { onRestore(task.id) }) {
-                                Text("Restore", color = colors.accent)
-                            }
-                            TextButton(onClick = { purgeTarget = task }) {
-                                Text("Delete", color = colors.danger)
-                            }
-                        }
-                        Hairline(Modifier.padding(horizontal = 20.dp))
-                    }
-                }
-                view == MoreView.Tags -> LazyColumn {
-                    if (db.tags.isEmpty()) {
-                        item(key = "tags-empty") {
-                            EmptyLine("No tags yet.")
-                        }
-                    }
-                    items(
-                        db.tags.values.sortedWith(
-                            compareByDescending<TagDto> { tagValue ->
-                                db.tasks.values.count { t -> t.tags.contains(tagValue.id) }
-                            }.thenBy { it.name.lowercase() },
-                        ),
-                        key = { it.id },
-                    ) { item ->
-                        val count = db.tasks.values.count { t -> t.tags.contains(item.id) }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable { tag = item }
-                                .padding(horizontal = 20.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("#${item.name}", style = MaterialTheme.typography.bodyMedium, color = colors.ink, modifier = Modifier.weight(1f))
-                            Text("$count", style = MaterialTheme.typography.labelMedium, color = colors.faint)
-                        }
-                        Hairline(Modifier.padding(start = 20.dp))
-                    }
-                }
-                view == MoreView.Priorities -> LazyColumn {
-                    db.priorityGroups().forEach { (label, tasks) ->
-                        item(key = "prio-$label") {
+                items(db.reviewProjects(), key = { it.id }) { project ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(project.name, style = MaterialTheme.typography.bodyMedium, color = colors.ink)
                             Text(
-                                text = label.uppercase(),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = colors.faint,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                                text = project.nextReview?.let { "Review due $it" } ?: "Review due",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.warning,
                             )
                         }
-                        items(tasks, key = { it.id }) { task ->
-                            TaskRow(task = task.copy(pending = task.id in pending), onToggle = { onToggle(task) }, onClick = { onTask(task) })
-                            Hairline(Modifier.padding(start = 58.dp))
+                        TextButton(onClick = { onReview(project) }) {
+                            Text("Reviewed", color = colors.accent)
                         }
+                    }
+                    Hairline(Modifier.padding(horizontal = 20.dp))
+                }
+            }
+            view == MoreView.Completed -> TaskList(db.completedTasks(), pending, onToggle, onTask)
+            view == MoreView.Archive -> LazyColumn {
+                if (db.archivedProjects().isEmpty()) {
+                    item(key = "archive-empty") {
+                        EmptyLine("No archived projects yet.")
                     }
                 }
-                view == MoreView.Changed -> TaskList(db.changedTasks(), pending, onToggle, onTask)
-                view == MoreView.Attachments -> LazyColumn {
-                    if (db.attachmentTasks().isEmpty()) {
-                        item(key = "attachments-empty") {
-                            EmptyLine("No attachments yet.")
-                        }
+                items(db.archivedProjects(), key = { it.id }) { project ->
+                    val count = db.tasks.values.count { it.project == project.id && !it.completed }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onProject(project) }
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            project.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.ink,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text("$count", style = MaterialTheme.typography.labelMedium, color = colors.faint)
                     }
-                    items(db.attachmentTasks(), key = { it.id }) { task ->
-                        Column(
-                            modifier = Modifier.clickable { onTask(task) }
-                                .padding(horizontal = 20.dp, vertical = 10.dp),
-                        ) {
+                    Hairline(Modifier.padding(start = 20.dp))
+                }
+            }
+            view == MoreView.Trash -> LazyColumn {
+                if (db.trashedTasks().isEmpty()) {
+                    item(key = "trash-empty") {
+                        EmptyLine("Trash is empty.")
+                    }
+                }
+                items(db.trashedTasks(), key = { it.id }) { task ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(task.title, style = MaterialTheme.typography.bodyMedium, color = colors.ink)
                             Text(
-                                text = task.attachments.joinToString(" · ") { it.substringAfterLast('/') },
+                                text = listOfNotNull(task.projectName, "In Trash").joinToString(" · "),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = colors.faint,
                             )
                         }
-                        Hairline(Modifier.padding(start = 20.dp))
+                        TextButton(onClick = { onRestore(task.id) }) {
+                            Text("Restore", color = colors.accent)
+                        }
+                        TextButton(onClick = { purgeTarget = task }) {
+                            Text("Delete", color = colors.danger)
+                        }
                     }
+                    Hairline(Modifier.padding(horizontal = 20.dp))
+                }
+            }
+            view == MoreView.Tags -> LazyColumn {
+                if (db.tags.isEmpty()) {
+                    item(key = "tags-empty") {
+                        EmptyLine("No tags yet.")
+                    }
+                }
+                items(
+                    db.tags.values.sortedWith(
+                        compareByDescending<TagDto> { tagValue ->
+                            db.tagUsageCount(tagValue.id)
+                        }.thenBy { it.name.lowercase() },
+                    ),
+                    key = { it.id },
+                ) { item ->
+                    val count = db.tagUsageCount(item.id)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { tag = item }
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "#${item.name}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.ink,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text("$count", style = MaterialTheme.typography.labelMedium, color = colors.faint)
+                    }
+                    Hairline(Modifier.padding(start = 20.dp))
+                }
+            }
+            view == MoreView.Priorities -> LazyColumn {
+                db.priorityGroups().forEach { (label, tasks) ->
+                    item(key = "prio-$label") {
+                        Text(
+                            text = label.uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.faint,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                        )
+                    }
+                    items(tasks, key = { it.id }) { task ->
+                        TaskRow(
+                            task = task.copy(pending = task.id in pending),
+                            onToggle = { onToggle(task) },
+                            onClick = { onTask(task) },
+                        )
+                        Hairline(Modifier.padding(start = 58.dp))
+                    }
+                }
+            }
+            view == MoreView.Changed -> TaskList(db.changedTasks(), pending, onToggle, onTask)
+            view == MoreView.Attachments -> LazyColumn {
+                if (db.attachmentTasks().isEmpty()) {
+                    item(key = "attachments-empty") {
+                        EmptyLine("No attachments yet.")
+                    }
+                }
+                items(db.attachmentTasks(), key = { it.id }) { task ->
+                    Column(
+                        modifier = Modifier.clickable { onTask(task) }
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                    ) {
+                        Text(task.title, style = MaterialTheme.typography.bodyMedium, color = colors.ink)
+                        Text(
+                            text = task.attachments.joinToString(" · ") { it.substringAfterLast('/') },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.faint,
+                        )
+                    }
+                    Hairline(Modifier.padding(start = 20.dp))
                 }
             }
         }

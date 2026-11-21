@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.8.9 — 2026-11-21
+
+- Tag counts now match the tag view: active tasks only, including child tags,
+  and never completed or trashed tasks.
+
+## 0.8.8 — 2026-11-21
+
+- Back inside a tag now returns to the Tags list instead of leaving the
+  perspective entirely. A second back leaves Tags.
+
+## 0.8.7 — 2026-11-21
+
+- The drawer gained a **Perspectives** heading above its list.
+
+## 0.8.6 — 2026-11-21
+
+- The drawer lists only the perspectives that are not already on the bottom
+  bar. Library and Settings are no longer repeated there; the connection
+  status stays pinned at the bottom.
+
+## 0.8.5 — 2026-11-21
+
+- The phone heading and its subtitle now start on the same left edge.
+- Settings → Appearance → **Bottom bar** chooses the four perspectives shown
+  in the bottom bar; Settings is always the fifth, on the far right.
+- Review, Completed, Archive, Trash, Tags, Priorities, Changed and Attachments
+  open as full destinations instead of modal sheets.
+
 ## 0.8.4 — 2026-11-21
 
 - The perspective heading now has a little more air below the search row.

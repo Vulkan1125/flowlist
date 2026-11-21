@@ -13,6 +13,7 @@ data class AppPreferences(
     val haptics: Boolean = true,
     val swipeActions: Boolean = true,
     val startTab: String = "inbox",
+    val bottomBar: List<String> = listOf("inbox", "today", "forecast", "browse"),
 )
 
 class PreferencesStore(context: Context) {
@@ -24,6 +25,11 @@ class PreferencesStore(context: Context) {
         haptics = prefs.getBoolean("haptics", true),
         swipeActions = prefs.getBoolean("swipe_actions", true),
         startTab = prefs.getString("start_tab", "inbox") ?: "inbox",
+        bottomBar = (prefs.getString("bottom_bar", null) ?: "inbox|today|forecast|browse")
+            .split('|')
+            .filter { it.isNotBlank() }
+            .take(4)
+            .ifEmpty { listOf("inbox", "today", "forecast", "browse") },
     )
 
     fun save(value: AppPreferences) {
@@ -33,6 +39,7 @@ class PreferencesStore(context: Context) {
             .putBoolean("haptics", value.haptics)
             .putBoolean("swipe_actions", value.swipeActions)
             .putString("start_tab", value.startTab)
+            .putString("bottom_bar", value.bottomBar.take(4).joinToString("|"))
             .apply()
     }
 }

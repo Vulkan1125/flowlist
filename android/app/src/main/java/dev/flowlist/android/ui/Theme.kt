@@ -72,6 +72,7 @@ data class ThemeSettings(
     val mode: AppearanceMode = AppearanceMode.System,
     val accentMode: AccentMode = AccentMode.Theme,
     val customAccent: AccentPreset = AccentPreset.Red,
+    val amoled: Boolean = false,
 )
 
 data class FlowColors(
@@ -206,14 +207,15 @@ fun themeColors(settings: ThemeSettings, dark: Boolean): FlowColors {
         }
     }
     val onAccent = if (accent.luminance() > 0.55f) Color(0xFF111111) else Color.White
+    val amoled = dark && settings.amoled
     return FlowColors(
         dark = dark,
-        background = Color(palette.background),
-        field = Color(palette.field),
-        raised = Color(palette.raised),
+        background = if (amoled) Color.Black else Color(palette.background),
+        field = if (amoled) Color(0xFF0C0C0C) else Color(palette.field),
+        raised = if (amoled) Color(0xFF121212) else Color(palette.raised),
         ink = Color(palette.ink),
         faint = Color(palette.faint),
-        hairline = Color(palette.hairline),
+        hairline = if (amoled) Color(0xFF222222) else Color(palette.hairline),
         success = Color(palette.success),
         warning = Color(palette.warning),
         danger = Color(palette.danger),

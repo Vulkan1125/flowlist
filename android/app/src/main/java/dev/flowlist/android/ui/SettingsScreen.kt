@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Notifications
@@ -148,7 +150,12 @@ fun SettingsScreen(
                     .padding(top = 8.dp, bottom = 32.dp),
             ) {
                 when (current) {
-                    SettingsSection.Appearance -> AppearanceSettings(theme, onThemeChange)
+                    SettingsSection.Appearance -> AppearanceSettings(
+                        theme = theme,
+                        onThemeChange = onThemeChange,
+                        preferences = preferences,
+                        onPreferencesChange = onPreferencesChange,
+                    )
                     SettingsSection.Tasks -> TaskSettings(preferences, onPreferencesChange)
                     SettingsSection.Library -> LibrarySettings(librarySettings, onLibrarySettings)
                     SettingsSection.Notifications -> NotificationSettings()
@@ -229,10 +236,17 @@ private fun summary(
 // Sections
 
 @Composable
-private fun AppearanceSettings(theme: ThemeSettings, onThemeChange: (ThemeSettings) -> Unit) {
+private fun AppearanceSettings(
+    theme: ThemeSettings,
+    onThemeChange: (ThemeSettings) -> Unit,
+    preferences: AppPreferences,
+    onPreferencesChange: (AppPreferences) -> Unit,
+) {
     val colors = flow
     val context = LocalContext.current
     var appIcon by remember { mutableStateOf(AppIcons.current(context)) }
+    BottomBarSettings(preferences, onPreferencesChange)
+    Spacer(modifier = Modifier.height(14.dp))
     SettingsCard("Theme") {
         ChoiceRow {
             AppearanceMode.entries.forEach { mode ->
@@ -245,6 +259,14 @@ private fun AppearanceSettings(theme: ThemeSettings, onThemeChange: (ThemeSettin
                     theme.mode == mode,
                 ) { onThemeChange(theme.copy(mode = mode)) }
             }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        ToggleRow(
+            title = "AMOLED black",
+            detail = "Pure black background in dark mode",
+            checked = theme.amoled,
+        ) {
+            onThemeChange(theme.copy(amoled = it))
         }
         Spacer(modifier = Modifier.height(14.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -664,6 +686,125 @@ private fun Pill(label: String, selected: Boolean, enabled: Boolean = true, onCl
                 selected -> colors.accent
                 else -> colors.ink
             },
+        )
+    }
+}
+
+@Composable
+private fun BottomBarSettings(
+    preferences: AppPreferences,
+    onPreferencesChange: (AppPreferences) -> Unit,
+) {
+    val colors = flow
+    val slots = resolveBottomBar(preferences.bottomBar)
+    var editing by remember { mutableStateOf<Int?>(null) }
+
+    SettingsCard("Bottom bar") {
+        Text(
+            text = "Pick the four perspectives on the bottom bar. Settings always stays at the far right.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.faint,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        slots.forEachIndexed { index, item ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { editing = index }
+                    .padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "${index + 1}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.faint,
+                    modifier = Modifier.width(22.dp),
+                )
+                Icon(
+                    imageVector = item.icon,
+                    contentDescription = null,
+                    tint = colors.faint,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = item.label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.ink,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = colors.faint,
+                    modifier = Modifier.size(17.dp),
+                )
+            }
+        }
+    }
+
+    if (editing != null) {
+        val slot = editing!!
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text("Slot ${slot + 1}") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    Perspective.entries.forEach { item ->
+                        val selected = slots[slot] == item
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(9.dp))
+                                .clickable {
+                                    val keys = slots.map { it.key }.toMutableList()
+                                    val previous = slots[slot].key
+                                    val existing = keys.indexOf(item.key)
+                                    keys[slot] = item.key
+                                    if (existing >= 0 && existing != slot) keys[existing] = previous
+                                    onPreferencesChange(preferences.copy(bottomBar = keys))
+                                    editing = null
+                                }
+                                .padding(vertical = 11.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = item.icon,
+                                contentDescription = null,
+                                tint = if (selected) colors.accent else colors.faint,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = item.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (selected) colors.accent else colors.ink,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (selected) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    tint = colors.accent,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { editing = null }) {
+                    Text("Cancel", color = colors.accent)
+                }
+            },
+            containerColor = colors.background,
         )
     }
 }

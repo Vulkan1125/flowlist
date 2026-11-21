@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -179,7 +181,12 @@ fun TaskEditSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
             Label("Repeat")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 PriorityPill("None", repeat == null, colors.accent) { setRepeat(null) }
                 PriorityPill("Daily", repeatUnit == "days", colors.accent) { setRepeat("days") }
                 PriorityPill("Weekly", repeatUnit == "weeks", colors.accent) { setRepeat("weeks") }
@@ -639,12 +646,14 @@ private fun PriorityPill(
             .clip(RoundedCornerShape(9.dp))
             .background(if (selected) tone.copy(alpha = 0.14f) else colors.background)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp),
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelLarge,
             color = if (selected) tone else colors.faint,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }

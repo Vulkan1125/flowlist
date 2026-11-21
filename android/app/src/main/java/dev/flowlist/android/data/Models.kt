@@ -364,7 +364,7 @@ fun Db.changedTasks(days: Long = settings.changedDays.toLong()): List<TaskView> 
 fun Db.attachmentTasks(): List<TaskView> =
     taskViews(includeCompleted = true).filter { it.attachments.isNotEmpty() }
 
-fun Db.tasksForTag(tagId: String): List<TaskView> {
+private fun Db.tagFamily(tagId: String): Set<String> {
     val ids = mutableSetOf(tagId)
     var changed = true
     while (changed) {
@@ -373,7 +373,19 @@ fun Db.tasksForTag(tagId: String): List<TaskView> {
             if (tag.parent in ids && ids.add(tag.id)) changed = true
         }
     }
+    return ids
+}
+
+fun Db.tasksForTag(tagId: String): List<TaskView> {
+    val ids = tagFamily(tagId)
     return taskViews().filter { task ->
         task.tags.any { name -> tags.values.any { it.name == name && it.id in ids } }
+    }
+}
+
+fun Db.tagUsageCount(tagId: String): Int {
+    val ids = tagFamily(tagId)
+    return tasks.values.count { task ->
+        !task.completed && task.trashedAt == null && task.tags.any { it in ids }
     }
 }

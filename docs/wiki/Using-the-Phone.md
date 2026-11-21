@@ -117,29 +117,27 @@ subtask uses the same optimistic offline queue.
 Settings → About → **Check for updates** reads the latest GitHub release and
 offers the APK when a newer version exists.
 
-## More
+## Perspectives and the drawer
 
-The fifth tab collects the rest of the library:
+The bottom bar holds four perspectives and **Settings** on the far right.
+Settings → Appearance → **Bottom bar** assigns each of the four slots; picking
+a perspective that already lives in another slot swaps the two.
 
-- **Review** — projects whose review date has arrived, with a **Reviewed** action.
-- **Completed**, **Changed** and **Priorities** — task lists by state.
-- **Archive** — finished projects; tap one to see its tasks.
-- **Trash** — restore a task or delete it forever.
-- **Tags** — tags by open count; tap one to filter its tasks.
-- **Attachments** — tasks with files or links.
+Review, Completed, Archive, Trash, Tags, Priorities, Changed and Attachments
+open as full pages, not modal sheets. Back returns to the previous perspective.
+Inside Tags, Back first returns to the tag list, then leaves Tags.
 
-Settings lives only in this tab now. **Settings → Tasks → Open on** chooses
-Inbox, Today, Forecast or Browse for a normal launch.
+The hamburger lists only the perspectives that are **not** on the bottom bar,
+under a **Perspectives** heading, with the connection status pinned at the
+bottom. Settings is never repeated there.
 
-## Settings and the drawer
+Tag counts match the tag view: active tasks only, including child tags, never
+completed or trashed tasks.
 
-Settings is the fifth tab. Its home lists Appearance, Tasks, Library,
+Settings lives in the fifth tab. Its home lists Appearance, Tasks, Library,
 Notifications, Connection and About, and each opens a short page with a back
-arrow. The header no longer carries a gear.
-
-The hamburger on the left opens the library drawer: Inbox, Today, Forecast and
-Browse, then Review, Completed, Archive, Trash, Tags, Priorities, Changed and
-Attachments.
+arrow. The header no longer carries a gear. **Settings → Tasks → Open on**
+chooses Inbox, Today, Forecast or Library for a normal launch.
 
 Library defaults — review interval, changed window, completed visibility and
 trash retention — write through `update_settings`, so the Mac sees the same
