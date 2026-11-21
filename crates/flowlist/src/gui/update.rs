@@ -444,23 +444,33 @@ fn install(asset: &str, bundle: &Path) -> Result<PathBuf, String> {
     if !status.success() {
         return Err("The update download failed. Try again from the release page.".to_string());
     }
-    let extracted = work.join("extracted");
+    let result = unpack_and_swap(&zip, bundle);
+    let _ = std::fs::remove_dir_all(&work);
+    result
+}
+
+/// Unpack a downloaded release zip and swap its `.app` in beside the running
+/// bundle. Split from the download so the swap itself can be tested with a
+/// local archive.
+fn unpack_and_swap(zip: &Path, bundle: &Path) -> Result<PathBuf, String> {
+    let parent = bundle
+        .parent()
+        .ok_or_else(|| "The app bundle has no parent folder.".to_string())?;
+    let downloads = zip.parent().unwrap_or_else(|| Path::new(".")).to_path_buf();
+    let extracted = downloads.join("extracted");
+    let _ = std::fs::remove_dir_all(&extracted);
     std::fs::create_dir_all(&extracted)
         .map_err(|error| format!("Could not unpack the update: {error}"))?;
     let status = std::process::Command::new("ditto")
         .args(["-x", "-k"])
-        .arg(&zip)
+        .arg(zip)
         .arg(&extracted)
         .status()
         .map_err(|error| format!("Could not unpack the update: {error}"))?;
     if !status.success() {
         return Err("The update archive could not be unpacked.".to_string());
     }
-    let app = std::fs::read_dir(&extracted)
-        .map_err(|error| format!("Could not read the update: {error}"))?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .find(|path| path.extension().is_some_and(|extension| extension == "app"))
+    let app = find_app(&extracted, 2)
         .ok_or_else(|| "The update archive held no Flowlist.app.".to_string())?;
     let executable = app.join("Contents/MacOS/flowlist");
     if !executable.is_file() {
@@ -485,13 +495,68 @@ fn install(asset: &str, bundle: &Path) -> Result<PathBuf, String> {
         return Err(format!("Could not put the update in place: {error}"));
     }
     let _ = std::fs::remove_dir_all(&backup);
-    let _ = std::fs::remove_dir_all(&work);
     Ok(bundle.to_path_buf())
+}
+
+/// Find the first `.app` in an unpacked archive. Release zips usually put
+/// `Flowlist.app` at the root, but a wrapper folder is allowed.
+fn find_app(directory: &Path, depth: usize) -> Option<PathBuf> {
+    if depth == 0 {
+        return None;
+    }
+    let mut folders = Vec::new();
+    for entry in std::fs::read_dir(directory).ok()?.filter_map(Result::ok) {
+        let path = entry.path();
+        if path.extension().is_some_and(|extension| extension == "app") {
+            return Some(path);
+        }
+        if path.is_dir() {
+            folders.push(path);
+        }
+    }
+    folders
+        .into_iter()
+        .find_map(|folder| find_app(&folder, depth - 1))
 }
 
 #[cfg(test)]
 mod tests {
     use super::{is_newer, version_key};
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_downloaded_bundle_replaces_the_running_one() {
+        use std::fs;
+
+        let root = tempfile::tempdir().unwrap();
+        let bundle = root.path().join("Flowlist.app");
+        fs::create_dir_all(bundle.join("Contents/MacOS")).unwrap();
+        fs::write(bundle.join("Contents/MacOS/flowlist"), "old").unwrap();
+        fs::write(bundle.join("Contents/Info.plist"), "old").unwrap();
+
+        let source = root.path().join("source");
+        let app = source.join("Flowlist.app");
+        fs::create_dir_all(app.join("Contents/MacOS")).unwrap();
+        fs::write(app.join("Contents/MacOS/flowlist"), "new").unwrap();
+        fs::write(app.join("Contents/Info.plist"), "new").unwrap();
+        let zip = root.path().join("update.zip");
+        let status = std::process::Command::new("ditto")
+            .args(["-c", "-k"])
+            .arg(&source)
+            .arg(&zip)
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let installed = super::unpack_and_swap(&zip, &bundle).unwrap();
+        assert_eq!(installed, bundle);
+        assert_eq!(
+            fs::read_to_string(bundle.join("Contents/MacOS/flowlist")).unwrap(),
+            "new"
+        );
+        assert!(!root.path().join("Flowlist.app.previous").exists());
+        assert!(!root.path().join("Flowlist.app.updating").exists());
+    }
 
     #[test]
     fn versions_compare_numerically_and_ignore_the_v_prefix() {
