@@ -521,6 +521,9 @@ fun MainScreen(
                 subtasks = db.tasks.values
                     .filter { it.parent == taskView.id && it.isActive }
                     .sortedBy { it.title.lowercase() },
+                moveTargets = db.tasks.values
+                    .filter { it.isActive && it.parent == null && it.id != taskView.id }
+                    .sortedBy { it.title.lowercase() },
                 pending = taskView.id in state.pending,
                 weekStartsMonday = preferences.weekStartsMonday,
                 defaultTimeMinutes = preferences.defaultTimeMinutes,
@@ -538,11 +541,23 @@ fun MainScreen(
                 onChecklist = { item, completed ->
                     scope.launch { repository.toggleChecklist(dto, item.id, completed) }
                 },
+                onAddChecklist = { title ->
+                    scope.launch { repository.addChecklist(dto, title) }
+                },
+                onDeleteChecklist = { item ->
+                    scope.launch { repository.deleteChecklist(dto, item) }
+                },
+                onMoveChecklist = { item, to ->
+                    scope.launch { repository.moveChecklist(dto, item, to) }
+                },
                 onAddSubtask = { title ->
                     scope.launch { repository.addSubtask(dto, title) }
                 },
                 onToggleSubtask = { child, completed ->
                     scope.launch { repository.complete(child.id, completed) }
+                },
+                onMoveSubtask = { child, parent ->
+                    scope.launch { repository.moveSubtask(child, parent) }
                 },
                 onDeleteSeries = {
                     detail = null

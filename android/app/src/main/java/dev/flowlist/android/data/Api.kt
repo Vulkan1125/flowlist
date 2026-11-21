@@ -393,3 +393,56 @@ fun updateTagCommand(id: String, name: String, parent: String?): JsonObject = bu
 fun deleteTagCommand(id: String): JsonObject = buildJsonObject {
     put("delete_tag", buildJsonObject { put("id", id) })
 }
+
+fun addChecklistCommand(taskId: String, title: String): JsonObject = buildJsonObject {
+    put(
+        "add_checklist_item",
+        buildJsonObject {
+            put("task", taskId)
+            put("title", title)
+            put("position", JsonNull)
+        },
+    )
+}
+
+fun deleteChecklistCommand(taskId: String, itemId: String): JsonObject = buildJsonObject {
+    put(
+        "delete_checklist_item",
+        buildJsonObject {
+            put("task", taskId)
+            put("item", itemId)
+        },
+    )
+}
+
+fun moveChecklistCommand(taskId: String, itemId: String, to: Int): JsonObject = buildJsonObject {
+    put(
+        "move_checklist_item",
+        buildJsonObject {
+            put("task", taskId)
+            put("item", itemId)
+            put("to", to)
+        },
+    )
+}
+
+fun moveSubtaskCommand(childId: String, parentId: String): JsonObject = buildJsonObject {
+    put(
+        "move_tasks",
+        buildJsonObject {
+            put("ids", buildJsonArray { add(JsonPrimitive(childId)) })
+            put(
+                "placement",
+                buildJsonObject {
+                    put(
+                        "parent",
+                        buildJsonObject {
+                            put("parent", parentId)
+                            put("position", "end")
+                        },
+                    )
+                },
+            )
+        },
+    )
+}

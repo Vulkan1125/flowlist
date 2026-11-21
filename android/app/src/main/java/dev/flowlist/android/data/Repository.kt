@@ -271,6 +271,84 @@ class Repository(context: Context) {
         sync()
     }
 
+    suspend fun addChecklist(task: TaskDto, title: String) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val current = db.tasks[task.id] ?: return
+        val item = ChecklistDto(id = Ulid.next(), title = trimmed, completed = false)
+        val updatedTask = current.copy(
+            checklist = current.checklist + item,
+            modifiedAt = java.time.Instant.now().toString(),
+        )
+        val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = addChecklistCommand(task.id, trimmed),
+                label = trimmed,
+            ),
+        )
+        sync()
+    }
+
+    suspend fun deleteChecklist(task: TaskDto, item: ChecklistDto) {
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val current = db.tasks[task.id] ?: return
+        val updatedTask = current.copy(
+            checklist = current.checklist.filterNot { it.id == item.id },
+            modifiedAt = java.time.Instant.now().toString(),
+        )
+        val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = deleteChecklistCommand(task.id, item.id),
+                label = item.title,
+            ),
+        )
+        sync()
+    }
+
+    suspend fun moveChecklist(task: TaskDto, item: ChecklistDto, to: Int) {
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val current = db.tasks[task.id] ?: return
+        val from = current.checklist.indexOfFirst { it.id == item.id }
+        if (from < 0) return
+        val target = to.coerceIn(0, current.checklist.lastIndex)
+        if (target == from) return
+        val items = current.checklist.toMutableList()
+        items.removeAt(from)
+        items.add(target, item)
+        val updatedTask = current.copy(
+            checklist = items,
+            modifiedAt = java.time.Instant.now().toString(),
+        )
+        val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = moveChecklistCommand(task.id, item.id, target),
+                label = "Reorder ${item.title}",
+            ),
+        )
+        sync()
+    }
+
+    suspend fun moveSubtask(child: TaskDto, parent: TaskDto) {
+        if (child.id == parent.id) return
+        send(moveSubtaskCommand(child.id, parent.id), "Move “${child.title}” under “${parent.title}”")
+    }
+
     suspend fun updateLibrarySettings(updated: SettingsDto) {
         val current = _state.value.snapshot?.db?.settings ?: SettingsDto()
         val patch = buildJsonObject {

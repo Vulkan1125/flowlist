@@ -12,18 +12,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -41,6 +48,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -80,14 +88,19 @@ fun TaskEditSheet(
     projects: List<ProjectDto>,
     tags: List<TagDto>,
     subtasks: List<TaskDto>,
+    moveTargets: List<TaskDto>,
     pending: Boolean,
     weekStartsMonday: Boolean = true,
     defaultTimeMinutes: Int = 9 * 60,
     onDismiss: () -> Unit,
     onSave: (TaskEdit) -> Unit,
     onChecklist: (ChecklistDto, Boolean) -> Unit,
+    onAddChecklist: (String) -> Unit,
+    onDeleteChecklist: (ChecklistDto) -> Unit,
+    onMoveChecklist: (ChecklistDto, Int) -> Unit,
     onAddSubtask: (String) -> Unit,
     onToggleSubtask: (TaskDto, Boolean) -> Unit,
+    onMoveSubtask: (TaskDto, TaskDto) -> Unit,
     onDeleteSeries: () -> Unit,
     onComplete: () -> Unit,
     onDelete: () -> Unit,
@@ -106,15 +119,27 @@ fun TaskEditSheet(
     }
     var selectedTags by remember(task.id) { mutableStateOf(task.tags.toSet()) }
     var checklist by remember(task.id) { mutableStateOf(task.checklist) }
+    LaunchedEffect(task.checklist) { checklist = task.checklist }
+    var addingChecklist by remember { mutableStateOf(false) }
+    var checklistTitle by remember { mutableStateOf("") }
+    var movingSubtask by remember { mutableStateOf<TaskDto?>(null) }
+    var targetFilter by remember { mutableStateOf("") }
     var addingSubtask by remember { mutableStateOf(false) }
     var subtaskTitle by remember { mutableStateOf("") }
     var repeat by remember(task.id) { mutableStateOf(task.repeat) }
     var confirmSeries by remember { mutableStateOf(false) }
     val subtaskFocus = remember { FocusRequester() }
+    val checklistFocus = remember { FocusRequester() }
     LaunchedEffect(addingSubtask) {
         if (addingSubtask) {
             delay(120)
             subtaskFocus.requestFocus()
+        }
+    }
+    LaunchedEffect(addingChecklist) {
+        if (addingChecklist) {
+            delay(120)
+            checklistFocus.requestFocus()
         }
     }
     var projectMenu by remember { mutableStateOf(false) }
@@ -286,7 +311,22 @@ fun TaskEditSheet(
                         } else {
                             null
                         },
+                        modifier = Modifier.weight(1f),
                     )
+                    IconButton(
+                        onClick = {
+                            movingSubtask = child
+                            targetFilter = ""
+                        },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.DriveFileMove,
+                            contentDescription = "Move subtask",
+                            tint = colors.faint,
+                            modifier = Modifier.size(17.dp),
+                        )
+                    }
                 }
             }
             if (addingSubtask) {
@@ -348,45 +388,144 @@ fun TaskEditSheet(
                 }
             }
 
-            if (checklist.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Label("Checklist · ${checklist.count { it.completed }}/${checklist.size}")
-                checklist.forEach { item ->
-                    Row(
+            Spacer(modifier = Modifier.height(16.dp))
+            Label(
+                if (checklist.isEmpty()) {
+                    "Checklist"
+                } else {
+                    "Checklist · ${checklist.count { it.completed }}/${checklist.size}"
+                },
+            )
+            checklist.forEachIndexed { index, item ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CheckCircle(
+                        checked = item.completed,
+                        onClick = {
+                            val next = !item.completed
+                            checklist = checklist.map {
+                                if (it.id == item.id) it.copy(completed = next) else it
+                            }
+                            onChecklist(item.copy(completed = next), next)
+                        },
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (item.completed) colors.faint else colors.ink,
+                        textDecoration = if (item.completed) {
+                            androidx.compose.ui.text.style.TextDecoration.LineThrough
+                        } else {
+                            null
+                        },
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .weight(1f)
                             .clickable {
                                 val next = !item.completed
                                 checklist = checklist.map {
                                     if (it.id == item.id) it.copy(completed = next) else it
                                 }
                                 onChecklist(item.copy(completed = next), next)
-                            }
-                            .padding(vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                            },
+                    )
+                    IconButton(
+                        onClick = { onMoveChecklist(item, index - 1) },
+                        enabled = index > 0,
+                        modifier = Modifier.size(30.dp),
                     ) {
-                        CheckCircle(
-                            checked = item.completed,
-                            onClick = {
-                                val next = !item.completed
-                                checklist = checklist.map {
-                                    if (it.id == item.id) it.copy(completed = next) else it
-                                }
-                                onChecklist(item.copy(completed = next), next)
-                            },
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = item.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (item.completed) colors.faint else colors.ink,
-                            textDecoration = if (item.completed) {
-                                androidx.compose.ui.text.style.TextDecoration.LineThrough
-                            } else {
-                                null
-                            },
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowUpward,
+                            contentDescription = "Move step up",
+                            tint = if (index > 0) colors.faint else colors.hairline,
+                            modifier = Modifier.size(15.dp),
                         )
                     }
+                    IconButton(
+                        onClick = { onMoveChecklist(item, index + 1) },
+                        enabled = index < checklist.lastIndex,
+                        modifier = Modifier.size(30.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowDownward,
+                            contentDescription = "Move step down",
+                            tint = if (index < checklist.lastIndex) colors.faint else colors.hairline,
+                            modifier = Modifier.size(15.dp),
+                        )
+                    }
+                    IconButton(
+                        onClick = { onDeleteChecklist(item) },
+                        modifier = Modifier.size(30.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.DeleteOutline,
+                            contentDescription = "Delete step",
+                            tint = colors.faint,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            }
+            if (addingChecklist) {
+                OutlinedTextField(
+                    value = checklistTitle,
+                    onValueChange = { checklistTitle = it },
+                    placeholder = { Text("Checklist step", color = colors.faint) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = colors.accent,
+                        unfocusedBorderColor = colors.hairline,
+                        focusedContainerColor = colors.background,
+                        unfocusedContainerColor = colors.background,
+                        focusedTextColor = colors.ink,
+                        unfocusedTextColor = colors.ink,
+                        cursorColor = colors.accent,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(checklistFocus),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { addingChecklist = false; checklistTitle = "" }) {
+                        Text("Cancel", color = colors.faint)
+                    }
+                    TextButton(
+                        onClick = {
+                            if (checklistTitle.isNotBlank()) {
+                                onAddChecklist(checklistTitle)
+                                checklistTitle = ""
+                                addingChecklist = false
+                            }
+                        },
+                    ) {
+                        Text("Add", color = colors.accent)
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { addingChecklist = true }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Rounded.Add,
+                        contentDescription = null,
+                        tint = colors.accent,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Add checklist item",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.faint,
+                    )
                 }
             }
 
@@ -569,6 +708,92 @@ fun TaskEditSheet(
             },
             dismissButton = {
                 TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+            },
+            containerColor = colors.background,
+        )
+    }
+
+    movingSubtask?.let { child ->
+        val candidates = moveTargets
+            .filter { it.id != child.id && it.id != task.id }
+            .filter { it.title.contains(targetFilter.trim(), ignoreCase = true) }
+            .sortedBy { it.title.lowercase() }
+        AlertDialog(
+            onDismissRequest = {
+                movingSubtask = null
+                targetFilter = ""
+            },
+            title = { Text("Move “${child.title}”") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = targetFilter,
+                        onValueChange = { targetFilter = it },
+                        placeholder = { Text("Find a task", color = colors.faint) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = colors.accent,
+                            unfocusedBorderColor = colors.hairline,
+                            focusedContainerColor = colors.background,
+                            unfocusedContainerColor = colors.background,
+                            focusedTextColor = colors.ink,
+                            unfocusedTextColor = colors.ink,
+                            cursorColor = colors.accent,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (candidates.isEmpty()) {
+                        Text(
+                            text = "No matching tasks.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.faint,
+                            modifier = Modifier.padding(vertical = 10.dp),
+                        )
+                    } else {
+                        LazyColumn(modifier = Modifier.heightIn(max = 340.dp)) {
+                            items(candidates, key = { it.id }) { target ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(9.dp))
+                                        .clickable {
+                                            onMoveSubtask(child, target)
+                                            movingSubtask = null
+                                            targetFilter = ""
+                                        }
+                                        .padding(vertical = 11.dp, horizontal = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = target.title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = colors.ink,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Outlined.DriveFileMove,
+                                        contentDescription = null,
+                                        tint = colors.faint,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        movingSubtask = null
+                        targetFilter = ""
+                    },
+                ) {
+                    Text("Cancel", color = colors.faint)
+                }
             },
             containerColor = colors.background,
         )

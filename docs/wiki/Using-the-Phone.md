@@ -114,6 +114,16 @@ Child tasks appear indented under their parent. In the task editor, the
 created under the current one and stays in the same project. Completing a
 subtask uses the same optimistic offline queue.
 
+Each subtask row has a **move** button that opens a searchable picker of
+top-level tasks; choosing one re-parents the subtask there and inherits that
+task's project.
+
+## Checklists
+
+**Add checklist item** appends a step to the current task. Every step has up
+and down arrows for reordering and a delete button. Ticking a step is
+independent of completing the task, and all edits use the same offline queue.
+
 Settings → About → **Check for updates** reads the latest GitHub release and
 offers the APK when a newer version exists.
 

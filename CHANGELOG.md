@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.1 — 2026-11-21
+
+- **Checklist steps can be added, reordered and deleted** in the task editor.
+  Up and down arrows move a step one place; the delete button removes it.
+- **Subtasks can be moved under another top-level task** from the task editor,
+  with a searchable picker.
+- Per-task reminders are not part of the core model yet, so they remain a
+  Mac-side due-time notification.
+
 ## 0.9.0 — 2026-11-21
 
 - **Library management on the phone.** Browse now groups projects under
