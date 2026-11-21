@@ -244,6 +244,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       restores the row.
 - [x] Image and PDF attachments preview inside the window, with PDF page
       stepping, and `o` still opens the file externally.
+- [x] The plus opens the capture panel over the window (the global shortcut
+      stays screen-centered), the toast follows the visible middle pane, and
+      inspector boxes sit on a solid surface with visible rounded borders.
 - [x] Rich custom-perspective editor laid out like settings: labelled filter
       and layout rows that each open a menu of every value, a live match count,
       an explicit Clear filters, and unknown CLI conditions kept and counted

@@ -447,9 +447,13 @@ impl FlowlistApp {
                     .px_2()
                     .flex()
                     .items_center()
-                    .rounded_md()
+                    .rounded_lg()
                     .border_1()
-                    .border_color(theme.border_soft)
+                    .border_color(theme.border)
+                    // A readonly field is still a box: give it a surface so it
+                    // reads as one solid object on the glass, and a border
+                    // strong enough that its rounded corners stay visible.
+                    .bg(theme.field)
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover))
                     .text_color(if value.is_empty() {
@@ -515,13 +519,10 @@ impl FlowlistApp {
                     .h(px(28.))
                     .flex()
                     .items_center()
-                    .rounded_md()
+                    .rounded_lg()
                     .border_1()
-                    .border_color(if open {
-                        theme.accent
-                    } else {
-                        theme.border_soft
-                    })
+                    .border_color(if open { theme.accent } else { theme.border })
+                    .bg(theme.field)
                     .child(
                         div()
                             .id(super::sid(format!("date-value:{}", field.slug())))
@@ -1132,9 +1133,10 @@ impl FlowlistApp {
                     .whitespace_normal()
                     .min_h(px(52.))
                     .p_2()
-                    .rounded_md()
+                    .rounded_lg()
                     .border_1()
-                    .border_color(theme.border_soft)
+                    .border_color(theme.border)
+                    .bg(theme.field)
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover))
                     .text_sm()
@@ -1533,9 +1535,10 @@ impl FlowlistApp {
                 .flex()
                 .items_center()
                 .justify_between()
-                .rounded_md()
+                .rounded_lg()
                 .border_1()
-                .border_color(theme.border_soft)
+                .border_color(theme.border)
+                .bg(theme.field)
                 .cursor_pointer()
                 .hover(|style| style.bg(theme.hover))
                 .child(
@@ -1648,12 +1651,12 @@ impl FlowlistApp {
                             .border_color(if self.project_icon_open {
                                 theme.accent
                             } else {
-                                theme.border_soft
+                                theme.border
                             })
                             .bg(if self.project_icon_open {
                                 theme.selection
                             } else {
-                                theme.clear
+                                theme.field
                             })
                             .cursor_pointer()
                             .flow_tip(self, cx, theme, "Change the project icon")
@@ -1688,12 +1691,8 @@ impl FlowlistApp {
                             .justify_center()
                             .rounded_md()
                             .border_1()
-                            .border_color(if active {
-                                theme.accent
-                            } else {
-                                theme.border_soft
-                            })
-                            .bg(if active { theme.selection } else { theme.clear })
+                            .border_color(if active { theme.accent } else { theme.border })
+                            .bg(if active { theme.selection } else { theme.field })
                             .cursor_pointer()
                             .flow_tip(self, cx, theme, candidate.label())
                             .hover(|style| style.bg(theme.hover))
@@ -1973,7 +1972,8 @@ impl FlowlistApp {
             .whitespace_nowrap()
             .rounded_md()
             .border_1()
-            .border_color(theme.border_soft)
+            .border_color(theme.border)
+            .bg(theme.field)
             .text_xs()
             .text_color(theme.text_dim)
             .cursor_pointer()
@@ -1997,7 +1997,8 @@ impl FlowlistApp {
             .flex_shrink_0()
             .rounded_md()
             .border_1()
-            .border_color(theme.border_soft)
+            .border_color(theme.border)
+            .bg(theme.field)
             .text_xs()
             .text_color(theme.text_dim)
             .cursor_pointer()

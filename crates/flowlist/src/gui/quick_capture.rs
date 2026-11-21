@@ -620,7 +620,12 @@ impl Render for QuickCapture {
 }
 
 /// Open or bring forward the capture panel.
-pub fn show(cx: &mut App, paths: DataPaths, theme: Theme) -> Result<()> {
+pub fn show(
+    cx: &mut App,
+    paths: DataPaths,
+    theme: Theme,
+    anchor: Option<Bounds<gpui::Pixels>>,
+) -> Result<()> {
     // Remember who was in front before Flowlist takes over, so a plain capture
     // or Esc can put them back exactly where they were.
     let previous_app = frontmost_app();
@@ -640,7 +645,7 @@ pub fn show(cx: &mut App, paths: DataPaths, theme: Theme) -> Result<()> {
     }
 
     let store = Store::open(paths)?;
-    let bounds = panel_bounds(cx);
+    let bounds = panel_bounds(cx, anchor);
     activate_app();
     cx.activate(true);
     cx.open_window(
@@ -858,11 +863,21 @@ fn reveal_in_main(id: TaskId, cx: &mut Context<QuickCapture>) {
     }
 }
 
-fn panel_bounds(cx: &App) -> Bounds<gpui::Pixels> {
+fn panel_bounds(cx: &App, anchor: Option<Bounds<gpui::Pixels>>) -> Bounds<gpui::Pixels> {
     let panel = size(px(PANEL_WIDTH), px(PANEL_HEIGHT));
-    // Centred on the primary display, like a Spotlight prompt: the eye lands
-    // in the middle of the screen instead of hunting the menu bar.
-    Bounds::centered(None, panel, cx)
+    match anchor {
+        // The Add task button belongs to the window, so its panel opens over
+        // the window. The global shortcut keeps the Spotlight habit of
+        // landing in the middle of the display.
+        Some(anchor) => Bounds::new(
+            gpui::point(
+                anchor.origin.x + (anchor.size.width - panel.width) / 2.0,
+                anchor.origin.y + (anchor.size.height - panel.height) / 2.0,
+            ),
+            panel,
+        ),
+        None => Bounds::centered(None, panel, cx),
+    }
 }
 
 /// Room for the title line inside the 620px panel, after the plus badge, the

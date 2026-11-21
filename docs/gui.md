@@ -87,10 +87,11 @@ over the current app instead of bringing the whole window forward, so the main
 window keeps its view, selection and scroll. The panel stays above normal
 windows when another app comes forward, the way Things' quick entry does.
 `n` or `⌘N` starts capture inside the app, and the title-bar plus opens the same
-panel from any view.
+panel over the Flowlist window from any view. The global shortcut opens it in
+the middle of the display; the plus opens it in the middle of the window.
 
-The panel is a square-cornered card in the middle of the screen, so it reads as
-a single surface rather than a second app window. It parses as you type: the top
+The panel is a square-cornered card, so it reads as a single surface rather
+than a second app window. It parses as you type: the top
 line is the title, a row of chips previews the project, tags, flag, due/defer
 dates, estimate and repeat rule, and the footer says where the task will land.
 A plain thought always goes to the Inbox, whatever view was last open. An
@@ -182,10 +183,10 @@ one order from the attachment badge inwards — attachments, project, `#tag`
 chips, estimate, due, deferred, repeat, checklist — so two tasks with the same
 fields always read the same way. Empty views share one illustrated halo,
 counts read as prose (`1 task`, `6 tasks`), and menus, toasts and sheets fade
-in over 120 ms. The toast sits at the bottom-center of the middle pane — the
-same band as the search field, with the inspector's column reserved — so it
-never drifts under a side pane. Settings previews each theme family as a
-miniature window.
+in over 120 ms. The toast sits at the bottom-center of the middle pane and
+follows the pane that is actually visible, so it re-centres when the inspector
+closes (the search field keeps the inspector's column reserved instead).
+Settings previews each theme family as a miniature window.
 
 ## Projects, review and archive
 

@@ -1815,7 +1815,11 @@ impl FlowlistApp {
     /// fallback when the platform cannot open a second window.
     pub(super) fn open_quick_capture(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let theme = self.theme;
-        if let Err(error) = quick_capture::show(cx, self.store.paths().clone(), theme) {
+        // The in-app button belongs to this window, so the panel opens over
+        // the window; the global shortcut keeps its screen-centered spot.
+        let anchor = window.bounds();
+        if let Err(error) = quick_capture::show(cx, self.store.paths().clone(), theme, Some(anchor))
+        {
             self.toast = Some(format!("Could not open quick capture: {error}"));
             self.focus_capture(window, cx);
         }
@@ -5874,9 +5878,13 @@ impl FlowlistApp {
             cx.notify();
         });
         // Sit over the middle pane, not the window: a toast under the
-        // inspector or the sidebar points at the wrong place.
-        let (band_left, band_width) =
-            content_band(self.window_size.map_or(1254.0, |(width, _)| width));
+        // inspector or the sidebar points at the wrong place. Unlike search,
+        // the toast follows the visible pane, so closing the inspector
+        // re-centres it instead of leaving it left of middle.
+        let (band_left, band_width) = pane_band(
+            self.window_size.map_or(1254.0, |(width, _)| width),
+            self.show_inspector,
+        );
         div()
             .absolute()
             .bottom(px(38.))
@@ -6221,7 +6229,7 @@ pub fn run(paths: DataPaths) -> Result<()> {
                             let theme = window
                                 .read_with(cx, |app, _| app.theme)
                                 .unwrap_or_else(|_| quick_capture::stored_theme(&paths));
-                            quick_capture::show(cx, paths.clone(), theme)
+                            quick_capture::show(cx, paths.clone(), theme, None)
                         });
                         match opened {
                             Ok(Ok(())) => {}
@@ -6242,14 +6250,23 @@ pub fn run(paths: DataPaths) -> Result<()> {
     Ok(())
 }
 
-/// The content pane's horizontal band: after the sidebar, stopping before the
-/// inspector. The inspector's width stays reserved even when it is closed, so
-/// anything centered here (the search field, the toast) keeps one place as
-/// panes open and close.
-fn content_band(window_width: f32) -> (f32, f32) {
+/// The middle pane's horizontal band: after the sidebar, stopping before the
+/// inspector. `reserve_inspector` keeps the inspector's column in the width
+/// even when it is closed, which is what the title-bar search wants so the
+/// field never moves. The toast wants the visible pane instead.
+fn pane_band(window_width: f32, reserve_inspector: bool) -> (f32, f32) {
     let left = SIDEBAR_WIDTH;
-    let width = (window_width - INSPECTOR_WIDTH - left).max(0.0);
+    let reserved = if reserve_inspector {
+        INSPECTOR_WIDTH
+    } else {
+        0.0
+    };
+    let width = (window_width - reserved - left).max(0.0);
     (left, width)
+}
+
+fn content_band(window_width: f32) -> (f32, f32) {
+    pane_band(window_width, true)
 }
 
 /// The title-bar search sits centered on the content pane, not on the whole
@@ -6337,17 +6354,24 @@ mod tests {
     }
 
     #[test]
-    fn the_toast_band_is_the_middle_pane_and_keeps_the_inspector_reserved() {
-        use super::content_band;
+    fn search_reserves_the_inspector_and_the_toast_follows_the_visible_pane() {
+        use super::{content_band, pane_band};
 
-        // Same band the search field sits in, at the working size.
+        // The search field always keeps the inspector's column, so it does not
+        // move when the pane opens and closes.
         let (left, width) = content_band(1254.0);
         assert_eq!(left, 240.0);
         assert_eq!(width, 1254.0 - 240.0 - 320.0);
-        // The band never runs under the inspector, and a tiny window clamps
-        // to zero rather than painting outside the window.
         assert!(left + width <= 1254.0 - 320.0);
-        assert_eq!(content_band(400.0), (240.0, 0.0));
+
+        // The toast follows the pane actually on screen: with the inspector
+        // closed it centres under the full middle pane.
+        let (left, width) = pane_band(1254.0, false);
+        assert_eq!(left, 240.0);
+        assert_eq!(width, 1254.0 - 240.0);
+        assert_eq!(pane_band(1254.0, true), (240.0, 1254.0 - 240.0 - 320.0));
+        // A tiny window clamps to zero rather than painting outside.
+        assert_eq!(pane_band(400.0, true), (240.0, 0.0));
     }
 
     #[test]

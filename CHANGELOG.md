@@ -96,9 +96,16 @@
   (`⌘⇧F`); library results ignore Trash and keep the project and tag metadata
   so every hit says where it lives. The empty state names the scope and how to
   switch it.
-- The toast now sits in the bottom-center of the middle pane instead of the
-  bottom-center of the whole window, so it lines up under the list and never
-  drifts under the inspector.
+- The toast now sits in the bottom-center of the middle pane. It follows the
+  pane that is actually on screen, so closing the inspector re-centres it under
+  the wider list instead of leaving it left of middle.
+- The **Add task** button opens the floating capture panel over the Flowlist
+  window, while the global `⌃⌥Space` shortcut keeps its screen-centered spot.
+  A panel opened from the button now lands where the user is looking.
+- Inspector boxes read as solid objects instead of pale outlines on the glass:
+  the readonly title, notes, date, project and attachment controls carry the
+  same surface as the other chips, use the visible border tone, and take an
+  8px radius, so their corners stay rounded rather than washed out.
 - A Plain accent chosen in one appearance now carries into the other instead
   of resetting to ink: the unset side inherits the chosen hue, clamped by the
   theme builder so text and button labels stay readable there. The accent
