@@ -165,6 +165,23 @@ fun updateCommand(id: String, patch: JsonObject): JsonObject = buildJsonObject {
     put("update_task", buildJsonObject { put("id", id); put("patch", patch) })
 }
 
+fun checklistCommand(
+    taskId: String,
+    itemId: String,
+    title: String,
+    completed: Boolean,
+): JsonObject = buildJsonObject {
+    put(
+        "update_checklist_item",
+        buildJsonObject {
+            put("task", taskId)
+            put("item", itemId)
+            put("title", title)
+            put("completed", completed)
+        },
+    )
+}
+
 fun setTagsCommand(id: String, added: List<String>, removed: List<String>): JsonObject = buildJsonObject {
     put(
         "set_task_tags",

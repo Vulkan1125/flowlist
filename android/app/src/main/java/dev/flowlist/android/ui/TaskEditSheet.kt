@@ -53,6 +53,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.flowlist.android.data.ChecklistDto
 import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.StampDto
 import dev.flowlist.android.data.TagDto
@@ -73,6 +74,7 @@ fun TaskEditSheet(
     defaultTimeMinutes: Int = 9 * 60,
     onDismiss: () -> Unit,
     onSave: (TaskEdit) -> Unit,
+    onChecklist: (ChecklistDto, Boolean) -> Unit,
     onComplete: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -89,6 +91,7 @@ fun TaskEditSheet(
         mutableStateOf(task.estimateMin?.toString().orEmpty())
     }
     var selectedTags by remember(task.id) { mutableStateOf(task.tags.toSet()) }
+    var checklist by remember(task.id) { mutableStateOf(task.checklist) }
     var projectMenu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var datePickerForDue by remember { mutableStateOf(true) }
@@ -209,6 +212,48 @@ fun TaskEditSheet(
                             onClick = {
                                 project = item.id
                                 projectMenu = false
+                            },
+                        )
+                    }
+                }
+            }
+
+            if (checklist.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Label("Checklist · ${checklist.count { it.completed }}/${checklist.size}")
+                checklist.forEach { item ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val next = !item.completed
+                                checklist = checklist.map {
+                                    if (it.id == item.id) it.copy(completed = next) else it
+                                }
+                                onChecklist(item.copy(completed = next), next)
+                            }
+                            .padding(vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CheckCircle(
+                            checked = item.completed,
+                            onClick = {
+                                val next = !item.completed
+                                checklist = checklist.map {
+                                    if (it.id == item.id) it.copy(completed = next) else it
+                                }
+                                onChecklist(item.copy(completed = next), next)
+                            },
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (item.completed) colors.faint else colors.ink,
+                            textDecoration = if (item.completed) {
+                                androidx.compose.ui.text.style.TextDecoration.LineThrough
+                            } else {
+                                null
                             },
                         )
                     }

@@ -1248,6 +1248,34 @@ impl FlowlistApp {
                         "A clear day. Capture something above when it comes up."
                     },
                 ),
+                View::Builtin(BuiltinPerspective::Flagged) => (
+                    "Nothing flagged",
+                    "Flag a task with ! and it will wait here.",
+                ),
+                View::Builtin(BuiltinPerspective::Tags) => (
+                    "No tags yet",
+                    "Add #tag to a task and the tag appears here.",
+                ),
+                View::Builtin(BuiltinPerspective::Nearby) => (
+                    "Nothing nearby",
+                    "Give a tag a location and tasks around it show up here.",
+                ),
+                View::Builtin(BuiltinPerspective::Archive) => (
+                    "No archived projects",
+                    "Finished projects can be archived from the project menu.",
+                ),
+                View::Builtin(BuiltinPerspective::Changed) => (
+                    "Nothing changed recently",
+                    "Edits from the last few days collect here.",
+                ),
+                View::Builtin(BuiltinPerspective::Attachments) => (
+                    "No attachments",
+                    "Add a file or link from the inspector and it will appear here.",
+                ),
+                View::Builtin(BuiltinPerspective::Trash) => (
+                    "Trash is empty",
+                    "Deleted tasks wait here until you restore or empty them.",
+                ),
                 View::Builtin(BuiltinPerspective::Completed) => (
                     "Nothing completed yet",
                     "Finish a task with x and it will wait here.",

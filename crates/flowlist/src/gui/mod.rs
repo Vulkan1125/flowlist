@@ -6042,18 +6042,10 @@ impl FlowlistApp {
         let theme = self.theme;
         // Recorded for the GUI probe, which cannot read text off the screen.
         *self.empty_note.borrow_mut() = Some(title.to_string());
-        let kind = if !self.search.is_empty() {
-            doodles::DoodleKind::Search
-        } else {
-            match &self.view {
-                View::Builtin(BuiltinPerspective::Today) => doodles::DoodleKind::Today,
-                View::Builtin(BuiltinPerspective::Forecast) => doodles::DoodleKind::Forecast,
-                View::Builtin(BuiltinPerspective::Completed) => doodles::DoodleKind::Completed,
-                View::Builtin(BuiltinPerspective::Projects) | View::Folder(_) => {
-                    doodles::DoodleKind::Folder
-                }
-                _ => doodles::DoodleKind::Inbox,
-            }
+        let kind = match &self.view {
+            View::Builtin(BuiltinPerspective::Today) => Some(doodles::DoodleKind::Today),
+            View::Builtin(BuiltinPerspective::Forecast) => Some(doodles::DoodleKind::Forecast),
+            _ => None,
         };
         div()
             .flex()
@@ -6063,7 +6055,24 @@ impl FlowlistApp {
             .flex_1()
             .gap_3()
             .py_12()
-            .child(doodles::doodle(kind, theme))
+            .child(if let Some(kind) = kind {
+                doodles::doodle(kind, theme).into_any_element()
+            } else {
+                // A soft halo keeps other empty views from reading as a
+                // missing image without turning every perspective into an
+                // illustrated page.
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(76.))
+                    .rounded_full()
+                    .bg(theme.field)
+                    .border_1()
+                    .border_color(theme.border_soft)
+                    .child(icons::icon(Icon::CircleDashed, 30.0, theme.text_faint))
+                    .into_any_element()
+            })
             .child(
                 div()
                     .text_base()

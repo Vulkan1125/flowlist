@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.rounded.Add
@@ -108,6 +109,7 @@ fun MainScreen(
     var tab by rememberSaveable { mutableStateOf(Tab.Inbox) }
     var capture by rememberSaveable { mutableStateOf(false) }
     var settings by rememberSaveable { mutableStateOf(false) }
+    var search by rememberSaveable { mutableStateOf(false) }
     var detail by remember { mutableStateOf<TaskView?>(null) }
     var project by remember { mutableStateOf<ProjectDto?>(null) }
     val haptics = LocalHapticFeedback.current
@@ -228,6 +230,7 @@ fun MainScreen(
                 tab = tab,
                 state = state,
                 onSettings = { settings = true },
+                onSearch = { search = true },
                 modifier = Modifier.statusBarsPadding(),
             )
             if (offlineWarning) {
@@ -300,6 +303,9 @@ fun MainScreen(
                         )
                     }
                 },
+                onChecklist = { item, completed ->
+                    scope.launch { repository.toggleChecklist(dto, item.id, completed) }
+                },
                 onComplete = {
                     complete(taskView, !taskView.completed)
                     detail = null
@@ -349,6 +355,19 @@ fun MainScreen(
         )
     }
 
+    if (search) {
+        SearchSheet(
+            db = snapshot?.db ?: dev.flowlist.android.data.Db(),
+            pending = state.pending,
+            onDismiss = { search = false },
+            onToggle = { task -> complete(task, true) },
+            onClick = { task ->
+                search = false
+                detail = task
+            },
+        )
+    }
+
     if (settings) {
         SettingsSheet(
             state = state,
@@ -371,6 +390,7 @@ private fun Header(
     tab: Tab,
     state: AppState,
     onSettings: () -> Unit,
+    onSearch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = flow
@@ -400,6 +420,14 @@ private fun Header(
                     },
                     style = MaterialTheme.typography.labelMedium,
                     color = colors.faint,
+                )
+            }
+            IconButton(onClick = onSearch) {
+                Icon(
+                    imageVector = Icons.Outlined.Search,
+                    contentDescription = "Search",
+                    tint = colors.faint,
+                    modifier = Modifier.size(20.dp),
                 )
             }
             IconButton(onClick = onSettings) {

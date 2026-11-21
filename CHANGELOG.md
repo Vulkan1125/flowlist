@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0 — 2026-11-21
+
+- **Mac empty states stay focused.** Today keeps its sun and cloud doodle and
+  Forecast its calendar, both theme-coloured and animated. The other
+  perspectives keep the quiet halo instead of a drawing.
+- The perspective empty titles are specific now: Nothing flagged, No tags yet,
+  Nothing nearby, No archived projects, Nothing changed recently, No
+  attachments, Trash is empty.
+- **Phone search.** A search button in the header filters the cached library by
+  task, note, project or tag, with results you can complete or open.
+- **Checklist toggles on the phone.** Checklist steps show in the task editor
+  and tick through `update_checklist_item`, optimistic and offline-safe like
+  every other edit.
+
 ## 0.4.0 — 2026-11-21
 
 - **Sectioned phone settings.** Appearance, Tasks, Notifications, Connection

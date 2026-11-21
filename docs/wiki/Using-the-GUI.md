@@ -230,8 +230,7 @@ Flowlist quits, a helper removes the files, and the result is logged to
 
 ## Empty states
 
-When a view has nothing in it, Flowlist draws a small hand-drawn illustration
-instead of a placeholder: a check on a sheet for Inbox, a sun for Today, a
-calendar for Forecast, and a folder for Projects. The drawings use the active
-theme's ink, accent and warning colours, and move slowly (a bob, a drifting
-cloud, a floating page and an orbiting dot) without demanding attention.
+Today and Forecast draw a small hand-drawn illustration when they are empty: a
+sun with a drifting cloud, and a calendar with a bouncing accent dot. Both use
+the active theme's colours and move slowly without demanding attention. Other
+views keep a quiet halo instead of an illustration.

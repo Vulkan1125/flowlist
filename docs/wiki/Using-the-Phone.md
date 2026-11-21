@@ -98,3 +98,11 @@ Settings is grouped into cards:
 The sync badge is intentionally absent from the top bar. If the Mac has been
 unreachable for more than a minute while the app is open, a slim line appears
 below the heading; tapping it retries.
+
+## Search and checklists
+
+The magnifier in the header searches the cached library by task title, notes,
+project or tag. Results can be completed in place or opened.
+
+Checklist steps appear in the task editor. Tapping one sends
+`update_checklist_item` through the same offline queue as every other edit.

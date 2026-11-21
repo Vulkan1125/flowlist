@@ -219,6 +219,28 @@ class Repository(context: Context) {
         sync()
     }
 
+    suspend fun toggleChecklist(task: TaskDto, itemId: String, completed: Boolean) {
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val current = db.tasks[task.id] ?: return
+        val item = current.checklist.firstOrNull { it.id == itemId } ?: return
+        val updatedTask = current.copy(
+            checklist = current.checklist.map { if (it.id == itemId) it.copy(completed = completed) else it },
+            modifiedAt = java.time.Instant.now().toString(),
+        )
+        val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = checklistCommand(task.id, itemId, item.title, completed),
+                label = item.title,
+            ),
+        )
+        sync()
+    }
+
     suspend fun delete(taskId: String): TaskDto? {
         val snapshot = _state.value.snapshot ?: return null
         val task = snapshot.db.tasks[taskId] ?: return null
