@@ -4,6 +4,13 @@
 
 ### Interface
 
+- Settings gains an **About** section (`⌘6`) with the version, the library
+  folder and GitHub/wiki links, plus a real update check against the latest
+  published GitHub release. A newer release downloads its zip, stages the
+  `.app` beside the running bundle, swaps it in and offers **Restart
+  Flowlist**; a build that is not inside a bundle falls back to the release
+  page, and offline checks fail with a sentence rather than a spinner.
+
 - Settings is now a sectioned sheet: a fixed rail (Appearance, Sidebar,
   Workflow, Nearby, Trash) beside one scrolling pane, so library-wide
   preferences have a home instead of lengthening one nameless list. `⌘1`–`⌘5`

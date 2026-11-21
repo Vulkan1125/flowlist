@@ -259,7 +259,7 @@ below; this list is the current map.
       bar walks view history with back/forward arrows, and Archive rows can be
       deleted with confirmation and Undo.
 - [x] Settings is a sectioned sheet (Appearance, Sidebar, Workflow, Nearby,
-      Trash) with `⌘1`–`⌘5` navigation. It carries section visibility and
+      Trash, About) with `⌘1`–`⌘6` navigation. It carries section visibility and
       count badges; counts default quiet outside the Library, while Today
       always shows its day count.
 

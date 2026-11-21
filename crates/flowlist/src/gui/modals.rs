@@ -189,15 +189,17 @@ pub enum SettingsSection {
     Workflow,
     Nearby,
     Trash,
+    About,
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 5] = [
+    pub const ALL: [SettingsSection; 6] = [
         SettingsSection::Appearance,
         SettingsSection::Sidebar,
         SettingsSection::Workflow,
         SettingsSection::Nearby,
         SettingsSection::Trash,
+        SettingsSection::About,
     ];
 
     pub fn slug(self) -> &'static str {
@@ -207,6 +209,7 @@ impl SettingsSection {
             SettingsSection::Workflow => "workflow",
             SettingsSection::Nearby => "nearby",
             SettingsSection::Trash => "trash",
+            SettingsSection::About => "about",
         }
     }
 
@@ -217,6 +220,7 @@ impl SettingsSection {
             SettingsSection::Workflow => "Workflow",
             SettingsSection::Nearby => "Nearby",
             SettingsSection::Trash => "Trash",
+            SettingsSection::About => "About",
         }
     }
 
@@ -229,6 +233,7 @@ impl SettingsSection {
             SettingsSection::Workflow => "Keyboard behaviour, review cadence and history windows.",
             SettingsSection::Nearby => "How distance ranks tasks with tagged locations.",
             SettingsSection::Trash => "How long deleted tasks stay restorable.",
+            SettingsSection::About => "Version, library location and update checks.",
         }
     }
 
@@ -239,7 +244,7 @@ impl SettingsSection {
             SettingsSection::Workflow => &[0, 1, 2],
             SettingsSection::Nearby => &[3],
             SettingsSection::Trash => &[4],
-            SettingsSection::Appearance | SettingsSection::Sidebar => &[],
+            SettingsSection::Appearance | SettingsSection::Sidebar | SettingsSection::About => &[],
         }
     }
 
@@ -250,6 +255,7 @@ impl SettingsSection {
             SettingsSection::Workflow => Icon::Review,
             SettingsSection::Nearby => Icon::Crosshair,
             SettingsSection::Trash => Icon::Trash,
+            SettingsSection::About => Icon::Info,
         }
     }
 }
@@ -989,7 +995,7 @@ impl FlowlistApp {
                         if matches!(modal, Modal::DeleteTask { .. }) {
                             "Esc close · ⇥ switch choice"
                         } else if is_settings {
-                            "Esc close · ⌘1–5 sections · ⇥ field"
+                            "Esc close · ⌘1–6 sections · ⇥ field"
                         } else if field_count > 0 {
                             "Esc close · ⇥ next field"
                         } else {
@@ -1873,6 +1879,7 @@ impl FlowlistApp {
             SettingsSection::Workflow => pane.child(self.render_workflow_settings(cx)),
             SettingsSection::Nearby => pane.child(self.render_nearby_settings(cx)),
             SettingsSection::Trash => pane.child(self.render_trash_settings(cx)),
+            SettingsSection::About => pane.child(self.render_about_settings(cx)),
         };
         // A section change fades its pane in, matching the sheet's own 120 ms
         // entrance. The id carries the section so the animation restarts on
@@ -1973,7 +1980,7 @@ impl FlowlistApp {
 
     /// One bordered group inside a section. Grouping is the main defence
     /// against a settings sheet turning into a wall of controls.
-    fn settings_card(
+    pub(super) fn settings_card(
         &self,
         title: &'static str,
         hint: Option<&'static str>,

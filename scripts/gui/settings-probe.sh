@@ -150,6 +150,8 @@ wait_value settings_section "sidebar"
 wait_value settings_section "nearby"
 "$helpers/flowctl" key 23 cmd
 wait_value settings_section "trash"
+"$helpers/flowctl" key 22 cmd
+wait_value settings_section "about"
 "$helpers/flowctl" key 18 cmd
 wait_value settings_section "appearance"
 

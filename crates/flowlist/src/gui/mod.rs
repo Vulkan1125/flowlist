@@ -19,6 +19,7 @@ mod session;
 mod sidebar;
 mod text;
 mod theme;
+mod update;
 mod vim;
 mod widgets;
 
@@ -462,6 +463,8 @@ pub struct FlowlistApp {
     search: text::TextBuffer,
     /// An image or PDF shown over the list, closed with Esc.
     preview: Option<preview::Preview>,
+    /// The last update check, shown in Settings → About.
+    update: update::UpdateState,
     /// Whether the search field filters the current view or matches across the
     /// whole library. Transient: a new session starts on the current view.
     search_library: bool,
@@ -674,6 +677,7 @@ impl FlowlistApp {
             capture: text::TextBuffer::empty(),
             search: text::TextBuffer::empty(),
             preview: None,
+            update: update::UpdateState::Idle,
             search_library: false,
             field: text::TextBuffer::empty(),
             tag_buffer: text::TextBuffer::empty(),
@@ -3450,6 +3454,7 @@ impl FlowlistApp {
                     "3" => Some(modals::SettingsSection::Workflow),
                     "4" => Some(modals::SettingsSection::Nearby),
                     "5" => Some(modals::SettingsSection::Trash),
+                    "6" => Some(modals::SettingsSection::About),
                     _ => None,
                 };
                 if let (
@@ -5240,6 +5245,15 @@ impl FlowlistApp {
         // json! recursion limit, so new debug fields go in one at a time.
         state["project_badges"] = serde_json::json!(project_badges);
         state["toast"] = serde_json::json!(self.toast);
+        state["update"] = serde_json::json!(match &self.update {
+            update::UpdateState::Idle => "idle",
+            update::UpdateState::Checking => "checking",
+            update::UpdateState::UpToDate { .. } => "up-to-date",
+            update::UpdateState::Available { .. } => "available",
+            update::UpdateState::Installing => "installing",
+            update::UpdateState::Ready { .. } => "ready",
+            update::UpdateState::Failed(_) => "failed",
+        });
         state["preview"] = serde_json::json!(self.preview.as_ref().map(|preview| {
             serde_json::json!({
                 "path": preview.path,

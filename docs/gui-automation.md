@@ -123,7 +123,10 @@ under the folder.
 boxes, and `can_go_back` / `can_go_forward` report whether a valid view lies
 that way.
 `preview` is the attachment card on screen, or null: `path`, `name`, `kind`
-(`image` or `pdf`) and, for PDFs, the one-based `page` visible. `content_rows`
+(`image` or `pdf`) and, for PDFs, the one-based `page` visible. `update` is
+the Settings → About check state (`idle`, `checking`, `up-to-date`,
+`available`, `installing`, `ready` or `failed`); the check only runs when its
+button is clicked, so a probe can assert the idle sheet without a network. `content_rows`
 lists the task rows
 actually painted on the last frame, in order, with `id`, `title`, `depth` and
 `has_children`; hidden descendants are absent, so a probe can assert what a
@@ -256,7 +259,7 @@ library:
   headings, tag ordering by usage, the live-project folder badge, title-bar
   history, Settings visibility and count choices, and that those choices
   survive a relaunch.
-- `scripts/gui/settings-probe.sh` checks the sectioned sheet, the `⌘1`–`⌘5`
+- `scripts/gui/settings-probe.sh` checks the sectioned sheet, the `⌘1`–`⌘6`
   section shortcuts, Plain's keyboard accent presets, Cancel's undo pair, the
   saved accent pair, relaunch persistence and Reset to ink.
 

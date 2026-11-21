@@ -218,7 +218,7 @@ so typing replaces it. The New Project sheet adds Notes and a Review every
 (days) field, so each project can have its own cadence.
 
 Settings is a sectioned sheet: a fixed rail on the left and one section on the
-right. `⌘1`–`⌘5` jump straight to a section, and `⇥` only walks the fields in
+right. `⌘1`–`⌘6` jump straight to a section, and `⇥` only walks the fields in
 the section on screen.
 
 - **Appearance** — theme family, light/dark, follow-system appearance. For
@@ -235,6 +235,13 @@ the section on screen.
   close/minimise/zoom buttons (`W` while the section is open). The header
   reserves room for them when they are visible and tightens up when they are
   not.
+- **About** — version, library folder, GitHub and wiki links, and a real
+  update check against the latest published GitHub release. A newer release
+  offers **Install update**: the zip is downloaded, the `.app` is staged and
+  swapped beside the running bundle, and **Restart Flowlist** relaunches it.
+  A build that is not inside a bundle (or a release without a zip) falls back
+  to the download page, and a failed or offline check says so without blocking
+  the sheet.
 - **Sidebar** — which rail sections appear and which rows carry counts.
 - **Workflow** — vim mode, default review days and the completed/changed
   history windows.
