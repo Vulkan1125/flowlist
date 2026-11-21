@@ -18,7 +18,7 @@ are in Settings → Appearance.*
 
 ## Install
 
-1. Download **Flowlist-0.1.1.dmg** (or the zip) from the
+1. Download **Flowlist-0.1.2.dmg** (or the zip) from the
    [latest release](https://github.com/Vulkan1125/flowlist/releases/latest).
 2. Open the DMG and drag **Flowlist** to Applications, or unzip and move the
    app yourself.

@@ -613,6 +613,33 @@ pub fn toggle_chip(theme: Theme, label: impl Into<String>, active: bool) -> impl
         .child(label.into())
 }
 
+/// A macOS-style switch for a boolean setting. The caller owns the click and
+/// the label; this is only the 36x20 track and knob, so it can sit at the end
+/// of a row without borrowing the button language (and its tick marks).
+pub fn switch(theme: Theme, on: bool) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .w(px(36.))
+        .h(px(20.))
+        .p(px(2.))
+        .rounded_full()
+        .border_1()
+        .border_color(if on { theme.accent } else { theme.border })
+        .bg(if on { theme.accent } else { theme.field })
+        .when(on, |this| this.justify_end())
+        .child(
+            div()
+                .size(px(14.))
+                .rounded_full()
+                .border_1()
+                .border_color(if on { theme.accent } else { theme.border })
+                .bg(theme.raised)
+                .shadow_sm(),
+        )
+}
+
 pub fn divider(theme: Theme) -> impl IntoElement {
     div().h(px(1.)).w_full().bg(theme.border_soft)
 }

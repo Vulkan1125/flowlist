@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2 — 2026-11-21
+
+- Boolean settings are switches now instead of tick-mark buttons: Vim mode,
+  Follow system, Window controls, Due reminders, the Sidebar section/count
+  rows and Import's merge choice. The labels stay put; the switch carries the
+  state.
+- The Reminders status follows the toggle: **Off** when reminders are off, and
+  only **On**, **Denied**, **Blocked** or **Waiting** while they are on.
+  Previously it showed the macOS permission ("Allowed") even beside an off
+  toggle.
+
 ## 0.1.1 — 2026-11-21
 
 ### Notifications and distribution

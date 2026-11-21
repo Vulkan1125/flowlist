@@ -4,7 +4,7 @@
 reviews and a floating capture panel in one native window. The same library is
 available from the `flowlist` CLI and an MCP server for AI assistants.
 
-**[Download Flowlist 0.1.1](https://github.com/Vulkan1125/flowlist/releases/latest)**
+**[Download Flowlist 0.1.2](https://github.com/Vulkan1125/flowlist/releases/latest)**
 · [Wiki](https://github.com/Vulkan1125/flowlist/wiki)
 · [Using the GUI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-GUI)
 · [CLI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-CLI)
@@ -17,7 +17,7 @@ Settings → Appearance.*
 
 ## Install
 
-1. Download **Flowlist-0.1.1.dmg** (or the zip) from the latest release.
+1. Download **Flowlist-0.1.2.dmg** (or the zip) from the latest release.
 2. Open the DMG and drag **Flowlist** to Applications, or unzip and move the app
    yourself.
 3. The first time, right-click the app and choose **Open**. The build is

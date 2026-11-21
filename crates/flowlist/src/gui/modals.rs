@@ -2117,15 +2117,17 @@ impl FlowlistApp {
         let follow = div().flex().items_center().gap_2().child(
             div()
                 .id("modal-follow-system")
-                .child(widgets::button(
-                    theme,
-                    if follow_system {
-                        "Follow system ✓"
-                    } else {
-                        "Follow system"
-                    },
-                    follow_system,
-                ))
+                .flex()
+                .items_center()
+                .gap_2()
+                .cursor_pointer()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(theme.text)
+                        .child("Follow system appearance"),
+                )
+                .child(widgets::switch(theme, follow_system))
                 .on_click(cx.listener(|this, _, _, cx| {
                     if let Some(Modal::Settings { follow_system, .. }) = &mut this.modal {
                         *follow_system = !*follow_system;
@@ -2183,67 +2185,68 @@ impl FlowlistApp {
         let boxes = self.settings_toggle_boxes.clone();
         // One slim row rather than a full card: the toggle belongs with the
         // window's appearance, but it does not need its own heading.
-        let window_card = div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_3()
-            .p_2()
-            .rounded_lg()
-            .border_1()
-            .border_color(theme.border_soft)
-            .bg(theme.field)
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_0p5()
-                    .child(div().text_sm().child("Window controls"))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child("Close, minimise and zoom in the header. W toggles them."),
-                    ),
-            )
-            .child(
-                div()
-                    .id("settings-window-controls")
-                    .child(
-                        div()
-                            .on_children_prepainted(move |bounds, _, _| {
-                                if let Some(bounds) = bounds.first() {
-                                    boxes.borrow_mut().insert(
-                                        "settings-window-controls".to_string(),
-                                        [
-                                            f32::from(bounds.origin.x),
-                                            f32::from(bounds.origin.y),
-                                            f32::from(bounds.size.width),
-                                            f32::from(bounds.size.height),
-                                        ],
-                                    );
-                                }
-                            })
-                            .child(widgets::button(
-                                theme,
-                                if traffic_lights {
-                                    "Visible ✓"
-                                } else {
-                                    "Hidden"
-                                },
-                                traffic_lights,
-                            )),
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(Modal::Settings { traffic_lights, .. }) = &mut this.modal {
-                            *traffic_lights = !*traffic_lights;
-                            // Preview the choice on the window; Cancel
-                            // restores the value the sheet opened with.
-                            this.traffic_lights_visible = *traffic_lights;
-                        }
-                        cx.notify();
-                    })),
-            );
+        let window_card =
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .p_2()
+                .rounded_lg()
+                .border_1()
+                .border_color(theme.border_soft)
+                .bg(theme.field)
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_0p5()
+                        .child(div().text_sm().child("Window controls"))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("Close, minimise and zoom in the header. W toggles them."),
+                        ),
+                )
+                .child(
+                    div()
+                        .on_children_prepainted(move |bounds, _, _| {
+                            if let Some(bounds) = bounds.first() {
+                                boxes.borrow_mut().insert(
+                                    "settings-window-controls".to_string(),
+                                    [
+                                        f32::from(bounds.origin.x),
+                                        f32::from(bounds.origin.y),
+                                        f32::from(bounds.size.width),
+                                        f32::from(bounds.size.height),
+                                    ],
+                                );
+                            }
+                        })
+                        .id("settings-window-controls")
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .cursor_pointer()
+                        .child(widgets::switch(theme, traffic_lights))
+                        .child(div().text_xs().text_color(theme.text_faint).child(
+                            if traffic_lights {
+                                "Shown in the header"
+                            } else {
+                                "Hidden"
+                            },
+                        ))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(Modal::Settings { traffic_lights, .. }) = &mut this.modal {
+                                *traffic_lights = !*traffic_lights;
+                                // Preview the choice on the window; Cancel
+                                // restores the value the sheet opened with.
+                                this.traffic_lights_visible = *traffic_lights;
+                            }
+                            cx.notify();
+                        })),
+                );
 
         div()
             .flex()
@@ -2739,16 +2742,17 @@ impl FlowlistApp {
         let vim = matches!(&self.modal, Some(Modal::Settings { vim_mode: true, .. }));
         let keyboard = div()
             .flex()
-            .items_center()
-            .gap_2()
+            .flex_col()
+            .gap_1()
             .child(
                 div()
                     .id("modal-vim-mode")
-                    .child(widgets::button(
-                        theme,
-                        if vim { "Vim mode ✓" } else { "Vim mode off" },
-                        vim,
-                    ))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .cursor_pointer()
+                    .child(div().text_sm().child("Vim mode"))
+                    .child(widgets::switch(theme, vim))
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(Modal::Settings { vim_mode, .. }) = &mut this.modal {
                             *vim_mode = !*vim_mode;
@@ -2771,21 +2775,24 @@ impl FlowlistApp {
         let permission = self.notification_permission;
         let supported = super::notifications::supported();
         let blocked = super::notifications::signature_blocked();
+        // The status describes the toggle first. A permission is only relevant
+        // while reminders are switched on; showing "Allowed" next to an off
+        // toggle read as if reminders were active.
         let status = if !supported {
             "Notifications need the packaged Flowlist.app."
+        } else if !reminders {
+            "Off"
         } else if blocked {
             "Blocked for this ad-hoc build"
         } else if permission.allowed() {
-            permission.label()
+            "On"
         } else if permission == super::notifications::Permission::Denied {
             "Denied in System Settings"
-        } else if reminders {
-            "Save to ask macOS for permission."
         } else {
-            "Off"
+            "Waiting for macOS permission…"
         };
         let mut actions = div().flex().items_center().gap_2();
-        if supported && permission.allowed() && !blocked {
+        if supported && reminders && permission.allowed() && !blocked {
             actions = actions.child(
                 div()
                     .on_children_prepainted(self.theme_probe("notify-test".to_string()))
@@ -2801,7 +2808,11 @@ impl FlowlistApp {
                     })),
             );
         }
-        if supported && !blocked && permission == super::notifications::Permission::Denied {
+        if supported
+            && reminders
+            && !blocked
+            && permission == super::notifications::Permission::Denied
+        {
             actions = actions.child(
                 div()
                     .on_children_prepainted(self.theme_probe("notify-settings".to_string()))
@@ -2827,19 +2838,12 @@ impl FlowlistApp {
                         .flex()
                         .items_center()
                         .gap_2()
+                        .child(div().text_sm().child("Due reminders"))
                         .child(
                             div()
                                 .on_children_prepainted(self.theme_probe("notify-toggle".to_string()))
                                 .id("notify-toggle")
-                                .child(widgets::button(
-                                    theme,
-                                    if reminders {
-                                        "Due reminders ✓"
-                                    } else {
-                                        "Due reminders off"
-                                    },
-                                    reminders,
-                                ))
+                                .child(widgets::switch(theme, reminders))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     if let Some(Modal::Settings { notifications, .. }) =
                                         &mut this.modal
@@ -2940,8 +2944,9 @@ impl FlowlistApp {
                 Some("A hidden section disappears from the rail. Its rows still exist in search."),
                 div()
                     .flex()
-                    .flex_wrap()
+                    .flex_col()
                     .gap_1()
+                    .w_full()
                     .child(toggle(
                         "sidebar-show-perspectives",
                         "Perspectives",
@@ -2983,8 +2988,9 @@ impl FlowlistApp {
                 Some("Counts are quiet by default: only the Library shows a number."),
                 div()
                     .flex()
-                    .flex_wrap()
+                    .flex_col()
                     .gap_1()
+                    .w_full()
                     .child(toggle(
                         "sidebar-counts-perspectives",
                         "Perspectives",
@@ -3030,6 +3036,13 @@ impl FlowlistApp {
         let box_key = key.to_string();
         div()
             .id(key)
+            .w_full()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .cursor_pointer()
+            .child(div().text_sm().child(label))
             .child(
                 div()
                     .on_children_prepainted(move |bounds, _, _| {
@@ -3045,15 +3058,7 @@ impl FlowlistApp {
                             );
                         }
                     })
-                    .child(widgets::button(
-                        theme,
-                        if active {
-                            format!("{label} ✓")
-                        } else {
-                            label.to_string()
-                        },
-                        active,
-                    )),
+                    .child(widgets::switch(theme, active)),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
                 if let Some(Modal::Settings { sidebar, .. }) = &mut this.modal {
@@ -3228,15 +3233,12 @@ impl FlowlistApp {
             .child(
                 div()
                     .id("modal-merge")
-                    .child(widgets::button(
-                        theme,
-                        if merge {
-                            "Merge ✓"
-                        } else {
-                            "Replace library"
-                        },
-                        merge,
-                    ))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .cursor_pointer()
+                    .child(div().text_sm().child("Merge into the current library"))
+                    .child(widgets::switch(theme, merge))
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(Modal::Import { merge, .. }) = &mut this.modal {
                             *merge = !*merge;
