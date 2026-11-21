@@ -31,6 +31,7 @@ use flowlist_core::store::Store;
 pub const DEFAULT_PORT: u16 = 7777;
 pub const DEFAULT_BIND: &str = "0.0.0.0";
 const MAX_BODY: usize = 2 * 1024 * 1024;
+const MAX_UPLOAD: usize = 40 * 1024 * 1024;
 const RECENT_OPS: usize = 500;
 const PAIR_TTL: Duration = Duration::from_secs(10 * 60);
 const PAIR_ATTEMPTS: usize = 10;
@@ -430,6 +431,14 @@ impl Response {
             content_type: "text/plain; charset=utf-8",
         }
     }
+
+    fn bytes(status: u16, body: Vec<u8>, content_type: &'static str) -> Self {
+        Self {
+            status,
+            body,
+            content_type,
+        }
+    }
 }
 
 fn handle(mut stream: TcpStream, peer: SocketAddr, shared: Arc<Shared>) -> Result<()> {
@@ -482,7 +491,12 @@ fn read_request(stream: &mut TcpStream) -> Result<Option<Request>> {
         .find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
         .and_then(|(_, value)| value.parse::<usize>().ok())
         .unwrap_or(0);
-    if length > MAX_BODY {
+    let limit = if path.starts_with("/api/v1/files") {
+        MAX_UPLOAD
+    } else {
+        MAX_BODY
+    };
+    if length > limit {
         return Ok(None);
     }
 
@@ -595,8 +609,142 @@ fn route(request: &Request, peer: SocketAddr, shared: &Shared) -> Response {
                 .unwrap_or(0);
             events(shared, since)
         }
+        ("POST", "/api/v1/files") => {
+            if let Err(response) = authorize(request, shared) {
+                return response;
+            }
+            upload_file(request, shared)
+        }
+        ("GET", "/api/v1/files") => {
+            if let Err(response) = authorize(request, shared) {
+                return response;
+            }
+            download_file(request, shared)
+        }
         ("OPTIONS", _) => Response::text(204, ""),
         _ => Response::error(404, "not found"),
+    }
+}
+
+fn upload_file(request: &Request, shared: &Shared) -> Response {
+    if request.body.is_empty() {
+        return Response::error(400, "empty file");
+    }
+    let raw = request.query("name").unwrap_or_else(|| "attachment".to_string());
+    let name = safe_file_name(&raw);
+    let dir = shared.paths.root.join("attachments");
+    if let Err(error) = std::fs::create_dir_all(&dir) {
+        return Response::error(500, format!("could not create the attachments folder: {error}"));
+    }
+    let mut path = dir.join(&name);
+    if path.exists() {
+        let stem = path
+            .file_stem()
+            .map(|value| value.to_string_lossy().to_string())
+            .unwrap_or_else(|| "attachment".to_string());
+        let extension = path
+            .extension()
+            .map(|value| format!(".{}", value.to_string_lossy()))
+            .unwrap_or_default();
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|value| value.as_secs())
+            .unwrap_or(0);
+        path = dir.join(format!("{stem}-{stamp}{extension}"));
+    }
+    if let Err(error) = std::fs::write(&path, &request.body) {
+        return Response::error(500, format!("could not save the file: {error}"));
+    }
+    Response::json(
+        200,
+        json!({
+            "path": path.to_string_lossy(),
+            "name": name,
+            "size": request.body.len(),
+        }),
+    )
+}
+
+fn download_file(request: &Request, shared: &Shared) -> Response {
+    let Some(requested) = request.query("path") else {
+        return Response::error(400, "missing path");
+    };
+    let Ok(target) = std::fs::canonicalize(&requested) else {
+        return Response::error(404, "file not found");
+    };
+    let upload_dir = std::fs::canonicalize(shared.paths.root.join("attachments")).ok();
+    let in_upload_dir = upload_dir
+        .as_ref()
+        .is_some_and(|dir| target.starts_with(dir));
+    let listed = attachment_paths(shared)
+        .iter()
+        .filter_map(|path| std::fs::canonicalize(path).ok())
+        .any(|allowed| allowed == target);
+    if !in_upload_dir && !listed {
+        return Response::error(404, "file not found");
+    }
+    match std::fs::read(&target) {
+        Ok(bytes) => Response::bytes(200, bytes, mime_for(&target)),
+        Err(error) => Response::error(500, format!("could not read the file: {error}")),
+    }
+}
+
+fn attachment_paths(shared: &Shared) -> Vec<PathBuf> {
+    let Ok(store) = Store::open(shared.paths.clone()) else {
+        return Vec::new();
+    };
+    let db = &store.data().db;
+    let mut paths = Vec::new();
+    for task in db.tasks.values() {
+        paths.extend(task.attachments.iter().map(PathBuf::from));
+    }
+    for project in db.projects.values() {
+        paths.extend(project.attachments.iter().map(PathBuf::from));
+    }
+    paths
+}
+
+fn safe_file_name(raw: &str) -> String {
+    let base = Path::new(raw)
+        .file_name()
+        .map(|value| value.to_string_lossy().to_string())
+        .unwrap_or_else(|| "attachment".to_string());
+    let mut cleaned: String = base
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_' | ' ') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    cleaned = cleaned.trim_matches('.').trim().to_string();
+    if cleaned.is_empty() {
+        "attachment".to_string()
+    } else {
+        cleaned.chars().take(120).collect()
+    }
+}
+
+fn mime_for(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "pdf" => "application/pdf",
+        "txt" | "md" => "text/plain; charset=utf-8",
+        "json" => "application/json",
+        "mp4" => "video/mp4",
+        "mp3" => "audio/mpeg",
+        _ => "application/octet-stream",
     }
 }
 

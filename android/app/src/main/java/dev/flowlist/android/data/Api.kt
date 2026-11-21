@@ -122,6 +122,39 @@ class Api(
             return text
         }
     }
+
+    suspend fun uploadFile(
+        base: String,
+        token: String,
+        name: String,
+        bytes: ByteArray,
+    ): String = withContext(Dispatchers.IO) {
+        val encoded = java.net.URLEncoder.encode(name, "UTF-8")
+        val request = Request.Builder()
+            .url("${base.trimEnd('/')}/api/v1/files?name=$encoded")
+            .header("Authorization", "Bearer $token")
+            .post(bytes.toRequestBody("application/octet-stream".toMediaType()))
+            .build()
+        val text = execute(request)
+        val value = json.parseToJsonElement(text) as JsonObject
+        value["path"]?.toString()?.trim('"') ?: throw ApiException("The Mac did not return a file path.")
+    }
+
+    suspend fun downloadFile(base: String, token: String, path: String): ByteArray =
+        withContext(Dispatchers.IO) {
+            val encoded = java.net.URLEncoder.encode(path, "UTF-8")
+            val request = Request.Builder()
+                .url("${base.trimEnd('/')}/api/v1/files?path=$encoded")
+                .header("Authorization", "Bearer $token")
+                .get()
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw ApiException("The Mac could not send that file (${response.code}).")
+                }
+                response.body?.bytes() ?: ByteArray(0)
+            }
+        }
 }
 
 fun normalizeBase(input: String): String? {

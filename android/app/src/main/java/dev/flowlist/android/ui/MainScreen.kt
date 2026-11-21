@@ -86,6 +86,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.AppState
 import dev.flowlist.android.data.FolderDto
@@ -213,6 +215,20 @@ fun MainScreen(
             .orEmpty()
     }
     val snackbarHost = remember { SnackbarHostState() }
+    val attachmentPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        val current = detail
+        if (uri != null && current != null) {
+            scope.launch {
+                val uploaded = repository.uploadAttachment(current.id, uri)
+                snackbarHost.showSnackbar(
+                    message = if (uploaded) "Attachment added" else "Couldn't add the attachment",
+                    duration = SnackbarDuration.Short,
+                )
+            }
+        }
+    }
     LaunchedEffect(state.error, state.online) {
         val message = state.error
         if (message != null && state.online) {
@@ -599,6 +615,20 @@ fun MainScreen(
                 },
                 onMoveChecklist = { item, to ->
                     scope.launch { repository.moveChecklist(dto, item, to) }
+                },
+                onAddAttachment = { attachmentPicker.launch("*/*") },
+                onOpenAttachment = { path ->
+                    scope.launch {
+                        if (!repository.openAttachment(path)) {
+                            snackbarHost.showSnackbar(
+                                message = "Couldn't open that attachment",
+                                duration = SnackbarDuration.Short,
+                            )
+                        }
+                    }
+                },
+                onRemoveAttachment = { path ->
+                    scope.launch { repository.removeAttachment(dto.id, path) }
                 },
                 onAddSubtask = { title ->
                     scope.launch { repository.addSubtask(dto, title) }
@@ -1104,9 +1134,9 @@ private fun Header(
         )
         Spacer(modifier = Modifier.height(3.dp))
         Text(
-            text = subtitle,
+            text = subtitle.ifBlank { " " },
             style = MaterialTheme.typography.labelMedium,
-            color = colors.faint,
+            color = if (subtitle.isBlank()) Color.Transparent else colors.faint,
         )
     }
 }
@@ -1136,7 +1166,7 @@ private fun headerSubtitle(more: MoreView?, tab: Tab, state: AppState): String {
 
         Tab.Forecast -> "Your month at a glance"
         Tab.Browse -> "${state.snapshot?.db?.projects?.size ?: 0} projects"
-        Tab.Settings -> "Appearance, tasks, sync and about"
+        Tab.Settings -> ""
     }
 }
 

@@ -1,6 +1,10 @@
 package dev.flowlist.android.data
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,6 +16,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.put
+import java.io.File
 import java.util.UUID
 
 data class AppState(
@@ -30,6 +35,7 @@ data class AppState(
 )
 
 class Repository(context: Context) {
+    private val appContext = context.applicationContext
     private val api = Api()
     private val session = SessionStore(context)
     private val files = FileStore(context)
@@ -482,6 +488,112 @@ class Repository(context: Context) {
             ),
         )
         sync()
+    }
+
+    suspend fun uploadAttachment(taskId: String, uri: Uri): Boolean {
+        val base = session.baseUrl ?: return false
+        val token = session.token ?: return false
+        return try {
+            val resolver = appContext.contentResolver
+            val name = resolver.query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            } ?: uri.lastPathSegment ?: "attachment"
+            val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: throw IllegalStateException("Could not read the file.")
+            if (bytes.size > 40 * 1024 * 1024) {
+                throw IllegalStateException("Files are limited to 40 MB.")
+            }
+            val path = api.uploadFile(base, token, name, bytes)
+            updateAttachments(taskId, (currentAttachments(taskId) + path).distinct())
+            true
+        } catch (error: Exception) {
+            _state.update { it.copy(error = friendly(error)) }
+            false
+        }
+    }
+
+    suspend fun removeAttachment(taskId: String, path: String) {
+        val next = currentAttachments(taskId).filterNot { it == path }
+        updateAttachments(taskId, next)
+    }
+
+    suspend fun openAttachment(path: String): Boolean {
+        val base = session.baseUrl ?: return false
+        val token = session.token ?: return false
+        return try {
+            val bytes = api.downloadFile(base, token, path)
+            val dir = File(appContext.cacheDir, "attachments").apply { mkdirs() }
+            val name = path.substringAfterLast('/').ifBlank { "attachment" }
+            val file = File(dir, name)
+            file.writeBytes(bytes)
+            val uri = FileProvider.getUriForFile(
+                appContext,
+                "${appContext.packageName}.files",
+                file,
+            )
+            val intent = Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, mimeFor(name))
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            appContext.startActivity(
+                Intent.createChooser(intent, "Open attachment")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            true
+        } catch (error: Exception) {
+            _state.update { it.copy(error = friendly(error)) }
+            false
+        }
+    }
+
+    private fun currentAttachments(taskId: String): List<String> =
+        _state.value.snapshot?.db?.tasks?.get(taskId)?.attachments.orEmpty()
+
+    private suspend fun updateAttachments(taskId: String, attachments: List<String>) {
+        val snapshot = _state.value.snapshot ?: return
+        val task = snapshot.db.tasks[taskId] ?: return
+        val db = snapshot.db
+        val updatedTask = task.copy(
+            attachments = attachments,
+            modifiedAt = java.time.Instant.now().toString(),
+        )
+        val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (taskId to updatedTask)))
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+        val patch = buildJsonObject {
+            put(
+                "attachments",
+                kotlinx.serialization.json.buildJsonArray {
+                    attachments.forEach { add(JsonPrimitive(it)) }
+                },
+            )
+        }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = updateCommand(taskId, patch),
+                label = "Attachment",
+            ),
+        )
+        sync()
+    }
+
+    private fun mimeFor(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
+        "png" -> "image/png"
+        "jpg", "jpeg" -> "image/jpeg"
+        "gif" -> "image/gif"
+        "webp" -> "image/webp"
+        "pdf" -> "application/pdf"
+        "txt", "md" -> "text/plain"
+        "json" -> "application/json"
+        "mp4" -> "video/mp4"
+        "mp3" -> "audio/mpeg"
+        else -> "*/*"
     }
 
     suspend fun savePerspective(

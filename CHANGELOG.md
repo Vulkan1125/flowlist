@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.4 — 2026-11-21
+
+- **Attachments on the phone.** Pick any file from the task editor; it is
+  uploaded to `attachments/` inside the library and added to the task.
+  Tap an attachment to download and open it, or remove it.
+- **File endpoints on the Mac server:** authenticated `POST /api/v1/files`
+  and `GET /api/v1/files`, limited to 40 MB and to files inside the
+  attachments folder or already listed on a task/project.
+- The Settings header no longer repeats a subtitle, but keeps its line of
+  vertical space.
+
+## 0.9.3 — 2026-11-21
+
+- Perspective creation uses labelled dropdowns for project, tag, priority,
+  due, grouping and sorting instead of horizontal pill rows. Long lists
+  scroll inside the menu.
+
 ## 0.9.2 — 2026-11-21
 
 - **Forecast has a month grid.** Days show how many tasks are due, with

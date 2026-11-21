@@ -1,7 +1,7 @@
 package dev.flowlist.android.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +25,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -43,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -250,71 +256,96 @@ fun PerspectiveEditorSheet(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
 
-            PerspectiveLabel("Project")
-            PillsRow {
-                PerspectivePill("Any", project == null) { project = null }
-                projects.sortedBy { it.name.lowercase() }.forEach { item ->
-                    PerspectivePill(item.name, project == item.id) { project = item.id }
-                }
-            }
+            Spacer(modifier = Modifier.height(14.dp))
+            PerspectiveDropdown(
+                label = "Project",
+                value = projects.firstOrNull { it.id == project }?.name ?: "Any project",
+                options = listOf<Pair<String?, String>>(null to "Any project") +
+                    projects.sortedBy { it.name.lowercase() }.map { it.id to it.name },
+            ) { project = it }
 
-            PerspectiveLabel("Tag")
-            PillsRow {
-                PerspectivePill("Any", tag == null) { tag = null }
-                tags.sortedBy { it.name.lowercase() }.forEach { item ->
-                    PerspectivePill("#${item.name}", tag == item.id) { tag = item.id }
-                }
-            }
+            PerspectiveDropdown(
+                label = "Tag",
+                value = tags.firstOrNull { it.id == tag }?.let { "#${it.name}" } ?: "Any tag",
+                options = listOf<Pair<String?, String>>(null to "Any tag") +
+                    tags.sortedBy { it.name.lowercase() }.map { it.id to "#${it.name}" },
+            ) { tag = it }
 
-            PerspectiveLabel("Priority")
-            PillsRow {
-                PerspectivePill("Any", priority == null) { priority = null }
-                PerspectivePill("P1", priority == "high") { priority = "high" }
-                PerspectivePill("P2", priority == "medium") { priority = "medium" }
-                PerspectivePill("P3", priority == "low") { priority = "low" }
-            }
+            PerspectiveDropdown(
+                label = "Priority",
+                value = when (priority) {
+                    "high" -> "P1"
+                    "medium" -> "P2"
+                    "low" -> "P3"
+                    else -> "Any priority"
+                },
+                options = listOf(
+                    null to "Any priority",
+                    "high" to "P1",
+                    "medium" to "P2",
+                    "low" to "P3",
+                ),
+            ) { priority = it }
 
-            PerspectiveLabel("Due")
-            PillsRow {
-                listOf(
-                    null to "Any",
+            PerspectiveDropdown(
+                label = "Due",
+                value = when (due) {
+                    "overdue" -> "Overdue"
+                    "today" -> "Today"
+                    "tomorrow" -> "Tomorrow"
+                    "next_7_days" -> "Next 7 days"
+                    "next_30_days" -> "Next 30 days"
+                    "no_date" -> "No date"
+                    else -> "Any date"
+                },
+                options = listOf(
+                    null to "Any date",
                     "overdue" to "Overdue",
                     "today" to "Today",
                     "tomorrow" to "Tomorrow",
                     "next_7_days" to "Next 7 days",
                     "next_30_days" to "Next 30 days",
                     "no_date" to "No date",
-                ).forEach { (key, label) ->
-                    PerspectivePill(label, due == key) { due = key }
-                }
-            }
+                ),
+            ) { due = it }
 
-            PerspectiveLabel("Group by")
-            PillsRow {
-                listOf(
+            PerspectiveDropdown(
+                label = "Group by",
+                value = when (group) {
+                    "project" -> "Project"
+                    "due_date" -> "Due date"
+                    "tag" -> "Tag"
+                    "folder" -> "Folder"
+                    else -> "None"
+                },
+                options = listOf(
                     "none" to "None",
                     "project" to "Project",
                     "due_date" to "Due date",
                     "tag" to "Tag",
                     "folder" to "Folder",
-                ).forEach { (key, label) ->
-                    PerspectivePill(label, group == key) { group = key }
-                }
-            }
+                ),
+            ) { group = it ?: "none" }
 
-            PerspectiveLabel("Sort")
-            PillsRow {
-                listOf(
+            PerspectiveDropdown(
+                label = "Sort",
+                value = when (sort) {
+                    "due" -> "Due"
+                    "name" -> "Name"
+                    "priority" -> "Priority"
+                    "flagged" -> "Flagged"
+                    "estimate" -> "Estimate"
+                    else -> "Manual"
+                },
+                options = listOf(
                     "manual" to "Manual",
                     "due" to "Due",
                     "name" to "Name",
                     "priority" to "Priority",
                     "flagged" to "Flagged",
                     "estimate" to "Estimate",
-                ).forEach { (key, label) ->
-                    PerspectivePill(label, sort == key) { sort = key }
-                }
-            }
+                ),
+            ) { sort = it ?: "manual" }
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
@@ -373,48 +404,60 @@ fun PerspectiveEditorSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PerspectiveLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = flow.faint,
-        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
-    )
-}
-
-@Composable
-private fun PillsRow(content: @Composable () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        content()
-    }
-}
-
-@Composable
-private fun PerspectivePill(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun PerspectiveDropdown(
+    label: String,
+    value: String,
+    options: List<Pair<String?, String>>,
+    onSelect: (String?) -> Unit,
+) {
     val colors = flow
-    Box(
-        modifier = Modifier
-            .heightIn(min = 34.dp)
-            .background(
-                color = if (selected) colors.field else Color.Transparent,
-                shape = RoundedCornerShape(9.dp),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        contentAlignment = Alignment.Center,
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier.padding(top = 12.dp),
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) colors.ink else colors.faint,
-            maxLines = 1,
-            softWrap = false,
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            shape = RoundedCornerShape(10.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colors.hairline,
+                unfocusedBorderColor = colors.hairline,
+                focusedContainerColor = colors.background,
+                unfocusedContainerColor = colors.background,
+                focusedTextColor = colors.ink,
+                unfocusedTextColor = colors.ink,
+                focusedLabelColor = colors.faint,
+                unfocusedLabelColor = colors.faint,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(),
         )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.heightIn(max = 320.dp),
+            shape = RoundedCornerShape(12.dp),
+            containerColor = colors.raised,
+        ) {
+            options.forEach { (key, text) ->
+                DropdownMenuItem(
+                    text = { Text(text, color = colors.ink) },
+                    onClick = {
+                        onSelect(key)
+                        expanded = false
+                    },
+                )
+            }
+        }
     }
 }
 

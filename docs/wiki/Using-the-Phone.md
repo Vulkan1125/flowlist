@@ -118,6 +118,19 @@ Each subtask row has a **move** button that opens a searchable picker of
 top-level tasks; choosing one re-parents the subtask there and inherits that
 task's project.
 
+## Attachments
+
+In the task editor, **Add attachment** opens the system file picker. The file
+is uploaded to `attachments/` inside the library and referenced on the task, so
+the Mac sees the same path. Tapping an attachment downloads it to the phone's
+cache and opens it with any installed viewer; the close button removes it from
+the task.
+
+Uploads go over `POST /api/v1/files` and downloads over `GET /api/v1/files`.
+Both require the paired token. Files are capped at 40 MB, and the Mac only
+serves paths inside its attachments folder or paths already listed on a task or
+project.
+
 ## Checklists
 
 **Add checklist item** appends a step to the current task. Every step has up
@@ -153,9 +166,10 @@ the grid. **Agenda** switches back to the rolling two-week list.
 ## Saved perspectives
 
 The drawer has a **Saved** section. **New perspective** builds a view from any
-combination of text, project, tag, priority and due window, then chooses
-grouping (project, due date, tag, folder), sorting (due, name, priority,
-flagged, estimate) and whether completed tasks appear. Saved perspectives use
+combination of text, project, tag, priority and due window, each chosen from a
+labelled dropdown with a scrollable menu. It then chooses grouping (project,
+due date, tag, folder), sorting (due, name, priority, flagged, estimate) and
+whether completed tasks appear. Saved perspectives use
 the Mac's `save_perspective` command, so they appear there too; the row menu
 edits or deletes them.
 

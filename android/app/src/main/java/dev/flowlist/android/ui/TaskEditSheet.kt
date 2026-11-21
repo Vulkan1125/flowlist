@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDownward
@@ -98,6 +99,9 @@ fun TaskEditSheet(
     onAddChecklist: (String) -> Unit,
     onDeleteChecklist: (ChecklistDto) -> Unit,
     onMoveChecklist: (ChecklistDto, Int) -> Unit,
+    onAddAttachment: () -> Unit,
+    onOpenAttachment: (String) -> Unit,
+    onRemoveAttachment: (String) -> Unit,
     onAddSubtask: (String) -> Unit,
     onToggleSubtask: (TaskDto, Boolean) -> Unit,
     onMoveSubtask: (TaskDto, TaskDto) -> Unit,
@@ -203,6 +207,64 @@ fun TaskEditSheet(
                     .fillMaxWidth()
                     .padding(top = 2.dp),
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Label("Attachments")
+            task.attachments.forEach { path ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenAttachment(path) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AttachFile,
+                        contentDescription = null,
+                        tint = colors.faint,
+                        modifier = Modifier.size(17.dp),
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = path.substringAfterLast('/'),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.ink,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(
+                        onClick = { onRemoveAttachment(path) },
+                        modifier = Modifier.size(30.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Remove attachment",
+                            tint = colors.faint,
+                            modifier = Modifier.size(15.dp),
+                        )
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onAddAttachment)
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Add,
+                    contentDescription = null,
+                    tint = colors.accent,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Add attachment",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.faint,
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
             Label("Repeat")
