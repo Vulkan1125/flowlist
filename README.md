@@ -1,265 +1,152 @@
 # Flowlist
 
-Flowlist is a local-first task manager written in Rust. A native
-[GPUI](https://gpui.rs) desktop app, a scriptable CLI and a Model Context Protocol
-server all read and write the same JSON library. Nothing leaves your machine.
+**A fast, local-first task manager for macOS.** Inbox, projects, tags, repeats,
+reviews and a floating capture panel in one native window. The same library is
+available from the `flowlist` CLI and an MCP server for AI assistants.
 
-```
-crates/
-  flowlist-core   domain model, persistence, commands, undo, queries, import/export
-  flowlist        GPUI app, CLI and MCP server (one binary)
-```
+**[Download Flowlist 0.1.0](https://github.com/Vulkan1125/flowlist/releases/latest)**
+· [Wiki](https://github.com/Vulkan1125/flowlist/wiki)
+· [Using the GUI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-GUI)
+· [CLI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-CLI)
+· [MCP](https://github.com/Vulkan1125/flowlist/wiki/Using-the-MCP)
 
-- Pure Rust, no web view, no Tauri/Electron.
-- Official `gpui = 0.2.2` with `runtime_shaders` (no Metal toolchain step).
-- JSON persistence with atomic writes, backups and cross-process locking.
-- Every mutation goes through one command engine, so GUI, CLI and MCP all share
-  validation, repeat rules and undo/redo.
+![The Flowlist Inbox on a colourful desktop](docs/images/hero.png)
 
-## Build and run
+## Install
 
-Requires Rust 1.88 or newer and a macOS/Linux toolchain supported by GPUI.
+1. Download **Flowlist-0.1.0.zip** from the latest release.
+2. Unzip it and move **Flowlist.app** to `/Applications`.
+3. The first time, right-click the app and choose **Open**. The build is
+   ad-hoc signed and not notarised, so macOS asks once.
+4. Requires macOS 13 or later.
 
-```sh
-cargo build --release
-./target/release/flowlist gui      # desktop app
-./target/release/flowlist --help   # CLI
-./target/release/flowlist mcp      # MCP server on stdio
-```
+Your library lives in `~/Library/Application Support/Flowlist`. Nothing is
+uploaded; there is no account, no sync service and no telemetry.
 
-The CLI and MCP server can be built without GPUI:
+## What you get
 
-```sh
-cargo build --release --no-default-features
-```
+- **One window for the day.** Inbox, Today, Forecast (with a month calendar),
+  Review, Projects, Tags, Flagged, Completed, Archive, Trash and your saved
+  perspectives.
+- **Capture without breaking flow.** `⌃⌥Space` opens a floating parser anywhere:
+  `Draft the launch email ::Website #writing due:friday est:45m` becomes a filed
+  task, then returns you to the app you were in.
+- **Real projects.** Parallel, sequential and single-action projects, folders,
+  nested tags, subtasks, repeats that spawn the next occurrence, and review
+  schedules you can change later.
+- **An inspector that earns its space.** Notes, priority, checklist, subtasks,
+  attachments, dates and repeat rules in place. Images and PDFs preview in the
+  window instead of opening another app.
+- **Glass and colour.** Eleven theme families, Plain light/dark with nine
+  accent presets, a custom colour picker and a screen eyedropper.
+- **Keyboard-first, undo everywhere.** Vim motions are on by default; every
+  edit, drag, import and tool call is one `⌘Z` away.
+- **Updates in the app.** Settings → About checks the latest release and
+  installs it in place.
 
-Point every front end at the same library with `FLOWLIST_HOME` or `--data-dir`:
+## Three ways to use it
 
-```sh
-export FLOWLIST_HOME="$HOME/Library/Application Support/Flowlist"
-./target/release/flowlist where
-```
+| Surface | Start it with | Good for |
+| --- | --- | --- |
+| Desktop app | `open /Applications/Flowlist.app` | planning, dragging, reviewing |
+| CLI | `…/Flowlist.app/Contents/MacOS/flowlist` | scripts and terminal habits |
+| MCP server | `…/flowlist mcp` | letting an AI assistant read and change the library |
 
-The default location is `~/Library/Application Support/Flowlist` on macOS,
-`%APPDATA%\Flowlist` on Windows and `$XDG_DATA_HOME/flowlist` (or
-`~/.local/share/flowlist`) on other Unix systems.
+All three use the same library and the same undo history.
 
-## Quick start
+## Capture
 
-```sh
-flowlist add 'Draft launch email #Work/Website ::Work/Launch due:tomorrow est:45m !'
-flowlist list --forecast
-flowlist checklist add <task> 'Proofread the copy'
-flowlist checklist list <task>
-flowlist done <task>
-flowlist undo
-```
-
-Quick entry understands:
+The floating panel opens from any app with **`⌃⌥Space`**, or from the title bar
+inside Flowlist. It parses as you type and shows where the task will land.
 
 | Syntax | Meaning |
 | --- | --- |
-| `#Tag` / `#Parent/Child` | attach a tag, creating missing levels |
-| `::Project` / `::Folder/Project` | file into a project, creating it if needed |
-| `due:tomorrow 5pm`, `defer:next monday` | natural-language date; parenthesize phrases with spaces |
-| `est:1h30m` | estimate in minutes |
-| `repeat:every 2 weeks` | repeat rule (`after completion`, `(defer another)` also work) |
-| `!` | flag the task |
-| `// note text` | everything after `//` becomes a note |
+| `#writing`, `#work/website` | tag, created if missing |
+| `::Website`, `::Work/Website` | project, created if missing |
+| `due:friday`, `defer:tomorrow` | dates; wrap phrases with spaces in parentheses |
+| `est:45m`, `est:2h30m` | estimate |
+| `repeat:every week` | repeat rule |
+| `!` | flag |
+| `// ask Sam` | note |
 
-Short ids (the last eight characters of a ULID) are accepted anywhere an id is
-expected. An unambiguous prefix also works.
+Press `Enter` to file and return to the previous app, `⇧Enter` to keep
+capturing, or `⌘Enter` to file and select the task in the main window.
 
-## Desktop app
-
-The window hides the native macOS titlebar and its traffic lights. A custom
-glass header shows the app name, the search field, a light/dark toggle and a
-labelled **Add task** button, with a persistent sidebar and an optional
-inspector around the task list.
-
-Key behaviour:
-
-- Perspectives: Inbox (unscheduled work), Projects, Forecast, Flagged,
-  Review, Tags, Completed, Nearby and custom saved perspectives.
-- Projects and folders form a tree; tags form a nested context tree.
-- Task rows support multi-select, drag/drop into projects, tags, parents and
-  sibling positions, inline completion circles and flag toggles.
-- The inspector edits title, notes, tags, project, defer, due, estimate, repeat
-  rules and checklist steps in place.
-- Checklist items have their own completion state and progress badge; they are
-  not tasks and never appear in perspectives.
-- Saved perspectives open a full editor for their conditions, grouping and
-  sort; conditions the editor does not expose survive editing unchanged.
-- Tags can carry a latitude and longitude; **Nearby** ranks tasks tagged with
-  a located context by distance.
-- Import JSON or TaskPaper, export TaskPaper with `⇧⌘E`, and undo everything
-  with `⌘Z`.
-- Session state (view, selection, inspector, sort, grouping, theme family and
-  light/dark mode, vim mode and window size) is persisted in `session.json`.
-
-Frequently used shortcuts:
-
-| Shortcut | Action |
-| --- | --- |
-| `n` | quick capture |
-| `⌃⌥Space` | capture from any app in a floating panel; the main window stays put |
-| `/` or `⌘F` | search |
-| `⌘⇧F` | search this view or the whole library |
-| `↑` / `↓`, `⇧↑` / `⇧↓` | move / extend selection |
-| `space` | complete or reopen |
-| `!` or `⌘D` | flag / unflag |
-| `⏎` | edit title |
-| `Tab` / `⇧Tab` | nest / unnest |
-| `za` / `zo` / `zc` | toggle / open / close subtasks |
-| `⌥↑` / `⌥↓` | move within siblings |
-| `i` or `⌘I` | toggle inspector |
-| `⌘L` | add a checklist step |
-| `⌘R` | rename current project, folder, tag or perspective |
-| `⌘Z` / `⇧⌘Z` | undo / redo |
-| `⌘1…⌘8` | built-in perspectives |
-| `⌘N` | quick capture |
-| `⇧⌘N` / `⌥⌘N` / `⌃⌘N` | new project / folder / tag |
-| `⇧⌘P` | new saved perspective |
-| `⌘T` | toggle light / dark |
-| `⇧⌘T` / `⌥⌘T` | next / previous theme family |
-| `⌘⌫` | delete the selection, or the sidebar entity |
-| `⌘,` | settings |
-| `⌘O` | import |
-| `?` | keyboard and mouse help |
-
-### Vim mode
-
-Vim mode is on by default and covers the whole window: the task list, the
-sidebar and the checklist pane. It can be turned off in **Settings**
-(`⌘,`). macOS shortcuts keep working at the same time.
-
-| Keys | Action |
-| --- | --- |
-| `j` / `k` | move down / up; a count multiplies (`3j`) |
-| `h` / `l` | outdent / indent a task; collapse / expand a folder or tag |
-| `gg` / `G` | jump to top / bottom; `5G` jumps to line 5 |
-| `Ctrl-d` / `Ctrl-u` | half page down / up |
-| `o` / `O` | new task below / above |
-| `x` | complete or reopen |
-| `!` | flag or unflag |
-| `dd` / `yy` / `p` | delete / yank / paste |
-| `u` / `Ctrl-r` | undo / redo |
-| `r` / `e` | rename / edit the selected title |
-| `⇧L` | set a tag or library location |
-| `⇧J` / `⇧K` | move a task down / up among its siblings |
-| `Ctrl-w h` | focus the sidebar |
-| `Ctrl-w l` | focus the task list |
-| `Ctrl-w j` | focus the checklist pane |
-| `/`, `n`, `N` | search, next match, previous match |
-| `?` | help |
-| `Esc` | clear counts, selection and search |
-
-In vim mode unmodified digits build a count, so perspectives move to
-`⌘1…⌘8`.
-
-## CLI
-
-The CLI is designed for scripts and shell pipelines. Every command supports
-`--json` and the same undo history as the GUI.
+## Quick start in the terminal
 
 ```sh
-flowlist add 'Call the bank' --due tomorrow --flag
-flowlist list --inbox --group project
-flowlist list --project 'Work/Launch' --include-completed
-flowlist edit <id> --due 'next friday 5pm' --repeat 'every week'
-flowlist mv <id> --project 'Work/Launch' --before <other-id>
-flowlist checklist add <task> 'Book the room' --before 0
-flowlist checklist set <task> <item> --done
-flowlist checklist move <task> <item> --to 2
-flowlist checklist remove <task> <item>
-flowlist tag add 'Places/Cafe'
-flowlist project status <project> on-hold
-flowlist folder rename <folder> 'Archive'
-flowlist perspective add 'Deep work' --group project --sort due
-flowlist export --format json -o backup.json
-flowlist import --merge backup.json
-flowlist doctor --fix
+FLOWLIST="/Applications/Flowlist.app/Contents/MacOS/flowlist"
+
+"$FLOWLIST" add 'Draft the launch email #writing ::Website due:friday est:45m'
+"$FLOWLIST" list --today
+"$FLOWLIST" done <ID>
+"$FLOWLIST" review
+"$FLOWLIST" undo
 ```
 
-Full command reference: [docs/cli.md](docs/cli.md).
+Add `--json` to any command for scripts. `FLOWLIST_HOME` or `--data-dir` points
+the CLI at another library. The full command reference is in the
+[CLI guide](https://github.com/Vulkan1125/flowlist/wiki/Using-the-CLI).
 
-## MCP server
+## Let an assistant use it
 
-`flowlist mcp` speaks JSON-RPC over stdio. It supports both the modern
-`2026-07-28` lifecycle (`server/discover`, `_meta`, `resultType`) and the legacy
-`initialize` handshake, so current and older clients can connect.
+Run `flowlist mcp` from an MCP client and it gets tasks, projects, tags,
+checklists, reviews, search, stats and undo over stdio — the same store as the
+window.
 
 ```json
 {
   "mcpServers": {
     "flowlist": {
-      "command": "/absolute/path/to/flowlist",
+      "command": "/Applications/Flowlist.app/Contents/MacOS/flowlist",
       "args": ["mcp"]
     }
   }
 }
 ```
 
-The server exposes task, project, tag, folder, checklist, review, search,
-import/export and undo tools. See [docs/mcp.md](docs/mcp.md) for the tool list
-and examples.
+Then ask things like *“Add a task to Website relaunch, due Friday”* or *“What’s
+due today?”*. See the
+[MCP guide](https://github.com/Vulkan1125/flowlist/wiki/Using-the-MCP) for the
+tool list and examples.
 
-## Packaging
+## Keyboard
 
-Build a double-clickable app bundle:
-
-```sh
-scripts/package.sh        # dist/Flowlist.app
-open dist/Flowlist.app
-open dist/Flowlist.app --args --data-dir /path/to/library
-```
-
-The bundle contains the same binary as the CLI and MCP server, so
-`dist/Flowlist.app/Contents/MacOS/flowlist list --json` works too. The script
-ad-hoc signs the bundle; see [docs/packaging.md](docs/packaging.md) for
-Gatekeeper and notarization notes.
-
-## Data and safety
-
-A library directory contains:
-
-| File | Purpose |
+| Shortcut | Action |
 | --- | --- |
-| `data.json` | the whole normalized library |
-| `data.json.bak` | previous good revision |
-| `history.json`, `history.json.bak` | undo/redo snapshots |
-| `session.json` | GUI session state |
-| `data.lock` | cross-process write lock |
-| `backups/` | timestamped copies created by `flowlist export --backup` |
-
-Writes are atomic (write, fsync, rename). A revision number lets every process
-reload when another process writes. Schema migrations run on open, and
-`flowlist doctor` reports or repairs dangling references.
+| `⌃⌥Space` | capture from any app |
+| `n` / `⌘N` | capture |
+| `/` or `⌘F` | search |
+| `⌘⇧F` | search this view or the whole library |
+| `space` | complete or reopen |
+| `!` / `⌘D` | flag |
+| `⏎` | edit the title |
+| `Tab` / `⇧Tab` | nest / unnest |
+| `⌘I` | toggle the inspector |
+| `⌘Z` / `⇧⌘Z` | undo / redo |
+| `⌘,` | settings |
+| `?` | full keyboard help |
 
 ## Documentation
 
-- [CLI reference](docs/cli.md)
-- [MCP tools](docs/mcp.md)
-- [GUI guide](docs/gui.md)
-- [Architecture](docs/architecture.md)
-- [Feature checklist](docs/features.md)
-- [Checklists](docs/checklists.md)
-- [Packaging](docs/packaging.md)
-- [Performance](docs/performance.md)
-- [Accessibility](docs/accessibility.md)
-- [GUI smoke test](docs/gui-automation.md)
-- [Backlog](docs/backlog.md)
+- [Wiki home](https://github.com/Vulkan1125/flowlist/wiki)
+- [Using the GUI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-GUI)
+- [Using the CLI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-CLI)
+- [Using the MCP server](https://github.com/Vulkan1125/flowlist/wiki/Using-the-MCP)
+- `docs/` in this repository for design notes, packaging and testing
 
-The GitHub wiki is generated from these pages. After creating the first wiki
-page in the GitHub web UI, run `scripts/publish-wiki.sh` to publish the full
-tree.
+## Build from source
 
-## Development
+Requires Rust 1.88+ and macOS 13+.
 
 ```sh
-cargo test --workspace
-cargo check --workspace
-cargo build -p flowlist --no-default-features   # headless CLI/MCP build
-scripts/gui-smoke.sh                            # mouse-only GUI flows (macOS)
-scripts/gui/forecast-probe.sh                   # Forecast calendar probe (macOS)
+cargo build --release
+./target/release/flowlist gui
 ```
+
+`scripts/package.sh` builds `dist/Flowlist.app` and the release zip used by the
+in-app updater. `cargo test --workspace` runs the suite.
+
+## License
+
+MIT

@@ -3,6 +3,9 @@
 Open `/Applications/Flowlist.app`. The window restores the view, selection,
 theme and size you left it with.
 
+*The screenshots here use the Catppuccin theme; the Settings shot shows Plain's
+accent picker. Every family is one click away in Settings → Appearance.*
+
 ![The Inbox with a working set of tasks](images/gui-inbox.png)
 
 ## Capture

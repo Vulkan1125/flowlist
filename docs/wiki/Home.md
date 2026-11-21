@@ -8,6 +8,9 @@ Nothing leaves your Mac. There is no account, no sync service and no telemetry.
 
 ![The Flowlist window showing the Inbox](images/gui-inbox.png)
 
+*The Inbox in the Catppuccin theme. Plain is the default; all eleven families
+are in Settings → Appearance.*
+
 ## Install
 
 1. Download **Flowlist-0.1.0.zip** from the

@@ -34,8 +34,8 @@ use chrono::{Datelike, Timelike};
 use gpui::{
     Animation, AnimationExt, App, Application, Bounds, ClipboardItem, Context, CursorStyle,
     FocusHandle, Focusable, IntoElement, KeyDownEvent, Keystroke, MouseButton, Render,
-    ScrollHandle, SharedString, Window, WindowBackgroundAppearance, WindowBounds, WindowOptions,
-    div, ease_out_quint, point, prelude::*, px, size,
+    ScrollHandle, SharedString, Window, WindowBackgroundAppearance, WindowBounds, WindowKind,
+    WindowOptions, div, ease_out_quint, point, prelude::*, px, size,
 };
 
 use flowlist_core::command::{
@@ -6169,6 +6169,37 @@ impl Render for FlowlistApp {
     }
 }
 
+/// Raise a window above the window manager for screenshot probes. Normal
+/// launches never call this; the main window keeps its native level and
+/// corners. The quick capture panel has its own version of this.
+#[cfg(target_os = "macos")]
+fn raise_for_capture(window: &Window) {
+    use objc::runtime::Object;
+    use objc::{msg_send, sel, sel_impl};
+    use raw_window_handle::RawWindowHandle;
+
+    let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(window) else {
+        return;
+    };
+    let RawWindowHandle::AppKit(appkit) = handle.as_raw() else {
+        return;
+    };
+    let view = appkit.ns_view.as_ptr().cast::<Object>();
+    unsafe {
+        let native: *mut Object = msg_send![view, window];
+        if native.is_null() {
+            return;
+        }
+        // NSFloatingWindowLevel. Windows on a lower level are left to the
+        // system window manager; this one is not tiled.
+        let _: () = msg_send![native, setLevel: 3i64];
+        let _: () = msg_send![native, setHidesOnDeactivate: false];
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn raise_for_capture(_window: &Window) {}
+
 pub fn run(paths: DataPaths) -> Result<()> {
     let store = Store::open(paths.clone())?;
     let saved: Option<session::Session> = store.read_session();
@@ -6184,7 +6215,17 @@ pub fn run(paths: DataPaths) -> Result<()> {
     Application::new()
         .with_assets(icons::Assets)
         .run(move |cx: &mut App| {
-            let bounds = Bounds::centered(None, restored.unwrap_or(size(px(1240.), px(800.))), cx);
+            let requested = restored.unwrap_or(size(px(1240.), px(800.)));
+            let bounds = Bounds::centered(None, requested, cx);
+            // Screenshot and layout probes need a window the system window
+            // manager leaves alone. Normal launches stay tiled; this is only
+            // set by `FLOWLIST_TEST_FLOAT`.
+            let test_float = std::env::var_os("FLOWLIST_TEST_FLOAT").is_some();
+            let kind = if test_float {
+                WindowKind::Floating
+            } else {
+                WindowKind::Normal
+            };
             let window = match cx.open_window(
                 WindowOptions {
                     titlebar: Some(gpui::TitlebarOptions {
@@ -6195,6 +6236,7 @@ pub fn run(paths: DataPaths) -> Result<()> {
                     window_background: WindowBackgroundAppearance::Blurred,
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     window_min_size: Some(size(px(880.), px(560.))),
+                    kind,
                     ..Default::default()
                 },
                 |window, cx| {
@@ -6208,6 +6250,14 @@ pub fn run(paths: DataPaths) -> Result<()> {
                     let app = cx.new(|cx| FlowlistApp::new(store, cx));
                     let handle = app.read(cx).focus_handle.clone();
                     window.focus(&handle);
+                    if test_float {
+                        raise_for_capture(window);
+                        window.resize(requested);
+                        window.defer(cx, move |window, _| {
+                            raise_for_capture(window);
+                            window.resize(requested);
+                        });
+                    }
                     app
                 },
             ) {

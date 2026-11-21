@@ -236,10 +236,17 @@ these clicks can be replaced by named actions without changing the assertions.
 - `scripts/gui/window.swift` prints the live window title, origin and size.
   `window <pid> move <x> <y>` also activates the app and asks the window
   server to move it, which keeps absolute clicks reliable when macOS restores
-  a window partly off screen. `window <pid> layers` lists every on-screen
-  window for the process with its layer and rectangle, which is how the
-  capture probe proves the panel sits above normal windows. `window front`
-  prints the frontmost app's process id.
+  a window partly off screen. `window <pid> resize <w> <h>` asks for a size.
+  `window <pid> layers` lists every on-screen window for the process with its
+  layer and rectangle, which is how the capture probe proves the panel sits
+  above normal windows. `window <pid> id [layer]` prints the CGWindowID of the
+  largest window (or the largest at that layer) for `screencapture -l`.
+  `window front` prints the frontmost app's process id.
+
+  For screenshots under a tiling window manager, launch with
+  `FLOWLIST_TEST_FLOAT=1`. The main window then opens at the session size as a
+  floating window the window manager leaves alone; normal launches keep their
+  native kind and layout.
 - Both are compiled into the temporary directory when the smoke test runs.
 
 ## Probes
