@@ -117,6 +117,18 @@ data class OpResult(
 @Serializable
 data class ApiErrorResponse(val error: String = "Something went wrong")
 
+data class TaskEdit(
+    val title: String,
+    val notes: String,
+    val project: String?,
+    val due: StampDto?,
+    val defer: StampDto?,
+    val priority: String?,
+    val flagged: Boolean,
+    val estimateMin: Int?,
+    val tags: Set<String>,
+)
+
 data class TaskView(
     val id: String,
     val title: String,
@@ -252,6 +264,8 @@ fun StampDto.label(): String {
     }
     return if (clock.isEmpty()) day else "$day · $clock"
 }
+
+fun StampDto.isToday(): Boolean = local()?.toLocalDate() == LocalDate.now()
 
 fun StampDto.isOverdue(): Boolean {
     val moment = local() ?: return false

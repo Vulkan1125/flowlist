@@ -7,6 +7,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.put
 import java.util.UUID
 
 data class AppState(
@@ -147,6 +151,63 @@ class Repository(context: Context) {
                 label = task.title,
             ),
         )
+        sync()
+    }
+
+    suspend fun update(task: TaskDto, edit: TaskEdit) {
+        val snapshot = _state.value.snapshot ?: return
+        if (edit.title.isBlank()) return
+        val db = snapshot.db
+        val updatedTask = task.copy(
+            title = edit.title,
+            notes = edit.notes,
+            project = edit.project,
+            due = edit.due,
+            defer = edit.defer,
+            priority = edit.priority,
+            flagged = edit.flagged,
+            estimateMin = edit.estimateMin,
+            tags = edit.tags.toList(),
+            modifiedAt = java.time.Instant.now().toString(),
+        )
+        val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+
+        val projectJson: JsonElement = edit.project?.let { JsonPrimitive(it) } ?: JsonNull
+        val priorityJson: JsonElement = edit.priority?.let { JsonPrimitive(it) } ?: JsonNull
+        val estimateJson: JsonElement = edit.estimateMin?.let { JsonPrimitive(it) } ?: JsonNull
+        val dueJson: JsonElement = if (edit.due != null) stampJson(edit.due) else JsonNull
+        val deferJson: JsonElement = if (edit.defer != null) stampJson(edit.defer) else JsonNull
+        val patch = kotlinx.serialization.json.buildJsonObject {
+            put("title", edit.title)
+            put("notes", edit.notes)
+            put("project", projectJson)
+            put("due", dueJson)
+            put("defer", deferJson)
+            put("priority", priorityJson)
+            put("flagged", edit.flagged)
+            put("estimate_min", estimateJson)
+        }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = updateCommand(task.id, patch),
+                label = edit.title,
+            ),
+        )
+        val before = task.tags.toSet()
+        val add = (edit.tags - before).toList()
+        val remove = (before - edit.tags).toList()
+        if (add.isNotEmpty() || remove.isNotEmpty()) {
+            enqueue(
+                PendingOp(
+                    id = "op_${UUID.randomUUID()}",
+                    command = setTagsCommand(task.id, add, remove),
+                    label = edit.title,
+                ),
+            )
+        }
         sync()
     }
 

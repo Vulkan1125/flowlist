@@ -161,6 +161,29 @@ fun deleteCommand(ids: List<String>): JsonObject = buildJsonObject {
     )
 }
 
+fun updateCommand(id: String, patch: JsonObject): JsonObject = buildJsonObject {
+    put("update_task", buildJsonObject { put("id", id); put("patch", patch) })
+}
+
+fun setTagsCommand(id: String, added: List<String>, removed: List<String>): JsonObject = buildJsonObject {
+    put(
+        "set_task_tags",
+        buildJsonObject {
+            put("ids", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive(id)) })
+            put("add", buildJsonArray { added.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
+            put(
+                "remove",
+                buildJsonArray { removed.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } },
+            )
+        },
+    )
+}
+
+fun stampJson(stamp: StampDto): JsonObject = buildJsonObject {
+    put("at", stamp.at)
+    put("has_time", stamp.hasTime)
+}
+
 fun restoreCommand(ids: List<String>): JsonObject = buildJsonObject {
     put(
         "restore_tasks",

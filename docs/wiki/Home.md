@@ -18,7 +18,7 @@ are in Settings → Appearance.*
 
 ## Install
 
-1. Download **Flowlist-0.2.0.dmg** (or the zip) from the
+1. Download **Flowlist-0.3.0.dmg** (or the zip) from the
    [latest release](https://github.com/Vulkan1125/flowlist/releases/latest).
 2. Open the DMG and drag **Flowlist** to Applications, or unzip and move the
    app yourself.
@@ -35,7 +35,7 @@ let two machines write to it at the same time.
 
 ## Android
 
-Download **Flowlist-Android-0.2.0.apk** from the same release, install it, then
+Download **Flowlist-Android-0.3.0.apk** from the same release, install it, then
 open **Settings → Mobile** on the Mac and turn on **Serve to my phone**. Enter
 one of the addresses and the pairing code in the app. See
 [Using the phone](Using-the-Phone) for the full walkthrough.
@@ -45,7 +45,7 @@ one of the addresses and the pairing code in the app. See
 | Surface | Open it with | Good for |
 | --- | --- | --- |
 | Desktop app | `open /Applications/Flowlist.app` | day-to-day planning, dragging, reviewing |
-| Android | install `Flowlist-Android-0.2.0.apk` | capture and checking off away from the Mac |
+| Android | install `Flowlist-Android-0.3.0.apk` | capture and checking off away from the Mac |
 | CLI | `/Applications/Flowlist.app/Contents/MacOS/flowlist` | scripts, terminal habits, bulk edits |
 | MCP server | `…/flowlist mcp` | letting an AI assistant read and change the library |
 

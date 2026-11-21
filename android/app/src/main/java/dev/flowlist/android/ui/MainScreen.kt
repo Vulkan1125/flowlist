@@ -31,7 +31,8 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,6 +76,7 @@ import dev.flowlist.android.data.isActive
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.label
 import dev.flowlist.android.data.today
+import dev.flowlist.android.data.isToday
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -92,6 +95,10 @@ fun MainScreen(
     repository: Repository,
     state: AppState,
     scope: kotlinx.coroutines.CoroutineScope,
+    theme: ThemeSettings,
+    onThemeChange: (ThemeSettings) -> Unit,
+    initialTab: String?,
+    onTabConsumed: () -> Unit,
 ) {
     val colors = flow
     var tab by rememberSaveable { mutableStateOf(Tab.Inbox) }
@@ -100,6 +107,14 @@ fun MainScreen(
     var detail by remember { mutableStateOf<TaskView?>(null) }
     var project by remember { mutableStateOf<ProjectDto?>(null) }
     val haptics = LocalHapticFeedback.current
+    LaunchedEffect(initialTab) {
+        when (initialTab) {
+            "today" -> tab = Tab.Today
+            "forecast" -> tab = Tab.Forecast
+            "browse" -> tab = Tab.Browse
+        }
+        if (initialTab != null) onTabConsumed()
+    }
     val snapshot = state.snapshot
     val snackbarHost = remember { SnackbarHostState() }
 
@@ -156,28 +171,33 @@ fun MainScreen(
                             Text(item.label, style = MaterialTheme.typography.labelSmall)
                         },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = colors.ink,
-                            selectedTextColor = colors.ink,
+                            selectedIconColor = colors.accent,
+                            selectedTextColor = colors.accent,
                             unselectedIconColor = colors.faint,
                             unselectedTextColor = colors.faint,
-                            indicatorColor = colors.field,
+                            indicatorColor = Color.Transparent,
                         ),
                     )
                 }
             }
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            FloatingActionButton(
                 onClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     capture = true
                 },
                 containerColor = colors.accent,
                 contentColor = colors.onAccent,
-                shape = RoundedCornerShape(16.dp),
-                icon = { Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(19.dp)) },
-                text = { Text("New task", style = MaterialTheme.typography.labelLarge) },
-            )
+                shape = CircleShape,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Add,
+                    contentDescription = "New task",
+                    modifier = Modifier.size(26.dp),
+                )
+            }
         },
     ) { padding ->
         Column(
@@ -206,18 +226,21 @@ fun MainScreen(
                     pending = state.pending,
                     onToggle = { task -> complete(task, true) },
                     onClick = { detail = it },
+                    onTrash = trash,
                 )
                 Tab.Today -> TodayList(
                     tasks = snapshot?.db?.today().orEmpty(),
                     pending = state.pending,
                     onToggle = { task -> complete(task, true) },
                     onClick = { detail = it },
+                    onTrash = trash,
                 )
                 Tab.Forecast -> ForecastList(
                     groups = snapshot?.db?.forecast().orEmpty(),
                     pending = state.pending,
                     onToggle = { task -> complete(task, true) },
                     onClick = { detail = it },
+                    onTrash = trash,
                 )
                 Tab.Browse -> BrowseList(
                     projects = snapshot?.db?.projects?.values?.sortedBy { it.name.lowercase() }.orEmpty(),
@@ -239,20 +262,36 @@ fun MainScreen(
         )
     }
 
-    detail?.let { task ->
-        TaskDetailSheet(
-            task = task,
-            pending = task.id in state.pending,
-            onDismiss = { detail = null },
-            onComplete = {
-                complete(task, !task.completed)
-                detail = null
-            },
-            onDelete = {
-                trash(task)
-                detail = null
-            },
-        )
+    detail?.let { taskView ->
+        val db = snapshot?.db
+        val dto = db?.tasks?.get(taskView.id)
+        if (dto != null) {
+            TaskEditSheet(
+                task = dto,
+                projects = db.projects.values.toList(),
+                tags = db.tags.values.toList(),
+                pending = taskView.id in state.pending,
+                onDismiss = { detail = null },
+                onSave = { edit ->
+                    detail = null
+                    scope.launch {
+                        repository.update(dto, edit)
+                        snackbarHost.showSnackbar(
+                            message = "Saved “${edit.title}”",
+                            duration = SnackbarDuration.Short,
+                        )
+                    }
+                },
+                onComplete = {
+                    complete(taskView, !taskView.completed)
+                    detail = null
+                },
+                onDelete = {
+                    trash(taskView)
+                    detail = null
+                },
+            )
+        }
     }
 
     project?.let { value ->
@@ -301,6 +340,8 @@ fun MainScreen(
                 settings = false
                 scope.launch { repository.signOut() }
             },
+            theme = theme,
+            onThemeChange = onThemeChange,
         )
     }
 }
@@ -393,23 +434,26 @@ private fun InboxList(
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
     onClick: (TaskView) -> Unit,
+    onTrash: (TaskView) -> Unit,
 ) {
-    if (tasks.isEmpty()) {
-        EmptyState(
-            icon = Icons.Outlined.Inbox,
-            title = "Inbox zero",
-            body = "Anything you capture lands here until you give it a date or file it into a project.",
-        )
-        return
-    }
     LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
+        if (tasks.isEmpty()) {
+            item(key = "empty") {
+                EmptyState(
+                    title = "Inbox zero",
+                    body = "A clean slate. Capture something and it lands here until you give it a date or project.",
+                    doodle = { InboxDoodle() },
+                )
+            }
+        }
         items(tasks, key = { it.id }) { task ->
-            TaskRow(
-                task = task.copy(pending = task.id in pending),
+            SwipeTaskRow(
+                task = task,
+                pending = task.id in pending,
                 onToggle = { onToggle(task) },
+                onTrash = { onTrash(task) },
                 onClick = { onClick(task) },
             )
-            Hairline(Modifier.padding(start = 58.dp))
         }
     }
 }
@@ -420,38 +464,42 @@ private fun TodayList(
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
     onClick: (TaskView) -> Unit,
+    onTrash: (TaskView) -> Unit,
 ) {
     val overdue = tasks.filter { it.due?.isOverdue() == true }
     val today = tasks - overdue.toSet()
-    if (tasks.isEmpty()) {
-        EmptyState(
-            icon = Icons.Outlined.WbSunny,
-            title = "Nothing due today",
-            body = "Tasks with a due date for today or earlier show up here, overdue first.",
-        )
-        return
-    }
     LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
+        if (tasks.isEmpty()) {
+            item(key = "empty") {
+                EmptyState(
+                    title = "Nothing due today",
+                    body = "Enjoy the quiet, or look ahead in Forecast.",
+                    doodle = { TodayDoodle() },
+                )
+            }
+        }
         if (overdue.isNotEmpty()) {
             item { SectionLabel("Overdue") }
             items(overdue, key = { it.id }) { task ->
-                TaskRow(
-                    task = task.copy(pending = task.id in pending),
+                SwipeTaskRow(
+                    task = task,
+                    pending = task.id in pending,
                     onToggle = { onToggle(task) },
+                    onTrash = { onTrash(task) },
                     onClick = { onClick(task) },
                 )
-                Hairline(Modifier.padding(start = 58.dp))
             }
         }
         if (today.isNotEmpty()) {
             item { SectionLabel(if (overdue.isEmpty()) "Due today" else "Today") }
             items(today, key = { it.id }) { task ->
-                TaskRow(
-                    task = task.copy(pending = task.id in pending),
+                SwipeTaskRow(
+                    task = task,
+                    pending = task.id in pending,
                     onToggle = { onToggle(task) },
+                    onTrash = { onTrash(task) },
                     onClick = { onClick(task) },
                 )
-                Hairline(Modifier.padding(start = 58.dp))
             }
         }
     }
@@ -463,25 +511,28 @@ private fun ForecastList(
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
     onClick: (TaskView) -> Unit,
+    onTrash: (TaskView) -> Unit,
 ) {
-    if (groups.values.all { it.isEmpty() }) {
-        EmptyState(
-            icon = Icons.Outlined.CalendarMonth,
-            title = "An open fortnight",
-            body = "Schedule a task and it appears here, grouped by the day it is due.",
-        )
-        return
-    }
     LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
+        if (groups.values.all { it.isEmpty() }) {
+            item(key = "empty") {
+                EmptyState(
+                    title = "An open fortnight",
+                    body = "Give a task a date and it appears here, grouped by the day it is due.",
+                    doodle = { ForecastDoodle() },
+                )
+            }
+        }
         groups.forEach { (date, tasks) ->
             item(key = "day-$date") { ForecastHeader(date, tasks.size) }
             items(tasks, key = { it.id }) { task ->
-                TaskRow(
-                    task = task.copy(pending = task.id in pending),
+                SwipeTaskRow(
+                    task = task,
+                    pending = task.id in pending,
                     onToggle = { onToggle(task) },
+                    onTrash = { onTrash(task) },
                     onClick = { onClick(task) },
                 )
-                Hairline(Modifier.padding(start = 58.dp))
             }
         }
     }
@@ -526,9 +577,9 @@ private fun BrowseList(
     val colors = flow
     if (projects.isEmpty()) {
         EmptyState(
-            icon = Icons.Outlined.FolderOpen,
             title = "No projects yet",
             body = "Projects created on the Mac appear here with their open tasks.",
+            doodle = { BrowseDoodle() },
         )
         return
     }

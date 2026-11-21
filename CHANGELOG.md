@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.0 — 2026-11-21
+
+- **A Todoist-shaped app.** Red accent by default, a round capture button, an
+  inline **Add task** row, coloured due dates, priority flags and swipe-to-
+  complete / swipe-to-trash with undo.
+- **Animated empty states.** Hand-drawn check, sun, calendar and folder doodles
+  draw themselves in and move gently, instead of a plain text block.
+- **Themes from the Mac.** Todoist, Plain, Paper, Mist, Catppuccin, Nord,
+  Gruvbox, Dracula, Tokyo Night, Vesper, Graphite and Midnight, each with light
+  and dark palettes.
+- **Accent modes.** Theme accent, a Material You **Wallpaper** colour on
+  Android 12+, or eleven custom presets with matching light and dark tones. No
+  colour picker or eyedropper.
+- **Six launcher icons** (red, blue, green, orange, purple, graphite) switched
+  from Settings without reinstalling. The icon is a normal-sized version of the
+  Mac mark.
+- **Full task editing** on the phone: title, notes, due and defer dates with
+  Android pickers, project, priority, flag, estimate and tags. Saves go through
+  `update_task` and `set_task_tags`, and queue offline like every other change.
+- **Home-screen widget** with today and Inbox counts.
+- **Due reminders** with a notification permission flow and a periodic summary
+  for today and overdue tasks.
+- The Settings sheet starts below the status bar instead of crowding it.
+
 ## 0.2.0 — 2026-11-21
 
 - **Flowlist for Android.** A native Compose app that uses the Mac library

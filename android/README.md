@@ -39,6 +39,10 @@ sdk.dir=/opt/homebrew/share/android-commandlinetools
   bearer token still guards every request.
 - Offline captures get a client-generated ULID, so the Mac and phone agree on
   the id before the first sync. Operations carry an id the server deduplicates.
-- Editing beyond capture/complete/delete is the next milestone.
+- Themes: Todoist (default), Plain, Paper, Mist, Catppuccin, Nord, Gruvbox,
+  Dracula, Tokyo Night, Vesper, Graphite and Midnight, with theme, wallpaper or
+  custom accent tones and six launcher icons.
+- Full task editing (title, notes, dates, project, priority, flag, estimate,
+  tags), a home-screen widget and due reminders.
 
 Everything in this folder can be deleted without touching the Mac app.

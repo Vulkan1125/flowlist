@@ -31,6 +31,25 @@ projects and tags behave identically.
 - **Undo:** the snackbar reverses the action you just took. It is scoped to the
   phone and never moves the Mac's global undo cursor.
 
+## Make it yours
+
+Settings has four ways to change the look:
+
+- **Appearance** — System, Light or Dark.
+- **Theme** — the same twelve families as the Mac: Todoist (red on white), Plain, Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula, Tokyo Night, Vesper, Graphite and Midnight. The Todoist family is the default; the others use the Mac palettes.
+- **Accent** — the theme's own accent, a **Wallpaper** colour from Android's Material You palette (Android 12 and later), or a custom tone chosen from eleven presets. Each preset has a light and a dark version, so there is no colour picker to fiddle with.
+- **App icon** — six launcher colours: red, blue, green, orange, purple and graphite. Changing one replaces the home-screen icon in place.
+
+## Edit a task
+
+Tap a task to open the editor. Change the title and notes, then set:
+
+- due and defer dates with Android's date and time pickers (or clear either),
+- project, priority (P1–P3), the flag and an estimate,
+- any existing tag.
+
+**Save** sends one `update_task` command through the same engine as the Mac, plus a `set_task_tags` command when tags changed. It works offline: the change waits with the other queued operations and syncs later. Complete and Move to Trash are in the same sheet; the snackbar undoes either.
+
 ## Screens
 
 - **Inbox** is unscheduled work, exactly as on the Mac. Adding a due or defer
@@ -54,3 +73,12 @@ when you are away. There is no port forwarding and no public endpoint.
 
 Android 8 or later. The APK is signed with a Flowlist release key; install a
 newer one over the old app to update.
+
+## Empty states
+
+Inbox, Today, Forecast and Browse show a small hand-drawn illustration when they have nothing in them. The check, sun, calendar and folder doodles animate gently, so an empty view feels intentional rather than unfinished.
+
+## Home screen and reminders
+
+- **Widget**: add Flowlist from the Android widget picker to see today's and Inbox counts. Tap it to open the app.
+- **Due reminders**: Settings → Due reminders schedules a quiet summary when tasks are due today or overdue. Android 13 and later asks for notification permission the first time; nothing is sent off the device.

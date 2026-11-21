@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -20,11 +21,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
@@ -36,13 +43,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.flowlist.android.data.TaskView
 import dev.flowlist.android.data.isOverdue
+import dev.flowlist.android.data.isToday
 import dev.flowlist.android.data.label
 
 @Composable
@@ -59,7 +70,7 @@ fun CheckCircle(checked: Boolean, onClick: () -> Unit, modifier: Modifier = Modi
     )
     Box(
         modifier = modifier
-            .size(24.dp)
+            .size(22.dp)
             .scale(scale)
             .clip(CircleShape)
             .background(background)
@@ -76,7 +87,7 @@ fun CheckCircle(checked: Boolean, onClick: () -> Unit, modifier: Modifier = Modi
                 imageVector = Icons.Rounded.Check,
                 contentDescription = "Completed",
                 tint = colors.onAccent,
-                modifier = Modifier.size(15.dp),
+                modifier = Modifier.size(14.dp),
             )
         }
     }
@@ -129,27 +140,34 @@ fun TaskRow(
                     )
                 }
             }
+            val dueColor = when {
+                task.due?.isOverdue() == true && !task.completed -> colors.danger
+                task.due?.isToday() == true && !task.completed -> colors.success
+                else -> colors.faint
+            }
             val details = buildList {
-                task.projectName?.let { add(it) }
-                task.due?.let { add(it.label()) }
-                if (task.checklistTotal > 0) add("${task.checklistDone}/${task.checklistTotal}")
-                if (task.estimateMin != null) add("${task.estimateMin}m")
-                if (task.tags.isNotEmpty()) add(task.tags.joinToString(" ") { "#$it" })
+                task.projectName?.let { add(it to colors.faint) }
+                task.due?.let { add(it.label() to dueColor) }
+                if (task.checklistTotal > 0) add("${task.checklistDone}/${task.checklistTotal}" to colors.faint)
+                if (task.estimateMin != null) add("${task.estimateMin}m" to colors.faint)
+                if (task.tags.isNotEmpty()) add(task.tags.joinToString(" ") { "#$it" } to colors.faint)
             }
             if (details.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(3.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = details.joinToString("  ·  "),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = when {
-                            task.due?.isOverdue() == true && !task.completed -> colors.danger
-                            else -> colors.faint
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                val text = buildAnnotatedString {
+                    details.forEachIndexed { index, (value, color) ->
+                        if (index > 0) {
+                            withStyle(SpanStyle(color = colors.faint)) { append("  ·  ") }
+                        }
+                        withStyle(SpanStyle(color = color)) { append(value) }
+                    }
                 }
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
         if (task.pending) {
@@ -160,6 +178,65 @@ fun TaskRow(
             Spacer(modifier = Modifier.width(8.dp))
             PriorityMark(task.priority)
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SwipeTaskRow(
+    task: TaskView,
+    pending: Boolean,
+    onToggle: () -> Unit,
+    onTrash: () -> Unit,
+    onClick: () -> Unit,
+) {
+    val colors = flow
+    val state = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onToggle()
+                    true
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    onTrash()
+                    true
+                }
+                SwipeToDismissBoxValue.Settled -> false
+            }
+        },
+    )
+    Column {
+        SwipeToDismissBox(
+            state = state,
+            enableDismissFromStartToEnd = true,
+            enableDismissFromEndToStart = true,
+            backgroundContent = {
+                val start = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(if (start) colors.success else colors.danger)
+                        .padding(horizontal = 24.dp),
+                    contentAlignment = if (start) Alignment.CenterStart else Alignment.CenterEnd,
+                ) {
+                    Icon(
+                        imageVector = if (start) Icons.Rounded.Check else Icons.Rounded.Delete,
+                        contentDescription = if (start) "Complete" else "Move to Trash",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            },
+        ) {
+            TaskRow(
+                task = task.copy(pending = pending),
+                onToggle = onToggle,
+                onClick = onClick,
+                modifier = Modifier.background(colors.background),
+            )
+        }
+        Hairline(Modifier.padding(start = 58.dp))
     }
 }
 
@@ -191,26 +268,23 @@ fun PendingChip() {
 @Composable
 fun PriorityMark(priority: String?) {
     val colors = flow
-    val (label, color) = when (priority) {
-        "high" -> "High" to colors.danger
-        "medium" -> "Medium" to colors.warning
-        else -> "Low" to colors.faint
+    val color = when (priority) {
+        "high" -> colors.danger
+        "medium" -> colors.warning
+        else -> colors.accent
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(color),
-        )
-        Spacer(modifier = Modifier.width(5.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = colors.faint,
-        )
-    }
+    Icon(
+        imageVector = Icons.Rounded.Flag,
+        contentDescription = when (priority) {
+            "high" -> "Priority 1"
+            "medium" -> "Priority 2"
+            else -> "Priority 3"
+        },
+        tint = color,
+        modifier = Modifier.size(15.dp),
+    )
 }
+
 
 @Composable
 fun Hairline(modifier: Modifier = Modifier) {
@@ -235,33 +309,25 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 fun EmptyState(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     body: String,
     modifier: Modifier = Modifier,
+    doodle: @Composable () -> Unit,
 ) {
     val colors = flow
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 40.dp, vertical = 64.dp),
+            .padding(horizontal = 32.dp, vertical = 44.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(CircleShape)
-                .background(colors.field),
+            modifier = Modifier.height(150.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = colors.faint,
-                modifier = Modifier.size(22.dp),
-            )
+            doodle()
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
@@ -273,6 +339,7 @@ fun EmptyState(
             style = MaterialTheme.typography.bodyMedium,
             color = colors.faint,
             lineHeight = 20.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
     }
 }
