@@ -196,13 +196,15 @@ class Repository(context: Context) {
     suspend fun signOut() {
         val base = session.baseUrl
         val token = session.token
-        if (base != null && token != null) {
-            runCatching { api.unpair(base, token) }
-        }
         session.clear()
         files.clear()
         outbox.clear()
         _state.value = AppState(paired = false)
+        // Revoke on the Mac after the app has already returned to pairing, so
+        // an unreachable server never leaves the screen waiting.
+        if (base != null && token != null) {
+            runCatching { api.unpair(base, token) }
+        }
     }
 
     fun clearError() {

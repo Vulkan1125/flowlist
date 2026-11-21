@@ -34,7 +34,7 @@ for page in GUI CLI MCP Features Accessibility Architecture Testing-the-GUI Pack
 done
 rm -rf "$wiki/images"
 
-for page in Home Using-the-GUI Using-the-CLI Using-the-MCP _Sidebar; do
+for page in Home Using-the-GUI Using-the-CLI Using-the-Phone Using-the-MCP _Sidebar; do
 	cp "$root/docs/wiki/$page.md" "$wiki/$page.md"
 done
 cp -R "$root/docs/wiki/images" "$wiki/images"
