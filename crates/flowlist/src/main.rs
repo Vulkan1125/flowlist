@@ -13,6 +13,7 @@ mod gui;
 
 mod mcp;
 mod render;
+mod serve;
 
 fn main() {
     std::process::exit(cli::run());

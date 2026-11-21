@@ -42,6 +42,9 @@ pub fn extra_paths() -> Vec<PathBuf> {
     let bundle = "dev.flowlist.Flowlist";
     [
         library.join("Preferences").join(format!("{bundle}.plist")),
+        library
+            .join("LaunchAgents")
+            .join("dev.flowlist.serve.plist"),
         library.join("Caches").join(bundle),
         library
             .join("Saved Application State")
@@ -90,6 +93,8 @@ pub fn describe(plan: &Plan) -> Vec<String> {
 /// Spawn the delayed cleanup helper. The caller must quit the app immediately
 /// after this returns successfully.
 pub fn schedule(plan: &Plan) -> Result<(), String> {
+    // Stop the login-time mobile server before its plist disappears.
+    let _ = crate::serve::agent::remove();
     let mut paths: Vec<PathBuf> = Vec::new();
     if let Some(app) = &plan.app {
         paths.push(app.clone());

@@ -115,10 +115,31 @@ pub enum CliCommand {
     UninstallCli,
     /// Remove the app and its command, keeping or deleting the library.
     Uninstall(UninstallArgs),
+    /// Serve the library to the Android app over the local network.
+    Serve(ServeArgs),
     /// Run the MCP server on stdio.
     Mcp,
     /// Open the graphical application.
     Gui,
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct ServeArgs {
+    /// Port to listen on (default 7777).
+    #[arg(long)]
+    pub port: Option<u16>,
+    /// Interface to bind (default 0.0.0.0, so phones on the LAN can reach it).
+    #[arg(long)]
+    pub bind: Option<String>,
+    /// Install and start the login-time background server.
+    #[arg(long)]
+    pub install_agent: bool,
+    /// Stop and remove the login-time background server.
+    #[arg(long)]
+    pub uninstall_agent: bool,
+    /// Print whether the server is running and the current pairing code.
+    #[arg(long)]
+    pub status: bool,
 }
 
 #[derive(Args, Debug, Clone, Default)]
@@ -702,6 +723,7 @@ fn try_run() -> Result<()> {
         CliCommand::InstallCli => cmd_install_cli(&paint),
         CliCommand::UninstallCli => cmd_uninstall_cli(&paint),
         CliCommand::Uninstall(args) => cmd_uninstall(&cli, args, &paint),
+        CliCommand::Serve(args) => cmd_serve(&cli, args, &paint),
         CliCommand::Mcp => {
             let paths = DataPaths::discover(cli.data_dir.clone())?;
             crate::mcp::serve(paths)
@@ -725,6 +747,115 @@ fn cmd_install_cli(paint: &Paint) -> Result<()> {
         }
         Err(error) => bail!("{error}"),
     }
+    Ok(())
+}
+
+fn cmd_serve(cli: &Cli, args: ServeArgs, paint: &Paint) -> Result<()> {
+    let paths = DataPaths::discover(cli.data_dir.clone()).context("locating the library")?;
+    let mobile = crate::serve::load_mobile(&paths.root);
+    let port = args.port.unwrap_or(mobile.port);
+
+    if args.install_agent {
+        let plist = crate::serve::agent::install(&paths, port)?;
+        println!(
+            "{} {}",
+            paint.green("Installed the mobile server at login:"),
+            plist.display()
+        );
+        println!(
+            "{}",
+            paint.dim("It starts now and whenever you log in. Settings → Mobile controls it too.")
+        );
+        return Ok(());
+    }
+    if args.uninstall_agent {
+        let removed = crate::serve::agent::remove()?;
+        println!(
+            "{}",
+            if removed {
+                paint.green("Removed the login-time mobile server.")
+            } else {
+                paint.dim("No login-time mobile server was installed.")
+            }
+        );
+        return Ok(());
+    }
+    if args.status {
+        return print_serve_status(&paths, &paint);
+    }
+
+    if crate::serve::running(&paths.root).is_some() {
+        bail!(
+            "a mobile server is already running for {}",
+            paths.root.display()
+        );
+    }
+
+    let options = crate::serve::parse_options(args.port, args.bind);
+    let running = crate::serve::start(&paths, options)?;
+    let info = running.info().clone();
+    crate::serve::save_mobile(
+        &paths.root,
+        &crate::serve::MobileFile {
+            port: info.port,
+            ..crate::serve::load_mobile(&paths.root)
+        },
+    )?;
+
+    if cli.json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "port": info.port,
+                "pairing_code": info.pairing_code,
+                "addresses": crate::serve::addresses(),
+                "library": paths.root,
+            }))?
+        );
+    } else {
+        println!("{}", paint.bold("Flowlist mobile server"));
+        println!("  {}", paint.dim(&paths.root.display().to_string()));
+        crate::serve::print_addresses(info.port);
+        println!();
+        println!(
+            "  Pairing code {}  {}",
+            paint.bold(&info.pairing_code),
+            paint.dim("(valid for ten minutes)")
+        );
+        println!(
+            "{}",
+            paint
+                .dim("Stop with Ctrl-C. Add --install-agent to keep it running after you log out.")
+        );
+    }
+    running.wait();
+    Ok(())
+}
+
+fn print_serve_status(paths: &DataPaths, paint: &Paint) -> Result<()> {
+    let agent = crate::serve::agent::installed();
+    let running = crate::serve::running(&paths.root);
+    if let Some(info) = running {
+        let remaining = (info.pairing_expires_at - Utc::now().timestamp()).max(0);
+        println!(
+            "{} port {} {}",
+            paint.green("Running"),
+            info.port,
+            paint.dim(&format!("(pairing code valid {}m)", remaining / 60))
+        );
+        println!("  Pairing code {}", paint.bold(&info.pairing_code));
+        crate::serve::print_addresses(info.port);
+    } else {
+        println!("{}", paint.dim("Not running."));
+    }
+    println!(
+        "  Login agent: {}",
+        if agent {
+            paint.green("installed")
+        } else {
+            paint.dim("not installed")
+        }
+    );
     Ok(())
 }
 

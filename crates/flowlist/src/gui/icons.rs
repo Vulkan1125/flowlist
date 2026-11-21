@@ -63,10 +63,11 @@ pub enum Icon {
     Link,
     Archive,
     Skull,
+    Smartphone,
 }
 
 impl Icon {
-    pub const ALL: [Icon; 52] = [
+    pub const ALL: [Icon; 53] = [
         Icon::Inbox,
         Icon::Projects,
         Icon::Forecast,
@@ -119,6 +120,7 @@ impl Icon {
         Icon::Link,
         Icon::Archive,
         Icon::Skull,
+        Icon::Smartphone,
     ];
 
     pub fn path(self) -> &'static str {
@@ -175,6 +177,7 @@ impl Icon {
             Icon::Link => "icons/link.svg",
             Icon::Archive => "icons/archive.svg",
             Icon::Skull => "icons/skull.svg",
+            Icon::Smartphone => "icons/smartphone.svg",
         }
     }
 
@@ -310,6 +313,9 @@ impl Icon {
             Icon::Skull => {
                 r#"<path d="m12.5 17-.5-1-.5 1h1z"/><path d="M15 22a1 1 0 0 0 1-1v-1a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20v1a1 1 0 0 0 1 1z"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="12" r="1"/>"#
             }
+            Icon::Smartphone => {
+                r#"<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>"#
+            }
         }
     }
 }
@@ -355,7 +361,7 @@ mod tests {
 
     #[test]
     fn icon_set_is_complete_and_unique() {
-        assert_eq!(Icon::ALL.len(), 52);
+        assert_eq!(Icon::ALL.len(), 53);
         let mut paths: Vec<&str> = Icon::ALL.iter().map(|icon| icon.path()).collect();
         paths.sort_unstable();
         paths.dedup();

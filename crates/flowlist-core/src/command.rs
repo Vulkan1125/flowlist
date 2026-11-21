@@ -3,6 +3,7 @@
 //! moves and bulk changes.
 
 use chrono::{DateTime, NaiveDate, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::db::{ContainerPosition, Db, OrderKey, Position};
@@ -14,7 +15,7 @@ use crate::model::{
 };
 use crate::time::{Stamp, local_date, now};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Outcome {
     pub label: String,
     pub created: Vec<String>,
@@ -31,8 +32,12 @@ impl Outcome {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewTask {
+    /// A client-supplied id, used when a phone captures offline so the task
+    /// keeps one identity before it ever reaches this library.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<TaskId>,
     pub title: String,
     pub notes: String,
     pub project: Option<ProjectId>,
@@ -57,6 +62,7 @@ pub struct NewTask {
 impl NewTask {
     pub fn new(title: impl Into<String>) -> Self {
         Self {
+            id: None,
             title: title.into(),
             notes: String::new(),
             project: None,
@@ -84,7 +90,7 @@ impl NewTask {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TaskPatch {
     pub title: Option<String>,
     pub notes: Option<String>,
@@ -103,7 +109,7 @@ pub struct TaskPatch {
     pub sequential: Option<bool>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewProject {
     pub name: String,
     pub notes: String,
@@ -140,7 +146,7 @@ impl NewProject {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ProjectPatch {
     pub name: Option<String>,
     pub notes: Option<String>,
@@ -156,7 +162,7 @@ pub struct ProjectPatch {
     pub attachments: Option<Vec<String>>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TagPatch {
     pub name: Option<String>,
     pub parent: Option<Option<TagId>>,
@@ -164,7 +170,7 @@ pub struct TagPatch {
     pub location: Option<Option<Geo>>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SettingsPatch {
     pub default_review_days: Option<u32>,
     pub show_completed_days: Option<u32>,
@@ -178,7 +184,8 @@ pub struct SettingsPatch {
     pub sidebar: Option<crate::model::SidebarOptions>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TaskPlacement {
     Inbox(Position),
     Project {
@@ -191,19 +198,21 @@ pub enum TaskPlacement {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ContainerPlacement {
     pub parent: Option<FolderId>,
     pub position: ContainerPosition,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ImportMode {
     Replace,
     Merge,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Command {
     CreateTask(NewTask),
     UpdateTask {
@@ -513,6 +522,12 @@ impl Command {
                     (None, None) => (None, None),
                 };
                 let mut task = Task::new(title);
+                if let Some(id) = new_task.id.clone() {
+                    if db.tasks.contains_key(&id) {
+                        return Err(Error::invalid(format!("task {id} already exists")));
+                    }
+                    task.id = id;
+                }
                 task.notes = new_task.notes;
                 task.project = project;
                 task.parent = parent;

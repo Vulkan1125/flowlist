@@ -60,7 +60,8 @@ pub enum OrderKey {
 }
 
 /// Insertion point inside a sibling list.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Position {
     Start,
     End,
@@ -70,7 +71,8 @@ pub enum Position {
 }
 
 /// Insertion point inside a folder's container list.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ContainerPosition {
     Start,
     End,

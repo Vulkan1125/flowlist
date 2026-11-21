@@ -3530,7 +3530,8 @@ impl FlowlistApp {
                     "3" => Some(modals::SettingsSection::Workflow),
                     "4" => Some(modals::SettingsSection::Nearby),
                     "5" => Some(modals::SettingsSection::Trash),
-                    "6" => Some(modals::SettingsSection::About),
+                    "6" => Some(modals::SettingsSection::Mobile),
+                    "7" => Some(modals::SettingsSection::About),
                     _ => None,
                 };
                 if let (

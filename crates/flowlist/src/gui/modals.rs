@@ -196,16 +196,18 @@ pub enum SettingsSection {
     Workflow,
     Nearby,
     Trash,
+    Mobile,
     About,
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 6] = [
+    pub const ALL: [SettingsSection; 7] = [
         SettingsSection::Appearance,
         SettingsSection::Sidebar,
         SettingsSection::Workflow,
         SettingsSection::Nearby,
         SettingsSection::Trash,
+        SettingsSection::Mobile,
         SettingsSection::About,
     ];
 
@@ -216,6 +218,7 @@ impl SettingsSection {
             SettingsSection::Workflow => "workflow",
             SettingsSection::Nearby => "nearby",
             SettingsSection::Trash => "trash",
+            SettingsSection::Mobile => "mobile",
             SettingsSection::About => "about",
         }
     }
@@ -227,6 +230,7 @@ impl SettingsSection {
             SettingsSection::Workflow => "Workflow",
             SettingsSection::Nearby => "Nearby",
             SettingsSection::Trash => "Trash",
+            SettingsSection::Mobile => "Mobile",
             SettingsSection::About => "About",
         }
     }
@@ -240,6 +244,7 @@ impl SettingsSection {
             SettingsSection::Workflow => "Keyboard, reminders, review cadence and history windows.",
             SettingsSection::Nearby => "How distance ranks tasks with tagged locations.",
             SettingsSection::Trash => "How long deleted tasks stay restorable.",
+            SettingsSection::Mobile => "Pair your Android phone and keep it in sync with this Mac.",
             SettingsSection::About => "Version, library location and update checks.",
         }
     }
@@ -251,7 +256,10 @@ impl SettingsSection {
             SettingsSection::Workflow => &[0, 1, 2],
             SettingsSection::Nearby => &[3],
             SettingsSection::Trash => &[4],
-            SettingsSection::Appearance | SettingsSection::Sidebar | SettingsSection::About => &[],
+            SettingsSection::Appearance
+            | SettingsSection::Sidebar
+            | SettingsSection::Mobile
+            | SettingsSection::About => &[],
         }
     }
 
@@ -262,6 +270,7 @@ impl SettingsSection {
             SettingsSection::Workflow => Icon::Review,
             SettingsSection::Nearby => Icon::Crosshair,
             SettingsSection::Trash => Icon::Trash,
+            SettingsSection::Mobile => Icon::Smartphone,
             SettingsSection::About => Icon::Info,
         }
     }
@@ -1018,7 +1027,7 @@ impl FlowlistApp {
                         if matches!(modal, Modal::DeleteTask { .. }) {
                             "Esc close · ⇥ switch choice"
                         } else if is_settings {
-                            "Esc close · ⌘1–6 sections · ⇥ field"
+                            "Esc close · ⌘1–7 sections · ⇥ field"
                         } else if field_count > 0 {
                             "Esc close · ⇥ next field"
                         } else {
@@ -1996,6 +2005,7 @@ impl FlowlistApp {
             SettingsSection::Workflow => pane.child(self.render_workflow_settings(cx)),
             SettingsSection::Nearby => pane.child(self.render_nearby_settings(cx)),
             SettingsSection::Trash => pane.child(self.render_trash_settings(cx)),
+            SettingsSection::Mobile => pane.child(self.render_mobile_settings(cx)),
             SettingsSection::About => pane.child(self.render_about_settings(cx)),
         };
         // A section change fades its pane in, matching the sheet's own 120 ms
@@ -3070,6 +3080,232 @@ impl FlowlistApp {
             .into_any_element()
     }
 
+    fn render_mobile_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let root = self.store.paths().root.clone();
+        let mobile = crate::serve::load_mobile(&root);
+        let running = crate::serve::running(&root);
+        let installed = crate::serve::agent::installed();
+        let addresses = crate::serve::addresses();
+        let port = mobile.port;
+        let status = if running.is_some() {
+            "Running"
+        } else if installed {
+            "Starting"
+        } else {
+            "Off"
+        };
+        let status_color = if running.is_some() {
+            theme.success
+        } else if installed {
+            theme.warning
+        } else {
+            theme.text_faint
+        };
+
+        let toggle = {
+            let paths = self.store.paths().clone();
+            div()
+                .id("mobile-server-toggle")
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .cursor_pointer()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    let installed = crate::serve::agent::installed();
+                    if installed {
+                        match crate::serve::agent::remove() {
+                            Ok(_) => {
+                                this.toast =
+                                    Some("Mobile access is off; the login item was removed".into())
+                            }
+                            Err(error) => this.toast = Some(error.to_string()),
+                        }
+                    } else {
+                        let mobile = crate::serve::load_mobile(&paths.root);
+                        match crate::serve::agent::install(&paths, mobile.port) {
+                            Ok(_) => {
+                                this.toast =
+                                    Some("Mobile access is on; the server starts at login".into())
+                            }
+                            Err(error) => this.toast = Some(error.to_string()),
+                        }
+                    }
+                    cx.notify();
+                }))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_0p5()
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(theme.text)
+                                .child("Serve to my phone"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child(format!("{status} · port {port} · starts when you log in")),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(div().size(px(7.)).rounded_full().bg(status_color))
+                        .child(widgets::switch(theme, installed)),
+                )
+        };
+
+        let server = self.settings_card(
+            "Mobile access",
+            Some(
+                "Your phone connects straight to this Mac. No account, no cloud and no telemetry.",
+            ),
+            div().flex().flex_col().gap_3().child(toggle),
+        );
+
+        let pairing = if let Some(info) = &running {
+            let remaining = (info.pairing_expires_at - chrono::Utc::now().timestamp()).max(0);
+            let mut addresses_column = div().flex().flex_col().gap_1();
+            if addresses.is_empty() {
+                addresses_column = addresses_column.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .child("No network address found. Connect to Wi-Fi or Tailscale."),
+                );
+            }
+            for address in &addresses {
+                addresses_column = addresses_column.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.text)
+                        .child(format!("http://{address}:{}", info.port)),
+                );
+            }
+            let folders = (if remaining >= 60 {
+                format!("{} minutes", remaining / 60)
+            } else {
+                format!("{} seconds", remaining)
+            });
+            self.settings_card(
+                "Pair a phone",
+                Some(
+                    "Open Flowlist on Android, choose Pair this phone, then enter one of these addresses and the code.",
+                ),
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(
+                        div()
+                            .flex()
+                            .items_baseline()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .text_size(px(24.))
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(theme.text)
+                                    .child(info.pairing_code.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.text_faint)
+                                    .child(format!("expires in {folders}")),
+                            ),
+                    )
+                    .child(addresses_column),
+            )
+        } else {
+            self.settings_card(
+                "Pair a phone",
+                Some(
+                    "Turn on Mobile access above, then the pairing code and this Mac's addresses appear here.",
+                ),
+                div().into_any_element(),
+            )
+        };
+
+        let mut devices = div().flex().flex_col().gap_1();
+        if mobile.devices.is_empty() {
+            devices = devices.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("No phones paired yet."),
+            );
+        }
+        for device in &mobile.devices {
+            let id = device.id.clone();
+            let paths = self.store.paths().clone();
+            devices = devices.child(
+                div()
+                    .id(gpui::ElementId::Name(
+                        format!("mobile-device-{}", device.id).into(),
+                    ))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .py_1()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(theme.text)
+                                    .child(device.name.clone()),
+                            )
+                            .child(div().text_xs().text_color(theme.text_faint).child(format!(
+                                "Paired {}",
+                                device.created_at.get(..10).unwrap_or("")
+                            ))),
+                    )
+                    .child(
+                        div()
+                            .id(gpui::ElementId::Name(
+                                format!("mobile-revoke-{}", device.id).into(),
+                            ))
+                            .child(widgets::button(theme, "Revoke", false))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                let mut file = crate::serve::load_mobile(&paths.root);
+                                file.devices.retain(|device| device.id != id);
+                                match crate::serve::save_mobile(&paths.root, &file) {
+                                    Ok(()) => this.toast = Some("Phone removed".into()),
+                                    Err(error) => this.toast = Some(error.to_string()),
+                                }
+                                cx.notify();
+                            })),
+                    ),
+            );
+        }
+        let devices = self.settings_card(
+            "Paired phones",
+            Some("Revoking a phone makes it pair again. Nothing else changes."),
+            devices,
+        );
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(server)
+            .child(pairing)
+            .child(devices)
+            .into_any_element()
+    }
+
     fn render_sidebar_settings(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let Some(Modal::Settings { sidebar, .. }) = &self.modal else {
             return div().into_any_element();
@@ -3488,7 +3724,10 @@ fn help_body(theme: super::theme::Theme) -> impl IntoElement {
         (
             "Settings",
             vec![
-                ("⌘1…⌘5", "Appearance, Sidebar, Workflow, Nearby, Trash"),
+                (
+                    "⌘1…⌘7",
+                    "Appearance, Sidebar, Workflow, Nearby, Trash, Mobile, About",
+                ),
                 ("⇥", "next field in the open section"),
                 ("1…9", "Plain accent preset while Appearance is open"),
             ],
