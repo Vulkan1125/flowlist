@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 
@@ -98,15 +99,27 @@ pub fn install(paths: &DataPaths, port: u16) -> Result<PathBuf> {
 
     let uid = uid()?;
     let _ = bootout(uid);
-    let status = Command::new("/bin/launchctl")
-        .args([
-            "bootstrap",
-            &format!("gui/{uid}"),
-            &plist.display().to_string(),
-        ])
-        .status()
-        .context("running launchctl bootstrap")?;
-    if !status.success() {
+    // launchd needs a moment to release the old job. Without this retry a
+    // toggle off/on can fail with "Bootstrap failed: 5: Input/output error".
+    let mut loaded = false;
+    for attempt in 0..6 {
+        let status = Command::new("/bin/launchctl")
+            .args([
+                "bootstrap",
+                &format!("gui/{uid}"),
+                &plist.display().to_string(),
+            ])
+            .status()
+            .context("running launchctl bootstrap")?;
+        if status.success() {
+            loaded = true;
+            break;
+        }
+        if attempt < 5 {
+            std::thread::sleep(Duration::from_millis(150 * (attempt + 1)));
+        }
+    }
+    if !loaded {
         bail!(
             "launchctl could not load the server agent. Check {}.",
             log.display()

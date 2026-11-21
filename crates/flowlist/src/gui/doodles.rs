@@ -140,57 +140,51 @@ fn today(theme: Theme) -> impl IntoElement {
                 .child(div().size(px(4.)).rounded_full().bg(theme.raised)),
         )
         .child(
-            div()
-                .absolute()
-                .left(px(24.))
-                .top(px(86.))
-                .child(
-                    div()
-                        .relative()
-                        .w(px(42.))
-                        .h(px(20.))
-                        .child(
-                            div()
-                                .absolute()
-                                .left(px(0.))
-                                .top(px(6.))
-                                .w(px(38.))
-                                .h(px(12.))
-                                .rounded_full()
-                                .bg(theme.field)
-                                .border_1()
-                                .border_color(theme.border_soft),
-                        )
-                        .child(
-                            div()
-                                .absolute()
-                                .left(px(8.))
-                                .top(px(0.))
-                                .size(px(15.))
-                                .rounded_full()
-                                .bg(theme.field)
-                                .border_1()
-                                .border_color(theme.border_soft),
-                        )
-                        .child(
-                            div()
-                                .absolute()
-                                .left(px(19.))
-                                .top(px(3.))
-                                .size(px(11.))
-                                .rounded_full()
-                                .bg(theme.field)
-                                .border_1()
-                                .border_color(theme.border_soft),
-                        )
-                        .with_animation(
-                            "doodle-cloud",
-                            Animation::new(Duration::from_secs(5)).repeat(),
-                            |element, delta| {
-                                element.left(px((delta * TAU).sin() * 5.))
-                            },
-                        ),
-                ),
+            div().absolute().left(px(24.)).top(px(86.)).child(
+                div()
+                    .relative()
+                    .w(px(42.))
+                    .h(px(20.))
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(0.))
+                            .top(px(6.))
+                            .w(px(38.))
+                            .h(px(12.))
+                            .rounded_full()
+                            .bg(theme.field)
+                            .border_1()
+                            .border_color(theme.border_soft),
+                    )
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(8.))
+                            .top(px(0.))
+                            .size(px(15.))
+                            .rounded_full()
+                            .bg(theme.field)
+                            .border_1()
+                            .border_color(theme.border_soft),
+                    )
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(19.))
+                            .top(px(3.))
+                            .size(px(11.))
+                            .rounded_full()
+                            .bg(theme.field)
+                            .border_1()
+                            .border_color(theme.border_soft),
+                    )
+                    .with_animation(
+                        "doodle-cloud",
+                        Animation::new(Duration::from_secs(5)).repeat(),
+                        |element, delta| element.left(px((delta * TAU).sin() * 5.)),
+                    ),
+            ),
         )
         .child(sparkle(theme, 136., 36., 9., theme.accent))
         .child(orbit(theme, 90., 56., 66., 44., 9))
@@ -237,7 +231,11 @@ fn forecast(theme: Theme) -> impl IntoElement {
                     .top(px(38. + row as f32 * 15.))
                     .size(px(if selected { 6. } else { 4. }))
                     .rounded_full()
-                    .bg(if selected { theme.accent } else { theme.text_faint.opacity(0.45) }),
+                    .bg(if selected {
+                        theme.accent
+                    } else {
+                        theme.text_faint.opacity(0.45)
+                    }),
             );
         }
     }
@@ -254,31 +252,27 @@ fn folder(theme: Theme) -> impl IntoElement {
                 .child(icons::icon(Icon::Folder, 82., theme.accent)),
         )
         .child(
-            div()
-                .absolute()
-                .left(px(96.))
-                .top(px(18.))
-                .child(
-                    div()
-                        .relative()
-                        .w(px(46.))
-                        .h(px(36.))
-                        .rounded(px(6.))
-                        .bg(theme.raised)
-                        .border_1()
-                        .border_color(theme.border_soft)
-                        .child(bar(theme, 8., 11., 28.))
-                        .child(bar(theme, 8., 20., 20.))
-                        .with_animation(
-                            "doodle-page",
-                            Animation::new(Duration::from_secs(5)).repeat(),
-                            |element, delta| {
-                                element
-                                    .left(px((delta * TAU).sin() * 5.))
-                                    .top(px((delta * TAU).cos() * 3.))
-                            },
-                        ),
-                ),
+            div().absolute().left(px(96.)).top(px(18.)).child(
+                div()
+                    .relative()
+                    .w(px(46.))
+                    .h(px(36.))
+                    .rounded(px(6.))
+                    .bg(theme.raised)
+                    .border_1()
+                    .border_color(theme.border_soft)
+                    .child(bar(theme, 8., 11., 28.))
+                    .child(bar(theme, 8., 20., 20.))
+                    .with_animation(
+                        "doodle-page",
+                        Animation::new(Duration::from_secs(5)).repeat(),
+                        |element, delta| {
+                            element
+                                .left(px((delta * TAU).sin() * 5.))
+                                .top(px((delta * TAU).cos() * 3.))
+                        },
+                    ),
+            ),
         )
         .child(sparkle(theme, 30., 24., 8., theme.warning))
         .child(orbit(theme, 88., 66., 74., 48., 12))

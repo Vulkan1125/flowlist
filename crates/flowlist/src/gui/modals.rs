@@ -15,7 +15,6 @@ use flowlist_core::model::{GroupBy, ProjectIcon, ProjectKind, SidebarOptions, So
 use flowlist_core::query;
 use flowlist_core::time::now;
 
-use crate::app_icon::{self, AppIcon};
 use super::icons::Icon;
 use super::perspective::{PerspectiveForm, ViewChoice, ViewField};
 use super::screen_picker;
@@ -23,6 +22,7 @@ use super::text::TextBuffer;
 use super::theme::{self, Appearance, PLAIN_ACCENTS, Theme, ThemeKind};
 use super::widgets::TipExt;
 use super::{FlowlistApp, icons, widgets};
+use crate::app_icon::{self, AppIcon};
 
 /// What a rename sheet is editing. Keeping the typed id means a rename can
 /// never accidentally target the wrong entity kind.
