@@ -112,8 +112,10 @@ pub fn refresh_permission() {
             if settings.is_null() {
                 return;
             }
-            let status: isize = msg_send![settings, authorizationStatus];
-            store_status(status);
+            unsafe {
+                let status: isize = msg_send![settings, authorizationStatus];
+                store_status(status);
+            }
         });
         let callback = callback.copy();
         let _: () = msg_send![center, getNotificationSettingsWithCompletionHandler: &*callback];
@@ -141,22 +143,24 @@ pub fn request_permission() {
             return;
         }
         let callback = ConcreteBlock::new(|granted: i8, error: *mut Object| {
-            let message = if error.is_null() {
-                None
-            } else {
-                let description: *mut Object = msg_send![error, localizedDescription];
-                let text: *const std::os::raw::c_char = if description.is_null() {
-                    std::ptr::null()
+            let message = unsafe {
+                if error.is_null() {
+                    None
                 } else {
-                    msg_send![description, UTF8String]
-                };
-                Some(if text.is_null() {
-                    "notification authorization failed".to_string()
-                } else {
-                    std::ffi::CStr::from_ptr(text)
-                        .to_string_lossy()
-                        .into_owned()
-                })
+                    let description: *mut Object = msg_send![error, localizedDescription];
+                    let text: *const std::os::raw::c_char = if description.is_null() {
+                        std::ptr::null()
+                    } else {
+                        msg_send![description, UTF8String]
+                    };
+                    Some(if text.is_null() {
+                        "notification authorization failed".to_string()
+                    } else {
+                        std::ffi::CStr::from_ptr(text)
+                            .to_string_lossy()
+                            .into_owned()
+                    })
+                }
             };
             if let Ok(mut stored) = LAST_ERROR.lock() {
                 *stored = message;
