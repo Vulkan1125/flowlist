@@ -623,7 +623,7 @@ private fun Header(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 14.dp),
+            .padding(start = 20.dp, end = 20.dp, top = 0.dp, bottom = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onMenu, modifier = Modifier.size(32.dp)) {
@@ -660,7 +660,7 @@ private fun Header(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = tab.label,
             style = MaterialTheme.typography.displaySmall,

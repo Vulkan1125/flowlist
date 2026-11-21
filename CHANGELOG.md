@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.2 — 2026-11-21
+
+- The phone header sits closer to the top: no extra top padding, and the
+  perspective title follows the search row sooner.
+
 ## 0.8.1 — 2026-11-21
 
 - The phone header is a TickTick-style two-row header: hamburger and a full
