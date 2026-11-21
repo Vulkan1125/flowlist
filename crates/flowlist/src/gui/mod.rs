@@ -459,6 +459,9 @@ pub struct FlowlistApp {
     focus_handle: FocusHandle,
     capture: text::TextBuffer,
     search: text::TextBuffer,
+    /// Whether the search field filters the current view or matches across the
+    /// whole library. Transient: a new session starts on the current view.
+    search_library: bool,
     field: text::TextBuffer,
     tag_buffer: text::TextBuffer,
     checklist_buffer: text::TextBuffer,
@@ -667,6 +670,7 @@ impl FlowlistApp {
             focus_handle,
             capture: text::TextBuffer::empty(),
             search: text::TextBuffer::empty(),
+            search_library: false,
             field: text::TextBuffer::empty(),
             tag_buffer: text::TextBuffer::empty(),
             checklist_buffer: text::TextBuffer::empty(),
@@ -905,7 +909,11 @@ impl FlowlistApp {
         }
 
         if !self.search.is_empty() {
-            groups = self.filter_groups(groups);
+            groups = if self.search_library {
+                self.library_groups()
+            } else {
+                self.filter_groups(groups)
+            };
         }
 
         if let Some(priority) = self.priority_filter {
@@ -965,33 +973,67 @@ impl FlowlistApp {
         let needle = self.search.text().trim().to_lowercase();
         let mut out = Vec::new();
         for mut group in groups {
-            group.rows.retain(|row| {
-                let Some(task) = db.tasks.get(&row.id) else {
-                    return false;
-                };
-                // Stop at the first hit: title and notes cover most queries
-                // without building the project path or joined tag list.
-                if task.title.to_lowercase().contains(&needle)
-                    || task.notes.to_lowercase().contains(&needle)
-                {
-                    return true;
-                }
-                if let Some(project) = task.project.as_ref().map(|id| db.project_path(id))
-                    && project.to_lowercase().contains(&needle)
-                {
-                    return true;
-                }
-                task.tags.iter().any(|id| {
-                    db.tags
-                        .get(id)
-                        .is_some_and(|tag| tag.name.to_lowercase().contains(&needle))
+            // Fuzzy scoring subsumes plain substring matching ("lauch"
+            // still finds "Launch"), and relevance puts the closest row
+            // first without changing which group it belongs to.
+            let mut scored: Vec<(i64, TaskRow)> = group
+                .rows
+                .into_iter()
+                .filter_map(|row| {
+                    let task = db.tasks.get(&row.id)?;
+                    let score = flowlist_core::search::task_score(db, task, &needle);
+                    (score > 0).then_some((score, row))
+                })
+                .collect();
+            scored.sort_by(|(a_score, a), (b_score, b)| {
+                b_score.cmp(a_score).then_with(|| {
+                    db.tasks
+                        .get(&a.id)
+                        .map(|task| task.title.to_lowercase())
+                        .cmp(&db.tasks.get(&b.id).map(|task| task.title.to_lowercase()))
                 })
             });
+            group.rows = scored.into_iter().map(|(_, row)| row).collect();
             if !group.rows.is_empty() {
                 out.push(group);
             }
         }
         out
+    }
+
+    /// Matches from the whole library in one relevance-ordered list. Trash is
+    /// never included; the Trash view's own search covers deleted tasks.
+    fn library_groups(&self) -> Vec<Group> {
+        let db = self.store.db();
+        let needle = self.search.text().trim().to_lowercase();
+        let at = now();
+        let mut scored: Vec<(i64, TaskId)> = db
+            .tasks
+            .values()
+            .filter(|task| !task.is_trashed())
+            .filter_map(|task| {
+                let score = flowlist_core::search::task_score(db, task, &needle);
+                (score > 0).then_some((score, task.id.clone()))
+            })
+            .collect();
+        scored.sort_by(|(a_score, a), (b_score, b)| {
+            b_score.cmp(a_score).then_with(|| {
+                db.tasks
+                    .get(a)
+                    .map(|task| task.title.to_lowercase())
+                    .cmp(&db.tasks.get(b).map(|task| task.title.to_lowercase()))
+            })
+        });
+        let rows = scored
+            .into_iter()
+            .map(|(_, id)| query::row_for(db, &id, at))
+            .collect();
+        vec![Group {
+            key: "search:library".to_string(),
+            title: "Search results".to_string(),
+            position: 0,
+            rows,
+        }]
     }
 
     fn visible_ids(&self) -> Vec<TaskId> {
@@ -3838,6 +3880,19 @@ impl FlowlistApp {
                     self.open_modal(modals::Modal::new_perspective(self), cx);
                 }
                 "f" => {
+                    // ⌘⇧F flips search between this view and the whole
+                    // library; the scope chip in the content header mirrors it.
+                    if mods.shift && self.view.searches_tasks() {
+                        self.search_library = !self.search_library;
+                        self.toast = Some(
+                            if self.search_library {
+                                "Searching the whole library"
+                            } else {
+                                "Searching this view"
+                            }
+                            .to_string(),
+                        );
+                    }
                     self.focus = FocusArea::Search;
                     self.search.select_all();
                 }
@@ -5470,7 +5525,11 @@ impl FlowlistApp {
                             .child(widgets::text_field_with_trailer(
                                 theme,
                                 &self.search,
-                                "Search tasks",
+                                if self.search_library {
+                                    "Search library"
+                                } else {
+                                    "Search tasks"
+                                },
                                 self.focus == FocusArea::Search,
                                 if self.search.is_empty() { 0.0 } else { 26.0 },
                             ))

@@ -104,6 +104,7 @@ Frequently used shortcuts:
 | `n` | quick capture |
 | `⌃⌥Space` | capture from any app in a floating panel; the main window stays put |
 | `/` or `⌘F` | search |
+| `⌘⇧F` | search this view or the whole library |
 | `↑` / `↓`, `⇧↑` / `⇧↓` | move / extend selection |
 | `space` | complete or reopen |
 | `!` or `⌘D` | flag / unflag |

@@ -56,22 +56,7 @@ pub fn search(db: &Db, query: &str, limit: usize) -> Vec<SearchHit> {
         if task.is_trashed() {
             continue;
         }
-        let title_score = score(&task.title, &needle) * 3;
-        let notes_score = score(&task.notes, &needle);
-        let checklist_score = task
-            .checklist
-            .iter()
-            .map(|item| score(&item.title, &needle))
-            .max()
-            .unwrap_or(0);
-        let tag_score = task
-            .tags
-            .iter()
-            .filter_map(|id| db.tags.get(id))
-            .map(|tag| score(&tag.name, &needle))
-            .max()
-            .unwrap_or(0);
-        let total = title_score + notes_score + tag_score + checklist_score;
+        let total = task_score(db, task, &needle);
         if total == 0 {
             continue;
         }
@@ -156,6 +141,36 @@ pub fn search(db: &Db, query: &str, limit: usize) -> Vec<SearchHit> {
     hits
 }
 
+/// How well one task fits a search: title hits outrank notes, tags and
+/// checklist steps, and the project path counts so typing a project name finds
+/// its tasks. `0` means the task does not match at all.
+pub fn task_score(db: &Db, task: &crate::model::Task, needle: &str) -> i64 {
+    let needle = needle.trim().to_lowercase();
+    if needle.is_empty() {
+        return 0;
+    }
+    let title_score = score(&task.title, &needle) * 3;
+    let notes_score = score(&task.notes, &needle);
+    let checklist_score = task
+        .checklist
+        .iter()
+        .map(|item| score(&item.title, &needle))
+        .max()
+        .unwrap_or(0);
+    let tag_score = task
+        .tags
+        .iter()
+        .filter_map(|id| db.tags.get(id))
+        .map(|tag| score(&tag.name, &needle))
+        .max()
+        .unwrap_or(0);
+    let project_score = db
+        .effective_project(&task.id)
+        .map(|project| score(&db.project_path(&project), &needle))
+        .unwrap_or(0);
+    title_score + notes_score + checklist_score + tag_score + project_score
+}
+
 /// Search restricted to tasks, for the CLI's `flowlist list --search`.
 pub fn task_ids(db: &Db, query: &str, limit: usize) -> Vec<TaskId> {
     search(db, query, limit)
@@ -169,7 +184,8 @@ pub fn project_status_label(status: ProjectStatus) -> &'static str {
     status.label()
 }
 
-fn score(haystack: &str, needle: &str) -> i64 {
+/// A small relevance score: exact, prefix, substring, then subsequence.
+pub fn score(haystack: &str, needle: &str) -> i64 {
     if haystack.is_empty() {
         return 0;
     }
@@ -199,4 +215,30 @@ fn is_subsequence(haystack: &str, needle: &str) -> bool {
         return false;
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Task;
+
+    #[test]
+    fn task_search_is_fuzzy_and_reads_the_project_path() {
+        let mut db = Db::new();
+        let project = db.ensure_project_path("Work/Launch").unwrap();
+        let mut task = Task::new("Review the retro notes");
+        task.project = Some(project);
+        let id = task.id.clone();
+        db.tasks.insert(id.clone(), task);
+        let task = db.tasks.get(&id).unwrap();
+
+        // A subsequence reaches the title even when letters are missing.
+        assert!(task_score(&db, task, "rvw") > 0);
+        // The project path is searchable, so a project name finds its tasks.
+        assert!(task_score(&db, task, "launch") > 0);
+        // Prefix beats substring, substring beats a loose subsequence.
+        assert!(score("Launch plan", "launch") > score("Launch plan", "plan"));
+        assert!(score("Launch plan", "plan") > score("Launch plan", "lnp"));
+        assert_eq!(task_score(&db, task, "zzz"), 0);
+    }
 }

@@ -38,6 +38,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Merge import reconciles tags/containers by path
 - [x] Search across tasks, notes, checklist steps, projects, folders, tags and
       perspectives
+- [x] Fuzzy list search with a **This view** / **Library** scope (`⌘⇧F`),
+      ranked by relevance
 - [x] Library statistics and review scheduling
 
 ## Perspectives and queries

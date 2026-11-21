@@ -77,6 +77,13 @@
 - The content header no longer repeats the last action and its Undo sentence;
   the status bar still carries both. The Settings sheet drops its
   library-wide subtitle, since the section rail already names what it holds.
+- Search is fuzzy now: missing letters still find a task (`bcf` finds “Buy
+  coffee filters”), and the fields behind a row — title, notes, checklist,
+  tags, project path — all count, with the closest match first. A scope chip
+  under the view title switches between this view and the whole library
+  (`⌘⇧F`); library results ignore Trash and keep the project and tag metadata
+  so every hit says where it lives. The empty state names the scope and how to
+  switch it.
 - The toast now sits in the bottom-center of the middle pane instead of the
   bottom-center of the whole window, so it lines up under the list and never
   drifts under the inspector.

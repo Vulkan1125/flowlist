@@ -586,7 +586,15 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
-        let title = self.view_title();
+        // A library-wide search is its own place: the view name would be a lie
+        // when the rows come from everywhere.
+        let library_search =
+            self.search_library && !self.search.is_empty() && self.view.searches_tasks();
+        let title = if library_search {
+            "Search".to_string()
+        } else {
+            self.view_title()
+        };
         // The title shares its row with the chips, leaving it no room to wrap.
         // Shape it up front and paint it only when every letter fits: a name
         // clipped to a few characters reads as a bug, so it is left out.
@@ -925,7 +933,11 @@ impl FlowlistApp {
                     .text_color(theme.text_faint)
                     .overflow_hidden()
                     .whitespace_nowrap()
-                    .child(self.view_subtitle()),
+                    .child(if library_search {
+                        "Matches from the whole library"
+                    } else {
+                        self.view_subtitle()
+                    }),
             )
             .child(
                 div()
@@ -934,6 +946,39 @@ impl FlowlistApp {
                     .gap_2()
                     .text_xs()
                     .text_color(theme.text_faint)
+                    .when(
+                        self.view.searches_tasks() && !self.search.is_empty(),
+                        |this| {
+                            this.child(
+                                div()
+                                    .id("search-scope")
+                                    .flex_shrink_0()
+                                    .flow_tip(
+                                        self,
+                                        cx,
+                                        theme,
+                                        if self.search_library {
+                                            "Searching the whole library; click for this view (⌘⇧F)"
+                                        } else {
+                                            "Searching this view; click for the whole library (⌘⇧F)"
+                                        },
+                                    )
+                                    .child(widgets::toggle_chip(
+                                        theme,
+                                        if self.search_library {
+                                            "Library"
+                                        } else {
+                                            "This view"
+                                        },
+                                        self.search_library,
+                                    ))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.search_library = !this.search_library;
+                                        cx.notify();
+                                    })),
+                            )
+                        },
+                    )
                     .child(if is_archive {
                         if count == 0 {
                             "No projects".to_string()
@@ -1176,6 +1221,20 @@ impl FlowlistApp {
         // the same illustrated empty state instead of a lonely caption.
         let entirely_empty = groups.len() == 1 && groups[0].rows.is_empty() && !show_headers;
         if groups.is_empty() || entirely_empty {
+            if !self.search.is_empty() {
+                let (title, detail) = if self.search_library {
+                    (
+                        "No matches",
+                        "Nothing in the library matches that. ⌘⇧F searches this view instead.",
+                    )
+                } else {
+                    (
+                        "No matches",
+                        "Nothing in this view matches. ⌘⇧F searches the whole library.",
+                    )
+                };
+                return self.render_empty(title, detail).into_any_element();
+            }
             let (title, detail) = match &self.view {
                 View::Builtin(BuiltinPerspective::Today) => (
                     "Nothing due today",

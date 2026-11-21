@@ -26,8 +26,13 @@ the sidebar is the visual anchor.
 - **Search** is centered on the content pane at every width, with the
   inspector's column reserved even when the inspector is closed, so the field
   never moves or slides under the action cluster. The × clears it.
-  Search covers task titles and notes, checklist steps, projects, folders, tags
-  and perspectives.
+  Matching is fuzzy, so `bcf` finds “Buy coffee filters”, and it reads the
+  title, notes, checklist steps, tags and project path. A scope chip under the
+  view title (or `⌘⇧F`) switches between **This view** and **Library**: the
+  library scope searches every task outside Trash, ranks by relevance and
+  titles itself **Search**, so a hit can come from a project the current view
+  never showed. Archive, Review and Nearby keep their own bodies and do not
+  offer the switch.
 - **Add task** focuses capture from any view, including a view that has no
   inline capture bar.
 - The theme button switches light/dark (`⌘T`); `⇧⌘T` / `⌥⌘T` step through the

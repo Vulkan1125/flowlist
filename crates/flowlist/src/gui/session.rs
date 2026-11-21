@@ -98,6 +98,20 @@ impl View {
         }
     }
 
+    /// Views whose body is a list of tasks. Search filters that list; the
+    /// Archive, Review and Nearby bodies are built on projects and context, so
+    /// they do not take the task scope switch.
+    pub fn searches_tasks(&self) -> bool {
+        !matches!(
+            self,
+            View::Builtin(
+                BuiltinPerspective::Archive
+                    | BuiltinPerspective::Review
+                    | BuiltinPerspective::Nearby
+            )
+        )
+    }
+
     pub fn shows_capture(&self) -> bool {
         match self {
             View::Builtin(BuiltinPerspective::Inbox) => true,
