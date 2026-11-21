@@ -15,6 +15,7 @@ data class AppPreferences(
     val startTab: String = "inbox",
     val bottomBar: List<String> = listOf("inbox", "today", "forecast", "browse"),
     val saveAllAttachments: Boolean = false,
+    val forecastView: String = "month",
 )
 
 class PreferencesStore(context: Context) {
@@ -32,6 +33,7 @@ class PreferencesStore(context: Context) {
             .take(4)
             .ifEmpty { listOf("inbox", "today", "forecast", "browse") },
         saveAllAttachments = prefs.getBoolean("save_all_attachments", false),
+        forecastView = prefs.getString("forecast_view", "month") ?: "month",
     )
 
     fun save(value: AppPreferences) {
@@ -43,6 +45,7 @@ class PreferencesStore(context: Context) {
             .putString("start_tab", value.startTab)
             .putString("bottom_bar", value.bottomBar.take(4).joinToString("|"))
             .putBoolean("save_all_attachments", value.saveAllAttachments)
+            .putString("forecast_view", value.forecastView)
             .apply()
     }
 }

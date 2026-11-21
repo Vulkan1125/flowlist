@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.7 — 2026-11-21
+
+- **Forecast remembers Month or Agenda** across app restarts.
+- **Create a project or tag from the task editor.** The project menu is the
+  same width as the project row, and its last item is **Create new project**.
+  Tags gain a trailing **+** chip. Both auto-select the new item on the task.
+- **Tag chips wrap onto new lines** instead of running off the screen.
+- **Flagged tasks show their flag at the far right** of the task row.
+
 ## 0.9.6 — 2026-11-21
 
 - **Settings → Library → Offline files** has a **Save all attachments** toggle.

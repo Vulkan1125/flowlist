@@ -48,6 +48,8 @@ import java.util.Locale
 
 @Composable
 fun ForecastScreen(
+    view: String,
+    onViewChange: (String) -> Unit,
     snapshot: Snapshot?,
     weekStartsMonday: Boolean,
     swipeActions: Boolean,
@@ -58,7 +60,7 @@ fun ForecastScreen(
     onTrash: (TaskView) -> Unit,
 ) {
     val colors = flow
-    var monthMode by rememberSaveable { mutableStateOf(true) }
+    val monthMode = view != "agenda"
     var monthKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var selectedKey by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val month = YearMonth.parse(monthKey)
@@ -118,8 +120,8 @@ fun ForecastScreen(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            ModePill("Month", monthMode) { monthMode = true }
-            ModePill("Agenda", !monthMode) { monthMode = false }
+            ModePill("Month", monthMode) { onViewChange("month") }
+            ModePill("Agenda", !monthMode) { onViewChange("agenda") }
         }
 
         if (!monthMode) {

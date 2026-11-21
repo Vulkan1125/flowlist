@@ -6,6 +6,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -64,6 +66,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -84,7 +88,7 @@ import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.isToday
 import dev.flowlist.android.data.label
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TaskEditSheet(
     task: TaskDto,
@@ -101,6 +105,8 @@ fun TaskEditSheet(
     onAddChecklist: (String) -> Unit,
     onDeleteChecklist: (ChecklistDto) -> Unit,
     onMoveChecklist: (ChecklistDto, Int) -> Unit,
+    onCreateProject: (String) -> Unit,
+    onCreateTag: (String) -> Unit,
     savedAttachments: Set<String>,
     onAddAttachment: () -> Unit,
     onSaveAttachment: (String) -> Unit,
@@ -139,6 +145,8 @@ fun TaskEditSheet(
     var confirmSeries by remember { mutableStateOf(false) }
     val subtaskFocus = remember { FocusRequester() }
     val checklistFocus = remember { FocusRequester() }
+    var pendingProjectName by remember { mutableStateOf<String?>(null) }
+    var pendingTagName by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(addingSubtask) {
         if (addingSubtask) {
             delay(120)
@@ -151,7 +159,25 @@ fun TaskEditSheet(
             checklistFocus.requestFocus()
         }
     }
+    LaunchedEffect(projects, pendingProjectName) {
+        val wanted = pendingProjectName ?: return@LaunchedEffect
+        projects.firstOrNull { it.name.equals(wanted, ignoreCase = true) }?.let { created ->
+            project = created.id
+            pendingProjectName = null
+        }
+    }
+    LaunchedEffect(tags, pendingTagName) {
+        val wanted = pendingTagName ?: return@LaunchedEffect
+        tags.firstOrNull { it.name.equals(wanted, ignoreCase = true) }?.let { created ->
+            selectedTags = selectedTags + created.id
+            pendingTagName = null
+        }
+    }
     var projectMenu by remember { mutableStateOf(false) }
+    var projectMenuWidth by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
+    var newProjectOpen by remember { mutableStateOf(false) }
+    var newTagOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var datePickerForDue by remember { mutableStateOf(true) }
     var showDueSheet by remember { mutableStateOf(false) }
@@ -333,7 +359,13 @@ fun TaskEditSheet(
                 },
             )
 
-            Box {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { size ->
+                        projectMenuWidth = with(density) { size.width.toDp() }
+                    },
+            ) {
                 EditRow(
                     label = "Project",
                     value = projects.firstOrNull { it.id == project }?.name ?: "Inbox",
@@ -352,6 +384,11 @@ fun TaskEditSheet(
                 DropdownMenu(
                     expanded = projectMenu,
                     onDismissRequest = { projectMenu = false },
+                    modifier = if (projectMenuWidth > 0.dp) {
+                        Modifier.width(projectMenuWidth).heightIn(max = 360.dp)
+                    } else {
+                        Modifier
+                    },
                     containerColor = colors.raised,
                 ) {
                     DropdownMenuItem(
@@ -370,6 +407,24 @@ fun TaskEditSheet(
                             },
                         )
                     }
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Add,
+                                    contentDescription = null,
+                                    tint = colors.accent,
+                                    modifier = Modifier.size(17.dp),
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Create new project", color = colors.accent)
+                            }
+                        },
+                        onClick = {
+                            projectMenu = false
+                            newProjectOpen = true
+                        },
+                    )
                 }
             }
 
@@ -666,11 +721,10 @@ fun TaskEditSheet(
             if (tags.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Label("Tags")
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     tags.sortedBy { it.name.lowercase() }.forEach { tag ->
                         val active = tag.id in selectedTags
@@ -693,6 +747,19 @@ fun TaskEditSheet(
                                 color = if (active) colors.accent else colors.faint,
                             )
                         }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(colors.field)
+                            .clickable { newTagOpen = true }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            text = "+",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = colors.accent,
+                        )
                     }
                 }
             }
@@ -798,6 +865,33 @@ fun TaskEditSheet(
         )
     }
 
+    if (newProjectOpen) {
+        NamePromptDialog(
+            title = "New project",
+            placeholder = "Project name",
+            confirmLabel = "Create",
+            onDismiss = { newProjectOpen = false },
+        ) { name ->
+            newProjectOpen = false
+            pendingProjectName = name
+            onCreateProject(name)
+        }
+    }
+
+    if (newTagOpen) {
+        NamePromptDialog(
+            title = "New tag",
+            placeholder = "Tag name",
+            confirmLabel = "Create",
+            onDismiss = { newTagOpen = false },
+        ) { name ->
+            newTagOpen = false
+            val cleaned = name.removePrefix("#").trim()
+            pendingTagName = cleaned
+            onCreateTag(cleaned)
+        }
+    }
+
     movingSubtask?.let { child ->
         val candidates = moveTargets
             .filter { it.id != child.id && it.id != task.id }
@@ -883,6 +977,52 @@ fun TaskEditSheet(
             containerColor = colors.background,
         )
     }
+}
+
+@Composable
+private fun NamePromptDialog(
+    title: String,
+    placeholder: String,
+    confirmLabel: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    val colors = flow
+    var value by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(
+                value = value,
+                onValueChange = { value = it },
+                placeholder = { Text(placeholder, color = colors.faint) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colors.accent,
+                    unfocusedBorderColor = colors.hairline,
+                    focusedContainerColor = colors.background,
+                    unfocusedContainerColor = colors.background,
+                    focusedTextColor = colors.ink,
+                    unfocusedTextColor = colors.ink,
+                    cursorColor = colors.accent,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(value.trim()) },
+                enabled = value.isNotBlank(),
+            ) {
+                Text(confirmLabel, color = colors.accent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = colors.faint) }
+        },
+        containerColor = colors.background,
+    )
 }
 
 @Composable

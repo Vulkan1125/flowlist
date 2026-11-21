@@ -131,15 +131,6 @@ fun TaskRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                if (task.flagged && !task.completed) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Icons.Rounded.Flag,
-                        contentDescription = "Flagged",
-                        tint = colors.warning,
-                        modifier = Modifier.size(15.dp),
-                    )
-                }
             }
             val dueColor = when {
                 task.due?.isOverdue() == true && !task.completed -> colors.danger
@@ -178,6 +169,15 @@ fun TaskRow(
         if (task.priority != null && !task.completed) {
             Spacer(modifier = Modifier.width(8.dp))
             PriorityMark(task.priority)
+        }
+        if (task.flagged && !task.completed) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.Rounded.Flag,
+                contentDescription = "Flagged",
+                tint = colors.warning,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }

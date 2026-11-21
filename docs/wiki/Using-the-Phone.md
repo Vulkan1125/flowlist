@@ -118,6 +118,11 @@ Each subtask row has a **move** button that opens a searchable picker of
 top-level tasks; choosing one re-parents the subtask there and inherits that
 task's project.
 
+The project picker is as wide as its row. Its last item is **Create new
+project**, and the tag row ends with a **+** chip for a new tag; both select the
+new entity on the task. Tag chips wrap onto further lines when they run out of
+room.
+
 ## Attachments
 
 In the task editor, **Add attachment** opens the system file picker. The file
@@ -142,6 +147,11 @@ attachments, and new attachments are saved as the library syncs.
 **Remove all offline copies** deletes every saved file from the phone after a
 confirmation warning and switches the toggle off. Files on the Mac are never
 touched.
+
+## Task rows
+
+A flagged task shows a small flag at the far right of its row, after the
+priority mark. Pending edits and priority marks stay to its left.
 
 ## Checklists
 
@@ -173,7 +183,8 @@ open project or toggle its tags.
 
 Forecast opens on a **month grid**. Each day shows how many tasks are due, with
 previous/next month and **Today** controls. Tapping a day lists its tasks below
-the grid. **Agenda** switches back to the rolling two-week list.
+the grid. **Agenda** switches back to the rolling two-week list, and the choice is
+remembered across app restarts.
 
 ## Saved perspectives
 

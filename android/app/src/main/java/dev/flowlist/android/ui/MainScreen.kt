@@ -513,6 +513,8 @@ fun MainScreen(
                     onTrash = trash,
                 )
                 Tab.Forecast -> ForecastScreen(
+                    view = preferences.forecastView,
+                    onViewChange = { onPreferencesChange(preferences.copy(forecastView = it)) },
                     snapshot = snapshot,
                     weekStartsMonday = preferences.weekStartsMonday,
                     swipeActions = preferences.swipeActions,
@@ -641,6 +643,12 @@ fun MainScreen(
                     scope.launch { repository.moveChecklist(dto, item, to) }
                 },
                 savedAttachments = state.savedAttachments,
+                onCreateProject = { name ->
+                    scope.launch { repository.createProject(name, null) }
+                },
+                onCreateTag = { name ->
+                    scope.launch { repository.createTag(name, null) }
+                },
                 onAddAttachment = { attachmentPicker.launch("*/*") },
                 onSaveAttachment = { path ->
                     scope.launch {
