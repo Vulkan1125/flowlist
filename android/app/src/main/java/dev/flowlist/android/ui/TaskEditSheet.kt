@@ -32,6 +32,8 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -99,7 +101,10 @@ fun TaskEditSheet(
     onAddChecklist: (String) -> Unit,
     onDeleteChecklist: (ChecklistDto) -> Unit,
     onMoveChecklist: (ChecklistDto, Int) -> Unit,
+    savedAttachments: Set<String>,
     onAddAttachment: () -> Unit,
+    onSaveAttachment: (String) -> Unit,
+    onRemoveSavedAttachment: (String) -> Unit,
     onOpenAttachment: (String) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onAddSubtask: (String) -> Unit,
@@ -232,6 +237,24 @@ fun TaskEditSheet(
                         maxLines = 1,
                         modifier = Modifier.weight(1f),
                     )
+                    val saved = path in savedAttachments
+                    IconButton(
+                        onClick = {
+                            if (saved) onRemoveSavedAttachment(path) else onSaveAttachment(path)
+                        },
+                        modifier = Modifier.size(30.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (saved) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
+                            contentDescription = if (saved) {
+                                "Remove offline copy"
+                            } else {
+                                "Save for offline"
+                            },
+                            tint = if (saved) colors.accent else colors.faint,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
                     IconButton(
                         onClick = { onRemoveAttachment(path) },
                         modifier = Modifier.size(30.dp),

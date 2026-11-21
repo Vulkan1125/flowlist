@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.5 — 2026-11-21
+
+- **Attachments can be saved for offline use.** The download button on each
+  attachment copies it into the app's private files, marks it as saved, and
+  opening it no longer needs the Mac. Tapping the saved button again removes
+  the offline copy. Removing an attachment also removes its saved copy.
+
 ## 0.9.4 — 2026-11-21
 
 - **Attachments on the phone.** Pick any file from the task editor; it is

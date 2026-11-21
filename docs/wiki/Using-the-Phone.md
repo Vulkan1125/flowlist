@@ -124,7 +124,9 @@ In the task editor, **Add attachment** opens the system file picker. The file
 is uploaded to `attachments/` inside the library and referenced on the task, so
 the Mac sees the same path. Tapping an attachment downloads it to the phone's
 cache and opens it with any installed viewer; the close button removes it from
-the task.
+the task. The download button saves a durable copy inside the app's private
+files, after which the attachment opens without the Mac. Tapping that button
+again removes the offline copy.
 
 Uploads go over `POST /api/v1/files` and downloads over `GET /api/v1/files`.
 Both require the paired token. Files are capped at 40 MB, and the Mac only

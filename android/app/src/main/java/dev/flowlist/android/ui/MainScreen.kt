@@ -616,7 +616,24 @@ fun MainScreen(
                 onMoveChecklist = { item, to ->
                     scope.launch { repository.moveChecklist(dto, item, to) }
                 },
+                savedAttachments = state.savedAttachments,
                 onAddAttachment = { attachmentPicker.launch("*/*") },
+                onSaveAttachment = { path ->
+                    scope.launch {
+                        val saved = repository.saveAttachmentForOffline(path)
+                        snackbarHost.showSnackbar(
+                            message = if (saved) {
+                                "Saved for offline"
+                            } else {
+                                "Couldn't save the attachment"
+                            },
+                            duration = SnackbarDuration.Short,
+                        )
+                    }
+                },
+                onRemoveSavedAttachment = { path ->
+                    scope.launch { repository.removeSavedAttachment(path) }
+                },
                 onOpenAttachment = { path ->
                     scope.launch {
                         if (!repository.openAttachment(path)) {

@@ -32,6 +32,8 @@ data class AppState(
     val lastSyncAt: Long? = null,
     /// When the connection was lost, or when the app opened unpaired.
     val offlineSince: Long? = null,
+    /// Attachment paths with a durable copy on this phone.
+    val savedAttachments: Set<String> = emptySet(),
 )
 
 class Repository(context: Context) {
@@ -42,6 +44,14 @@ class Repository(context: Context) {
     private val mutex = Mutex()
 
     private var outbox: MutableList<PendingOp> = files.loadOutbox().toMutableList()
+    private val savedDir = File(appContext.filesDir, "attachments").apply { mkdirs() }
+    private val savedIndex = File(savedDir, "index.txt")
+    private val savedPaths: MutableSet<String> = savedIndex
+        .takeIf { it.exists() }
+        ?.readLines()
+        ?.filter { it.isNotBlank() && savedFile(it).exists() }
+        ?.toMutableSet()
+        ?: mutableSetOf()
     private val _state = MutableStateFlow(
         AppState(
             paired = session.paired,
@@ -50,6 +60,7 @@ class Repository(context: Context) {
             pendingCount = outbox.size,
             server = session.baseUrl.orEmpty(),
             offlineSince = if (session.paired) System.currentTimeMillis() else null,
+            savedAttachments = savedPaths.toSet(),
         ),
     )
     val state: StateFlow<AppState> = _state.asStateFlow()
@@ -521,24 +532,75 @@ class Repository(context: Context) {
     suspend fun removeAttachment(taskId: String, path: String) {
         val next = currentAttachments(taskId).filterNot { it == path }
         updateAttachments(taskId, next)
+        if (path !in next) removeSavedAttachment(path)
+    }
+
+    suspend fun saveAttachmentForOffline(path: String): Boolean {
+        val base = session.baseUrl ?: return false
+        val token = session.token ?: return false
+        return try {
+            val file = savedFile(path)
+            if (!file.exists()) {
+                val bytes = api.downloadFile(base, token, path)
+                val temp = File(file.parentFile, "${file.name}.part")
+                temp.writeBytes(bytes)
+                if (!temp.renameTo(file)) {
+                    file.writeBytes(bytes)
+                    temp.delete()
+                }
+            }
+            savedPaths.add(path)
+            persistSaved()
+            true
+        } catch (error: Exception) {
+            _state.update { it.copy(error = friendly(error)) }
+            false
+        }
+    }
+
+    suspend fun removeSavedAttachment(path: String) {
+        savedFile(path).delete()
+        savedPaths.remove(path)
+        persistSaved()
+    }
+
+    private fun savedFile(path: String): File {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(path.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        val extension = path.substringAfterLast('/', "")
+            .substringAfterLast('.', "")
+            .take(10)
+            .lowercase()
+        val name = if (extension.isBlank()) digest else "$digest.$extension"
+        return File(savedDir, name)
+    }
+
+    private fun persistSaved() {
+        runCatching {
+            savedIndex.writeText(savedPaths.sorted().joinToString("\n"))
+        }
+        _state.update { it.copy(savedAttachments = savedPaths.toSet()) }
     }
 
     suspend fun openAttachment(path: String): Boolean {
         val base = session.baseUrl ?: return false
         val token = session.token ?: return false
         return try {
-            val bytes = api.downloadFile(base, token, path)
-            val dir = File(appContext.cacheDir, "attachments").apply { mkdirs() }
-            val name = path.substringAfterLast('/').ifBlank { "attachment" }
-            val file = File(dir, name)
-            file.writeBytes(bytes)
+            val saved = savedFile(path).takeIf { path in savedPaths && it.exists() }
+            val file = saved ?: run {
+                val bytes = api.downloadFile(base, token, path)
+                val dir = File(appContext.cacheDir, "attachments").apply { mkdirs() }
+                val name = path.substringAfterLast('/').ifBlank { "attachment" }
+                File(dir, name).apply { writeBytes(bytes) }
+            }
             val uri = FileProvider.getUriForFile(
                 appContext,
                 "${appContext.packageName}.files",
                 file,
             )
             val intent = Intent(Intent.ACTION_VIEW)
-                .setDataAndType(uri, mimeFor(name))
+                .setDataAndType(uri, mimeFor(path.substringAfterLast('/')))
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             appContext.startActivity(
                 Intent.createChooser(intent, "Open attachment")
