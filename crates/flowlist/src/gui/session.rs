@@ -183,6 +183,9 @@ pub struct Session {
     /// Keep the theme family but take light/dark from the OS.
     #[serde(default)]
     pub follow_system: Option<bool>,
+    /// Alternate Dock icon, e.g. `red`. Absent means the blue artwork.
+    #[serde(default)]
+    pub app_icon: Option<String>,
     /// Show the macOS close, minimise and zoom buttons over the header.
     /// Absent means visible, including for sessions written before the
     /// setting existed.

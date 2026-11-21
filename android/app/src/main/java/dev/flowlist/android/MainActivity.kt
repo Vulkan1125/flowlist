@@ -20,6 +20,8 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.flowlist.android.data.AppPreferences
+import dev.flowlist.android.data.PreferencesStore
 import dev.flowlist.android.data.Repository
 import dev.flowlist.android.data.ThemeStore
 import dev.flowlist.android.ui.FlowlistTheme
@@ -56,7 +58,9 @@ private fun FlowlistApp(openTab: String?, onTabConsumed: () -> Unit) {
     val context = LocalContext.current
     val repository = remember { Repository(context.applicationContext) }
     val themeStore = remember { ThemeStore(context.applicationContext) }
+    val preferencesStore = remember { PreferencesStore(context.applicationContext) }
     var theme by remember { mutableStateOf(themeStore.load()) }
+    var preferences by remember { mutableStateOf(preferencesStore.load()) }
     val state by repository.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val view = LocalView.current
@@ -91,6 +95,11 @@ private fun FlowlistApp(openTab: String?, onTabConsumed: () -> Unit) {
                 },
                 initialTab = openTab,
                 onTabConsumed = onTabConsumed,
+                preferences = preferences,
+                onPreferencesChange = {
+                    preferencesStore.save(it)
+                    preferences = it
+                },
             )
         }
     }

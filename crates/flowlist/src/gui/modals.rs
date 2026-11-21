@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use gpui::{
     Animation, AnimationExt, AnyElement, Bounds, Context, CursorStyle, IntoElement, Window, div,
-    point, prelude::*, px, rgba, size,
+    point, prelude::*, px, rgb, rgba, size,
 };
 
 use flowlist_core::ids::{FolderId, PerspectiveId, ProjectId, TaskId};
@@ -15,6 +15,7 @@ use flowlist_core::model::{GroupBy, ProjectIcon, ProjectKind, SidebarOptions, So
 use flowlist_core::query;
 use flowlist_core::time::now;
 
+use crate::app_icon::{self, AppIcon};
 use super::icons::Icon;
 use super::perspective::{PerspectiveForm, ViewChoice, ViewField};
 use super::screen_picker;
@@ -2330,6 +2331,36 @@ impl FlowlistApp {
                 ))),
         );
 
+        let icon_card = self.settings_card(
+            "Dock icon",
+            Some("Changes the icon in the Dock and app switcher. Finder keeps the bundle artwork."),
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .children(AppIcon::ALL.into_iter().map(|icon| {
+                    let selected = self.app_icon == icon;
+                    div()
+                        .id(gpui::ElementId::Name(
+                            format!("dock-icon-{}", icon.slug()).into(),
+                        ))
+                        .size(px(26.))
+                        .rounded_md()
+                        .bg(rgb(icon.color()))
+                        .border_2()
+                        .border_color(if selected { theme.text } else { theme.border })
+                        .cursor_pointer()
+                        .hover(|style| style.opacity(0.9))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.app_icon = icon;
+                            app_icon::apply(icon);
+                            this.save_session();
+                            this.toast = Some(format!("{} Dock icon", icon.label()));
+                            cx.notify();
+                        }))
+                })),
+        );
+
         let accent = if selected == ThemeKind::Plain {
             self.render_plain_accent(cx)
         } else {
@@ -2411,6 +2442,7 @@ impl FlowlistApp {
             .flex_col()
             .gap_3()
             .child(theme_card)
+            .child(icon_card)
             .child(accent)
             .child(window_card)
             .into_any_element()

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.0 — 2026-11-21
+
+- **Sectioned phone settings.** Appearance, Tasks, Notifications, Connection
+  and About are separate cards: theme, accent and app icon; week start, default
+  time, haptics and swipe actions; due reminders with a test; the Mac address,
+  live status, last sync and unpair.
+- **A quieter top bar.** The sync badge is gone. If the phone loses the Mac for
+  more than a minute, a slim “Not connected to your Mac · Tap to retry” line
+  appears under the heading and disappears as soon as sync succeeds.
+- **Mac Dock icons.** Settings → Appearance now has six Dock icon colours.
+  They swap the running app's Dock and app-switcher icon and are remembered;
+  Finder keeps the bundle artwork.
+- **Animated Mac empty states.** Inbox, Today, Forecast, Projects and
+  Completed use the same hand-drawn check, sun, calendar and folder doodles as
+  the phone. Every stroke comes from the active theme, with a slow bob, drifting
+  cloud, floating page and an orbiting accent dot.
+- The Mac empty Inbox now says **Inbox zero** instead of “Nothing here”.
+
 ## 0.3.1 — 2026-11-21
 
 - **Compact due/defer picker.** The huge Material date dialog is gone. A

@@ -66,6 +66,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.AppState
 import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.Repository
@@ -77,6 +78,7 @@ import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.label
 import dev.flowlist.android.data.today
 import dev.flowlist.android.data.isToday
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -99,6 +101,8 @@ fun MainScreen(
     onThemeChange: (ThemeSettings) -> Unit,
     initialTab: String?,
     onTabConsumed: () -> Unit,
+    preferences: AppPreferences,
+    onPreferencesChange: (AppPreferences) -> Unit,
 ) {
     val colors = flow
     var tab by rememberSaveable { mutableStateOf(Tab.Inbox) }
@@ -107,6 +111,15 @@ fun MainScreen(
     var detail by remember { mutableStateOf<TaskView?>(null) }
     var project by remember { mutableStateOf<ProjectDto?>(null) }
     val haptics = LocalHapticFeedback.current
+    var offlineWarning by remember { mutableStateOf(false) }
+    LaunchedEffect(state.offlineSince) {
+        if (state.offlineSince != null) {
+            delay(60_000)
+            offlineWarning = true
+        } else {
+            offlineWarning = false
+        }
+    }
     LaunchedEffect(initialTab) {
         when (initialTab) {
             "today" -> tab = Tab.Today
@@ -119,7 +132,9 @@ fun MainScreen(
     val snackbarHost = remember { SnackbarHostState() }
 
     val complete: (TaskView, Boolean) -> Unit = { task, done ->
-        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        if (preferences.haptics) {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
         scope.launch {
             repository.complete(task.id, done)
             val result = snackbarHost.showSnackbar(
@@ -184,7 +199,9 @@ fun MainScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (preferences.haptics) {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
                     capture = true
                 },
                 containerColor = colors.accent,
@@ -213,15 +230,12 @@ fun MainScreen(
                 onSettings = { settings = true },
                 modifier = Modifier.statusBarsPadding(),
             )
-            if (state.error != null) {
-                ErrorBanner(
-                    message = state.error,
-                    onRetry = { scope.launch { repository.sync() } },
-                    onDismiss = repository::clearError,
-                )
+            if (offlineWarning) {
+                OfflineNotice(onRetry = { scope.launch { repository.sync() } })
             }
             when (tab) {
                 Tab.Inbox -> InboxList(
+                    swipeActions = preferences.swipeActions,
                     tasks = snapshot?.db?.inbox().orEmpty(),
                     pending = state.pending,
                     onToggle = { task -> complete(task, true) },
@@ -229,6 +243,7 @@ fun MainScreen(
                     onTrash = trash,
                 )
                 Tab.Today -> TodayList(
+                    swipeActions = preferences.swipeActions,
                     tasks = snapshot?.db?.today().orEmpty(),
                     pending = state.pending,
                     onToggle = { task -> complete(task, true) },
@@ -236,6 +251,7 @@ fun MainScreen(
                     onTrash = trash,
                 )
                 Tab.Forecast -> ForecastList(
+                    swipeActions = preferences.swipeActions,
                     groups = snapshot?.db?.forecast().orEmpty(),
                     pending = state.pending,
                     onToggle = { task -> complete(task, true) },
@@ -271,6 +287,8 @@ fun MainScreen(
                 projects = db.projects.values.toList(),
                 tags = db.tags.values.toList(),
                 pending = taskView.id in state.pending,
+                weekStartsMonday = preferences.weekStartsMonday,
+                defaultTimeMinutes = preferences.defaultTimeMinutes,
                 onDismiss = { detail = null },
                 onSave = { edit ->
                     detail = null
@@ -342,6 +360,8 @@ fun MainScreen(
             },
             theme = theme,
             onThemeChange = onThemeChange,
+            preferences = preferences,
+            onPreferencesChange = onPreferencesChange,
         )
     }
 }
@@ -382,13 +402,6 @@ private fun Header(
                     color = colors.faint,
                 )
             }
-            when {
-                state.pendingCount > 0 -> SyncDot("${state.pendingCount} waiting", colors.warning)
-                state.syncing -> SyncDot("Syncing", colors.faint)
-                !state.online -> SyncDot("Offline", colors.danger)
-                else -> SyncDot("Synced", colors.success)
-            }
-            Spacer(modifier = Modifier.width(4.dp))
             IconButton(onClick = onSettings) {
                 Icon(
                     imageVector = Icons.Outlined.Settings,
@@ -402,34 +415,33 @@ private fun Header(
 }
 
 @Composable
-private fun ErrorBanner(message: String, onRetry: () -> Unit, onDismiss: () -> Unit) {
+private fun OfflineNotice(onRetry: () -> Unit) {
     val colors = flow
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(colors.field)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 2.dp)
+            .clickable(onClick = onRetry),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.labelMedium,
-            color = colors.ink,
-            modifier = Modifier.weight(1f),
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(colors.warning),
         )
-        TextButton(onClick = onRetry) {
-            Text("Retry", color = colors.ink, style = MaterialTheme.typography.labelMedium)
-        }
-        TextButton(onClick = onDismiss) {
-            Text("Dismiss", color = colors.faint, style = MaterialTheme.typography.labelMedium)
-        }
+        Spacer(modifier = Modifier.width(7.dp))
+        Text(
+            text = "Not connected to your Mac · Tap to retry",
+            style = MaterialTheme.typography.labelMedium,
+            color = colors.faint,
+        )
     }
 }
 
 @Composable
 private fun InboxList(
+    swipeActions: Boolean,
     tasks: List<TaskView>,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
@@ -447,19 +459,38 @@ private fun InboxList(
             }
         }
         items(tasks, key = { it.id }) { task ->
-            SwipeTaskRow(
-                task = task,
-                pending = task.id in pending,
-                onToggle = { onToggle(task) },
-                onTrash = { onTrash(task) },
-                onClick = { onClick(task) },
-            )
+            if (swipeActions) {
+                if (swipeActions) {
+                    SwipeTaskRow(
+                        task = task,
+                        pending = task.id in pending,
+                        onToggle = { onToggle(task) },
+                        onTrash = { onTrash(task) },
+                        onClick = { onClick(task) },
+                    )
+                } else {
+                    TaskRow(
+                        task = task.copy(pending = task.id in pending),
+                        onToggle = { onToggle(task) },
+                        onClick = { onClick(task) },
+                    )
+                    Hairline(Modifier.padding(start = 58.dp))
+                }
+            } else {
+                TaskRow(
+                    task = task.copy(pending = task.id in pending),
+                    onToggle = { onToggle(task) },
+                    onClick = { onClick(task) },
+                )
+                Hairline(Modifier.padding(start = 58.dp))
+            }
         }
     }
 }
 
 @Composable
 private fun TodayList(
+    swipeActions: Boolean,
     tasks: List<TaskView>,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
@@ -481,25 +512,43 @@ private fun TodayList(
         if (overdue.isNotEmpty()) {
             item { SectionLabel("Overdue") }
             items(overdue, key = { it.id }) { task ->
-                SwipeTaskRow(
-                    task = task,
-                    pending = task.id in pending,
-                    onToggle = { onToggle(task) },
-                    onTrash = { onTrash(task) },
-                    onClick = { onClick(task) },
-                )
+                if (swipeActions) {
+                    SwipeTaskRow(
+                        task = task,
+                        pending = task.id in pending,
+                        onToggle = { onToggle(task) },
+                        onTrash = { onTrash(task) },
+                        onClick = { onClick(task) },
+                    )
+                } else {
+                    TaskRow(
+                        task = task.copy(pending = task.id in pending),
+                        onToggle = { onToggle(task) },
+                        onClick = { onClick(task) },
+                    )
+                    Hairline(Modifier.padding(start = 58.dp))
+                }
             }
         }
         if (today.isNotEmpty()) {
             item { SectionLabel(if (overdue.isEmpty()) "Due today" else "Today") }
             items(today, key = { it.id }) { task ->
-                SwipeTaskRow(
-                    task = task,
-                    pending = task.id in pending,
-                    onToggle = { onToggle(task) },
-                    onTrash = { onTrash(task) },
-                    onClick = { onClick(task) },
-                )
+                if (swipeActions) {
+                    SwipeTaskRow(
+                        task = task,
+                        pending = task.id in pending,
+                        onToggle = { onToggle(task) },
+                        onTrash = { onTrash(task) },
+                        onClick = { onClick(task) },
+                    )
+                } else {
+                    TaskRow(
+                        task = task.copy(pending = task.id in pending),
+                        onToggle = { onToggle(task) },
+                        onClick = { onClick(task) },
+                    )
+                    Hairline(Modifier.padding(start = 58.dp))
+                }
             }
         }
     }
@@ -507,6 +556,7 @@ private fun TodayList(
 
 @Composable
 private fun ForecastList(
+    swipeActions: Boolean,
     groups: Map<LocalDate, List<TaskView>>,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
@@ -526,13 +576,22 @@ private fun ForecastList(
         groups.forEach { (date, tasks) ->
             item(key = "day-$date") { ForecastHeader(date, tasks.size) }
             items(tasks, key = { it.id }) { task ->
-                SwipeTaskRow(
-                    task = task,
-                    pending = task.id in pending,
-                    onToggle = { onToggle(task) },
-                    onTrash = { onTrash(task) },
-                    onClick = { onClick(task) },
-                )
+                if (swipeActions) {
+                    SwipeTaskRow(
+                        task = task,
+                        pending = task.id in pending,
+                        onToggle = { onToggle(task) },
+                        onTrash = { onTrash(task) },
+                        onClick = { onClick(task) },
+                    )
+                } else {
+                    TaskRow(
+                        task = task.copy(pending = task.id in pending),
+                        onToggle = { onToggle(task) },
+                        onClick = { onClick(task) },
+                    )
+                    Hairline(Modifier.padding(start = 58.dp))
+                }
             }
         }
     }

@@ -82,3 +82,19 @@ Inbox, Today, Forecast and Browse show a small hand-drawn illustration when they
 
 - **Widget**: add Flowlist from the Android widget picker to see today's and Inbox counts. Tap it to open the app.
 - **Due reminders**: Settings → Due reminders schedules a quiet summary when tasks are due today or overdue. Android 13 and later asks for notification permission the first time; nothing is sent off the device.
+
+## Settings
+
+Settings is grouped into cards:
+
+- **Appearance** — system/light/dark, theme, accent and launcher icon.
+- **Tasks** — first day of the week, the default time used by the date sheet,
+  haptics and swipe actions.
+- **Notifications** — due reminders, permission state and a test notification.
+- **Connection** — the Mac address, live status, last sync, a manual sync and
+  unpairing.
+- **About** — version and links.
+
+The sync badge is intentionally absent from the top bar. If the Mac has been
+unreachable for more than a minute while the app is open, a slim line appears
+below the heading; tapping it retries.

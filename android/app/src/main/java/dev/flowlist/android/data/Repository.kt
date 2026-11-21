@@ -22,6 +22,10 @@ data class AppState(
     val online: Boolean = true,
     val error: String? = null,
     val server: String = "",
+    /// When the Mac last answered. Used for the one-minute offline notice.
+    val lastSyncAt: Long? = null,
+    /// When the connection was lost, or when the app opened unpaired.
+    val offlineSince: Long? = null,
 )
 
 class Repository(context: Context) {
@@ -38,6 +42,7 @@ class Repository(context: Context) {
             pending = outbox.mapNotNull { it.taskId }.toSet(),
             pendingCount = outbox.size,
             server = session.baseUrl.orEmpty(),
+            offlineSince = if (session.paired) System.currentTimeMillis() else null,
         ),
     )
     val state: StateFlow<AppState> = _state.asStateFlow()
@@ -93,6 +98,8 @@ class Repository(context: Context) {
                         online = true,
                         syncing = false,
                         error = null,
+                        lastSyncAt = System.currentTimeMillis(),
+                        offlineSince = null,
                     )
                 }
             } catch (error: Exception) {
@@ -101,6 +108,7 @@ class Repository(context: Context) {
                         syncing = false,
                         online = false,
                         error = friendly(error),
+                        offlineSince = it.offlineSince ?: System.currentTimeMillis(),
                     )
                 }
             }

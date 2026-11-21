@@ -69,6 +69,8 @@ fun TaskEditSheet(
     projects: List<ProjectDto>,
     tags: List<TagDto>,
     pending: Boolean,
+    weekStartsMonday: Boolean = true,
+    defaultTimeMinutes: Int = 9 * 60,
     onDismiss: () -> Unit,
     onSave: (TaskEdit) -> Unit,
     onComplete: () -> Unit,
@@ -341,6 +343,11 @@ fun TaskEditSheet(
         DueDateSheet(
             title = if (datePickerForDue) "Due date" else "Defer date",
             initial = if (datePickerForDue) due else defer,
+            weekStartsMonday = weekStartsMonday,
+            defaultTime = java.time.LocalTime.of(
+                defaultTimeMinutes / 60,
+                defaultTimeMinutes % 60,
+            ),
             onDismiss = { showDueSheet = false },
             onSet = { value ->
                 applyStamp(value)

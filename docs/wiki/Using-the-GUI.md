@@ -165,7 +165,8 @@ Press `⌘,`. The sheet has seven sections on the left (`⌘1`…`⌘7` jump bet
 them):
 
 - **Appearance** — theme family, light/dark, Plain's accent presets and custom
-  colour picker, screen eyedropper, and the window controls.
+  colour picker, screen eyedropper, six Dock icon colours, and the window
+  controls.
 - **Sidebar** — which rail sections appear and which rows carry counts.
 - **Workflow** — Vim mode, macOS due reminders, and the review/changed/completed windows.
 - **Nearby** — the radius used by the Nearby view.
@@ -226,3 +227,11 @@ opens a sheet with two choices:
 
 Flowlist quits, a helper removes the files, and the result is logged to
 `~/Library/Logs/Flowlist-uninstall.log` if anything could not be deleted.
+
+## Empty states
+
+When a view has nothing in it, Flowlist draws a small hand-drawn illustration
+instead of a placeholder: a check on a sheet for Inbox, a sun for Today, a
+calendar for Forecast, and a folder for Projects. The drawings use the active
+theme's ink, accent and warning colours, and move slowly (a bob, a drifting
+cloud, a floating page and an orbiting dot) without demanding attention.

@@ -62,6 +62,8 @@ import java.util.Locale
 fun DueDateSheet(
     title: String,
     initial: StampDto?,
+    weekStartsMonday: Boolean = true,
+    defaultTime: LocalTime = LocalTime.of(9, 0),
     onDismiss: () -> Unit,
     onSet: (StampDto?) -> Unit,
 ) {
@@ -73,7 +75,7 @@ fun DueDateSheet(
     var month by remember { mutableStateOf(YearMonth.from(selected)) }
     var hasTime by remember { mutableStateOf(initial?.hasTime ?: false) }
     var time by remember {
-        mutableStateOf(initial?.local()?.toLocalTime() ?: LocalTime.of(9, 0))
+        mutableStateOf(initial?.local()?.toLocalTime() ?: defaultTime)
     }
     var customTime by remember { mutableStateOf(false) }
 
@@ -158,8 +160,13 @@ fun DueDateSheet(
                 }
             }
 
+            val weekDays = if (weekStartsMonday) {
+                DayOfWeek.entries
+            } else {
+                listOf(DayOfWeek.SUNDAY) + DayOfWeek.entries.dropLast(1)
+            }
             Row(modifier = Modifier.fillMaxWidth()) {
-                DayOfWeek.entries.forEach { day ->
+                weekDays.forEach { day ->
                     Text(
                         text = day.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
                         style = MaterialTheme.typography.labelSmall,
@@ -172,7 +179,11 @@ fun DueDateSheet(
             Spacer(modifier = Modifier.height(4.dp))
 
             val first = month.atDay(1)
-            val offset = (first.dayOfWeek.value - DayOfWeek.MONDAY.value + 7) % 7
+            val offset = if (weekStartsMonday) {
+                (first.dayOfWeek.value - DayOfWeek.MONDAY.value + 7) % 7
+            } else {
+                first.dayOfWeek.value % 7
+            }
             val days = month.lengthOfMonth()
             val cells = 42
             for (row in 0 until 6) {

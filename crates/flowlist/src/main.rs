@@ -4,6 +4,7 @@
 //! `flowlist` opens the app, `flowlist <command>` runs a command, and
 //! `flowlist mcp` speaks Model Context Protocol on stdio.
 
+mod app_icon;
 mod cli;
 mod cli_install;
 mod uninstall;

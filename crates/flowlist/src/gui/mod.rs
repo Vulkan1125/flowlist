@@ -6,6 +6,7 @@
 
 mod blur;
 mod content;
+mod doodles;
 mod drag;
 mod hotkey;
 mod icons;
@@ -53,6 +54,7 @@ use flowlist_core::store::Store;
 use flowlist_core::time::{Stamp, format_duration, local_date, now};
 use flowlist_core::{export, taskpaper};
 
+use crate::app_icon::{self, AppIcon};
 use drag::{DragFolder, DragProject, DragTask};
 use icons::Icon;
 
@@ -309,6 +311,8 @@ pub(super) const INSPECTOR_WIDTH: f32 = 320.0;
 pub struct FlowlistApp {
     store: Store,
     theme: Theme,
+    /// Alternate Dock icon, saved with the session.
+    app_icon: AppIcon,
     view: View,
     /// First day of the month the Forecast calendar shows.
     forecast_month: chrono::NaiveDate,
@@ -577,6 +581,11 @@ impl FlowlistApp {
         let show_inspector = session.inspector.unwrap_or(true);
         let vim_mode = session.vim_mode.unwrap_or(true);
         let due_notifications = session.notifications.unwrap_or(false);
+        let app_icon = session
+            .app_icon
+            .as_deref()
+            .and_then(AppIcon::from_slug)
+            .unwrap_or_default();
         let priority_filter = session.priority_filter();
         let only_available = session.only_available.unwrap_or(false);
         let follow_system = session.follow_system.unwrap_or(false);
@@ -620,6 +629,7 @@ impl FlowlistApp {
         let mut app = Self {
             store,
             theme,
+            app_icon,
             view,
             forecast_month,
             forecast_date: None,
@@ -736,6 +746,7 @@ impl FlowlistApp {
             traffic_lights_on_open: None,
         };
         app.restore_view_options();
+        app_icon::apply(app_icon);
         app
     }
 
@@ -839,6 +850,7 @@ impl FlowlistApp {
             show_completed: Some(self.show_completed),
             vim_mode: Some(self.vim_mode),
             notifications: Some(self.due_notifications),
+            app_icon: Some(self.app_icon.slug().to_string()),
             priority_filter: self.priority_filter.map(|p| p.slug().to_string()),
             only_available: Some(self.only_available),
             follow_system: Some(self.follow_system),
@@ -5364,6 +5376,7 @@ impl FlowlistApp {
                 "on_path": false,
             }),
         };
+        state["app_icon"] = serde_json::json!(self.app_icon.slug());
         state["notifications"] = serde_json::json!({
             "enabled": self.due_notifications,
             "permission": self.notification_permission.label(),
@@ -6029,6 +6042,19 @@ impl FlowlistApp {
         let theme = self.theme;
         // Recorded for the GUI probe, which cannot read text off the screen.
         *self.empty_note.borrow_mut() = Some(title.to_string());
+        let kind = if !self.search.is_empty() {
+            doodles::DoodleKind::Search
+        } else {
+            match &self.view {
+                View::Builtin(BuiltinPerspective::Today) => doodles::DoodleKind::Today,
+                View::Builtin(BuiltinPerspective::Forecast) => doodles::DoodleKind::Forecast,
+                View::Builtin(BuiltinPerspective::Completed) => doodles::DoodleKind::Completed,
+                View::Builtin(BuiltinPerspective::Projects) | View::Folder(_) => {
+                    doodles::DoodleKind::Folder
+                }
+                _ => doodles::DoodleKind::Inbox,
+            }
+        };
         div()
             .flex()
             .flex_col()
@@ -6037,20 +6063,7 @@ impl FlowlistApp {
             .flex_1()
             .gap_3()
             .py_12()
-            .child(
-                // A soft halo keeps the empty state from reading as a missing
-                // image while staying quieter than a full illustration.
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .size(px(76.))
-                    .rounded_full()
-                    .bg(theme.field)
-                    .border_1()
-                    .border_color(theme.border_soft)
-                    .child(icons::icon(Icon::CircleDashed, 30.0, theme.text_faint)),
-            )
+            .child(doodles::doodle(kind, theme))
             .child(
                 div()
                     .text_base()

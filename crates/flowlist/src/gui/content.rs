@@ -1236,6 +1236,10 @@ impl FlowlistApp {
                 return self.render_empty(title, detail).into_any_element();
             }
             let (title, detail) = match &self.view {
+                View::Builtin(BuiltinPerspective::Inbox) => (
+                    "Inbox zero",
+                    "A clean slate. Capture something above and it lands here.",
+                ),
                 View::Builtin(BuiltinPerspective::Today) => (
                     "Nothing due today",
                     if self.hide_overdue {
