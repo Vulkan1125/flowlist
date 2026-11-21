@@ -1270,47 +1270,28 @@ impl FlowlistApp {
         cx.notify();
     }
 
+    /// Clicking the × on an attachment row asks first: removing a file is
+    /// easy to mistake for opening it, and an accidental delete is not.
     fn remove_attachment(&mut self, path: String, cx: &mut Context<Self>) {
-        if let Some(id) = self.selected_one() {
-            let attachments = self
-                .store
-                .db()
-                .tasks
-                .get(&id)
-                .map(|task| task.attachments.clone())
-                .unwrap_or_default();
-            let attachments: Vec<String> = attachments
-                .into_iter()
-                .filter(|candidate| candidate != &path)
-                .collect();
-            self.execute(Command::UpdateTask {
-                id,
-                patch: TaskPatch {
-                    attachments: Some(attachments),
-                    ..Default::default()
-                },
-            });
-        } else if let View::Project(id) = self.view.clone() {
-            let attachments = self
-                .store
-                .db()
-                .projects
-                .get(&id)
-                .map(|project| project.attachments.clone())
-                .unwrap_or_default();
-            let attachments: Vec<String> = attachments
-                .into_iter()
-                .filter(|candidate| candidate != &path)
-                .collect();
-            self.execute(Command::UpdateProject {
-                id,
-                patch: ProjectPatch {
-                    attachments: Some(attachments),
-                    ..Default::default()
-                },
-            });
-        }
-        cx.notify();
+        let task = self.selected_one();
+        let project = if task.is_none() {
+            match &self.view {
+                View::Project(id) => Some(id.clone()),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let target = match (task, project) {
+            (Some(id), _) => modals::AttachmentTarget::Task(id),
+            (None, Some(id)) => modals::AttachmentTarget::Project(id),
+            _ => {
+                self.toast = Some("Select a task or project first".to_string());
+                cx.notify();
+                return;
+            }
+        };
+        self.open_modal(modals::Modal::remove_attachment(target, path), cx);
     }
 
     fn open_attachment(&mut self, path: String) {
@@ -3168,6 +3149,63 @@ impl FlowlistApp {
                     status: TagStatus::Available,
                     location: None,
                     position: Position::End,
+                });
+            }
+            modals::Modal::RemoveAttachment { target, path, .. } => match target {
+                modals::AttachmentTarget::Task(id) => {
+                    let Some(mut attachments) = self
+                        .store
+                        .db()
+                        .tasks
+                        .get(id)
+                        .map(|task| task.attachments.clone())
+                    else {
+                        return Err("That task no longer exists".to_string());
+                    };
+                    attachments.retain(|candidate| candidate != path);
+                    self.execute(Command::UpdateTask {
+                        id: id.clone(),
+                        patch: TaskPatch {
+                            attachments: Some(attachments),
+                            ..Default::default()
+                        },
+                    });
+                }
+                modals::AttachmentTarget::Project(id) => {
+                    let Some(mut attachments) = self
+                        .store
+                        .db()
+                        .projects
+                        .get(id)
+                        .map(|project| project.attachments.clone())
+                    else {
+                        return Err("That project no longer exists".to_string());
+                    };
+                    attachments.retain(|candidate| candidate != path);
+                    self.execute(Command::UpdateProject {
+                        id: id.clone(),
+                        patch: ProjectPatch {
+                            attachments: Some(attachments),
+                            ..Default::default()
+                        },
+                    });
+                }
+            },
+            modals::Modal::ReviewInterval { id, days, .. } => {
+                let value = days
+                    .text()
+                    .trim()
+                    .parse::<u32>()
+                    .map_err(|_| "Review days must be a number".to_string())?;
+                if !(1..=365).contains(&value) {
+                    return Err("Review days must be between 1 and 365".to_string());
+                }
+                self.execute(Command::UpdateProject {
+                    id: id.clone(),
+                    patch: ProjectPatch {
+                        review_interval_days: Some(value),
+                        ..Default::default()
+                    },
                 });
             }
             modals::Modal::Perspective { form } => {

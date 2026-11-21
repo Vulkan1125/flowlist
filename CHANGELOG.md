@@ -62,7 +62,21 @@
   whole session ends, so Delete and Complete no longer appear as soon as the
   title is saved.
 - The New Project sheet has a Review every (days) field, pre-filled from the
-  library default, so each project can keep its own review cadence.
+  library default, so each project can keep its own review cadence. A project
+  keeps that cadence editable afterwards: its review line in the banner and in
+  the inspector is a button that opens a **Review interval** sheet, so changing
+  the rhythm no longer means recreating the project. Undo restores the previous
+  interval and the next review date moves with it.
+- Task rows read their right-edge metadata in one fixed order — attachments,
+  project, tags, estimate, due, deferred, repeat, checklist — instead of the
+  order the fields happened to be added. Tags now print with a leading `#`, so
+  a tag chip can never be mistaken for a project name.
+- The × on an attachment row now asks first, naming the file or link and
+  noting that nothing on disk is touched. Confirming unlinks it, and Undo puts
+  the attachment back.
+- The content header no longer repeats the last action and its Undo sentence;
+  the status bar still carries both. The Settings sheet drops its
+  library-wide subtitle, since the section rail already names what it holds.
 - Icon tooltips now wait three seconds instead of about five.
 - Nested folder rows show just the folder's own name; indentation carries the
   path instead of printing `Parent / Child` on every row.

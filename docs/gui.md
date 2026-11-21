@@ -123,7 +123,9 @@ move to the next one; a validation error keeps that field open, and `Enter` on
 the last field ends the session. A first-time task stays a draft until then, so
 its Delete and Complete actions stay hidden while you are still filling it in.
 Attachments take local file paths and http(s) links side by side: **Attach
-file…** opens the macOS picker and **Add link…** takes a pasted address.
+file…** opens the macOS picker and **Add link…** takes a pasted address. The ×
+on an attachment row asks before unlinking it, and the sheet says that the
+file itself stays where it is; Undo restores the attachment.
 Checklist steps are lightweight and never appear as tasks; completing a
 repeating task copies the checklist with every step unchecked. The last number
 in a repeating title moves on with each occurrence, so “Week 3 review” spawns
@@ -166,10 +168,12 @@ the only action surface on a row, so names keep the full width and no pencil
 or × competes with them.
 
 Task rows follow the same rule: the flag control and hover wash appear only
-under the pointer, so an idle list is titles and metadata. Empty views share
-one illustrated halo, counts read as prose (`1 task`, `6 tasks`), and menus,
-toasts and sheets fade in over 120 ms. Settings previews each theme family as
-a miniature window.
+under the pointer, so an idle list is titles and metadata. Row metadata keeps
+one order from the attachment badge inwards — attachments, project, `#tag`
+chips, estimate, due, deferred, repeat, checklist — so two tasks with the same
+fields always read the same way. Empty views share one illustrated halo,
+counts read as prose (`1 task`, `6 tasks`), and menus, toasts and sheets fade
+in over 120 ms. Settings previews each theme family as a miniature window.
 
 ## Projects, review and archive
 
@@ -182,7 +186,10 @@ available in the New Project sheet.
 Review shows projects whose next review date has arrived. Each project keeps
 its own review interval, set in the New Project sheet (pre-filled from the
 library default) or with `flowlist project add --review-days`; completing a
-review advances the next date by that project's interval.
+review advances the next date by that project's interval. The review line in
+the project banner and in the inspector is a button: it opens a **Review
+interval** sheet for the project on screen, so the cadence can change without
+recreating anything. The sheet takes 1–365 days and accepts an undo.
 
 The Archive lists finished and dropped projects grouped by folder. A row opens
 the project, Reopen brings it back without leaving the Archive, and Delete asks

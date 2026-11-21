@@ -234,7 +234,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] New project/folder/tag/perspective modals (`⇧⌘N`, `⌥⌘N`,
       `⌃⌘N`, `⇧⌘P`). The New Project sheet carries a Review every (days)
       field pre-filled from the library default, so each project can keep its
-      own cadence.
+      own cadence; the review line in the project banner and inspector opens
+      the same value for later edits.
+- [x] Removing an attachment asks first and leaves the file on disk; Undo
+      restores the row.
 - [x] Rich custom-perspective editor laid out like settings: labelled filter
       and layout rows that each open a menu of every value, a live match count,
       an explicit Clear filters, and unknown CLI conditions kept and counted

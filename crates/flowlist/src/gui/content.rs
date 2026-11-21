@@ -944,15 +944,8 @@ impl FlowlistApp {
                         "No tasks".to_string()
                     } else {
                         super::plural(count, "task", "tasks")
-                    })
-                    .when(self.store.can_undo(), |this| {
-                        this.child(
-                            div().child(
-                                self.store
-                                    .undo_label()
-                                    .unwrap_or_else(|| "Undo".to_string()),
-                            ),
-                        )
+                        // The last action and its Undo live in the status bar;
+                        // repeating them under every view header was noise.
                     }),
             )
     }
@@ -1826,17 +1819,9 @@ impl FlowlistApp {
                     .items_center()
                     .gap_1()
                     .flex_shrink_0()
-                    .children(tags.into_iter().map(|tag| widgets::tag_chip(theme, tag)))
-                    .when_some(project, |this, project| {
-                        this.child(div().text_xs().text_color(theme.text_faint).child(project))
-                    })
-                    .when_some(estimate, |this, minutes| {
-                        this.child(widgets::chip(
-                            theme,
-                            format_duration(minutes),
-                            theme.text_faint,
-                        ))
-                    })
+                    // Right-edge metadata reads in a fixed order: what is
+                    // attached, where it lives, what it is tagged, how long it
+                    // takes, when it is due, then the softer signals.
                     .when(attachment_count > 0, |this| {
                         this.child(
                             div()
@@ -1872,23 +1857,14 @@ impl FlowlistApp {
                                 .child(attachment_count.to_string()),
                         )
                     })
-                    .when(checklist_total > 0, |this| {
-                        this.child(widgets::chip_with_icon(
-                            theme,
-                            Icon::Check,
-                            format!("{checklist_done}/{checklist_total}"),
-                            if checklist_done == checklist_total {
-                                theme.success
-                            } else {
-                                theme.text_faint
-                            },
-                        ))
+                    .when_some(project, |this, project| {
+                        this.child(div().text_xs().text_color(theme.text_faint).child(project))
                     })
-                    .when_some(defer.filter(|stamp| stamp.at > now()), |this, stamp| {
-                        this.child(widgets::chip_with_icon(
+                    .children(tags.into_iter().map(|tag| widgets::tag_chip(theme, tag)))
+                    .when_some(estimate, |this, minutes| {
+                        this.child(widgets::chip(
                             theme,
-                            Icon::Clock,
-                            human_date(&stamp, now()),
+                            format_duration(minutes),
                             theme.text_faint,
                         ))
                     })
@@ -1899,6 +1875,14 @@ impl FlowlistApp {
                                 .text_color(due_color)
                                 .child(human_date(&stamp, now())),
                         )
+                    })
+                    .when_some(defer.filter(|stamp| stamp.at > now()), |this, stamp| {
+                        this.child(widgets::chip_with_icon(
+                            theme,
+                            Icon::Clock,
+                            human_date(&stamp, now()),
+                            theme.text_faint,
+                        ))
                     })
                     .when_some(repeat_label(db, &id), |this, label| {
                         this.child(
@@ -1911,6 +1895,18 @@ impl FlowlistApp {
                                 .child(icons::icon(Icon::Repeat, 11.0, theme.text_faint))
                                 .child(label),
                         )
+                    })
+                    .when(checklist_total > 0, |this| {
+                        this.child(widgets::chip_with_icon(
+                            theme,
+                            Icon::Check,
+                            format!("{checklist_done}/{checklist_total}"),
+                            if checklist_done == checklist_total {
+                                theme.success
+                            } else {
+                                theme.text_faint
+                            },
+                        ))
                     })
                     .when(!availability.is_available() && !completed, |this| {
                         this.child(
@@ -1988,17 +1984,31 @@ impl FlowlistApp {
                                     .child(format!("{done}/{total}")),
                             ),
                     )
-                    .child(
+                    .child({
+                        let edit_id = id.clone();
                         div()
+                            .id("banner-review-interval")
+                            .flex()
                             .flex_1()
+                            .items_center()
+                            .gap_1()
                             .text_xs()
                             .text_color(theme.text_dim)
+                            .cursor_pointer()
+                            .hover(|style| style.text_color(theme.text))
+                            .flow_tip(self, cx, theme, "Change how often this project is reviewed")
                             .child(format!(
                                 "Review {} · every {} day(s)",
                                 next_review.format("%b %-d"),
                                 interval
-                            )),
-                    )
+                            ))
+                            .child(icons::icon(Icon::ChevronRight, 10.0, theme.text_faint))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                let modal =
+                                    super::modals::Modal::review_interval(this, edit_id.clone());
+                                this.open_modal(modal, cx);
+                            }))
+                    })
                     .child(
                         div()
                             .id("project-status")

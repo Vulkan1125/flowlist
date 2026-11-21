@@ -26,9 +26,9 @@ use flowlist_core::paths::DataPaths;
 use flowlist_core::store::Store;
 use flowlist_core::time::{format_duration, human_date, now};
 use gpui::{
-    App, Bounds, ClipboardItem, Context, CursorStyle, FocusHandle, FontWeight, IntoElement,
-    KeyDownEvent, MouseButton, Render, SharedString, Window, WindowBackgroundAppearance,
-    WindowBounds, WindowKind, WindowOptions, div, prelude::*, px, size,
+    App, Bounds, ClipboardItem, Context, CursorStyle, FocusHandle, Font, FontWeight, IntoElement,
+    KeyDownEvent, MouseButton, Render, SharedString, TextRun, Window, WindowBackgroundAppearance,
+    WindowBounds, WindowKind, WindowOptions, div, font, prelude::*, px, size,
 };
 
 use super::FlowlistApp;
@@ -331,7 +331,7 @@ impl QuickCapture {
         }
     }
 
-    fn render_input(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_input(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let focused = true;
         div()
@@ -360,6 +360,7 @@ impl QuickCapture {
                         &self.buffer,
                         "What's on your mind?",
                         focused,
+                        window,
                     ))
                     .cursor(CursorStyle::IBeam),
             )
@@ -436,52 +437,58 @@ impl QuickCapture {
             }
         };
 
-        let mut any = false;
-        if entry.title != text {
-            row = row.child(
-                div()
-                    .flex_shrink_0()
-                    .text_size(px(12.))
-                    .text_color(theme.text_dim)
-                    .child(format!("→ {}", entry.title)),
-            );
-            any = true;
-        }
+        // The title already shows in the field above, so the row spends its
+        // width on what parsing decided. At most three chips fit beside the
+        // gutter at the widest chip; the rest collapse into a count rather
+        // than hanging over the panel edge half-drawn.
+        let mut items: Vec<(Icon, String, gpui::Hsla)> = Vec::new();
         if let Some(project) = &entry.project_path {
-            row = row.child(chip(Icon::Project, project.clone(), theme.accent));
-            any = true;
-        }
-        for tag in &entry.tag_paths {
-            row = row.child(chip(Icon::Tag, format!("#{tag}"), theme.accent));
-            any = true;
-        }
-        if entry.flagged {
-            row = row.child(chip(Icon::Flagged, "Flagged", theme.warning));
-            any = true;
+            items.push((Icon::Project, project.clone(), theme.accent));
         }
         if let Some(due) = entry.due {
-            row = row.child(chip(Icon::Calendar, human_date(&due, now()), theme.accent));
-            any = true;
+            items.push((Icon::Calendar, human_date(&due, now()), theme.accent));
         }
         if let Some(defer) = entry.defer {
-            row = row.child(chip(
+            items.push((
                 Icon::Clock,
                 format!("Defer {}", human_date(&defer, now())),
                 theme.text_dim,
             ));
-            any = true;
         }
         if let Some(minutes) = entry.estimate_min {
-            row = row.child(chip(Icon::Clock, format_duration(minutes), theme.text_dim));
-            any = true;
+            items.push((Icon::Clock, format_duration(minutes), theme.text_dim));
         }
         if let Some(repeat) = &entry.repeat {
-            row = row.child(chip(Icon::Repeat, repeat.description(), theme.success));
-            any = true;
+            items.push((Icon::Repeat, repeat.description(), theme.success));
         }
-        if self.flash.is_some() {
-            any = true;
+        if entry.flagged {
+            items.push((Icon::Flagged, "Flagged".to_string(), theme.warning));
         }
+        for tag in &entry.tag_paths {
+            items.push((Icon::Tag, format!("#{tag}"), theme.accent));
+        }
+        const SHOWN: usize = 3;
+        let total = items.len();
+        for (icon, label, color) in items.into_iter().take(SHOWN) {
+            row = row.child(chip(icon, label, color));
+        }
+        if total > SHOWN {
+            row = row.child(
+                div()
+                    .flex_shrink_0()
+                    .h(px(21.))
+                    .px(px(7.))
+                    .flex()
+                    .items_center()
+                    .rounded_lg()
+                    .bg(theme.raised)
+                    .text_size(px(10.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text_dim)
+                    .child(format!("+{}", total - SHOWN)),
+            );
+        }
+        let any = total > 0 || self.flash.is_some();
         if !any {
             return self.render_hints().into_any_element();
         }
@@ -606,7 +613,7 @@ impl Render for QuickCapture {
                         .bg(theme.text_faint.opacity(0.30)),
                 ),
             )
-            .child(self.render_input(cx))
+            .child(self.render_input(window, cx))
             .child(self.render_preview())
             .child(self.render_footer())
     }
@@ -858,20 +865,30 @@ fn panel_bounds(cx: &App) -> Bounds<gpui::Pixels> {
     Bounds::centered(None, panel, cx)
 }
 
+/// Room for the title line inside the 620px panel, after the plus badge, the
+/// `esc` cap and the panel padding have taken theirs.
+const INPUT_ROOM: f32 = 476.0;
+
 fn field_text(
     theme: Theme,
     buffer: &TextBuffer,
     placeholder: &str,
     focused: bool,
+    window: &mut Window,
 ) -> impl IntoElement {
     let chars: Vec<char> = buffer.text().chars().collect();
     let (start, end) = buffer.selection();
+    let start = start.min(chars.len());
+    let end = end.min(chars.len());
     let has_selection = start != end;
-    let before: String = chars[..start.min(chars.len())].iter().collect();
-    let selected: String = chars[start.min(chars.len())..end.min(chars.len())]
-        .iter()
-        .collect();
-    let after: String = chars[end.min(chars.len())..].iter().collect();
+    // A long capture is one line and the caret sits at the end, so show the
+    // tail rather than the head: the part being typed never leaves the panel.
+    let drop = visible_start(&chars, end, theme, window);
+    let before_start = start.max(drop);
+    let before_end = end.max(drop);
+    let before: String = chars[drop..before_start].iter().collect();
+    let selected: String = chars[before_start..before_end].iter().collect();
+    let after: String = chars[before_end..].iter().collect();
     let empty = chars.is_empty();
 
     div()
@@ -883,6 +900,14 @@ fn field_text(
         .text_size(px(17.))
         .line_height(px(22.))
         .font_weight(FontWeight::MEDIUM)
+        .when(drop > 0, |this| {
+            this.child(
+                div()
+                    .flex_shrink_0()
+                    .text_color(theme.text_faint)
+                    .child("…"),
+            )
+        })
         .child(run(before, false, theme))
         .when(has_selection, |this| {
             this.child(run(selected.clone(), true, theme))
@@ -901,9 +926,65 @@ fn field_text(
         })
 }
 
+/// How many leading characters to drop so the caret and its tail fit in the
+/// panel. Zero when the whole line fits.
+fn visible_start(chars: &[char], end: usize, theme: Theme, window: &mut Window) -> usize {
+    let whole: String = chars.iter().collect();
+    if text_width(&whole, theme, window) <= INPUT_ROOM {
+        return 0;
+    }
+    // Width falls as more characters are dropped, so find the first index
+    // whose tail fits: that is the most characters that can go.
+    let mut low = 0;
+    let mut high = end;
+    while low < high {
+        let middle = (low + high) / 2;
+        let mut candidate = String::from("…");
+        candidate.extend(&chars[middle..]);
+        if text_width(&candidate, theme, window) <= INPUT_ROOM {
+            high = middle;
+        } else {
+            low = middle + 1;
+        }
+    }
+    // Start on a word rather than mid-syllable, but do not hunt far.
+    let mut drop = low;
+    if drop > 0 {
+        let limit = (drop + 16).min(end);
+        while drop < limit && !chars[drop].is_whitespace() {
+            drop += 1;
+        }
+        while drop < end && chars[drop].is_whitespace() {
+            drop += 1;
+        }
+    }
+    drop
+}
+
+fn text_width(text: &str, theme: Theme, window: &mut Window) -> f32 {
+    if text.is_empty() {
+        return 0.0;
+    }
+    let runs = [TextRun {
+        len: text.len(),
+        font: Font {
+            weight: FontWeight::MEDIUM,
+            ..font("SF Pro Text")
+        },
+        color: theme.text,
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    }];
+    let shaped =
+        window
+            .text_system()
+            .shape_line(SharedString::from(text.to_string()), px(17.), &runs, None);
+    f32::from(shaped.width)
+}
+
 fn run(text: String, selected: bool, theme: Theme) -> impl IntoElement {
     div()
-        .whitespace_normal()
         .when(selected, |this| this.bg(theme.selection))
         .child(text)
 }
@@ -914,6 +995,7 @@ fn chip(icon: Icon, text: impl Into<SharedString>, color: gpui::Hsla) -> impl In
         .flex_shrink_0()
         .items_center()
         .gap_1()
+        .max_w(px(170.))
         .h(px(21.))
         .px(px(7.))
         .rounded_lg()
@@ -924,7 +1006,7 @@ fn chip(icon: Icon, text: impl Into<SharedString>, color: gpui::Hsla) -> impl In
         .font_weight(FontWeight::MEDIUM)
         .text_color(color)
         .child(icons::icon(icon, 11.0, color))
-        .child(text.into())
+        .child(div().flex_1().min_w_0().truncate().child(text.into()))
 }
 
 fn keycap(theme: Theme, text: impl Into<SharedString>) -> impl IntoElement {

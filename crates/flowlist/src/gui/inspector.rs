@@ -17,7 +17,7 @@ use super::{ClockUnit, DateField, DatePickerStep, EditField, FlowlistApp, View, 
 impl FlowlistApp {
     pub(super) fn render_inspector(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
@@ -66,9 +66,11 @@ impl FlowlistApp {
         );
 
         let content = if let Some(id) = self.selected_one() {
-            self.render_task_inspector(&id, cx).into_any_element()
+            self.render_task_inspector(&id, window, cx)
+                .into_any_element()
         } else if let View::Project(id) = self.view.clone() {
-            self.render_project_inspector(&id, cx).into_any_element()
+            self.render_project_inspector(&id, window, cx)
+                .into_any_element()
         } else {
             self.render_empty_inspector().into_any_element()
         };
@@ -120,7 +122,12 @@ impl FlowlistApp {
             )
     }
 
-    fn render_task_inspector(&self, id: &TaskId, cx: &mut Context<Self>) -> AnyElement {
+    fn render_task_inspector(
+        &self,
+        id: &TaskId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let theme = self.theme;
         let db = self.store.db();
         let Some(task) = db.tasks.get(id) else {
@@ -235,7 +242,7 @@ impl FlowlistApp {
             .child(self.inspector_notes(&notes, cx))
             .child(self.inspector_checklist(&id, &checklist, checklist_progress, cx))
             .child(self.inspector_task_type(sequential, cx))
-            .child(self.inspector_attachments(&attachments, cx))
+            .child(self.inspector_attachments(&attachments, window, cx))
             .child(self.inspector_tag_section(&tags, cx))
             .child(self.inspector_project_row(project, project_id, cx))
             .child(self.inspector_date_field(DateField::Defer, &defer.unwrap_or_default(), cx))
@@ -1577,6 +1584,7 @@ impl FlowlistApp {
     fn render_project_inspector(
         &self,
         id: &flowlist_core::ids::ProjectId,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = self.theme;
@@ -1762,11 +1770,29 @@ impl FlowlistApp {
                     }),
                 ),
             )
-            .child(div().text_xs().text_color(theme.text_faint).child(format!(
-                "Review {} · every {} day(s)",
-                project.next_review.format("%b %-d"),
-                project.review_interval_days
-            )))
+            .child({
+                let edit_id = id.clone();
+                div()
+                    .id("project-review-interval")
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .cursor_pointer()
+                    .hover(|style| style.text_color(theme.text))
+                    .flow_tip(self, cx, theme, "Change how often this project is reviewed")
+                    .child(format!(
+                        "Review {} · every {} day(s)",
+                        project.next_review.format("%b %-d"),
+                        project.review_interval_days
+                    ))
+                    .child(icons::icon(Icon::ChevronRight, 10.0, theme.text_faint))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let modal = super::modals::Modal::review_interval(this, edit_id.clone());
+                        this.open_modal(modal, cx);
+                    }))
+            })
             .when_some(defer, |this, defer| {
                 this.child(self.inspector_readonly("Defer", &defer))
             })
@@ -1776,7 +1802,7 @@ impl FlowlistApp {
             .when(!tags.is_empty(), |this| {
                 this.child(self.inspector_readonly("Tags", &tags.join(", ")))
             })
-            .child(self.inspector_attachments(&attachments, cx))
+            .child(self.inspector_attachments(&attachments, window, cx))
             .into_any_element()
     }
 
@@ -1823,6 +1849,7 @@ impl FlowlistApp {
     fn inspector_attachments(
         &self,
         attachments: &[String],
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
@@ -1830,6 +1857,17 @@ impl FlowlistApp {
         for (index, path) in attachments.iter().enumerate() {
             let link = flowlist_core::model::attachment::is_web_link(path);
             let name = flowlist_core::model::attachment::attachment_name(path);
+            // The name shares its row with the open and remove controls. The
+            // inspector is a fixed 320 wide with 12 of padding and an 8 inset
+            // on the row, so 204 points is what the text can claim.
+            let name = widgets::fit_head(
+                &name,
+                204.0,
+                12.0,
+                gpui::FontWeight::NORMAL,
+                theme.text,
+                window,
+            );
             let open_path = path.clone();
             let remove_path = path.clone();
             rows = rows.child(
@@ -1852,7 +1890,9 @@ impl FlowlistApp {
                             .id(super::sid(format!("attachment-name:{index}")))
                             .flex_1()
                             .min_w_0()
-                            .overflow_hidden()
+                            // A pasted URL or deep path is one long token: it
+                            // must end in an ellipsis, never wrap out of the row.
+                            .truncate()
                             .text_xs()
                             .text_color(theme.text)
                             .flow_tip(self, cx, theme, path.clone())
@@ -1861,6 +1901,7 @@ impl FlowlistApp {
                     .child(
                         div()
                             .id(super::sid(format!("attachment-open:{index}")))
+                            .flex_shrink_0()
                             .text_xs()
                             .text_color(theme.accent)
                             .cursor_pointer()
@@ -1883,6 +1924,7 @@ impl FlowlistApp {
                     .child(
                         div()
                             .id(super::sid(format!("attachment-remove:{index}")))
+                            .flex_shrink_0()
                             .text_xs()
                             .text_color(theme.text_faint)
                             .cursor_pointer()

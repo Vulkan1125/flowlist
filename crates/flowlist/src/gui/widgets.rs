@@ -21,6 +21,60 @@ use flowlist_core::model::ProjectIcon;
 
 use super::theme::Theme;
 
+/// Shape `text` and cut it to `room` points, ending in an ellipsis.
+///
+/// GPUI's own `truncate` sizes the text against the space its parent offers at
+/// layout time, which for a flex child can be wider than the final cell, so a
+/// long path or title paints clipped mid-glyph with no ellipsis. Measuring the
+/// real text first keeps the cut deliberate and the ellipsis visible.
+pub fn fit_head(
+    text: &str,
+    room: f32,
+    font_size: f32,
+    weight: FontWeight,
+    color: gpui::Hsla,
+    window: &mut Window,
+) -> String {
+    let width = |value: &str| -> f32 {
+        let runs = [gpui::TextRun {
+            len: value.len(),
+            font: gpui::Font {
+                weight,
+                ..gpui::font("SF Pro Text")
+            },
+            color,
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        }];
+        let shaped = window.text_system().shape_line(
+            SharedString::from(value.to_string()),
+            px(font_size),
+            &runs,
+            None,
+        );
+        f32::from(shaped.width)
+    };
+    if width(text) <= room {
+        return text.to_string();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let (mut low, mut high) = (0, chars.len());
+    while low < high {
+        let middle = (low + high).div_ceil(2);
+        let mut candidate: String = chars[..middle].iter().collect();
+        candidate.push('…');
+        if width(&candidate) <= room {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    let mut cut: String = chars[..low].iter().collect();
+    cut.push('…');
+    cut
+}
+
 pub fn caret(theme: Theme) -> impl IntoElement {
     div().w(px(1.5)).h(px(15.)).bg(theme.accent).flex_shrink_0()
 }
@@ -345,7 +399,7 @@ pub fn chip_with_icon(
 }
 
 pub fn tag_chip(theme: Theme, text: impl Into<String>) -> impl IntoElement {
-    chip(theme, text, theme.text_dim)
+    chip(theme, format!("#{}", text.into()), theme.text_dim)
 }
 
 pub fn checkbox(theme: Theme, completed: bool, accent: gpui::Hsla) -> impl IntoElement {

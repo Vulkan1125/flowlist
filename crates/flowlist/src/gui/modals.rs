@@ -46,6 +46,13 @@ pub enum Modal {
         entity: EntityRef,
         name: TextBuffer,
     },
+    /// Change how often one project asks to be reviewed after it exists.
+    /// The New Project sheet offers the same number at creation time.
+    ReviewInterval {
+        id: ProjectId,
+        name: String,
+        days: TextBuffer,
+    },
     NewProject {
         name: TextBuffer,
         notes: TextBuffer,
@@ -82,6 +89,13 @@ pub enum Modal {
         title: String,
         occurrences: usize,
         whole: bool,
+    },
+    /// Removing an attachment asks first. The file or link is only unlinked;
+    /// nothing on disk is touched, and Undo puts the row back.
+    RemoveAttachment {
+        target: AttachmentTarget,
+        path: String,
+        name: String,
     },
     /// Adding an http(s) link to a task or project. Links share the attachment
     /// list with file paths, so the row badge and the Attachments view already
@@ -381,14 +395,36 @@ impl Modal {
         }
     }
 
+    pub fn remove_attachment(target: AttachmentTarget, path: String) -> Self {
+        let name = flowlist_core::model::attachment::attachment_name(&path);
+        Modal::RemoveAttachment { target, path, name }
+    }
+
+    pub fn review_interval(app: &FlowlistApp, id: ProjectId) -> Self {
+        let project = app.store.db().projects.get(&id);
+        let name = project
+            .map(|project| project.name.clone())
+            .unwrap_or_default();
+        let days = project
+            .map(|project| project.review_interval_days.max(1))
+            .unwrap_or(7);
+        Modal::ReviewInterval {
+            id,
+            name,
+            days: TextBuffer::new(days.to_string()),
+        }
+    }
+
     pub fn title(&self) -> &'static str {
         match self {
             Modal::Rename { .. } => "Rename",
+            Modal::ReviewInterval { .. } => "Review interval",
             Modal::NewProject { .. } => "New project",
             Modal::CreateProject { .. } => "Create project",
             Modal::DeleteProject { .. } => "Delete project",
             Modal::DeleteFolder { .. } => "Delete folder",
             Modal::DeleteTask { .. } => "Delete repeating task",
+            Modal::RemoveAttachment { .. } => "Remove attachment",
             Modal::AttachLink { .. } => "Attach link",
             Modal::NewFolder { .. } => "New folder",
             Modal::NewTag { .. } => "New tag",
@@ -404,6 +440,7 @@ impl Modal {
     pub fn subtitle(&self) -> &'static str {
         match self {
             Modal::Rename { .. } => "Names are shared by the sidebar, CLI and MCP server.",
+            Modal::ReviewInterval { .. } => "How often this project comes back for a review.",
             Modal::NewProject { .. } => {
                 "Projects hold an outline of tasks; folders keep projects together."
             }
@@ -419,6 +456,9 @@ impl Modal {
             Modal::DeleteTask { .. } => {
                 "This task repeats. Trash this occurrence, or the whole series; Undo restores everything."
             }
+            Modal::RemoveAttachment { .. } => {
+                "Only the link on this item goes away; the file stays on disk."
+            }
             Modal::AttachLink { .. } => {
                 "Paste an http(s) address; it opens in your browser. Undo removes it."
             }
@@ -430,7 +470,8 @@ impl Modal {
             Modal::Import { .. } => {
                 "Paste Flowlist JSON or TaskPaper text. Merge keeps existing items."
             }
-            Modal::Settings { .. } => "Library-wide defaults shared by the GUI, CLI and MCP.",
+            // Settings is a hub of sections; the pane describes itself.
+            Modal::Settings { .. } => "",
             Modal::Location { .. } => {
                 "Nearby uses this point and the radius below to rank tagged tasks."
             }
@@ -451,6 +492,7 @@ impl Modal {
             Modal::DeleteProject { .. } => "Delete",
             Modal::DeleteFolder { .. } => "Delete",
             Modal::DeleteTask { .. } => "Delete",
+            Modal::RemoveAttachment { .. } => "Remove",
             Modal::AttachLink { .. } => "Attach",
             _ => "Save",
         }
@@ -459,11 +501,13 @@ impl Modal {
     pub fn field_count(&self) -> usize {
         match self {
             Modal::Rename { .. } => 1,
+            Modal::ReviewInterval { .. } => 1,
             Modal::NewProject { .. } => 3,
             Modal::CreateProject { .. } => 0,
             Modal::DeleteProject { .. } => 0,
             Modal::DeleteFolder { .. } => 0,
             Modal::DeleteTask { .. } => 0,
+            Modal::RemoveAttachment { .. } => 0,
             Modal::AttachLink { .. } => 1,
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
             Modal::Perspective { .. } => 1,
@@ -477,6 +521,7 @@ impl Modal {
     pub fn field(&self, index: usize) -> Option<&TextBuffer> {
         match self {
             Modal::Rename { name, .. } => (index == 0).then_some(name),
+            Modal::ReviewInterval { days, .. } => (index == 0).then_some(days),
             Modal::NewProject {
                 name,
                 notes,
@@ -492,6 +537,8 @@ impl Modal {
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
             Modal::DeleteTask { .. } => None,
+            Modal::RemoveAttachment { .. } => None,
+            Modal::RemoveAttachment { .. } => None,
             Modal::AttachLink { url, .. } => (index == 0).then_some(url),
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&form.name),
@@ -524,6 +571,7 @@ impl Modal {
     pub fn field_mut(&mut self, index: usize) -> Option<&mut TextBuffer> {
         match self {
             Modal::Rename { name, .. } => (index == 0).then_some(name),
+            Modal::ReviewInterval { days, .. } => (index == 0).then_some(days),
             Modal::NewProject {
                 name,
                 notes,
@@ -539,6 +587,7 @@ impl Modal {
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
             Modal::DeleteTask { .. } => None,
+            Modal::RemoveAttachment { .. } => None,
             Modal::AttachLink { url, .. } => (index == 0).then_some(url),
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&mut form.name),
@@ -571,6 +620,7 @@ impl Modal {
     pub fn field_label(&self, index: usize) -> &'static str {
         match self {
             Modal::Rename { .. } => "Name",
+            Modal::ReviewInterval { .. } => "Every (days)",
             Modal::NewProject { .. } => match index {
                 0 => "Name",
                 1 => "Notes",
@@ -581,6 +631,7 @@ impl Modal {
             Modal::DeleteProject { .. } => "",
             Modal::DeleteFolder { .. } => "",
             Modal::DeleteTask { .. } => "",
+            Modal::RemoveAttachment { .. } => "",
             Modal::AttachLink { .. } => "Address",
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
             Modal::Perspective { .. } => "Name",
@@ -714,6 +765,62 @@ impl FlowlistApp {
                         .text_sm()
                         .text_color(theme.text)
                         .child(path.clone()),
+                );
+            }
+            if let Modal::RemoveAttachment { name, .. } = modal {
+                body = body.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.field)
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(theme.text)
+                                .child(name.clone()),
+                        )
+                        .child(div().text_xs().text_color(theme.text_faint).child(
+                            "The file or link itself is left alone. Undo puts the attachment back.",
+                        )),
+                );
+            }
+            if let Modal::ReviewInterval { id, name, .. } = modal {
+                let next = self
+                    .store
+                    .db()
+                    .projects
+                    .get(id)
+                    .map(|project| project.next_review.format("%b %-d, %Y").to_string())
+                    .unwrap_or_else(|| "—".to_string());
+                body = body.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.field)
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(theme.text)
+                                .child(name.clone()),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child(format!("Next review {next}")),
+                        ),
                 );
             }
             if let Modal::DeleteProject { name, .. } = modal {
