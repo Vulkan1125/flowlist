@@ -68,4 +68,12 @@ codesign --force --sign - "$app" >/dev/null 2>&1 || {
 }
 
 echo "packaged $app ($version)"
+
+# The in-app updater downloads a release zip and looks for Flowlist.app inside
+# it, so keep the bundle at the archive root and publish this file as the
+# release asset.
+zip="dist/Flowlist-$version.zip"
+rm -f "$zip"
+ditto -c -k --sequesterRsrc --keepParent "$app" "$zip"
+echo "release asset: $zip"
 echo "launch with: open $app"

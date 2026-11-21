@@ -3,7 +3,9 @@
 //
 // Usage: window <pid>
 //        window <pid> move <x> <y>
+//        window <pid> resize <width> <height>
 //        window <pid> layers
+//        window <pid> id [layer]
 //        window front
 //
 // The GUI smoke test uses the live origin because window managers move
@@ -13,6 +15,8 @@
 // `layers` lists every on-screen window for the process as
 // window <TAB> layer <TAB> x <TAB> y <TAB> width <TAB> height,
 // so a probe can confirm the capture panel floats above normal windows.
+// `id` prints the CGWindowID of the process's largest window (or the largest
+// at a given layer), for `screencapture -l` and clean screenshots.
 // `front` prints the frontmost application's process id.
 
 import AppKit
@@ -28,6 +32,29 @@ if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "front" {
 
 guard CommandLine.arguments.count > 1, let pid = pid_t(CommandLine.arguments[1]) else {
     exit(1)
+}
+
+if CommandLine.arguments.count >= 3, CommandLine.arguments[2] == "id" {
+    let layerFilter = CommandLine.arguments.count >= 4 ? Int(CommandLine.arguments[3]) : nil
+    let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+    let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+    var best: (number: Int, area: Double)?
+    for window in windows {
+        guard let owner = window[kCGWindowOwnerPID as String] as? Int,
+            owner == Int(pid)
+        else { continue }
+        let layer = window[kCGWindowLayer as String] as? Int ?? 0
+        if let layerFilter, layer != layerFilter { continue }
+        let bounds = window[kCGWindowBounds as String] as? [String: Any] ?? [:]
+        let width = bounds["Width"] as? Double ?? 0
+        let height = bounds["Height"] as? Double ?? 0
+        let area = width * height
+        if best == nil || area > best!.area {
+            best = (window[kCGWindowNumber as String] as? Int ?? 0, area)
+        }
+    }
+    if let best { print(best.number) }
+    exit(0)
 }
 
 if CommandLine.arguments.count >= 3, CommandLine.arguments[2] == "layers" {
@@ -53,6 +80,16 @@ var value: CFTypeRef?
 AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value)
 guard let windows = value as? [AXUIElement], let window = windows.first else {
     exit(1)
+}
+
+if CommandLine.arguments.count >= 5, CommandLine.arguments[2] == "resize",
+    let width = Double(CommandLine.arguments[3]), let height = Double(CommandLine.arguments[4])
+{
+    var size = CGSize(width: width, height: height)
+    if let resized = AXValueCreate(.cgSize, &size) {
+        AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, resized)
+    }
+    usleep(300_000)
 }
 
 if CommandLine.arguments.count >= 5, CommandLine.arguments[2] == "move",

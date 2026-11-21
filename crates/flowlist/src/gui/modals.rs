@@ -544,7 +544,6 @@ impl Modal {
             Modal::DeleteFolder { .. } => None,
             Modal::DeleteTask { .. } => None,
             Modal::RemoveAttachment { .. } => None,
-            Modal::RemoveAttachment { .. } => None,
             Modal::AttachLink { url, .. } => (index == 0).then_some(url),
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&form.name),

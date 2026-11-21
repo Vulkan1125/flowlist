@@ -17,7 +17,9 @@ The script:
 3. runs `cargo build --release --locked`;
 4. creates `dist/Flowlist.app` with `Contents/MacOS/flowlist`,
    `Contents/Resources/Flowlist.icns` and `Contents/Info.plist`;
-5. validates the plist and ad-hoc signs the bundle (`codesign --sign -`).
+5. validates the plist and ad-hoc signs the bundle (`codesign --sign -`);
+6. packs `dist/Flowlist-<version>.zip`, the release asset the in-app updater
+   expects.
 
 The result can be launched from Finder or with:
 
@@ -26,6 +28,33 @@ open dist/Flowlist.app
 ```
 
 `dist/` is ignored by Git; build it locally or attach it to a release.
+
+## Publish a release
+
+The in-app update check reads
+`https://api.github.com/repos/Vulkan1125/flowlist/releases/latest`, compares
+the tag with the running `Cargo.toml` version and downloads the first `.zip`
+asset. To publish one:
+
+```sh
+# 1. Bump the workspace version in Cargo.toml, then commit.
+# 2. Build the app and its zip.
+scripts/package.sh
+
+# 3. Tag the release commit and publish a normal (not draft or prerelease)
+#    release with the zip attached.
+version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+gh release create "v$version" "dist/Flowlist-$version.zip" \
+  --title "Flowlist $version" \
+  --notes-file notes.md \
+  --latest
+```
+
+The app only offers an update when the release tag is numerically newer than
+the running version (`v0.2.0` beats `0.1.0`; a suffix such as `-beta.1` is
+ignored for the comparison). The zip must keep `Flowlist.app` at its root;
+`package.sh` does this. Downloads made by the app go through `curl`, so they
+do not carry the quarantine flag that a browser download would.
 
 ## Bundle layout
 

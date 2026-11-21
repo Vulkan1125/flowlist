@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, div, prelude::*, px};
+use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, div, prelude::*};
 
 use super::icons::Icon;
 use super::{FlowlistApp, icons, widgets};
@@ -95,15 +95,11 @@ impl FlowlistApp {
             );
         }
         if let UpdateState::Available {
-            release_url,
-            asset,
-            version,
-            ..
+            release_url, asset, ..
         } = &self.update
         {
             if let Some(asset) = asset {
                 let asset = asset.clone();
-                let version = version.clone();
                 actions = actions.child(
                     div()
                         .id("update-install")
@@ -139,7 +135,7 @@ impl FlowlistApp {
                 div()
                     .id("update-restart")
                     .child(widgets::button(theme, "Restart Flowlist", true))
-                    .on_click(cx.listener(move |this, _, _, cx| {
+                    .on_click(cx.listener(move |_this, _, _, cx| {
                         let _ = std::process::Command::new("open").arg(&bundle).spawn();
                         cx.quit();
                     })),
@@ -427,9 +423,6 @@ fn current_bundle() -> Option<PathBuf> {
 }
 
 fn install(asset: &str, bundle: &Path) -> Result<PathBuf, String> {
-    let parent = bundle
-        .parent()
-        .ok_or_else(|| "The app bundle has no parent folder.".to_string())?;
     let work = std::env::temp_dir().join(format!("flowlist-update-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work)

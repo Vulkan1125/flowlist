@@ -1,0 +1,200 @@
+# Using the GUI
+
+Open `/Applications/Flowlist.app`. The window restores the view, selection,
+theme and size you left it with.
+
+![The Inbox with a working set of tasks](images/gui-inbox.png)
+
+## Capture
+
+There are three ways to add a task:
+
+- **`⌃⌥Space`** from any app opens the floating capture panel over what you are
+  doing. The main window stays where it is.
+- **Add task** in the title bar opens the same panel over the Flowlist window.
+- **`n`** puts the caret in the capture bar at the top of the list, when the
+  view has one.
+
+![The floating capture panel with a parsed task](images/gui-capture.png)
+
+The line is parsed as you type, and the chips under it show where the task will
+land. A plain thought goes to the Inbox; `::Project` files it into a project;
+`due:` and `defer:` schedule it into Today or Forecast.
+
+| Text | Meaning |
+| --- | --- |
+| `#writing`, `#work/website` | tag (nested tags are created as needed) |
+| `::Website`, `::Work/Website` | project (created if missing) |
+| `due:friday`, `defer:tomorrow`, `due:(next monday 9am)` | dates |
+| `est:45m`, `est:2h30m` | estimate |
+| `repeat:every week` | repeat rule |
+| `!` | flag |
+| `// ask Sam` | note |
+
+In the panel:
+
+| Key | Action |
+| --- | --- |
+| `Enter` | file the task and return to the previous app |
+| `⇧Enter` | file it and stay open for the next thought |
+| `⌘Enter` | file it and select it in the main window |
+| `Esc` / `⌘W` | close without filing |
+
+Every capture is undoable with `⌘Z`, even after the panel has closed.
+
+## Tasks
+
+- Click the circle to complete or reopen a task; `space` does the same to the
+  selected row.
+- Click a title to edit it inline. `⏎` starts editing; `Esc` cancels.
+- Drag a task onto a project, a tag, another task (to make it a subtask) or
+  between siblings to reorder it. Every drop is undoable.
+- `Tab` / `⇧Tab` nest and unnest the selection. `⌥↑` / `⌥↓` move it among its
+  siblings.
+- The chevron on a parent opens and closes its subtasks. `za` toggles, `zo`
+  opens and `zc` closes.
+- Flag with `!` or `⌘D`; the flag sits left of the title and shows on hover in
+  an idle list.
+- Select several rows with `⇧↑` / `⇧↓`, `⌘`-click or a drag; bulk complete,
+  flag, move and delete work on the whole selection.
+
+The right edge of each row reads in one order: attachments, project, `#tag`
+chips, estimate, due date, deferred date, repeat and checklist progress.
+
+## The inspector
+
+Toggle the inspector with `i` or `⌘I`. It edits the selected task without
+leaving the list.
+
+![A project task selected with the inspector open](images/gui-inspector.png)
+
+- **Title, notes, estimate, repeat** are editable fields. `Tab` / `Enter`
+  saves the field and moves to the next one; `Esc` cancels the field.
+- **Priority** is a **None** chip plus High, Medium and Low. Click **None** to
+  clear it.
+- **Checklist** steps are not tasks. Add a step at the bottom, tick it, rename
+  it, reorder it with the arrows, or remove it with `×`. Completing a repeating
+  task copies the checklist with every step unchecked.
+- **Subtasks** switch between Parallel and Sequential for the selected task's
+  own children.
+- **Attachments** accept files and `http(s)` links. Click a file's name to
+  preview an image or PDF in the app; PDFs step with `←` / `→`. `open` hands the
+  file to its default app. Removing an attachment asks first and leaves the
+  file on disk; Undo restores the row.
+- **Tags**, **Project**, **Defer**, **Due**, **Estimate** and **Repeat** are
+  one click away. A date opens a calendar and a clock-face time picker.
+- **To project** converts the task and its subtasks into a project. **Delete**
+  and **Complete** finish the task.
+
+## Projects and reviews
+
+Create a project with `⇧⌘N` (or **＋ Project** at the bottom of the rail). A
+project can be **Parallel** (all tasks available), **Sequential** (one at a
+time) or single-action, and Active, On hold, Done or Dropped. Projects live in
+folders and can carry their own tags, dates, attachments and icon.
+
+![A project outline with its progress and review banner](images/gui-project.png)
+
+- The banner shows progress, the next review date, the status and the project
+  type.
+- Click **Review now** after a review; the next date moves on by the project's
+  interval.
+- Click the review line (*Review Nov 28 · every 7 day(s)*) to change the
+  interval later. The same line in the inspector opens the same sheet.
+- Drag a project onto a folder, onto the LIBRARY heading or onto empty space to
+  move it back to the root.
+
+## Views
+
+The rail is the map of the library:
+
+| View | Shows |
+| --- | --- |
+| **Inbox** | unscheduled tasks — no project, no due or defer date |
+| **Today** | due today, deferred to today, and overdue |
+| **Forecast** | the month calendar and upcoming dated work |
+| **Review** | projects whose review date has arrived |
+| **Projects** | every project at a glance |
+| **Tags** | tasks grouped by context |
+| **Flagged** | everything marked `!` |
+| **Completed** | recently finished tasks |
+| **Changed** | recently edited tasks |
+| **Archive** | finished and dropped projects |
+| **Trash** | deleted tasks, restorable until the retention window ends |
+| **Attachments** | open tasks with files or links |
+| **Nearby** | tags with a location, ranked by distance |
+
+![Today, grouped into Overdue and Today](images/gui-today.png)
+
+`⌘1`…`⌘8` jump between the built-in views. The back and forward arrows (`⌘[` /
+`⌘]`) walk the views you visited.
+
+## Search
+
+Press `/` or `⌘F`. Matching is fuzzy: `bcf` finds “Buy coffee filters”, and
+typing a project name finds its tasks. Search reads titles, notes, checklist
+steps, tags and project paths.
+
+The scope chip under the view title switches between **This view** and
+**Library**, as does `⌘⇧F`. A library search looks at every task outside Trash,
+titles itself **Search** and ranks the closest matches first.
+
+## Organising
+
+- **New project / folder / tag / perspective**: `⇧⌘N`, `⌥⌘N`, `⌃⌘N`, `⇧⌘P`.
+- Right-click a sidebar row for Open, Rename, Delete, New child, project status
+  and tag location. Rename is also `⌘R`.
+- Drag tasks between projects, tags and parents; drag projects into folders.
+- **Sort** and **Group** chips at the top of the list open a menu of orders.
+  **Available** keeps only tasks you can start now; **Priority** filters by
+  priority. The choices are remembered per view.
+- The **Calendar** chip in Forecast folds the month grid away.
+
+## Undo
+
+Every mutation is undoable: edits, completions, drags, imports, trash, even a
+theme change. Press `⌘Z`, or use the arrow in the title bar. `⇧⌘Z` redoes.
+The status bar names the last action and its Undo until the next one.
+
+## Settings
+
+Press `⌘,`. The sheet has six sections on the left (`⌘1`…`⌘6` jump between
+them):
+
+- **Appearance** — theme family, light/dark, Plain's accent presets and custom
+  colour picker, screen eyedropper, and the window controls.
+- **Sidebar** — which rail sections appear and which rows carry counts.
+- **Workflow** — Vim mode and the review/changed/completed windows.
+- **Nearby** — the radius used by the Nearby view.
+- **Trash** — how many days deleted tasks stay restorable.
+- **About** — version, library folder, GitHub and wiki links, and the update
+  check.
+
+![Settings on the Appearance section](images/gui-settings.png)
+
+Changes preview live. **Cancel** puts back the theme, accent and window
+controls the sheet opened with; **Save** keeps them.
+
+## Keyboard
+
+Press **`?`** for the full keyboard and mouse help. The essentials:
+
+| Shortcut | Action |
+| --- | --- |
+| `↑` / `↓` | move the selection |
+| `⇧↑` / `⇧↓` | extend the selection |
+| `space` | complete or reopen |
+| `!` / `⌘D` | flag or unflag |
+| `⏎` | edit the title |
+| `Tab` / `⇧Tab` | nest / unnest |
+| `⌘Z` / `⇧⌘Z` | undo / redo |
+| `⌘⌫` | delete the selection or sidebar item |
+| `⌘L` | add a checklist step |
+| `⌘T` | toggle light / dark |
+| `⇧⌘T` / `⌥⌘T` | next / previous theme |
+| `⌘O` | import TaskPaper or JSON |
+| `⌘,` | settings |
+
+Vim mode is on by default and covers the list, sidebar and checklist: `j`/`k`,
+`h`/`l`, `gg`/`G`, `o`/`O`, `x`, `dd`, `yy`, `p`, `u`, `Ctrl-r`, counts and
+`/` all work. Turn it off in **Settings → Workflow**.

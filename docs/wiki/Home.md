@@ -1,63 +1,94 @@
-# Flowlist wiki
+# Flowlist
 
-Flowlist is a local-first task manager written in Rust: a native GPUI window, a
-scriptable CLI and a Model Context Protocol server over one shared JSON
-library. Nothing leaves your machine.
+**A fast, local-first task manager for macOS.** One window, one library file,
+and the same tasks from the desktop app, the `flowlist` command line and an MCP
+server for AI assistants.
+
+Nothing leaves your Mac. There is no account, no sync service and no telemetry.
+
+![The Flowlist window showing the Inbox](images/gui-inbox.png)
+
+## Install
+
+1. Download **Flowlist-0.1.0.zip** from the
+   [latest release](https://github.com/Vulkan1125/flowlist/releases/latest).
+2. Unzip it and move **Flowlist.app** to `/Applications`.
+3. The first time, right-click the app and choose **Open**. The build is
+   ad-hoc signed and not notarised, so macOS asks once.
+4. Requires macOS 13 or later.
+
+Flowlist keeps its library in
+`~/Library/Application Support/Flowlist`. Move the folder to a synced disk and
+point Flowlist at it if you want the same library on more than one Mac; do not
+let two machines write to it at the same time.
+
+## Three ways to use it
+
+| Surface | Open it with | Good for |
+| --- | --- | --- |
+| Desktop app | `open /Applications/Flowlist.app` | day-to-day planning, dragging, reviewing |
+| CLI | `/Applications/Flowlist.app/Contents/MacOS/flowlist` | scripts, terminal habits, bulk edits |
+| MCP server | `…/flowlist mcp` | letting an AI assistant read and change the library |
+
+All three share one library and one undo history: a task captured from the
+floating panel can be completed in the terminal, and `⌘Z` in the app can undo
+the terminal's change.
 
 ## Start here
 
-- **New to Flowlist?** Read the [GUI guide](GUI) for a tour of the window, then
-  the [CLI reference](CLI) when you want to script it.
-- **Connecting an assistant?** The [MCP tools](MCP) page lists every tool and
-  its arguments.
-- **Looking for a specific behaviour?** The [feature checklist](Features) is
-  the exhaustive inventory.
-- **Building or testing?** [Architecture](Architecture) and
-  [Testing the GUI](Testing-the-GUI) cover the internals.
+- **[Using the GUI](Using-the-GUI)** — capture, the inspector, projects,
+  views, search, settings and the keyboard.
+- **[Using the CLI](Using-the-CLI)** — add, list, edit, complete, review,
+  search, export, and script it with `--json`.
+- **[Using the MCP server](Using-the-MCP)** — connect an assistant and ask it
+  to plan your day.
 
-## The four surfaces
+## The window at a glance
 
-| Surface | Entry point | Shared behaviour |
-| --- | --- | --- |
-| Desktop window | `flowlist gui` or `Flowlist.app` | undo, validation, repeat rules |
-| CLI | `flowlist <command>` | same command engine and undo history |
-| MCP server | `flowlist mcp` | same tools over JSON-RPC stdio |
-| Library file | `data.json` | atomic writes, backups, cross-process lock |
+- **Left rail** — Inbox, Today, Forecast, Review, Projects, Tags, Flagged,
+  Completed, Changed, Archive, Trash, plus your folders and saved views.
+- **Middle pane** — the list. Every row has one checkbox, one title and its
+  metadata; click the title to edit it.
+- **Right inspector** — everything about the selected task: notes, priority,
+  checklist, subtasks, attachments, tags, project and dates. Toggle it with
+  `i` or `⌘I`.
+- **Title bar** — search, **Add task**, undo and the current theme.
 
-Every mutation goes through `flowlist-core`, so the GUI, CLI and MCP server
-cannot drift apart. `flowlist undo` can undo a sidebar drag; `⌘Z` can undo a
-tool call.
+## Capture from anywhere
 
-## Quick recipes
+Press **`⌃⌥Space`** in any app. A small panel appears over what you are doing,
+parses the line as you type, and files it without bringing the main window
+forward.
 
-```sh
-flowlist add 'Draft launch email #Work/Website ::Work/Launch due:tomorrow'
-flowlist list --today --group project
-flowlist done <id>
-flowlist trash --restore <id>
-FLOWLIST_HOME="$HOME/Library/Application Support/Flowlist" flowlist mcp
+```text
+Draft the launch email #work/website ::Website due:friday est:45m // ask Sam
 ```
 
-## Pages
+`#tag`, `::project`, `due:` / `defer:`, `est:`, `repeat:` and `!` all work in
+the same line. Press `Enter` to file and return to the previous app.
 
-- [GUI guide](GUI)
-- [CLI reference](CLI)
-- [MCP tools](MCP)
-- [Feature checklist](Features)
-- [Accessibility and keyboard routes](Accessibility)
-- [Architecture](Architecture)
-- [Testing the GUI](Testing-the-GUI)
-- [Packaging](Packaging)
-- [Backlog](Backlog)
+## Updates
 
-## Publishing this wiki
+Open **Settings → About** (`⌘,` then `⌘6`) and choose **Check for updates**.
+When a newer release exists, **Install update** downloads it, swaps the app in
+place and offers **Restart Flowlist**.
 
-The wiki is generated from `docs/` in the repository. After the first wiki page
-exists on GitHub, run:
+## Common shortcuts
 
-```sh
-scripts/publish-wiki.sh
-```
+| Shortcut | Action |
+| --- | --- |
+| `⌃⌥Space` | capture from any app |
+| `n` or `⌘N` | capture |
+| `/` or `⌘F` | search |
+| `⌘⇧F` | search this view or the whole library |
+| `space` | complete or reopen |
+| `!` or `⌘D` | flag |
+| `⏎` | edit the title |
+| `Tab` / `⇧Tab` | nest / unnest |
+| `⌘I` | toggle the inspector |
+| `⌘Z` / `⇧⌘Z` | undo / redo |
+| `⌘,` | settings |
+| `?` | keyboard help |
 
-The script copies the source docs into the wiki working tree and pushes. It
-fails with instructions when the wiki repository has not been initialized yet.
+Vim motions are on by default: `j`/`k`, `h`/`l`, `gg`/`G`, `o`, `x`, `dd`,
+`u` and counts work across the window. Turn them off in **Settings → Workflow**.
