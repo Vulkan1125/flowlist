@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0 — 2026-11-21
+
+- **More on the phone.** A fifth destination collects Review, Completed,
+  Archive, Trash, Tags, Priorities, Changed and Attachments. Trash can restore
+  or permanently delete, Review marks projects reviewed, Archive and project
+  rows open their tasks, and Tags lists counts with a tag filter.
+- **Settings only in More.** The gear is removed from Inbox, Today, Forecast
+  and Browse; search stays everywhere.
+- **Startup destination.** Settings → Tasks → **Open on** chooses Inbox, Today,
+  Forecast or Browse for normal launches.
+- The update check, subtasks, search, checklists and sectioned settings from
+  0.6.x remain.
+
 ## 0.6.1 — 2026-11-21
 
 - **Mac empty states return to the quiet halo.** All hand-drawn illustrations

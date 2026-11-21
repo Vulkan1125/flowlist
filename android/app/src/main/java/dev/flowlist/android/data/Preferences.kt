@@ -12,6 +12,7 @@ data class AppPreferences(
     val defaultTimeMinutes: Int = 9 * 60,
     val haptics: Boolean = true,
     val swipeActions: Boolean = true,
+    val startTab: String = "inbox",
 )
 
 class PreferencesStore(context: Context) {
@@ -22,6 +23,7 @@ class PreferencesStore(context: Context) {
         defaultTimeMinutes = prefs.getInt("default_time", 9 * 60),
         haptics = prefs.getBoolean("haptics", true),
         swipeActions = prefs.getBoolean("swipe_actions", true),
+        startTab = prefs.getString("start_tab", "inbox") ?: "inbox",
     )
 
     fun save(value: AppPreferences) {
@@ -30,6 +32,7 @@ class PreferencesStore(context: Context) {
             .putInt("default_time", value.defaultTimeMinutes)
             .putBoolean("haptics", value.haptics)
             .putBoolean("swipe_actions", value.swipeActions)
+            .putString("start_tab", value.startTab)
             .apply()
     }
 }

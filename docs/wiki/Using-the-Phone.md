@@ -116,3 +116,17 @@ subtask uses the same optimistic offline queue.
 
 Settings → About → **Check for updates** reads the latest GitHub release and
 offers the APK when a newer version exists.
+
+## More
+
+The fifth tab collects the rest of the library:
+
+- **Review** — projects whose review date has arrived, with a **Reviewed** action.
+- **Completed**, **Changed** and **Priorities** — task lists by state.
+- **Archive** — finished projects; tap one to see its tasks.
+- **Trash** — restore a task or delete it forever.
+- **Tags** — tags by open count; tap one to filter its tasks.
+- **Attachments** — tasks with files or links.
+
+Settings lives only in this tab now. **Settings → Tasks → Open on** chooses
+Inbox, Today, Forecast or Browse for a normal launch.

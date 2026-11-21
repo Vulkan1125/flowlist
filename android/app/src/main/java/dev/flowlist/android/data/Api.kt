@@ -167,6 +167,25 @@ fun updateCommand(id: String, patch: JsonObject): JsonObject = buildJsonObject {
     put("update_task", buildJsonObject { put("id", id); put("patch", patch) })
 }
 
+fun reviewCommand(id: String, reviewedOn: String): JsonObject = buildJsonObject {
+    put(
+        "complete_review",
+        buildJsonObject {
+            put("id", id)
+            put("reviewed_on", reviewedOn)
+        },
+    )
+}
+
+fun purgeCommand(ids: List<String>): JsonObject = buildJsonObject {
+    put(
+        "purge_tasks",
+        buildJsonObject {
+            put("ids", buildJsonArray { ids.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
+        },
+    )
+}
+
 fun createSubtaskCommand(
     id: String,
     title: String,

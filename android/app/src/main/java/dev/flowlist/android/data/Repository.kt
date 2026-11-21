@@ -268,6 +268,44 @@ class Repository(context: Context) {
         sync()
     }
 
+    suspend fun reviewProject(project: ProjectDto) {
+        val snapshot = _state.value.snapshot ?: return
+        val today = java.time.LocalDate.now()
+        val next = today.plusDays(project.reviewIntervalDays.toLong())
+        val db = snapshot.db
+        val updated = snapshot.copy(
+            db = db.copy(
+                projects = db.projects + (project.id to project.copy(nextReview = next.toString())),
+            ),
+        )
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = reviewCommand(project.id, today.toString()),
+                label = project.name,
+            ),
+        )
+        sync()
+    }
+
+    suspend fun purge(taskId: String) {
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val updated = snapshot.copy(db = db.copy(tasks = db.tasks - taskId))
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = purgeCommand(listOf(taskId)),
+                label = "Purge task",
+            ),
+        )
+        sync()
+    }
+
     suspend fun delete(taskId: String): TaskDto? {
         val snapshot = _state.value.snapshot ?: return null
         val task = snapshot.db.tasks[taskId] ?: return null

@@ -249,6 +249,16 @@ fun SettingsSheet(
                     }
                 }
                 Spacer(modifier = Modifier.height(14.dp))
+                SmallLabel("Open on")
+                ChoiceRow {
+                    listOf("inbox" to "Inbox", "today" to "Today", "forecast" to "Forecast", "browse" to "Browse")
+                        .forEach { (key, label) ->
+                            Pill(label, preferences.startTab == key) {
+                                onPreferencesChange(preferences.copy(startTab = key))
+                            }
+                        }
+                }
+                Spacer(modifier = Modifier.height(14.dp))
                 SmallLabel("Default time")
                 ChoiceRow {
                     listOf(9 to 0, 12 to 0, 18 to 0).forEach { (hour, minute) ->

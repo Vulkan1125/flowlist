@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WbSunny
@@ -91,6 +92,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
     Today("Today", Icons.Outlined.WbSunny),
     Forecast("Forecast", Icons.Outlined.CalendarMonth),
     Browse("Browse", Icons.Outlined.FolderOpen),
+    More("More", Icons.Outlined.MoreHoriz),
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -107,12 +109,23 @@ fun MainScreen(
     onPreferencesChange: (AppPreferences) -> Unit,
 ) {
     val colors = flow
-    var tab by rememberSaveable { mutableStateOf(Tab.Inbox) }
+    var tab by rememberSaveable {
+        mutableStateOf(
+            when (preferences.startTab) {
+                "today" -> Tab.Today
+                "forecast" -> Tab.Forecast
+                "browse" -> Tab.Browse
+                "more" -> Tab.More
+                else -> Tab.Inbox
+            },
+        )
+    }
     var capture by rememberSaveable { mutableStateOf(false) }
     var settings by rememberSaveable { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf(false) }
     var detail by remember { mutableStateOf<TaskView?>(null) }
     var project by remember { mutableStateOf<ProjectDto?>(null) }
+    var moreView by remember { mutableStateOf<MoreView?>(null) }
     val haptics = LocalHapticFeedback.current
     var offlineWarning by remember { mutableStateOf(false) }
     LaunchedEffect(state.offlineSince) {
@@ -206,8 +219,9 @@ fun MainScreen(
             }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
+            if (tab != Tab.More) {
+                FloatingActionButton(
+                    onClick = {
                     if (preferences.haptics) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     }
@@ -218,11 +232,12 @@ fun MainScreen(
                 shape = CircleShape,
                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Add,
-                    contentDescription = "New task",
-                    modifier = Modifier.size(26.dp),
-                )
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = "New task",
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
             }
         },
     ) { padding ->
@@ -238,6 +253,7 @@ fun MainScreen(
                 state = state,
                 onSettings = { settings = true },
                 onSearch = { search = true },
+                showSettings = tab == Tab.More,
                 modifier = Modifier.statusBarsPadding(),
             )
             if (offlineWarning) {
@@ -275,6 +291,10 @@ fun MainScreen(
                     projects = snapshot?.db?.projects?.values?.sortedBy { it.name.lowercase() }.orEmpty(),
                     snapshot = snapshot,
                     onOpen = { project = it },
+                )
+                Tab.More -> MoreScreen(
+                    db = snapshot?.db,
+                    onOpen = { moreView = it },
                 )
             }
         }
@@ -374,6 +394,34 @@ fun MainScreen(
         )
     }
 
+    moreView?.let { view ->
+        val db = snapshot?.db
+        if (db != null) {
+            MoreSheet(
+                view = view,
+                db = db,
+                pending = state.pending,
+                onDismiss = { moreView = null },
+                onTask = { task ->
+                    moreView = null
+                    detail = task
+                },
+                onToggle = { task -> complete(task, !task.completed) },
+                onRestore = { id ->
+                    db.tasks[id]?.let { dto -> scope.launch { repository.restore(dto) } }
+                },
+                onPurge = { id -> scope.launch { repository.purge(id) } },
+                onReview = { projectItem ->
+                    scope.launch { repository.reviewProject(projectItem) }
+                },
+                onProject = { projectItem ->
+                    moreView = null
+                    project = projectItem
+                },
+            )
+        }
+    }
+
     if (search) {
         SearchSheet(
             db = snapshot?.db ?: dev.flowlist.android.data.Db(),
@@ -410,6 +458,7 @@ private fun Header(
     state: AppState,
     onSettings: () -> Unit,
     onSearch: () -> Unit,
+    showSettings: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = flow
@@ -436,6 +485,7 @@ private fun Header(
 
                         Tab.Forecast -> "The next two weeks"
                         Tab.Browse -> "${state.snapshot?.db?.projects?.size ?: 0} projects"
+                        Tab.More -> "Review, archive, trash and more"
                     },
                     style = MaterialTheme.typography.labelMedium,
                     color = colors.faint,
@@ -449,13 +499,15 @@ private fun Header(
                     modifier = Modifier.size(20.dp),
                 )
             }
-            IconButton(onClick = onSettings) {
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = "Settings",
-                    tint = colors.faint,
-                    modifier = Modifier.size(20.dp),
-                )
+            if (showSettings) {
+                IconButton(onClick = onSettings) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Settings",
+                        tint = colors.faint,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         }
     }

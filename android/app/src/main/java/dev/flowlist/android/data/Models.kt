@@ -36,6 +36,7 @@ data class TaskDto(
     val parent: String? = null,
     val tags: List<String> = emptyList(),
     val checklist: List<ChecklistDto> = emptyList(),
+    val attachments: List<String> = emptyList(),
     val due: StampDto? = null,
     val defer: StampDto? = null,
     @SerialName("estimate_min") val estimateMin: Int? = null,
@@ -72,6 +73,8 @@ data class ProjectDto(
     val name: String = "",
     val status: String = "active",
     val folder: String? = null,
+    @SerialName("next_review") val nextReview: String? = null,
+    @SerialName("review_interval_days") val reviewIntervalDays: Int = 7,
     @SerialName("task_order") val taskOrder: List<String> = emptyList(),
     @SerialName("modified_at") val modifiedAt: String = "",
 )
@@ -146,15 +149,26 @@ data class TaskView(
     val checklistDone: Int,
     val checklistTotal: Int,
     val estimateMin: Int?,
+    val attachments: List<String> = emptyList(),
+    val completedAt: String? = null,
+    val modifiedAt: String = "",
+    val trashed: Boolean = false,
 )
 
 val TaskDto.isActive: Boolean
     get() = !completed && trashedAt == null
 
-fun Db.taskViews(pending: Set<String> = emptySet()): List<TaskView> =
+fun Db.taskViews(
+    pending: Set<String> = emptySet(),
+    includeCompleted: Boolean = false,
+    includeTrashed: Boolean = false,
+): List<TaskView> =
     tasks.values
         .asSequence()
-        .filter { it.isActive }
+        .filter { task ->
+            (includeCompleted || !task.completed) &&
+                (includeTrashed || task.trashedAt == null)
+        }
         .map { task ->
             TaskView(
                 id = task.id,
@@ -173,6 +187,10 @@ fun Db.taskViews(pending: Set<String> = emptySet()): List<TaskView> =
                 checklistDone = task.checklist.count { it.completed },
                 checklistTotal = task.checklist.size,
                 estimateMin = task.estimateMin,
+                attachments = task.attachments,
+                completedAt = task.completedAt,
+                modifiedAt = task.modifiedAt,
+                trashed = task.trashedAt != null,
             )
         }
         .toList()
@@ -271,4 +289,65 @@ fun StampDto.isOverdue(): Boolean {
     val moment = local() ?: return false
     val now = ZonedDateTime.now()
     return if (hasTime) moment.isBefore(now) else moment.toLocalDate().isBefore(LocalDate.now())
+}
+
+fun Db.completedTasks(): List<TaskView> =
+    taskViews(includeCompleted = true)
+        .filter { it.completed && !it.trashed }
+        .sortedByDescending { it.completedAt.orEmpty() }
+
+fun Db.trashedTasks(): List<TaskView> =
+    taskViews(includeCompleted = true, includeTrashed = true)
+        .filter { it.trashed }
+        .sortedByDescending { it.modifiedAt }
+
+fun Db.archivedProjects(): List<ProjectDto> =
+    projects.values
+        .filter { it.status == "done" || it.status == "dropped" }
+        .sortedBy { it.name.lowercase() }
+
+fun Db.reviewProjects(): List<ProjectDto> =
+    projects.values
+        .filter { it.status == "active" }
+        .filter { project ->
+            val next = project.nextReview ?: return@filter false
+            runCatching { LocalDate.parse(next) }.getOrNull()?.let { !it.isAfter(LocalDate.now()) } == true
+        }
+        .sortedBy { it.nextReview.orEmpty() }
+
+fun Db.priorityGroups(): List<Pair<String, List<TaskView>>> {
+    val views = taskViews()
+    return listOf(
+        "High" to views.filter { it.priority == "high" },
+        "Medium" to views.filter { it.priority == "medium" },
+        "Low" to views.filter { it.priority == "low" },
+    ).filter { it.second.isNotEmpty() }
+}
+
+fun Db.changedTasks(days: Long = 7): List<TaskView> {
+    val cutoff = System.currentTimeMillis() - days * 24 * 60 * 60 * 1000
+    return taskViews()
+        .filter { task ->
+            runCatching { Instant.parse(task.modifiedAt).toEpochMilli() }
+                .getOrNull()
+                ?.let { it >= cutoff } == true
+        }
+        .sortedByDescending { it.modifiedAt }
+}
+
+fun Db.attachmentTasks(): List<TaskView> =
+    taskViews(includeCompleted = true).filter { it.attachments.isNotEmpty() }
+
+fun Db.tasksForTag(tagId: String): List<TaskView> {
+    val ids = mutableSetOf(tagId)
+    var changed = true
+    while (changed) {
+        changed = false
+        tags.values.forEach { tag ->
+            if (tag.parent in ids && ids.add(tag.id)) changed = true
+        }
+    }
+    return taskViews().filter { task ->
+        task.tags.any { name -> tags.values.any { it.name == name && it.id in ids } }
+    }
 }
