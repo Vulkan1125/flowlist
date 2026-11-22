@@ -120,6 +120,7 @@ import dev.flowlist.android.data.FolderDto
 import dev.flowlist.android.data.PerspectiveDto
 import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.Repository
+import dev.flowlist.android.data.SharedPayload
 import dev.flowlist.android.data.TaskView
 import dev.flowlist.android.data.forecast
 import dev.flowlist.android.data.inbox
@@ -130,6 +131,7 @@ import dev.flowlist.android.data.orderedChildTasks
 import dev.flowlist.android.data.isActive
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.label
+import dev.flowlist.android.data.linkWithName
 import dev.flowlist.android.data.today
 import dev.flowlist.android.data.taskViews
 import dev.flowlist.android.data.trashedTasks
@@ -229,7 +231,7 @@ fun MainScreen(
     onThemeChange: (ThemeSettings) -> Unit,
     initialTab: String?,
     onTabConsumed: () -> Unit,
-    sharedText: String? = null,
+    shared: SharedPayload? = null,
     onSharedConsumed: () -> Unit = {},
     preferences: AppPreferences,
     onPreferencesChange: (AppPreferences) -> Unit,
@@ -314,16 +316,54 @@ fun MainScreen(
         selecting = false
         selectedIds = emptySet()
     }
-    LaunchedEffect(sharedText) {
-        val text = sharedText?.trim().orEmpty()
-        if (text.isNotEmpty()) {
-            captureInitial = text
-            capture = true
-            onSharedConsumed()
-        }
-    }
     val toasts = remember { Toasts(scope) }
     val snackbarHost = toasts.host
+    LaunchedEffect(shared) {
+        val payload = shared ?: return@LaunchedEffect
+        when (payload) {
+            is SharedPayload.Text -> {
+                captureInitial = payload.text
+                capture = true
+            }
+            is SharedPayload.Link -> scope.launch {
+                val title = payload.title?.takeIf { it.isNotBlank() }
+                    ?: android.net.Uri.parse(payload.url).host
+                    ?: payload.url
+                val task = repository.captureShared(
+                    title,
+                    listOf(linkWithName(payload.url, payload.title.orEmpty())),
+                )
+                if (task != null) {
+                    toasts.show(
+                        message = "Attached link to “${task.title}”",
+                        duration = SnackbarDuration.Short,
+                    )
+                }
+            }
+            is SharedPayload.File -> scope.launch {
+                val title = payload.name
+                    ?.substringBeforeLast('.', payload.name)
+                    ?.takeIf { it.isNotBlank() }
+                    ?: "Shared file"
+                val path = repository.uploadSharedFile(payload.uri)
+                if (path == null) {
+                    toasts.show(
+                        message = "Couldn't attach that file",
+                        duration = SnackbarDuration.Short,
+                    )
+                } else {
+                    val task = repository.captureShared(title, listOf(path))
+                    if (task != null) {
+                        toasts.show(
+                            message = "Attached “${payload.name ?: title}”",
+                            duration = SnackbarDuration.Short,
+                        )
+                    }
+                }
+            }
+        }
+        onSharedConsumed()
+    }
     val attachmentPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri ->

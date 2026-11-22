@@ -159,9 +159,9 @@ below; this list is the current map.
 - [x] **QR pairing** — Settings → Mobile draws a QR carrying every Mac address
       and the live pairing code; the phone scans it and tries each address in
       order, so a LAN address can fall through to Tailscale.
-- [x] **Android share-sheet capture** — `ACTION_SEND` and `ACTION_PROCESS_TEXT`
-      open the capture sheet prefilled, so text from any app reaches the same
-      quick-entry parser.
+- [x] **Android share-sheet capture** — text opens the capture sheet
+      prefilled; a shared URL becomes a task with a link attachment and a
+      shared file is uploaded and attached to a new task.
 - [x] **Android multi-select** — a header checklist opens select mode; bulk
       complete/reopen, bulk trash with one Undo, and Trash select-all plus a
       confirmed delete-forever.

@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.9.17 — 2026-11-22
+
+- **Mac: one row, aligned.** The circle, chevron, flag and task name share one
+  line; attachments, project, tags, dates and the subtask badge drop to a second
+  line only when they would touch the name. The badge reads `[done/total]`.
+- **Keep completed subtasks.** A new per-device setting on Mac (Settings →
+  Workflow) and Android (Settings → Tasks) leaves finished subtasks under their
+  parent, struck through and ticked, instead of hiding them.
+- **Mac: Completed and Trash show their tasks again.** The expansion pass was
+  re-filtering rows the view had already selected.
+- **QR pairing.** Settings → Mobile draws a QR carrying every Mac address and
+  the live pairing code. The Android Pair screen scans it, fills the fields and
+  tries each address in order (LAN, then Tailscale).
+- **Share to Flowlist on Android.** Plain text opens the capture sheet
+  prefilled. A shared link becomes a task with the URL as its attachment, and a
+  shared file is uploaded to the Mac and attached to a new task.
+- **Multi-select on Android.** The header checklist opens select mode: bulk
+  complete or reopen, bulk trash with one Undo, and Trash select-all plus a
+  confirmed delete-forever.
+- **Priority while capturing.** Quick entry accepts `@1`, `@2` and `@3` for
+  high, medium and low; the Android capture sheet has an `@1 high` chip.
+- **Android toasts swipe away.** A new message replaces the visible toast
+  instead of queueing, and a left or right swipe dismisses it.
+- **Android task and capture sheets sit below the status bar.**
+- **Subtasks tick immediately.** Optimistic updates no longer wait for the
+  server round-trip, and the completion toggle reopens a finished task instead
+  of completing it again.
+
 ## 0.9.16 — 2026-11-22
 
 - **Mac: the vertical priority stripe is gone.** The task circle already carries

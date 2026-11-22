@@ -185,6 +185,34 @@ fun completeCommand(ids: List<String>, completed: Boolean): JsonObject = buildJs
     )
 }
 
+fun addTaskCommand(title: String, attachments: List<String> = emptyList()): JsonObject =
+    buildJsonObject {
+        put(
+            "create_task",
+            buildJsonObject {
+                put("title", title)
+                put("notes", "")
+                put("project", JsonNull)
+                put("project_path", JsonNull)
+                put("parent", JsonNull)
+                put("tags", buildJsonArray {})
+                put("tag_paths", buildJsonArray {})
+                put("due", JsonNull)
+                put("defer", JsonNull)
+                put("estimate_min", JsonNull)
+                put("flagged", false)
+                put("priority", JsonNull)
+                put(
+                    "attachments",
+                    buildJsonArray { attachments.forEach { add(JsonPrimitive(it)) } },
+                )
+                put("repeat", JsonNull)
+                put("sequential", false)
+                put("position", JsonPrimitive("end"))
+            },
+        )
+    }
+
 fun deleteCommand(ids: List<String>): JsonObject = buildJsonObject {
     put(
         "delete_tasks",

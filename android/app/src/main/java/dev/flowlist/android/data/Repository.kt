@@ -157,9 +157,9 @@ class Repository(context: Context) {
         }
     }
 
-    suspend fun capture(text: String) {
+    suspend fun capture(text: String): TaskDto? {
         val trimmed = text.trim()
-        if (trimmed.isEmpty()) return
+        if (trimmed.isEmpty()) return null
         val id = Ulid.next()
         val title = displayTitle(trimmed)
         val now = java.time.Instant.now().toString()
@@ -181,6 +181,70 @@ class Repository(context: Context) {
         persist(updated)
         enqueue(PendingOp(id = "op_${UUID.randomUUID()}", text = trimmed, taskId = id, label = title), id)
         sync()
+        return _state.value.snapshot?.db?.tasks?.get(id) ?: task
+    }
+
+    /// Creates a task with an exact title and attachments, no quick-entry
+    /// parsing, so a shared file name or page title keeps every character.
+    suspend fun captureShared(title: String, attachments: List<String> = emptyList()): TaskDto? {
+        val clean = title.trim().ifEmpty { "Shared item" }
+        val id = Ulid.next()
+        val now = java.time.Instant.now().toString()
+        val task = TaskDto(
+            id = id,
+            title = clean,
+            attachments = attachments,
+            createdAt = now,
+            modifiedAt = now,
+        )
+        val snapshot = _state.value.snapshot ?: Snapshot()
+        val db = snapshot.db
+        val updated = snapshot.copy(
+            db = db.copy(
+                tasks = db.tasks + (id to task),
+                inboxOrder = db.inboxOrder + id,
+            ),
+        )
+        _state.update { it.copy(snapshot = updated) }
+        persist(updated)
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = addTaskCommand(clean, attachments),
+                label = clean,
+            ),
+            id,
+        )
+        sync()
+        return _state.value.snapshot?.db?.tasks?.get(id) ?: task
+    }
+
+    /// Uploads a file to the Mac and returns its library path, ready to be
+    /// stored on a task in the same command.
+    suspend fun uploadSharedFile(uri: Uri): String? {
+        val base = session.baseUrl ?: return null
+        val token = session.token ?: return null
+        return try {
+            val resolver = appContext.contentResolver
+            val name = resolver.query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            } ?: uri.lastPathSegment ?: "attachment"
+            val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: throw IllegalStateException("Could not read the file.")
+            if (bytes.size > 40 * 1024 * 1024) {
+                throw IllegalStateException("Files are limited to 40 MB.")
+            }
+            api.uploadFile(base, token, name, bytes)
+        } catch (error: Exception) {
+            _state.update { it.copy(error = friendly(error)) }
+            null
+        }
     }
 
     suspend fun complete(taskId: String, completed: Boolean) {

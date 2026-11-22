@@ -2,7 +2,10 @@ package dev.flowlist.android
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -26,6 +29,7 @@ import dev.flowlist.android.data.Repository
 import dev.flowlist.android.data.ThemeStore
 import dev.flowlist.android.ui.FlowlistTheme
 import dev.flowlist.android.ui.MainScreen
+import dev.flowlist.android.data.SharedPayload
 import dev.flowlist.android.ui.PairingScreen
 import dev.flowlist.android.ui.isDark
 import dev.flowlist.android.widget.FlowlistWidget
@@ -36,19 +40,19 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var openTab by mutableStateOf<String?>(null)
-    private var sharedText by mutableStateOf<String?>(null)
+    private var shared by mutableStateOf<SharedPayload?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         openTab = intent.getStringExtra("tab")
-        sharedText = sharedText(intent)
+        shared = sharedPayload(intent)
         setContent {
             FlowlistApp(
                 openTab = openTab,
                 onTabConsumed = { openTab = null },
-                sharedText = sharedText,
-                onSharedConsumed = { sharedText = null },
+                shared = shared,
+                onSharedConsumed = { shared = null },
             )
         }
     }
@@ -57,26 +61,73 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         openTab = intent.getStringExtra("tab")
-        sharedText = sharedText(intent)
+        shared = sharedPayload(intent)
     }
 
-    /** Text shared from another app, or selected text sent from its menu. */
-    private fun sharedText(intent: Intent?): String? {
+    /** What another app shared: a file, a link, or plain text. */
+    private fun sharedPayload(intent: Intent?): SharedPayload? {
         if (intent == null) return null
-        return when (intent.action) {
-            Intent.ACTION_SEND -> intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
-            Intent.ACTION_PROCESS_TEXT ->
-                intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
-            else -> null
-        }?.takeIf { it.isNotBlank() }
+        when (intent.action) {
+            Intent.ACTION_SEND -> {
+                (streamUri(intent) ?: intent.data)?.let { uri ->
+                    if (uri.scheme != "flowlist") {
+                        return SharedPayload.File(uri, displayName(uri))
+                    }
+                }
+                val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.trim()
+                if (!text.isNullOrEmpty()) return classify(intent, text)
+            }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                val uris = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+                val uri = uris?.firstOrNull()
+                if (uri != null) return SharedPayload.File(uri, displayName(uri))
+            }
+            Intent.ACTION_PROCESS_TEXT -> {
+                val text = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()?.trim()
+                if (!text.isNullOrEmpty()) return SharedPayload.Text(text)
+            }
+        }
+        return null
     }
+
+    private fun classify(intent: Intent, text: String): SharedPayload {
+        val url = Regex("""https?://\S+""").find(text)?.value
+        val link = url != null && (text == url || (text.length <= 200 && text.endsWith(url)))
+        if (!link || url == null) return SharedPayload.Text(text)
+        val title = listOf(Intent.EXTRA_TITLE, Intent.EXTRA_SUBJECT)
+            .firstNotNullOfOrNull { key ->
+                intent.getCharSequenceExtra(key)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            }
+            ?: text.replace(url, "").trim().takeIf { it.isNotEmpty() }
+        return SharedPayload.Link(url, title)
+    }
+
+    private fun streamUri(intent: Intent): Uri? =
+        if (Build.VERSION.SDK_INT >= 33) {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        }
+
+    private fun displayName(uri: Uri): String? = runCatching {
+        contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        } ?: uri.lastPathSegment
+    }.getOrNull()
 }
 
 @Composable
 private fun FlowlistApp(
     openTab: String?,
     onTabConsumed: () -> Unit,
-    sharedText: String?,
+    shared: SharedPayload?,
     onSharedConsumed: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -122,7 +173,7 @@ private fun FlowlistApp(
                 },
                 initialTab = openTab,
                 onTabConsumed = onTabConsumed,
-                sharedText = sharedText,
+                shared = shared,
                 onSharedConsumed = onSharedConsumed,
                 preferences = preferences,
                 onPreferencesChange = {
