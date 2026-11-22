@@ -249,6 +249,8 @@ fun MainScreen(
     }
     var capture by rememberSaveable { mutableStateOf(false) }
     var captureInitial by rememberSaveable { mutableStateOf("") }
+    var captureAttachment by remember { mutableStateOf<String?>(null) }
+    var captureAttachmentLabel by remember { mutableStateOf<String?>(null) }
     var selecting by rememberSaveable { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var search by rememberSaveable { mutableStateOf(false) }
@@ -323,22 +325,18 @@ fun MainScreen(
         when (payload) {
             is SharedPayload.Text -> {
                 captureInitial = payload.text
+                captureAttachment = null
+                captureAttachmentLabel = null
                 capture = true
             }
-            is SharedPayload.Link -> scope.launch {
+            is SharedPayload.Link -> {
                 val title = payload.title?.takeIf { it.isNotBlank() }
                     ?: android.net.Uri.parse(payload.url).host
                     ?: payload.url
-                val task = repository.captureShared(
-                    title,
-                    listOf(linkWithName(payload.url, payload.title.orEmpty())),
-                )
-                if (task != null) {
-                    toasts.show(
-                        message = "Attached link to “${task.title}”",
-                        duration = SnackbarDuration.Short,
-                    )
-                }
+                captureInitial = title
+                captureAttachment = linkWithName(payload.url, payload.title.orEmpty())
+                captureAttachmentLabel = payload.title?.takeIf { it.isNotBlank() } ?: payload.url
+                capture = true
             }
             is SharedPayload.File -> scope.launch {
                 val title = payload.name
@@ -352,13 +350,10 @@ fun MainScreen(
                         duration = SnackbarDuration.Short,
                     )
                 } else {
-                    val task = repository.captureShared(title, listOf(path))
-                    if (task != null) {
-                        toasts.show(
-                            message = "Attached “${payload.name ?: title}”",
-                            duration = SnackbarDuration.Short,
-                        )
-                    }
+                    captureInitial = title
+                    captureAttachment = path
+                    captureAttachmentLabel = payload.name ?: path.substringAfterLast('/')
+                    capture = true
                 }
             }
         }
@@ -669,6 +664,8 @@ fun MainScreen(
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     }
                     captureInitial = ""
+                    captureAttachment = null
+                    captureAttachmentLabel = null
                     capture = true
                 },
                 containerColor = colors.accent,
@@ -1194,13 +1191,33 @@ fun MainScreen(
     if (capture) {
         CaptureSheet(
             initialText = captureInitial,
-            onDismiss = { capture = false },
+            attachmentLabel = captureAttachmentLabel,
+            onDismiss = {
+                capture = false
+                captureAttachment = null
+                captureAttachmentLabel = null
+            },
             onAdd = { text ->
                 capture = false
+                val attachment = captureAttachment
+                captureAttachment = null
+                captureAttachmentLabel = null
                 if (preferences.haptics) {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
-                scope.launch { repository.capture(text) }
+                scope.launch {
+                    if (attachment == null) {
+                        repository.capture(text)
+                    } else {
+                        val task = repository.captureShared(text, listOf(attachment))
+                        if (task != null) {
+                            toasts.show(
+                                message = "Added “${task.title}” with its attachment",
+                                duration = SnackbarDuration.Short,
+                            )
+                        }
+                    }
+                }
             },
         )
     }

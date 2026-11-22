@@ -1,5 +1,14 @@
 package dev.flowlist.android.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material3.Icon
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -49,6 +58,7 @@ fun CaptureSheet(
     onDismiss: () -> Unit,
     onAdd: (String) -> Unit,
     initialText: String = "",
+    attachmentLabel: String? = null,
 ) {
     val colors = flow
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -125,6 +135,33 @@ fun CaptureSheet(
                     .fillMaxWidth()
                     .focusRequester(focus),
             )
+            if (attachmentLabel != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.field)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AttachFile,
+                        contentDescription = null,
+                        tint = colors.faint,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = attachmentLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),

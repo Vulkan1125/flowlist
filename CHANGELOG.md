@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.18 — 2026-11-22
+
+- **Sharing asks for a name first.** Sharing a link or file now opens the
+  capture sheet with the page title or file name prefilled and an attachment
+  chip. Rename the task, then Add to Inbox; the link or uploaded file is
+  attached to that task. Previously the task was created silently with a name
+  you could not choose.
+
 ## 0.9.17 — 2026-11-22
 
 - **Mac: one row, aligned.** The circle, chevron, flag and task name share one
