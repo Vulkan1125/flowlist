@@ -17,6 +17,7 @@ data class AppPreferences(
     val saveAllAttachments: Boolean = false,
     val forecastView: String = "month",
     val keepCompletedSubtasks: Boolean = false,
+    val nearbyReminders: Boolean = true,
     /// Drawer order, by perspective key. Empty means the built-in order.
     val perspectiveOrder: List<String> = emptyList(),
 )
@@ -38,6 +39,7 @@ class PreferencesStore(context: Context) {
         saveAllAttachments = prefs.getBoolean("save_all_attachments", false),
         forecastView = prefs.getString("forecast_view", "month") ?: "month",
         keepCompletedSubtasks = prefs.getBoolean("keep_completed_subtasks", false),
+        nearbyReminders = prefs.getBoolean("nearby_reminders", true),
         perspectiveOrder = (prefs.getString("perspective_order", null) ?: "")
             .split('|')
             .filter { it.isNotBlank() },
@@ -54,6 +56,7 @@ class PreferencesStore(context: Context) {
             .putBoolean("save_all_attachments", value.saveAllAttachments)
             .putString("forecast_view", value.forecastView)
             .putBoolean("keep_completed_subtasks", value.keepCompletedSubtasks)
+        .putBoolean("nearby_reminders", value.nearbyReminders)
             .putString("perspective_order", value.perspectiveOrder.joinToString("|"))
             .apply()
     }

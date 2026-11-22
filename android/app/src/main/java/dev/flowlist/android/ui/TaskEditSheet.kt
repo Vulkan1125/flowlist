@@ -53,6 +53,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
@@ -1050,11 +1051,22 @@ fun TaskEditSheet(
                                 }
                                 .padding(horizontal = 11.dp, vertical = 6.dp),
                         ) {
-                            Text(
-                                text = "#${tag.name}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (active) colors.accent else colors.faint,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (tag.location != null) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Place,
+                                        contentDescription = "Geotagged",
+                                        tint = if (active) colors.accent else colors.faint,
+                                        modifier = Modifier.size(11.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                }
+                                Text(
+                                    text = "#${tag.name}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (active) colors.accent else colors.faint,
+                                )
+                            }
                         }
                     }
                     Box(

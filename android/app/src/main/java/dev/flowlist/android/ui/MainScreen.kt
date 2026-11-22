@@ -241,6 +241,8 @@ fun MainScreen(
     onTabConsumed: () -> Unit,
     shared: SharedPayload? = null,
     onSharedConsumed: () -> Unit = {},
+    initialMore: String? = null,
+    onMoreConsumed: () -> Unit = {},
     preferences: AppPreferences,
     onPreferencesChange: (AppPreferences) -> Unit,
 ) {
@@ -287,6 +289,13 @@ fun MainScreen(
         } else {
             offlineWarning = false
         }
+    }
+    LaunchedEffect(initialMore) {
+        if (initialMore == "nearby") {
+            moreView = MoreView.Nearby
+            savedPerspective = null
+        }
+        if (initialMore != null) onMoreConsumed()
     }
     LaunchedEffect(initialTab) {
         when (initialTab) {
@@ -1212,13 +1221,13 @@ fun MainScreen(
             target = target,
             tags = snapshot?.db?.tags?.values?.toList().orEmpty(),
             onDismiss = { tagEditor = null },
-            onSave = { name, parent ->
+            onSave = { name, parent, location ->
                 tagEditor = null
                 scope.launch {
                     if (editing == null) {
-                        repository.createTag(name, parent)
+                        repository.createTag(name, parent, location)
                     } else {
-                        repository.updateTag(editing, name, parent)
+                        repository.updateTag(editing, name, parent, location)
                     }
                 }
             },

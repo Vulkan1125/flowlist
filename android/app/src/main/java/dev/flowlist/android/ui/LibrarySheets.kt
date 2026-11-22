@@ -1,5 +1,15 @@
 package dev.flowlist.android.ui
 
+import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import dev.flowlist.android.data.GeoDto
+import dev.flowlist.android.notify.DeviceLocation
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -321,13 +331,44 @@ fun TagEditorDialog(
     target: TagEditorTarget,
     tags: List<TagDto>,
     onDismiss: () -> Unit,
-    onSave: (name: String, parent: String?) -> Unit,
+    onSave: (name: String, parent: String?, location: GeoDto?) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
     val colors = flow
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val tag = target.tag
     var name by remember(tag?.id) { mutableStateOf(tag?.name.orEmpty()) }
     var parent by remember(tag?.id, target.parent) { mutableStateOf(tag?.parent ?: target.parent) }
+    var lat by remember(tag?.id) {
+        mutableStateOf(tag?.location?.lat?.let { "%.5f".format(it) }.orEmpty())
+    }
+    var lon by remember(tag?.id) {
+        mutableStateOf(tag?.location?.lon?.let { "%.5f".format(it) }.orEmpty())
+    }
+    val place = remember(lat, lon) {
+        val latitude = lat.toDoubleOrNull()
+        val longitude = lon.toDoubleOrNull()
+        if (latitude == null || longitude == null) {
+            null
+        } else if (latitude in -90.0..90.0 && longitude in -180.0..180.0) {
+            GeoDto(latitude, longitude)
+        } else {
+            null
+        }
+    }
+    val locationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        if (grants.values.any { it }) {
+            scope.launch {
+                DeviceLocation.current(context)?.let { fix ->
+                    lat = "%.5f".format(fix.lat)
+                    lon = "%.5f".format(fix.lon)
+                }
+            }
+        }
+    }
     val blocked = tag?.let { tagFamily(it.id, tags) }.orEmpty()
     val options = remember(tags, blocked) {
         tags.filterNot { it.id in blocked }.sortedBy { it.name.lowercase() }
@@ -362,6 +403,62 @@ fun TagEditorDialog(
                         LibraryPill("#${item.name}", parent == item.id) { parent = item.id }
                     }
                 }
+                LibraryLabel("Geotag")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = lat,
+                        onValueChange = { lat = it.filter { ch -> ch.isDigit() || ch == '-' || ch == '.' }.take(12) },
+                        label = { Text("Latitude") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        colors = libraryFieldColors(),
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = lon,
+                        onValueChange = { lon = it.filter { ch -> ch.isDigit() || ch == '-' || ch == '.' }.take(12) },
+                        label = { Text("Longitude") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        colors = libraryFieldColors(),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = {
+                        locationPermission.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                            ),
+                        )
+                    }) {
+                        Text("Use my location", color = colors.accent)
+                    }
+                    if (place != null) {
+                        TextButton(onClick = {
+                            val label = Uri.encode(name.ifBlank { "Tag" })
+                            runCatching {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse(
+                                            "geo:${place.lat},${place.lon}?q=${place.lat},${place.lon}($label)",
+                                        ),
+                                    ),
+                                )
+                            }
+                        }) {
+                            Text("Maps", color = colors.accent)
+                        }
+                        TextButton(onClick = {
+                            lat = ""
+                            lon = ""
+                        }) {
+                            Text("Clear", color = colors.faint)
+                        }
+                    }
+                }
                 if (onDelete != null) {
                     TextButton(onClick = onDelete, modifier = Modifier.padding(top = 10.dp)) {
                         Text("Delete tag", color = colors.danger)
@@ -371,7 +468,7 @@ fun TagEditorDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(name.trim().removePrefix("#"), parent) },
+                onClick = { onSave(name.trim().removePrefix("#"), parent, place) },
                 enabled = name.isNotBlank(),
             ) {
                 Text(if (tag == null) "Create" else "Save", color = colors.accent)

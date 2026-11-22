@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.25 — 2026-11-22
+
+- **Nearby uses the phone's location.** The Nearby perspective asks for location
+  access and measures from the phone, falling back to the library location, and
+  shows which source it is using.
+- **Geotags on tags.** The tag editor carries latitude/longitude fields, a
+  **Use my location** button, **Maps** to open the coordinates in Google Maps or
+  another maps app, and **Clear**. Geotagged tags show a pin in the task
+  editor's tag list.
+- **Arrival reminders.** A geofence is registered for every geotagged tag with
+  open tasks (250 m). Arriving posts a notification naming the tag and its
+  tasks. Settings → Tasks → Nearby reminders has the switch, the location and
+  background-location prompts, and a test reminder.
+
 ## 0.9.24 — 2026-11-22
 
 - **Bulk actions on search results.** A checklist button in the search sheet

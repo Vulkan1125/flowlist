@@ -444,20 +444,35 @@ fun deleteFolderCommand(id: String): JsonObject = buildJsonObject {
     put("delete_folder", buildJsonObject { put("id", id) })
 }
 
-fun createTagCommand(name: String, parent: String?): JsonObject = buildJsonObject {
+fun geoJson(place: dev.flowlist.android.data.GeoDto): JsonObject = buildJsonObject {
+    put("lat", place.lat)
+    put("lon", place.lon)
+}
+
+fun createTagCommand(
+    name: String,
+    parent: String?,
+    location: dev.flowlist.android.data.GeoDto? = null,
+): JsonObject = buildJsonObject {
     put(
         "create_tag",
         buildJsonObject {
             put("name", name)
             put("parent", parent?.let { JsonPrimitive(it) } ?: JsonNull)
             put("status", "available")
-            put("location", JsonNull)
+            put("location", location?.let(::geoJson) ?: JsonNull)
             put("position", "end")
         },
     )
 }
 
-fun updateTagCommand(id: String, name: String, parent: String?): JsonObject = buildJsonObject {
+fun updateTagCommand(
+    id: String,
+    name: String,
+    parent: String?,
+    location: dev.flowlist.android.data.GeoDto?,
+    locationChanged: Boolean,
+): JsonObject = buildJsonObject {
     put(
         "update_tag",
         buildJsonObject {
@@ -467,6 +482,9 @@ fun updateTagCommand(id: String, name: String, parent: String?): JsonObject = bu
                 buildJsonObject {
                     put("name", name)
                     put("parent", parent?.let { JsonPrimitive(it) } ?: JsonNull)
+                    if (locationChanged) {
+                        put("location", location?.let(::geoJson) ?: JsonNull)
+                    }
                 },
             )
         },

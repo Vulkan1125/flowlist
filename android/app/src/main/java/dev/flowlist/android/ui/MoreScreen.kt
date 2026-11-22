@@ -1,5 +1,12 @@
 package dev.flowlist.android.ui
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import dev.flowlist.android.notify.DeviceLocation
+import kotlinx.coroutines.launch
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -532,9 +539,55 @@ private fun TaskList(
 @Composable
 private fun NearbyList(db: Db, onOpenTag: (TagDto) -> Unit) {
     val colors = flow
-    val origin = db.settings.currentLocation
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var deviceLocation by remember { mutableStateOf<GeoDto?>(null) }
+    var requested by remember { mutableStateOf(false) }
+    val locationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        if (grants.values.any { it }) {
+            scope.launch { deviceLocation = DeviceLocation.current(context) }
+        }
+    }
+    LaunchedEffect(Unit) {
+        if (DeviceLocation.hasForeground(context)) {
+            deviceLocation = DeviceLocation.current(context)
+        }
+    }
+    val origin = deviceLocation ?: db.settings.currentLocation
     if (origin == null) {
-        EmptyLine("Set the library location on the Mac in Settings → Nearby.")
+        val hasPermission = DeviceLocation.hasForeground(context)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            EmptyLine(
+                if (hasPermission) {
+                    "Finding your location…"
+                } else {
+                    "Allow location access or set the library location on the Mac in Settings → Nearby."
+                },
+            )
+            TextButton(
+                onClick = {
+                    if (hasPermission) {
+                        scope.launch { deviceLocation = DeviceLocation.current(context) }
+                    } else {
+                        requested = true
+                        locationPermission.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                            ),
+                        )
+                    }
+                },
+                modifier = Modifier.padding(horizontal = 20.dp),
+            ) {
+                Text(
+                    text = if (hasPermission) "Try again" else "Use my location",
+                    color = colors.accent,
+                )
+            }
+        }
         return
     }
     val radius = db.settings.nearbyRadiusKm
@@ -550,13 +603,24 @@ private fun NearbyList(db: Db, onOpenTag: (TagDto) -> Unit) {
     }
     LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
         item(key = "nearby-header") {
-            Text(
-                text = "WITHIN ${radius.toInt()} KM",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = colors.faint,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            )
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
+                Text(
+                    text = "WITHIN ${radius.toInt()} KM",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.faint,
+                )
+                Text(
+                    text = if (deviceLocation != null) {
+                        "Using your phone's location"
+                    } else {
+                        "Using the library location"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.faint,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
         items(nearby, key = { it.first.id }) { (tag, km) ->
             val count = db.tagUsageCount(tag.id)

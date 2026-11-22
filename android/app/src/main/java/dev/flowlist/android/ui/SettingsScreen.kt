@@ -75,6 +75,8 @@ import androidx.core.content.ContextCompat
 import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.AppState
 import dev.flowlist.android.data.SettingsDto
+import dev.flowlist.android.notify.DeviceLocation
+import dev.flowlist.android.notify.NearbyReminders
 import dev.flowlist.android.data.UpdateChecker
 import dev.flowlist.android.data.UpdateInfo
 import dev.flowlist.android.icon.AppIcon
@@ -403,6 +405,66 @@ private fun TaskSettings(preferences: AppPreferences, onChange: (AppPreferences)
             preferences.keepCompletedSubtasks,
         ) {
             onChange(preferences.copy(keepCompletedSubtasks = it))
+        }
+    }
+    Spacer(modifier = Modifier.height(14.dp))
+    NearbySettings(preferences, onChange)
+}
+
+@Composable
+private fun NearbySettings(
+    preferences: AppPreferences,
+    onChange: (AppPreferences) -> Unit,
+) {
+    val colors = flow
+    val context = LocalContext.current
+    val backgroundLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
+    val foregroundLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        if (grants.values.any { it } && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            backgroundLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        }
+    }
+    SettingsCard("Nearby reminders") {
+        ToggleRow(
+            "Location reminders",
+            "Remind me when I arrive near a geotagged tag",
+            preferences.nearbyReminders,
+        ) {
+            onChange(preferences.copy(nearbyReminders = it))
+            NearbyReminders.setEnabled(context, it)
+        }
+        if (preferences.nearbyReminders) {
+            val hasForeground = DeviceLocation.hasForeground(context)
+            val hasBackground = DeviceLocation.hasBackground(context)
+            when {
+                !hasForeground -> TextButton(onClick = {
+                    foregroundLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                        ),
+                    )
+                }) {
+                    Text("Allow location", color = colors.accent)
+                }
+                !hasBackground -> TextButton(onClick = {
+                    backgroundLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                }) {
+                    Text("Allow background location", color = colors.accent)
+                }
+            }
+            Text(
+                text = "Geotag a tag to get a reminder when you arrive within 250 m of it.",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.faint,
+            )
+            TextButton(onClick = { NearbyReminders.sendTest(context) }) {
+                Text("Send a test reminder", color = colors.accent)
+            }
         }
     }
 }

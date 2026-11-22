@@ -1181,17 +1181,26 @@ class Repository(context: Context) {
         send(deleteFolderCommand(folder.id), "Delete folder “${folder.name}”")
     }
 
-    suspend fun createTag(name: String, parent: String?) {
+    suspend fun createTag(name: String, parent: String?, location: GeoDto? = null) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        send(createTagCommand(trimmed, parent), "New tag “$trimmed”")
+        send(createTagCommand(trimmed, parent, location), "New tag “$trimmed”")
     }
 
-    suspend fun updateTag(tag: TagDto, name: String, parent: String?) {
+    suspend fun updateTag(
+        tag: TagDto,
+        name: String,
+        parent: String?,
+        location: GeoDto? = tag.location,
+    ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        if (trimmed == tag.name && parent == tag.parent) return
-        send(updateTagCommand(tag.id, trimmed, parent), "Edit tag “${tag.name}”")
+        val locationChanged = location != tag.location
+        if (trimmed == tag.name && parent == tag.parent && !locationChanged) return
+        send(
+            updateTagCommand(tag.id, trimmed, parent, location, locationChanged),
+            "Edit tag “${tag.name}”",
+        )
     }
 
     suspend fun deleteTag(tag: TagDto) {

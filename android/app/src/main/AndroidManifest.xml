@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <application
         android:allowBackup="false"
@@ -138,6 +141,13 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/flowlist_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".notify.NearbyReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="dev.flowlist.android.NEARBY" />
+            </intent-filter>
         </receiver>
     </application>
 </manifest>
