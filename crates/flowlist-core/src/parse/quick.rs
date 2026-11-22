@@ -7,6 +7,7 @@
 //! * `#tag` or `#Parent/Child` — attach a tag, creating it when needed
 //! * `::Project` or `::Folder/Project` — file the task, creating it when needed
 //! * `!` — flag the task
+//! * `@1`, `@2`, `@3` — priority high, medium, low
 //! * `due:`, `defer:` — natural-language dates (`due:(next friday 5pm)`)
 //! * `est:` / `estimate:` — duration (`est:1h30m`)
 //! * `repeat:` — repeat rule (`repeat:(every 2 weeks after completion)`)
@@ -16,7 +17,7 @@ use chrono::{DateTime, Utc};
 
 use crate::command::NewTask;
 use crate::error::{Error, Result};
-use crate::model::RepeatRule;
+use crate::model::{Priority, RepeatRule};
 use crate::parse::dates::parse_stamp;
 use crate::parse::duration::parse_duration;
 use crate::parse::repeat::parse_repeat;
@@ -31,6 +32,7 @@ pub struct QuickEntry {
     pub defer: Option<Stamp>,
     pub estimate_min: Option<u32>,
     pub flagged: bool,
+    pub priority: Option<Priority>,
     pub repeat: Option<RepeatRule>,
     pub notes: String,
 }
@@ -44,6 +46,7 @@ impl QuickEntry {
         task.defer = self.defer;
         task.estimate_min = self.estimate_min;
         task.flagged = self.flagged;
+        task.priority = self.priority;
         task.repeat = self.repeat.clone();
         task.notes = self.notes.clone();
         task
@@ -66,6 +69,21 @@ pub fn parse(input: &str, reference: DateTime<Utc>) -> Result<QuickEntry> {
         if token == "!" {
             entry.flagged = true;
             continue;
+        }
+        match token.as_str() {
+            "@1" => {
+                entry.priority = Some(Priority::High);
+                continue;
+            }
+            "@2" => {
+                entry.priority = Some(Priority::Medium);
+                continue;
+            }
+            "@3" => {
+                entry.priority = Some(Priority::Low);
+                continue;
+            }
+            _ => {}
         }
         if let Some(tag) = token.strip_prefix('#') {
             if !tag.trim().is_empty() {
@@ -208,6 +226,23 @@ mod tests {
         let entry = parse("Ship it!", reference()).unwrap();
         assert!(!entry.flagged);
         assert_eq!(entry.title, "Ship it!");
+    }
+
+    #[test]
+    fn parses_priority_upfront() {
+        let entry = parse("Ship the build @1", reference()).unwrap();
+        assert_eq!(entry.title, "Ship the build");
+        assert_eq!(entry.priority, Some(Priority::High));
+
+        let entry = parse("Call mum @2", reference()).unwrap();
+        assert_eq!(entry.priority, Some(Priority::Medium));
+
+        let entry = parse("Water plants @3", reference()).unwrap();
+        assert_eq!(entry.priority, Some(Priority::Low));
+
+        let entry = parse("Read @9", reference()).unwrap();
+        assert_eq!(entry.priority, None);
+        assert_eq!(entry.title, "Read @9");
     }
 
     #[test]

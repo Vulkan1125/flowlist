@@ -82,6 +82,9 @@ private fun FlowlistApp(openTab: String?, onTabConsumed: () -> Unit) {
                 onPair = { address, code ->
                     scope.launch { repository.pair(address, code) }
                 },
+                onPairBases = { addresses, code ->
+                    scope.launch { repository.pairAny(addresses, code) }
+                },
             )
         } else {
             MainScreen(

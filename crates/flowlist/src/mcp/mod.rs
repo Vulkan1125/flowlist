@@ -1253,7 +1253,7 @@ fn tool_definitions() -> Vec<Value> {
             "Add a task. Supports quick-entry text in `title`, or explicit project/tags/due/defer/estimate fields.",
             schema(
                 json!({
-                    "title": s("Task title (quick-entry syntax allowed: #tag ::Project due:tomorrow est:30m !)"),
+                    "title": s("Task title (quick-entry syntax allowed: #tag ::Project @1 due:tomorrow est:30m !; @1/@2/@3 set priority)"),
                     "notes": s("Notes"),
                     "project": s("Project or Folder/Project path; created when missing"),
                     "tags": arr("Tag paths such as [\"Errands\", \"Errands/Phone\"]"),

@@ -1,5 +1,6 @@
 package dev.flowlist.android.ui
 
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,9 +22,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -33,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,18 +47,49 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.BorderStroke
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import dev.flowlist.android.data.parsePairingQr
 
 @Composable
 fun PairingScreen(
     busy: Boolean,
     error: String?,
     onPair: (String, String) -> Unit,
+    onPairBases: (List<String>, String) -> Unit,
 ) {
     val colors = flow
     var address by rememberSaveable { mutableStateOf("") }
     var code by rememberSaveable { mutableStateOf("") }
     var help by rememberSaveable { mutableStateOf(false) }
+    var scanError by rememberSaveable { mutableStateOf<String?>(null) }
     val canPair = address.isNotBlank() && code.trim().length >= 4 && !busy
+    val context = LocalContext.current
+
+    fun scan() {
+        scanError = null
+        val options = GmsBarcodeScannerOptions.Builder()
+            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+            .enableAutoZoom()
+            .build()
+        GmsBarcodeScanning.getClient(context, options)
+            .startScan()
+            .addOnSuccessListener { barcode ->
+                val parsed = barcode.rawValue?.let(::parsePairingQr)
+                if (parsed == null) {
+                    scanError = "That QR code isn't a Flowlist pairing code."
+                    return@addOnSuccessListener
+                }
+                address = parsed.addresses.first()
+                code = parsed.code
+                onPairBases(parsed.addresses, parsed.code)
+            }
+            .addOnFailureListener {
+                scanError = "Couldn't open the QR scanner. Enter the address and code instead."
+            }
+    }
 
     Column(
         modifier = Modifier
@@ -99,6 +135,31 @@ fun PairingScreen(
             color = colors.ink,
         )
         Spacer(modifier = Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = { scan() },
+            enabled = !busy,
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, colors.hairline),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.ink),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.QrCodeScanner,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Scan the QR code on your Mac", fontWeight = FontWeight.Medium)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "or enter the details manually",
+            style = MaterialTheme.typography.labelMedium,
+            color = colors.faint,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
         OutlinedTextField(
             value = address,
             onValueChange = { address = it },
@@ -133,10 +194,11 @@ fun PairingScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        if (error != null) {
+        val shownError = scanError ?: error
+        if (shownError != null) {
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = error,
+                text = shownError,
                 style = MaterialTheme.typography.labelMedium,
                 color = colors.danger,
             )
@@ -255,3 +317,4 @@ private fun fieldColors() = OutlinedTextFieldDefaults.colors(
     focusedPlaceholderColor = flow.faint,
     unfocusedPlaceholderColor = flow.faint,
 )
+

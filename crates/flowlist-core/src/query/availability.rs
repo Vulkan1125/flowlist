@@ -149,15 +149,22 @@ fn availability_inner(db: &Db, task: &Task, at: DateTime<Utc>) -> Availability {
         }
     }
 
-    if let Some(blocker) = sequence_blocker(db, task) {
+    if let Some(blocker) = sequence_blocker_inner(db, task) {
         return Availability::BlockedBySequence(blocker);
     }
 
     Availability::Available
 }
 
+/// The earlier incomplete task that blocks this one in a sequential list.
+pub fn sequence_blocker(db: &Db, task_id: &TaskId) -> Option<TaskId> {
+    db.tasks
+        .get(task_id)
+        .and_then(|task| sequence_blocker_inner(db, task))
+}
+
 /// In a sequential list, every earlier incomplete sibling blocks this task.
-fn sequence_blocker(db: &Db, task: &Task) -> Option<TaskId> {
+fn sequence_blocker_inner(db: &Db, task: &Task) -> Option<TaskId> {
     let (key, sequential) = if let Some(parent_id) = &task.parent {
         let parent = db.tasks.get(parent_id)?;
         (OrderKey::Parent(parent_id.clone()), parent.sequential)

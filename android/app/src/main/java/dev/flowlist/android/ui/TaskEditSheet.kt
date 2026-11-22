@@ -24,7 +24,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -137,6 +143,7 @@ fun TaskEditSheet(
     onAddSubtask: (String) -> Unit,
     onToggleSubtask: (TaskDto, Boolean) -> Unit,
     onMoveSubtask: (TaskDto, TaskDto) -> Unit,
+    onDeleteSubtask: (TaskDto) -> Unit,
     onReorderSubtasks: (List<TaskDto>) -> Unit,
     onAddLink: (String, String) -> Unit,
     onRenameLink: (String, String, String) -> Unit,
@@ -254,6 +261,9 @@ fun TaskEditSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        modifier = Modifier.windowInsetsPadding(
+            WindowInsets.statusBars.only(WindowInsetsSides.Top),
+        ),
         sheetState = sheet,
         containerColor = colors.background,
         dragHandle = { SheetHandle() },
@@ -557,13 +567,14 @@ fun TaskEditSheet(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+            val activeDone = orderedSubtasks.count { it.completed } +
+                task.checklist.count { it.completed }
+            val activeTotal = orderedSubtasks.size + task.checklist.size
             Label(
-                if (stepMode == StepMode.OneOff) {
-                    "One-off"
-                } else if (orderedSubtasks.isEmpty()) {
+                if (activeTotal == 0) {
                     "Subtasks"
                 } else {
-                    "Subtasks · ${orderedSubtasks.count { it.completed }}/${orderedSubtasks.size}"
+                    "Subtasks · $activeDone/$activeTotal"
                 },
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -578,7 +589,6 @@ fun TaskEditSheet(
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
-            if (stepMode != StepMode.OneOff) {
             orderedSubtasks.forEachIndexed { index, child ->
                 key(child.id) {
                     val dragging = subtaskDragId == child.id
@@ -651,6 +661,17 @@ fun TaskEditSheet(
                             Icon(
                                 imageVector = Icons.Outlined.DriveFileMove,
                                 contentDescription = "Move subtask",
+                                tint = colors.faint,
+                                modifier = Modifier.size(17.dp),
+                            )
+                        }
+                        IconButton(
+                            onClick = { onDeleteSubtask(child) },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.DeleteOutline,
+                                contentDescription = "Delete subtask",
                                 tint = colors.faint,
                                 modifier = Modifier.size(17.dp),
                             )
@@ -761,17 +782,7 @@ fun TaskEditSheet(
                     }
                 }
             }
-            }
-            if (stepMode == StepMode.OneOff) {
-                if (task.checklist.isEmpty()) {
-                    Text(
-                        text = "No one-off steps yet.",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = colors.faint,
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    )
-                }
-                task.checklist.forEachIndexed { index, item ->
+            task.checklist.forEachIndexed { index, item ->
                     val oneOffDragging = oneOffDragId == item.id
                     val rowHeightPx = if (oneOffRowHeight > 0f) {
                         oneOffRowHeight
@@ -862,7 +873,6 @@ fun TaskEditSheet(
                         }
                     }
                 }
-            }
 
             Spacer(modifier = Modifier.height(8.dp))
             if (addingSubtask) {

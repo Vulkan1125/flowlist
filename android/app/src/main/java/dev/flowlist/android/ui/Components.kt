@@ -33,7 +33,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -44,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -65,6 +68,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import dev.flowlist.android.data.TaskView
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.isToday
@@ -131,6 +137,8 @@ fun TaskRow(
     modifier: Modifier = Modifier,
     depth: Int = 0,
     hasChildren: Boolean = false,
+    childCount: Int = 0,
+    childDone: Int = 0,
     expanded: Boolean = false,
     onToggleExpanded: (() -> Unit)? = null,
     dragging: Boolean = false,
@@ -172,7 +180,7 @@ fun TaskRow(
                 .weight(1f)
                 .clickable(onClick = onClick),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.Top) {
                 Text(
                     text = task.title,
                     style = MaterialTheme.typography.bodyMedium,
@@ -180,8 +188,52 @@ fun TaskRow(
                     textDecoration = if (task.completed) TextDecoration.LineThrough else null,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier.weight(1f),
                 )
+                if (task.pending) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    PendingChip()
+                }
+                // The chevron and the flag share one 20dp-tall row so their
+                // centres land on the task title's first line together.
+                Row(
+                    modifier = Modifier.height(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (hasChildren && onToggleExpanded != null) {
+                        Box(
+                            modifier = Modifier
+                                .height(20.dp)
+                                .width(30.dp)
+                                .clickable(onClick = onToggleExpanded),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = if (expanded) {
+                                    Icons.Rounded.ExpandMore
+                                } else {
+                                    Icons.Rounded.ChevronRight
+                                },
+                                contentDescription = if (expanded) {
+                                    "Collapse subtasks"
+                                } else {
+                                    "Expand subtasks"
+                                },
+                                tint = colors.faint,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                    if (task.flagged && !task.completed) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Rounded.Flag,
+                            contentDescription = "Flagged",
+                            tint = colors.warning,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
             }
             val dueColor = when {
                 task.due?.isOverdue() == true && !task.completed -> colors.danger
@@ -189,6 +241,9 @@ fun TaskRow(
                 else -> colors.faint
             }
             val details = buildList {
+                if (childCount > 0) {
+                    add("[$childDone/$childCount]" to colors.faint)
+                }
                 task.projectName?.let { add(it to colors.faint) }
                 task.due?.let { add(it.label() to dueColor) }
                 if (task.checklistTotal > 0) add("${task.checklistDone}/${task.checklistTotal}" to colors.faint)
@@ -213,37 +268,6 @@ fun TaskRow(
                 )
             }
         }
-        if (task.pending) {
-            Spacer(modifier = Modifier.width(8.dp))
-            PendingChip()
-        }
-        if (hasChildren && onToggleExpanded != null) {
-            IconButton(onClick = onToggleExpanded, modifier = Modifier.size(28.dp)) {
-                Icon(
-                    imageVector = if (expanded) {
-                        Icons.Rounded.ExpandMore
-                    } else {
-                        Icons.Rounded.ChevronRight
-                    },
-                    contentDescription = if (expanded) {
-                        "Collapse subtasks"
-                    } else {
-                        "Expand subtasks"
-                    },
-                    tint = colors.faint,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        }
-        if (task.flagged && !task.completed) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Icon(
-                imageVector = Icons.Rounded.Flag,
-                contentDescription = "Flagged",
-                tint = colors.warning,
-                modifier = Modifier.size(16.dp),
-            )
-        }
     }
 }
 
@@ -257,6 +281,8 @@ fun SwipeTaskRow(
     onClick: () -> Unit,
     depth: Int = 0,
     hasChildren: Boolean = false,
+    childCount: Int = 0,
+    childDone: Int = 0,
     expanded: Boolean = false,
     onToggleExpanded: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -310,6 +336,8 @@ fun SwipeTaskRow(
                 modifier = Modifier.background(colors.background).then(modifier),
                 depth = depth,
                 hasChildren = hasChildren,
+                childCount = childCount,
+                childDone = childDone,
                 expanded = expanded,
                 onToggleExpanded = onToggleExpanded,
                 dragging = dragging,
@@ -401,6 +429,8 @@ fun TaskTreeItem(
             onTrash = { onTrash(task) },
             onClick = { onClick(task) },
             hasChildren = hasChildren,
+            childCount = kids.size,
+            childDone = kids.count { it.completed },
             expanded = expanded,
             onToggleExpanded = toggleExpanded,
             modifier = dragModifier,
@@ -416,6 +446,8 @@ fun TaskTreeItem(
             modifier = dragModifier,
             depth = depth,
             hasChildren = hasChildren,
+            childCount = kids.size,
+            childDone = kids.count { it.completed },
             expanded = expanded,
             onToggleExpanded = toggleExpanded,
             dragging = dragging,
@@ -527,30 +559,79 @@ fun EmptyState(
 fun FlowSnackbarHost(hostState: SnackbarHostState) {
     val colors = flow
     SnackbarHost(hostState = hostState) { data ->
-        Row(
-            modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(colors.ink)
-                .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = data.visuals.message,
-                style = MaterialTheme.typography.labelLarge,
-                color = colors.background,
-                modifier = Modifier.weight(1f),
+        // A fresh dismiss state per message, so a swiped-away toast cannot
+        // leave the next one already half off screen.
+        key(data) {
+            val dismissState = rememberSwipeToDismissBoxState(
+                confirmValueChange = { value ->
+                    if (value == SwipeToDismissBoxValue.Settled) {
+                        false
+                    } else {
+                        data.dismiss()
+                        true
+                    }
+                },
             )
-            data.visuals.actionLabel?.let { label ->
-                TextButton(onClick = { data.performAction() }) {
+            SwipeToDismissBox(
+                state = dismissState,
+                backgroundContent = {},
+            ) {
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.ink)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
-                        text = label,
+                        text = data.visuals.message,
                         style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
                         color = colors.background,
+                        modifier = Modifier.weight(1f),
                     )
+                    data.visuals.actionLabel?.let { label ->
+                        TextButton(onClick = { data.performAction() }) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.background,
+                            )
+                        }
+                    }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * One snackbar at a time. A new message replaces the visible one instead of
+ * queueing behind it, so repeated taps cannot leave a minutes-long parade of
+ * toasts. Swipe a toast left or right to dismiss it.
+ */
+class Toasts(private val scope: CoroutineScope) {
+    val host = SnackbarHostState()
+    private var job: Job? = null
+
+    fun show(
+        message: String,
+        actionLabel: String? = null,
+        duration: SnackbarDuration = SnackbarDuration.Short,
+        onAction: (suspend () -> Unit)? = null,
+    ) {
+        job?.cancel()
+        host.currentSnackbarData?.dismiss()
+        job = scope.launch {
+            val result = host.showSnackbar(
+                message = message,
+                actionLabel = actionLabel,
+                duration = duration,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                onAction?.invoke()
             }
         }
     }

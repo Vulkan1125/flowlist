@@ -530,6 +530,20 @@ fun inboxPlacement(position: JsonElement): JsonObject = buildJsonObject {
     put("inbox", position)
 }
 
+fun restoreOneOffsCommand(taskId: String): JsonObject = buildJsonObject {
+    put(
+        "convert_one_off_to_subtasks",
+        buildJsonObject { put("id", taskId) },
+    )
+}
+
+fun convertSubtasksCommand(taskId: String): JsonObject = buildJsonObject {
+    put(
+        "convert_subtasks_to_one_off",
+        buildJsonObject { put("id", taskId) },
+    )
+}
+
 fun savePerspectiveCommand(
     id: String,
     name: String,

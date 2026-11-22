@@ -280,12 +280,13 @@ fun MainScreen(
             }
         }
     }
-    val children = remember(snapshot?.revision) {
+    val children = remember(snapshot, preferences.keepCompletedSubtasks) {
         val db = snapshot?.db
         if (db == null) {
             emptyMap()
         } else {
-            val views = db.taskViews().filter { it.parent != null }
+            val views = db.taskViews(includeCompleted = preferences.keepCompletedSubtasks)
+                .filter { it.parent != null }
             val byId = views.associateBy { it.id }
             db.tasks.values.associate { dto ->
                 val ordered = dto.childOrder.mapNotNull { id ->
@@ -297,7 +298,8 @@ fun MainScreen(
             }.filterValues { it.isNotEmpty() }
         }
     }
-    val snackbarHost = remember { SnackbarHostState() }
+    val toasts = remember { Toasts(scope) }
+    val snackbarHost = toasts.host
     val attachmentPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri ->
@@ -305,7 +307,7 @@ fun MainScreen(
         if (uri != null && current != null) {
             scope.launch {
                 val uploaded = repository.uploadAttachment(current.id, uri)
-                snackbarHost.showSnackbar(
+                toasts.show(
                     message = if (uploaded) "Attachment added" else "Couldn't add the attachment",
                     duration = SnackbarDuration.Short,
                 )
@@ -315,7 +317,7 @@ fun MainScreen(
     LaunchedEffect(state.error, state.online) {
         val message = state.error
         if (message != null && state.online) {
-            snackbarHost.showSnackbar(message, duration = SnackbarDuration.Short)
+            toasts.show(message, duration = SnackbarDuration.Short)
             repository.clearError()
         }
     }
@@ -369,29 +371,23 @@ fun MainScreen(
         }
         scope.launch {
             repository.complete(task.id, done)
-            val result = snackbarHost.showSnackbar(
+            toasts.show(
                 message = if (done) "Completed “${task.title}”" else "Reopened “${task.title}”",
                 actionLabel = "Undo",
-                withDismissAction = false,
                 duration = SnackbarDuration.Long,
+                onAction = { repository.complete(task.id, !done) },
             )
-            if (result == SnackbarResult.ActionPerformed) {
-                repository.complete(task.id, !done)
-            }
         }
     }
     val trash: (TaskView) -> Unit = { task ->
         scope.launch {
             val removed = repository.delete(task.id)
-            val result = snackbarHost.showSnackbar(
+            toasts.show(
                 message = "Moved “${task.title}” to Trash",
                 actionLabel = "Undo",
-                withDismissAction = false,
                 duration = SnackbarDuration.Long,
+                onAction = { if (removed != null) repository.restore(removed) },
             )
-            if (result == SnackbarResult.ActionPerformed && removed != null) {
-                repository.restore(removed)
-            }
         }
     }
 
@@ -572,7 +568,7 @@ fun MainScreen(
                     snapshot = snapshot,
                     swipeActions = preferences.swipeActions,
                     pending = state.pending,
-                    onToggle = { task -> complete(task, true) },
+                    onToggle = { task -> complete(task, !task.completed) },
                     onClick = { detail = it },
                     onTrash = trash,
                 )
@@ -612,7 +608,7 @@ fun MainScreen(
                     children = children,
                     tasks = snapshot?.db?.inbox().orEmpty(),
                     pending = state.pending,
-                    onToggle = { task -> complete(task, true) },
+                    onToggle = { task -> complete(task, !task.completed) },
                     onClick = { detail = it },
                     onTrash = trash,
                 )
@@ -621,7 +617,7 @@ fun MainScreen(
                     children = children,
                     tasks = snapshot?.db?.today().orEmpty(),
                     pending = state.pending,
-                    onToggle = { task -> complete(task, true) },
+                    onToggle = { task -> complete(task, !task.completed) },
                     onClick = { detail = it },
                     onTrash = trash,
                 )
@@ -633,7 +629,7 @@ fun MainScreen(
                     swipeActions = preferences.swipeActions,
                     children = children,
                     pending = state.pending,
-                    onToggle = { task -> complete(task, true) },
+                    onToggle = { task -> complete(task, !task.completed) },
                     onClick = { detail = it },
                     onTrash = trash,
                 )
@@ -646,7 +642,7 @@ fun MainScreen(
                     onArchiveProject = { item ->
                         scope.launch {
                             repository.setProjectStatus(item, "done")
-                            snackbarHost.showSnackbar(
+                            toasts.show(
                                 message = "Archived “${item.name}”",
                                 duration = SnackbarDuration.Short,
                             )
@@ -691,7 +687,7 @@ fun MainScreen(
                         onPreferencesChange(preferences.copy(saveAllAttachments = false))
                         scope.launch {
                             repository.removeAllSavedAttachments()
-                            snackbarHost.showSnackbar(
+                            toasts.show(
                                 message = "Offline attachment copies removed",
                                 duration = SnackbarDuration.Short,
                             )
@@ -735,7 +731,7 @@ fun MainScreen(
                     detail = null
                     scope.launch {
                         repository.update(dto, edit)
-                        snackbarHost.showSnackbar(
+                        toasts.show(
                             message = "Saved “${edit.title}”",
                             duration = SnackbarDuration.Short,
                         )
@@ -752,7 +748,7 @@ fun MainScreen(
                 onSaveAttachment = { path ->
                     scope.launch {
                         val saved = repository.saveAttachmentForOffline(path)
-                        snackbarHost.showSnackbar(
+                        toasts.show(
                             message = if (saved) {
                                 "Saved for offline"
                             } else {
@@ -768,7 +764,7 @@ fun MainScreen(
                 onOpenAttachment = { path ->
                     scope.launch {
                         if (!repository.openAttachment(path)) {
-                            snackbarHost.showSnackbar(
+                            toasts.show(
                                 message = "Couldn't open that attachment",
                                 duration = SnackbarDuration.Short,
                             )
@@ -786,6 +782,17 @@ fun MainScreen(
                 },
                 onMoveSubtask = { child, parent ->
                     scope.launch { repository.moveSubtask(child, parent) }
+                },
+                onDeleteSubtask = { child ->
+                    scope.launch {
+                        val removed = repository.delete(child.id)
+                        toasts.show(
+                            message = "Moved “${child.title}” to Trash",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Long,
+                            onAction = { if (removed != null) repository.restore(removed) },
+                        )
+                    }
                 },
                 onReorderSubtasks = { ordered ->
                     scope.launch { repository.reorderSubtasks(dto.id, ordered) }
@@ -859,7 +866,7 @@ fun MainScreen(
                 project = null
                 projectEditor = ProjectEditorTarget(editing, editing.folder)
             },
-            onToggle = { task -> complete(task, true) },
+            onToggle = { task -> complete(task, !task.completed) },
             onClick = { task ->
                 project = null
                 detail = task
@@ -1014,7 +1021,7 @@ fun MainScreen(
             db = snapshot?.db ?: dev.flowlist.android.data.Db(),
             pending = state.pending,
             onDismiss = { search = false },
-            onToggle = { task -> complete(task, true) },
+            onToggle = { task -> complete(task, !task.completed) },
             onClick = { task ->
                 search = false
                 detail = task
@@ -1728,7 +1735,7 @@ private fun BrowseList(
     val db = snapshot?.db
     val projects = db?.projects?.values.orEmpty()
     val folders = db?.folders?.values.orEmpty()
-    val entries = remember(snapshot?.revision) {
+    val entries = remember(snapshot) {
         val open = projects
             .filter { it.status == "active" || it.status == "on_hold" }
             .sortedBy { it.name.lowercase() }

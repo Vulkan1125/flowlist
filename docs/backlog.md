@@ -153,6 +153,12 @@ below; this list is the current map.
       says “Empty” aligned with the names instead of reading like a heading.
 - [x] **Changed hides completed tasks** — the query and the sidebar badge both
       filter out completed tasks; undo brings the row and the count back.
+- [x] **Android client** — a Compose remote for the Mac library with an offline
+      outbox, full task editing, themes, a home-screen widget and due reminders.
+      See `android/README.md`.
+- [x] **QR pairing** — Settings → Mobile draws a QR carrying every Mac address
+      and the live pairing code; the phone scans it and tries each address in
+      order, so a LAN address can fall through to Tailscale.
 - [x] **Inline subtasks** — outlines are expanded by default, so children sit
       under their parent without a first click. The disclosure previously
       disagreed with the render default, which made its first click a no-op;

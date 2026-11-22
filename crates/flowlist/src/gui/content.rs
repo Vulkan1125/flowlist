@@ -1,7 +1,7 @@
 //! The main task list, project dashboards, review queue and nearby places.
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use chrono::{Datelike, Duration, NaiveDate};
@@ -11,6 +11,7 @@ use gpui::{
 };
 
 use flowlist_core::command::{Command, ProjectPatch};
+use flowlist_core::db::Db;
 use flowlist_core::ids::{ProjectId, TaskId};
 use flowlist_core::model::{
     BuiltinPerspective, GroupBy, Priority, ProjectStatus, RepeatRule, SortBy,
@@ -1196,7 +1197,7 @@ impl FlowlistApp {
                         .child(widgets::text_field(
                             theme,
                             &self.capture,
-                            "Add a task…  #tag  ::Project  !  due:tomorrow  est:15m",
+                            "Add a task…  #tag  ::Project  @1  due:tomorrow  est:15m",
                             self.focus == super::FocusArea::Capture,
                         ))
                         .on_click(cx.listener(|this, _, _, cx| {
@@ -1301,7 +1302,7 @@ impl FlowlistApp {
                 list = list.child(self.render_group_header(group, open, cx));
             }
             if open {
-                for row in &group.rows {
+                for row in self.expanded_rows(&group.rows) {
                     if self.row_is_hidden(&row.id) {
                         continue;
                     }
@@ -1310,7 +1311,7 @@ impl FlowlistApp {
                             self.render_root_drop_zone(Some(row.id.clone()), cx),
                         );
                     }
-                    list = list.child(self.render_task_row(row, cx));
+                    list = list.child(self.render_task_row(&row, cx));
                 }
                 if group.rows.is_empty() {
                     list = list.child(
@@ -1328,6 +1329,54 @@ impl FlowlistApp {
             list = list.child(self.render_root_drop_zone(None, cx));
         }
         list.into_any_element()
+    }
+
+    /// The rows a group paints. A parent that matches the view but whose
+    /// children do not (Today, Flagged, a search) still reveals those children
+    /// when its disclosure is open, so the arrow always does something.
+    fn expanded_rows(&self, rows: &[TaskRow]) -> Vec<TaskRow> {
+        fn add(
+            app: &FlowlistApp,
+            db: &Db,
+            at: chrono::DateTime<chrono::Utc>,
+            id: &TaskId,
+            seeded: bool,
+            out: &mut Vec<TaskRow>,
+            seen: &mut BTreeSet<TaskId>,
+        ) {
+            if !seen.insert(id.clone()) {
+                return;
+            }
+            let Some(task) = db.tasks.get(id) else {
+                return;
+            };
+            // Rows handed in by the view already passed its filter: the
+            // Completed and Trash perspectives put completed or trashed tasks
+            // there on purpose. Only children revealed by expanding a branch
+            // need the completed-work filter.
+            if !seeded {
+                let keep_completed =
+                    app.show_completed || app.keep_completed_subtasks;
+                if task.is_trashed() || (task.completed && !keep_completed) {
+                    return;
+                }
+            }
+            out.push(query::row_for(db, id, at));
+            if app.is_open(&format!("task:{id}"), false) {
+                for child in &task.child_order {
+                    add(app, db, at, child, false, out, seen);
+                }
+            }
+        }
+
+        let db = self.store.db();
+        let at = now();
+        let mut out = Vec::new();
+        let mut seen = BTreeSet::new();
+        for row in rows {
+            add(self, db, at, &row.id, true, &mut out, &mut seen);
+        }
+        out
     }
 
     /// A thin root-level gap that accepts a dragged task. It only shows a
@@ -1728,7 +1777,34 @@ impl FlowlistApp {
         let flagged = task.flagged;
         let title = task.title.clone();
         let painted_title = title.clone();
-        let has_children = task.has_children();
+        let subtask_total = task
+            .child_order
+            .iter()
+            .filter(|child| {
+                db.tasks
+                    .get(*child)
+                    .is_some_and(|task| !task.is_trashed())
+            })
+            .count();
+        let subtask_completed = task
+            .child_order
+            .iter()
+            .filter(|child| {
+                db.tasks
+                    .get(*child)
+                    .is_some_and(|task| !task.is_trashed() && task.completed)
+            })
+            .count();
+        // The badge only counts children the list will actually paint. Done
+        // subtasks count once they are kept visible; while they are filtered
+        // out they must not turn an empty branch into "[2/0]".
+        let shows_done = self.show_completed || self.keep_completed_subtasks;
+        let subtask_done = if shows_done { subtask_completed } else { 0 };
+        let subtask_open = subtask_total - subtask_completed;
+        // [done/total] over the rows that are actually shown, so two visible
+        // finished subtasks read "[2/2]", never "[2/0]".
+        let subtask_visible = subtask_done + subtask_open;
+        let has_children = subtask_visible > 0;
         // Subtasks start collapsed; the disclosure opens a branch. Expanding
         // stays view state, so sorting or grouping never changes it.
         let expanded = self.is_open(&format!("task:{id}"), false);
@@ -1757,7 +1833,6 @@ impl FlowlistApp {
                 .map(|project| db.project_path(project)),
         };
         let availability = row.availability.clone();
-        let short = id.short().to_string();
         let title_id = id.clone();
         let checkbox_id = id.clone();
         let flag_id = id.clone();
@@ -1785,206 +1860,32 @@ impl FlowlistApp {
         let root_id = id.clone();
         let drop_root_id = id.clone();
         let row_depth = row.depth;
-        let base = div()
-            .id(super::sid(format!("task:{}", id)))
-            .group(row_group.clone())
-            .flex()
-            .items_center()
-            .gap_2()
-            .min_h(px(32.))
-            .w_full()
-            .pl(px(18.0 + row.depth as f32 * 18.0))
-            .pr_4()
-            .py_1()
-            .border_b_1()
-            .border_color(theme.border_soft)
-            .bg(if root_after {
-                theme.accent_soft
-            } else if selected {
-                theme.selection
-            } else {
-                theme.bg
-            })
-            .text_sm()
-            .cursor_pointer()
-            .hover(|style| style.bg(theme.hover))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, _| window.focus(&this.focus_handle)),
-            )
-            .on_click(cx.listener(move |this, event: &gpui::ClickEvent, _, cx| {
-                let mods = event.modifiers();
-                let double = match event {
-                    gpui::ClickEvent::Mouse(mouse) => mouse.down.click_count >= 2,
-                    _ => false,
-                };
-                if mods.shift {
-                    this.select_range_to(title_id.clone());
-                } else if mods.platform {
-                    this.toggle_selection(title_id.clone());
-                } else {
-                    this.select_only(title_id.clone());
-                    this.anchor = Some(title_id.clone());
-                }
-                if double {
-                    this.show_inspector = true;
-                    this.begin_edit(EditField::Title, cx);
-                } else {
-                    this.save_session();
-                }
-                cx.notify();
-            }))
-            .on_drag(drag_payload, move |payload, position, window, cx| {
-                ghost(payload, position, window, cx, theme)
-            })
-            .on_drag_move::<DragTask>(cx.listener(
-                move |this, event: &DragMoveEvent<DragTask>, _, cx| {
-                    // The bottom of a root row is a large, forgiving zone for
-                    // moving a subtask back out to the project root.
-                    let bottom = event.bounds.origin.y + event.bounds.size.height;
-                    let near_bottom = row_depth == 0
-                        && event.event.position.y > bottom - event.bounds.size.height * 0.30;
-                    let target = near_bottom.then(|| format!("root-after:{root_id}"));
-                    this.set_content_drop_target(target, cx);
-                },
-            ))
-            .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
-                let key = format!("root-after:{drop_root_id}");
-                if this.content_drop_target.as_deref() == Some(key.as_str()) {
-                    this.drop_on_root(Some(drop_root_id.clone()), payload, cx);
-                } else {
-                    this.drop_on_task(drop_id.clone(), payload, cx);
-                }
-            }))
-            .child(
-                div()
-                    .id(super::sid(format!("check:{}", checkbox_id)))
-                    .flow_tip(
-                        self,
-                        cx,
-                        theme,
-                        if completed {
-                            "Reopen task (x)"
-                        } else {
-                            "Complete task (x)"
-                        },
-                    )
-                    .child(widgets::checkbox(
-                        theme,
-                        completed,
-                        theme.accent,
-                        task.priority
-                            .map(|priority| super::theme::priority_color(theme, priority)),
-                    ))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.toggle_complete(checkbox_id.clone(), cx);
-                    })),
-            )
-            .child(if has_children {
-                div()
-                    .on_children_prepainted(move |bounds, _, _| {
-                        if let Some(bounds) = bounds.first() {
-                            disclosure_anchor.borrow_mut().insert(
-                                disclosure_key.clone(),
-                                [
-                                    f32::from(bounds.origin.x),
-                                    f32::from(bounds.origin.y),
-                                    f32::from(bounds.size.width),
-                                    f32::from(bounds.size.height),
-                                ],
-                            );
-                        }
-                    })
-                    .child(
-                        div()
-                            .id(super::sid(format!("disclosure:{}", disclosure_id)))
-                            .w(px(12.))
-                            .text_color(theme.text_faint)
-                            .flow_tip(
-                                self,
-                                cx,
-                                theme,
-                                if expanded {
-                                    "Collapse subtasks"
-                                } else {
-                                    "Expand subtasks"
-                                },
-                            )
-                            .child(icons::icon(
-                                if expanded {
-                                    Icon::ChevronDown
-                                } else {
-                                    Icon::ChevronRight
-                                },
-                                12.0,
-                                theme.text_faint,
-                            ))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.toggle_expanded(format!("task:{}", disclosure_id), false, cx);
-                            })),
-                    )
-                    .into_any_element()
-            } else {
-                div().w(px(12.)).into_any_element()
-            })
-            .child(
-                div()
-                    .id(super::sid(format!("flag:{}", flag_id)))
-                    .w(px(14.))
-                    .text_color(if flagged {
-                        theme.danger
-                    } else {
-                        theme.text_faint
-                    })
-                    .opacity(if flagged { 1.0 } else { 0.0 })
-                    .cursor_pointer()
-                    .group_hover(row_group, |style| style.opacity(1.0))
-                    .hover(|style| style.opacity(1.0))
-                    .flow_tip(
-                        self,
-                        cx,
-                        theme,
-                        if flagged {
-                            "Unflag task (!)"
-                        } else {
-                            "Flag task (!)"
-                        },
-                    )
-                    .child(icons::icon(
-                        Icon::Flagged,
-                        12.0,
-                        if flagged {
-                            theme.danger
-                        } else {
-                            theme.text_faint
-                        },
-                    ))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.toggle_flag(flag_id.clone(), cx);
-                    })),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_color(title_color)
-                    .when(completed, |this| this.line_through())
-                    .child(title),
-            )
-            .child(
-                div()
+        let title_line = div()
+            .flex_grow()
+            .flex_shrink_0()
+            .min_w_0()
+            .overflow_hidden()
+            .whitespace_nowrap()
+            .text_color(title_color)
+            .when(completed, |this| this.line_through())
+            .child(title);
+        let meta_line = div()
                     .flex()
+                    .flex_wrap()
                     .items_center()
-                    .gap_1()
+                    .gap_2()
                     .flex_shrink_0()
                     // Right-edge metadata reads in a fixed order: what is
                     // attached, where it lives, what it is tagged, how long it
                     // takes, when it is due, then the softer signals.
+                    .when(subtask_visible > 0, |this| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child(format!("[{subtask_done}/{subtask_visible}]")),
+                        )
+                    })
                     .when(attachment_count > 0, |this| {
                         this.child(
                             div()
@@ -2066,15 +1967,214 @@ impl FlowlistApp {
                                 .text_color(theme.warning)
                                 .child(availability.label()),
                         )
+                    });
+        let first_line = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .flex_grow()
+            .flex_shrink()
+            .min_w_0()
+            .overflow_hidden()
+            .child(
+                div()
+                    .id(super::sid(format!("check:{}", checkbox_id)))
+                    .flow_tip(
+                        self,
+                        cx,
+                        theme,
+                        if completed {
+                            "Reopen task (x)"
+                        } else {
+                            "Complete task (x)"
+                        },
+                    )
+                    .child(widgets::checkbox(
+                        theme,
+                        completed,
+                        theme.accent,
+                        task.priority
+                            .map(|priority| super::theme::priority_color(theme, priority)),
+                    ))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.toggle_complete(checkbox_id.clone(), cx);
+                    })),
+            )
+            .child(if has_children {
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            disclosure_anchor.borrow_mut().insert(
+                                disclosure_key.clone(),
+                                [
+                                    f32::from(bounds.origin.x),
+                                    f32::from(bounds.origin.y),
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
+                                ],
+                            );
+                        }
                     })
                     .child(
                         div()
-                            .text_xs()
+                            .id(super::sid(format!("disclosure:{}", disclosure_id)))
+                            .flex()
+                            .items_center()
+                            .gap_1()
                             .text_color(theme.text_faint)
-                            .opacity(0.0)
-                            .child(short),
-                    ),
-            );
+                            .flow_tip(
+                                self,
+                                cx,
+                                theme,
+                                if expanded {
+                                    "Collapse subtasks"
+                                } else {
+                                    "Expand subtasks"
+                                },
+                            )
+                            .child(icons::icon(
+                                if expanded {
+                                    Icon::ChevronDown
+                                } else {
+                                    Icon::ChevronRight
+                                },
+                                12.0,
+                                theme.text_faint,
+                            ))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.set_branch_open(
+                                    format!("task:{}", disclosure_id),
+                                    !expanded,
+                                );
+                                cx.notify();
+                            })),
+                    )
+                    .into_any_element()
+            } else {
+                div().w(px(12.)).into_any_element()
+            })
+            .child(
+                div()
+                    .id(super::sid(format!("flag:{}", flag_id)))
+                    .w(px(14.))
+                    .text_color(if flagged {
+                        theme.danger
+                    } else {
+                        theme.text_faint
+                    })
+                    .opacity(if flagged { 1.0 } else { 0.0 })
+                    .cursor_pointer()
+                    .group_hover(row_group.clone(), |style| style.opacity(1.0))
+                    .hover(|style| style.opacity(1.0))
+                    .flow_tip(
+                        self,
+                        cx,
+                        theme,
+                        if flagged {
+                            "Unflag task (!)"
+                        } else {
+                            "Flag task (!)"
+                        },
+                    )
+                    .child(icons::icon(
+                        Icon::Flagged,
+                        12.0,
+                        if flagged {
+                            theme.danger
+                        } else {
+                            theme.text_faint
+                        },
+                    ))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.toggle_flag(flag_id.clone(), cx);
+                    })),
+            )
+            .child(title_line);
+        let content = div()
+            .flex_1()
+            .min_w_0()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_end()
+            .gap_2()
+            .child(first_line)
+            .child(meta_line);
+        let base = div()
+            .id(super::sid(format!("task:{}", id)))
+            .group(row_group.clone())
+            .flex()
+            .items_start()
+            .gap_2()
+            .min_h(px(32.))
+            .w_full()
+            .pl(px(18.0 + row.depth as f32 * 18.0))
+            .pr_4()
+            .py_1()
+            .border_b_1()
+            .border_color(theme.border_soft)
+            .bg(if root_after {
+                theme.accent_soft
+            } else if selected {
+                theme.selection
+            } else {
+                theme.bg
+            })
+            .text_sm()
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.hover))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, window, _| window.focus(&this.focus_handle)),
+            )
+            .on_click(cx.listener(move |this, event: &gpui::ClickEvent, _, cx| {
+                let mods = event.modifiers();
+                let double = match event {
+                    gpui::ClickEvent::Mouse(mouse) => mouse.down.click_count >= 2,
+                    _ => false,
+                };
+                if mods.shift {
+                    this.select_range_to(title_id.clone());
+                } else if mods.platform {
+                    this.toggle_selection(title_id.clone());
+                } else {
+                    this.select_only(title_id.clone());
+                    this.anchor = Some(title_id.clone());
+                }
+                if double {
+                    this.show_inspector = true;
+                    this.begin_edit(EditField::Title, cx);
+                } else {
+                    this.save_session();
+                }
+                cx.notify();
+            }))
+            .on_drag(drag_payload, move |payload, position, window, cx| {
+                ghost(payload, position, window, cx, theme)
+            })
+            .on_drag_move::<DragTask>(cx.listener(
+                move |this, event: &DragMoveEvent<DragTask>, _, cx| {
+                    // The bottom of a root row is a large, forgiving zone for
+                    // moving a subtask back out to the project root.
+                    let bottom = event.bounds.origin.y + event.bounds.size.height;
+                    let near_bottom = row_depth == 0
+                        && event.event.position.y > bottom - event.bounds.size.height * 0.30;
+                    let target = near_bottom.then(|| format!("root-after:{root_id}"));
+                    this.set_content_drop_target(target, cx);
+                },
+            ))
+            .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
+                let key = format!("root-after:{drop_root_id}");
+                if this.content_drop_target.as_deref() == Some(key.as_str()) {
+                    this.drop_on_root(Some(drop_root_id.clone()), payload, cx);
+                } else {
+                    this.drop_on_task(drop_id.clone(), payload, cx);
+                }
+            }))
+            .child(content);
         self.content_rows.borrow_mut().push((
             id.to_string(),
             row.depth,

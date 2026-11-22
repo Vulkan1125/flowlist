@@ -169,6 +169,10 @@ pub struct Session {
     pub group: Option<String>,
     #[serde(default)]
     pub show_completed: Option<bool>,
+    /// Keep finished subtasks under their parent even when the list is
+    /// hiding completed work. Per device, like the Android app's setting.
+    #[serde(default)]
+    pub keep_completed_subtasks: Option<bool>,
     #[serde(default)]
     pub vim_mode: Option<bool>,
     /// Due-date reminders on this Mac. Per device, not per library.

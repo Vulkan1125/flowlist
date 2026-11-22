@@ -2189,3 +2189,162 @@ fn defer_after_due_is_rejected_on_create_and_update() {
     );
 }
 
+#[test]
+fn converting_subtasks_flattens_them_into_one_off_steps() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let parent = add_task(&mut store, "Parent");
+    let mut first = NewTask::new("First child");
+    first.parent = Some(parent.clone());
+    let first = store
+        .execute(Command::CreateTask(first))
+        .unwrap()
+        .created[0]
+        .clone();
+    let first = store.db().resolve_task(&first).unwrap();
+    let mut second = NewTask::new("Second child");
+    second.parent = Some(parent.clone());
+    let second = store
+        .execute(Command::CreateTask(second))
+        .unwrap()
+        .created[0]
+        .clone();
+    let second = store.db().resolve_task(&second).unwrap();
+    let mut nested = NewTask::new("Nested child");
+    nested.parent = Some(second.clone());
+    let nested = store
+        .execute(Command::CreateTask(nested))
+        .unwrap()
+        .created[0]
+        .clone();
+    let nested = store.db().resolve_task(&nested).unwrap();
+
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![first.clone()],
+            completed: true,
+        })
+        .unwrap();
+
+    store
+        .execute(Command::ConvertSubtasksToOneOff {
+            id: parent.clone(),
+        })
+        .unwrap();
+
+    let task = &store.db().tasks[&parent];
+    assert!(task.steps_one_off);
+    assert!(!task.sequential);
+    assert!(task.child_order.is_empty());
+    assert_eq!(
+        task.checklist
+            .iter()
+            .map(|item| (item.title.as_str(), item.completed))
+            .collect::<Vec<_>>(),
+        vec![("First child", true), ("Second child", false), ("Nested child", false)]
+    );
+    assert!(!store.db().tasks.contains_key(&first));
+    assert!(!store.db().tasks.contains_key(&second));
+    assert!(!store.db().tasks.contains_key(&nested));
+}
+
+#[test]
+fn sequential_children_must_be_completed_in_order() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let mut parent = NewTask::new("Sequential parent");
+    parent.sequential = true;
+    let parent = store
+        .execute(Command::CreateTask(parent))
+        .unwrap()
+        .created[0]
+        .clone();
+    let parent = store.db().resolve_task(&parent).unwrap();
+
+    let mut first = NewTask::new("First");
+    first.parent = Some(parent.clone());
+    let first = store
+        .execute(Command::CreateTask(first))
+        .unwrap()
+        .created[0]
+        .clone();
+    let first = store.db().resolve_task(&first).unwrap();
+    let mut second = NewTask::new("Second");
+    second.parent = Some(parent.clone());
+    let second = store
+        .execute(Command::CreateTask(second))
+        .unwrap()
+        .created[0]
+        .clone();
+    let second = store.db().resolve_task(&second).unwrap();
+
+    let error = store
+        .execute(Command::CompleteTasks {
+            ids: vec![second.clone()],
+            completed: true,
+        })
+        .unwrap_err();
+    assert!(error.to_string().contains("Finish “First” first"));
+
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![first.clone()],
+            completed: true,
+        })
+        .unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![second.clone()],
+            completed: true,
+        })
+        .unwrap();
+    assert!(store.db().tasks[&second].completed);
+}
+
+#[test]
+fn converting_one_off_steps_back_to_subtasks() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let parent = add_task(&mut store, "Parent");
+    store
+        .execute(Command::AddChecklistItem {
+            task: parent.clone(),
+            title: "First".into(),
+            position: None,
+        })
+        .unwrap();
+    store
+        .execute(Command::AddChecklistItem {
+            task: parent.clone(),
+            title: "Second".into(),
+            position: None,
+        })
+        .unwrap();
+    store
+        .execute(Command::UpdateTask {
+            id: parent.clone(),
+            patch: TaskPatch {
+                steps_one_off: Some(true),
+                ..TaskPatch::default()
+            },
+        })
+        .unwrap();
+
+    store
+        .execute(Command::ConvertOneOffToSubtasks { id: parent.clone() })
+        .unwrap();
+
+    let task = &store.db().tasks[&parent];
+    assert!(!task.steps_one_off);
+    assert!(task.checklist.is_empty());
+    assert_eq!(
+        task.child_order
+            .iter()
+            .map(|id| store.db().tasks[id].title.as_str())
+            .collect::<Vec<_>>(),
+        vec!["First", "Second"]
+    );
+}

@@ -484,10 +484,10 @@ fun SavedPerspectiveView(
 ) {
     val colors = flow
     val db = snapshot?.db
-    val all = remember(snapshot?.revision, perspective) {
+    val all = remember(snapshot, perspective) {
         db?.taskViews(includeCompleted = perspective.showCompleted).orEmpty()
     }
-    val children = remember(snapshot?.revision) {
+    val children = remember(snapshot) {
         db?.taskViews()
             ?.filter { it.parent != null }
             ?.groupBy { it.parent!! }

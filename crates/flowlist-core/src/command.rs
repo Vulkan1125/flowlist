@@ -294,6 +294,14 @@ pub enum Command {
     PurgeTasks {
         ids: Vec<TaskId>,
     },
+    /// Replace a task's child tasks with one-off checklist steps.
+    ConvertSubtasksToOneOff {
+        id: TaskId,
+    },
+    /// Turn a task's one-off checklist steps back into child tasks.
+    ConvertOneOffToSubtasks {
+        id: TaskId,
+    },
     /// Turn a task (and its subtasks) into a project in the same folder.
     ConvertTaskToProject {
         id: TaskId,
@@ -464,6 +472,12 @@ impl Command {
             Command::RestoreTasks { ids } => format!("Restore {}", task_count(ids.len())),
             Command::PurgeTasks { ids } => {
                 format!("Permanently delete {}", task_count(ids.len()))
+            }
+            Command::ConvertSubtasksToOneOff { .. } => {
+                "Convert subtasks to one-off steps".to_string()
+            }
+            Command::ConvertOneOffToSubtasks { .. } => {
+                "Restore one-off steps as subtasks".to_string()
             }
             Command::ConvertTaskToProject { .. } => "Convert task to project".to_string(),
             Command::PurgeExpiredTrash { .. } => "Empty expired trash".to_string(),
@@ -717,6 +731,20 @@ impl Command {
                     if task.completed == completed {
                         continue;
                     }
+                    if completed {
+                        if let Some(blocker) =
+                            crate::query::availability::sequence_blocker(db, &id)
+                        {
+                            let title = db
+                                .tasks
+                                .get(&blocker)
+                                .map(|task| task.title.clone())
+                                .unwrap_or_default();
+                            return Err(Error::invalid(format!(
+                                "Finish “{title}” first — this is a sequential list"
+                            )));
+                        }
+                    }
                     let repeat = task.repeat.clone();
                     let due = task.due;
                     let defer = task.defer;
@@ -875,6 +903,78 @@ impl Command {
                     format!("Emptied {} from Trash", task_count(removed))
                 });
                 db.touch();
+            }
+            Command::ConvertOneOffToSubtasks { id } => {
+                let parent = db.task(&id)?.clone();
+                let items = parent.checklist.clone();
+                let mut created = 0;
+                for item in items {
+                    let mut child = Task::new(item.title);
+                    child.parent = Some(id.clone());
+                    child.project = parent.project.clone();
+                    child.completed = item.completed;
+                    child.completed_at = item.completed.then_some(at);
+                    child.modified_at = at;
+                    let child_id = child.id.clone();
+                    db.tasks.insert(child_id.clone(), child);
+                    db.insert_task_at(
+                        OrderKey::Parent(id.clone()),
+                        child_id.clone(),
+                        Position::End,
+                    );
+                    outcome.created.push(child_id.to_string());
+                    created += 1;
+                }
+                let task = db.task_mut(&id)?;
+                task.checklist.clear();
+                task.steps_one_off = false;
+                task.modified_at = at;
+                db.touch();
+                outcome.affected.push(id.to_string());
+                outcome.message = Some(if created == 0 {
+                    "Switched to subtasks".to_string()
+                } else {
+                    format!("Restored {} as subtasks", task_count(created))
+                });
+            }
+            Command::ConvertSubtasksToOneOff { id } => {
+                db.task(&id)?;
+                let descendants = db.task_subtree(&id);
+                let items: Vec<(String, bool)> = descendants
+                    .iter()
+                    .skip(1)
+                    .filter_map(|child_id| {
+                        db.tasks
+                            .get(child_id)
+                            .filter(|task| !task.is_trashed())
+                            .map(|task| (task.title.clone(), task.completed))
+                    })
+                    .collect();
+                {
+                    let task = db.task_mut(&id)?;
+                    for (title, completed) in &items {
+                        let mut item = ChecklistItem::new(title.clone());
+                        item.completed = *completed;
+                        task.checklist.push(item);
+                    }
+                    task.steps_one_off = true;
+                    task.sequential = false;
+                    task.modified_at = at;
+                }
+                let children: Vec<TaskId> = descendants.into_iter().skip(1).collect();
+                if !children.is_empty() {
+                    purge_tasks(db, &children);
+                }
+                db.touch();
+                outcome.affected.push(id.to_string());
+                outcome.message = Some(if items.is_empty() {
+                    "Switched to one-off steps".to_string()
+                } else {
+                    format!(
+                        "Converted {} to one-off steps",
+                        task_count(items.len())
+                    )
+                });
             }
             Command::ConvertTaskToProject { id, folder } => {
                 let task = db.task(&id)?.clone();

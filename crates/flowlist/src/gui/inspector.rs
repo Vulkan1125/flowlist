@@ -1622,8 +1622,6 @@ impl FlowlistApp {
                     .collect()
             })
             .unwrap_or_default();
-        let done = children.iter().filter(|child| child.2).count();
-        let total = children.len();
         let one_off = db.tasks.get(id).is_some_and(|task| task.steps_one_off);
         let checklist: Vec<(ChecklistId, String, bool)> = db
             .tasks
@@ -1635,6 +1633,11 @@ impl FlowlistApp {
                     .collect()
             })
             .unwrap_or_default();
+        // Both lists are always visible. The mode only changes the rules and
+        // what the add field creates.
+        let done = children.iter().filter(|child| child.2).count()
+            + checklist.iter().filter(|item| item.2).count();
+        let total = children.len() + checklist.len();
 
         let mut section = div().flex().flex_col().gap_1().child(
             div()
@@ -1667,6 +1670,23 @@ impl FlowlistApp {
             super::TaskStepMode::Parallel
         };
         let mode_id = parent.clone();
+        let mode_boxes = self.inspector_boxes.clone();
+        let probe = |key: &'static str| {
+            let boxes = mode_boxes.clone();
+            move |bounds: Vec<gpui::Bounds<gpui::Pixels>>, _: &mut Window, _: &mut gpui::App| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        key.to_string(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            }
+        };
         section = section.child(
             div()
                 .flex()
@@ -1674,6 +1694,7 @@ impl FlowlistApp {
                 .gap_1()
                 .child(
                     div()
+                        .on_children_prepainted(probe("step:parallel"))
                         .id("task-kind-parallel")
                         .cursor_pointer()
                         .child(widgets::toggle_chip(
@@ -1694,6 +1715,7 @@ impl FlowlistApp {
                 )
                 .child(
                     div()
+                        .on_children_prepainted(probe("step:sequential"))
                         .id("task-kind-sequential")
                         .cursor_pointer()
                         .child(widgets::toggle_chip(
@@ -1714,6 +1736,7 @@ impl FlowlistApp {
                 )
                 .child(
                     div()
+                        .on_children_prepainted(probe("step:one-off"))
                         .id("task-kind-one-off")
                         .cursor_pointer()
                         .child(widgets::toggle_chip(
@@ -1731,16 +1754,31 @@ impl FlowlistApp {
                 ),
         );
 
-        if !one_off {
         for (child_id, title, completed, priority) in children {
             let select_id = child_id.clone();
             let toggle_id = child_id.clone();
             let separate_id = child_id.clone();
+            let trash_id = child_id.clone();
             let drag_id = child_id.clone();
             let drag_title = title.clone();
             let drop_parent = parent.clone();
             let drop_target = child_id.clone();
+            let box_id = format!("subtask:{child_id}");
+            let boxes = self.inspector_boxes.clone();
             let row = div()
+                .on_children_prepainted(move |bounds, _, _| {
+                    if let Some(bounds) = bounds.first() {
+                        boxes.borrow_mut().insert(
+                            box_id.clone(),
+                            [
+                                f32::from(bounds.origin.x),
+                                f32::from(bounds.origin.y),
+                                f32::from(bounds.size.width),
+                                f32::from(bounds.size.height),
+                            ],
+                        );
+                    }
+                })
                 .id(super::sid(format!("subtask:{child_id}")))
                 .flex()
                 .items_center()
@@ -1797,29 +1835,52 @@ impl FlowlistApp {
                             cx.notify();
                         })),
                 )
+                .when(!one_off, |this| {
+                    this.child(
+                        div()
+                            .id(super::sid(format!("separate-subtask:{child_id}")))
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .cursor_pointer()
+                            .hover(|style| style.text_color(theme.text))
+                            .flow_tip(
+                                self,
+                                cx,
+                                theme,
+                                "Move this task out from under its parent",
+                            )
+                            .child("Separate")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.promote_subtask(separate_id.clone(), cx);
+                            })),
+                    )
+                })
                 .child(
                     div()
-                        .id(super::sid(format!("separate-subtask:{child_id}")))
+                        .id(super::sid(format!("delete-subtask:{child_id}")))
+                        .ml(px(10.))
+                        .w(px(18.))
+                        .text_center()
                         .text_xs()
                         .text_color(theme.text_faint)
                         .cursor_pointer()
-                        .hover(|style| style.text_color(theme.text))
-                        .flow_tip(
-                            self,
-                            cx,
-                            theme,
-                            "Move this task out from under its parent",
-                        )
-                        .child("Separate")
+                        .hover(|style| style.text_color(theme.danger))
+                        .flow_tip(self, cx, theme, "Move subtask to Trash")
+                        .child(icons::icon(Icon::Trash, 12.0, theme.text_faint))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
-                            this.promote_subtask(separate_id.clone(), cx);
+                            this.trash_subtask(trash_id.clone(), cx);
                         })),
                 )
                 .child(
                     div()
                         .id(super::sid(format!("subtask-grip:{child_id}")))
-                        .w(px(12.))
+                        .w(px(22.))
+                        .h(px(22.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
                         .cursor(CursorStyle::OpenHand)
                         .text_xs()
                         .text_color(theme.text_faint)
@@ -1851,41 +1912,8 @@ impl FlowlistApp {
                     .child("No subtasks yet."),
             );
         }
-        }
 
-        if one_off && checklist.is_empty() {
-            section = section.child(
-                div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child("No one-off steps yet."),
-            );
-        }
-
-        if one_off && !checklist.is_empty() {
-            section = section.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child("One-off"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child(format!(
-                                "{}/{}",
-                                checklist.iter().filter(|item| item.2).count(),
-                                checklist.len()
-                            )),
-                    ),
-            );
-            for (item_id, title, completed) in &checklist {
+        for (item_id, title, completed) in &checklist {
                 let toggle_task = parent.clone();
                 let toggle_item = item_id.clone();
                 let edit_task = parent.clone();
@@ -1986,7 +2014,11 @@ impl FlowlistApp {
                         .child(
                             div()
                                 .id(super::sid(format!("one-off-grip:{item_id}")))
-                                .w(px(12.))
+                                .w(px(22.))
+                                .h(px(22.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
                                 .cursor(CursorStyle::OpenHand)
                                 .text_xs()
                                 .text_color(theme.text_faint)
@@ -2015,7 +2047,6 @@ impl FlowlistApp {
                         )),
                 );
             }
-        }
 
         section.child(
             div()

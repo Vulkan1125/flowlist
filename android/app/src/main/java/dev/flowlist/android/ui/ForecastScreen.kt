@@ -66,7 +66,7 @@ fun ForecastScreen(
     val month = YearMonth.parse(monthKey)
     val selected = LocalDate.parse(selectedKey)
 
-    val byDate = remember(snapshot?.revision) {
+    val byDate = remember(snapshot) {
         snapshot?.db?.tasks?.values
             ?.asSequence()
             ?.filter { it.isActive && it.parent == null && it.due != null }
@@ -77,7 +77,7 @@ fun ForecastScreen(
             ?.groupBy({ it.first }, { it.second })
             .orEmpty()
     }
-    val allViews = remember(snapshot?.revision) {
+    val allViews = remember(snapshot) {
         snapshot?.db?.taskViews().orEmpty().associateBy { it.id }
     }
 

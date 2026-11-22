@@ -397,6 +397,13 @@ private fun TaskSettings(preferences: AppPreferences, onChange: (AppPreferences)
         ToggleRow("Swipe actions", "Right to complete, left to trash", preferences.swipeActions) {
             onChange(preferences.copy(swipeActions = it))
         }
+        ToggleRow(
+            "Keep completed subtasks",
+            "Leave finished subtasks under the parent, struck through",
+            preferences.keepCompletedSubtasks,
+        ) {
+            onChange(preferences.copy(keepCompletedSubtasks = it))
+        }
     }
 }
 

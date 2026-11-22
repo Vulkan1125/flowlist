@@ -388,6 +388,7 @@ impl QuickCapture {
             ("#tag", theme.accent),
             ("::Project", theme.accent),
             ("!", theme.warning),
+            ("@1 high", theme.warning),
             ("due:tomorrow", theme.text_dim),
             ("repeat:every week", theme.text_dim),
         ] {

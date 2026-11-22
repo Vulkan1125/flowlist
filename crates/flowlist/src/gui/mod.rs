@@ -380,6 +380,8 @@ pub struct FlowlistApp {
     content_rows: Rc<RefCell<Vec<PaintedTaskRow>>>,
     /// Subtask disclosure chevrons, measured so the GUI probe can click them.
     task_disclosures: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Inspector subtask rows, measured so a probe can drag one onto another.
+    inspector_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Applies to every list, and is what the sidebar priority rows set.
     priority_filter: Option<Priority>,
     /// Hide everything blocked behind another task (First Available).
@@ -465,6 +467,9 @@ pub struct FlowlistApp {
     collapsed_groups: BTreeSet<String>,
     show_inspector: bool,
     show_completed: bool,
+    /// Finished subtasks stay under their parent, struck through, even when
+    /// the active view hides completed work.
+    keep_completed_subtasks: bool,
     vim_mode: bool,
     /// Send macOS notifications for upcoming due dates (this device only).
     due_notifications: bool,
@@ -587,6 +592,7 @@ impl FlowlistApp {
         let sort = session.sort.as_deref().and_then(sort_from_slug);
         let group = session.group.as_deref().and_then(group_from_slug);
         let show_completed = session.show_completed.unwrap_or(false);
+        let keep_completed_subtasks = session.keep_completed_subtasks.unwrap_or(false);
         let show_inspector = session.inspector.unwrap_or(true);
         let vim_mode = session.vim_mode.unwrap_or(true);
         let due_notifications = session.notifications.unwrap_or(false);
@@ -663,6 +669,7 @@ impl FlowlistApp {
             content_drop_target: None,
             content_rows: Rc::new(RefCell::new(Vec::new())),
             task_disclosures: Rc::new(RefCell::new(BTreeMap::new())),
+            inspector_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             priority_filter,
             only_available,
             hide_overdue: false,
@@ -707,6 +714,7 @@ impl FlowlistApp {
             collapsed_groups: BTreeSet::new(),
             show_inspector,
             show_completed,
+            keep_completed_subtasks,
             vim_mode,
             due_notifications,
             notification_permission: notifications::Permission::Unknown,
@@ -858,6 +866,7 @@ impl FlowlistApp {
             sort: self.sort.map(|sort| sort_slug(sort).to_string()),
             group: self.group.map(|group| group_slug(group).to_string()),
             show_completed: Some(self.show_completed),
+            keep_completed_subtasks: Some(self.keep_completed_subtasks),
             vim_mode: Some(self.vim_mode),
             notifications: Some(self.due_notifications),
             app_icon: Some(self.app_icon.slug().to_string()),
@@ -1040,7 +1049,7 @@ impl FlowlistApp {
         let db = self.store.db();
         let at = now();
         let rows: Vec<TaskRow> = db
-            .project_outline(id, self.show_completed)
+            .project_outline_with(id, self.show_completed, self.keep_completed_subtasks)
             .into_iter()
             .map(|row| {
                 let mut task_row = query::row_for(db, &row.task, at);
@@ -1395,6 +1404,10 @@ impl FlowlistApp {
     }
 
     fn set_task_step_mode(&mut self, id: TaskId, mode: TaskStepMode, cx: &mut Context<Self>) {
+        self.apply_task_step_mode(id, mode, cx);
+    }
+
+    fn apply_task_step_mode(&mut self, id: TaskId, mode: TaskStepMode, cx: &mut Context<Self>) {
         self.execute(Command::UpdateTask {
             id,
             patch: TaskPatch {
@@ -2771,6 +2784,18 @@ impl FlowlistApp {
         cx.notify();
     }
 
+    /// Set a branch explicitly. Used by the task disclosure so its first click
+    /// cannot depend on how the branch's default is interpreted elsewhere.
+    fn set_branch_open(&mut self, key: String, open: bool) {
+        if open {
+            self.collapsed_groups.remove(&key);
+            self.expanded.insert(key);
+        } else {
+            self.expanded.remove(&key);
+            self.collapsed_groups.insert(key);
+        }
+    }
+
     fn toggle_group_collapsed(&mut self, key: String, cx: &mut Context<Self>) {
         self.toggle_open(key, true);
         cx.notify();
@@ -3039,13 +3064,29 @@ impl FlowlistApp {
             return;
         }
         let ids = self.drag_ids(payload);
+        // Dropping on a row above moves before it; dropping below moves after
+        // it. Always using `After` made dragging upward a no-op.
+        let order = db
+            .tasks
+            .get(&parent)
+            .map(|task| task.child_order.clone())
+            .unwrap_or_default();
+        let from = order.iter().position(|id| id == &payload.id);
+        let to = order.iter().position(|id| id == &target);
+        let position = match (from, to) {
+            (Some(from), Some(to)) if from > to => Position::Before(target),
+            _ => Position::After(target),
+        };
         self.execute(Command::MoveTasks {
             ids,
-            placement: TaskPlacement::Parent {
-                parent,
-                position: Position::After(target),
-            },
+            placement: TaskPlacement::Parent { parent, position },
         });
+        cx.notify();
+    }
+
+    fn trash_subtask(&mut self, id: TaskId, cx: &mut Context<Self>) {
+        self.execute(Command::DeleteTasks { ids: vec![id] });
+        self.toast = Some("Moved subtask to Trash · ⌘Z to undo".to_string());
         cx.notify();
     }
 
@@ -3414,6 +3455,16 @@ impl FlowlistApp {
                     format!("Moved {} occurrence(s) to Trash · ⌘Z to undo", ids.len())
                 });
             }
+            modals::Modal::HideSubtasks { id, .. } => {
+                self.execute(Command::UpdateTask {
+                    id: id.clone(),
+                    patch: TaskPatch {
+                        sequential: Some(false),
+                        steps_one_off: Some(true),
+                        ..TaskPatch::default()
+                    },
+                });
+            }
             modals::Modal::PriorityScope {
                 id, priority, all, ..
             } => {
@@ -3635,6 +3686,7 @@ impl FlowlistApp {
                 trash_days,
                 vim_mode,
                 notifications,
+                keep_completed_subtasks,
                 follow_system,
                 theme,
                 appearance,
@@ -3683,6 +3735,7 @@ impl FlowlistApp {
                 }
                 self.vim_mode = *vim_mode;
                 self.due_notifications = *notifications;
+                self.keep_completed_subtasks = *keep_completed_subtasks;
                 self.notification_requested = false;
                 if self.due_notifications && !notifications::permission().allowed() {
                     notifications::request_permission();
@@ -3957,6 +4010,20 @@ impl FlowlistApp {
                         cx.notify();
                         return;
                     }
+                    "escape" => {
+                        self.close_modal(cx);
+                        return;
+                    }
+                    "enter" | "return" => {
+                        self.commit_modal(cx);
+                        return;
+                    }
+                    _ => {}
+                }
+            }
+            // The one-off conversion warning is a plain confirm/cancel sheet.
+            if matches!(self.modal, Some(modals::Modal::HideSubtasks { .. })) {
+                match stroke.key.as_str() {
                     "escape" => {
                         self.close_modal(cx);
                         return;
@@ -5831,6 +5898,7 @@ impl FlowlistApp {
                 .collect::<Vec<_>>()
         );
         state["task_disclosures"] = serde_json::json!(self.task_disclosures.borrow().clone());
+        state["inspector_subtasks"] = serde_json::json!(self.inspector_boxes.borrow().clone());
         let text = state.to_string();
         if self.test_state_last.as_deref() == Some(text.as_str()) {
             return;

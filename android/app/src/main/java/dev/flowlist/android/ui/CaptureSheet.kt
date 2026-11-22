@@ -1,5 +1,6 @@
 package dev.flowlist.android.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -32,8 +34,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,11 +48,21 @@ import kotlinx.coroutines.delay
 fun CaptureSheet(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
     val colors = flow
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var text by rememberSaveable { mutableStateOf("") }
+    var text by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(""))
+    }
     val focus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
         delay(220)
+        focus.requestFocus()
+    }
+
+    // Chips append at the end and keep the keyboard open, so tapping one
+    // first and typing the title second still produces a parseable line.
+    fun append(chip: String) {
+        val joined = (text.text.trimEnd() + " " + chip + " ").trimStart()
+        text = TextFieldValue(joined, selection = TextRange(joined.length))
         focus.requestFocus()
     }
 
@@ -95,7 +109,7 @@ fun CaptureSheet(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(
                     onDone = {
-                        if (text.isNotBlank()) onAdd(text)
+                        if (text.text.isNotBlank()) onAdd(text.text)
                     },
                 ),
                 modifier = Modifier
@@ -103,13 +117,22 @@ fun CaptureSheet(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
                     .focusRequester(focus),
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("due:today", "est:30m", "#errand", "::Project").forEach { chip ->
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(
+                    "@1" to "@1 high",
+                    "due:today" to "due:today",
+                    "est:30m" to "est:30m",
+                    "#errand" to "#errand",
+                    "::Project" to "::Project",
+                ).forEach { (token, label) ->
                     AssistChip(
-                        onClick = { text = (text.trimEnd() + " " + chip).trimStart() },
+                        onClick = { append(token) },
                         label = {
                             Text(
-                                chip,
+                                label,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = colors.faint,
                             )
@@ -127,8 +150,8 @@ fun CaptureSheet(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
             }
             Spacer(modifier = Modifier.height(18.dp))
             Button(
-                onClick = { if (text.isNotBlank()) onAdd(text) },
-                enabled = text.isNotBlank(),
+                onClick = { if (text.text.isNotBlank()) onAdd(text.text) },
+                enabled = text.text.isNotBlank(),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.accent,

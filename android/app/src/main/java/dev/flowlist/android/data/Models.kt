@@ -92,6 +92,8 @@ data class ProjectDto(
     @SerialName("next_review") val nextReview: String? = null,
     @SerialName("review_interval_days") val reviewIntervalDays: Int = 7,
     @SerialName("task_order") val taskOrder: List<String> = emptyList(),
+    val sequential: Boolean = false,
+    val kind: String = "parallel",
     val attachments: List<String> = emptyList(),
     @SerialName("modified_at") val modifiedAt: String = "",
 )
@@ -445,4 +447,25 @@ fun attachmentDisplayName(value: String): String {
 fun linkWithName(url: String, name: String): String {
     val trimmed = name.trim()
     return if (trimmed.isEmpty()) url.trim() else "${url.trim()}\t$trimmed"
+}
+
+/// The earlier incomplete task that blocks this one in a sequential list, or
+/// null when completing it is allowed.
+fun Db.sequenceBlocker(taskId: String): TaskDto? {
+    val task = tasks[taskId] ?: return null
+    if (task.completed) return null
+    val parent = task.parent?.let { tasks[it] }
+    val project = task.project?.let { projects[it] }
+    val (order, sequential) = when {
+        parent != null -> parent.childOrder to parent.sequential
+        project != null -> project.taskOrder to (project.sequential || project.kind == "sequential")
+        else -> return null
+    }
+    if (!sequential) return null
+    for (id in order) {
+        if (id == taskId) break
+        val sibling = tasks[id] ?: continue
+        if (!sibling.completed && sibling.trashedAt == null) return sibling
+    }
+    return null
 }

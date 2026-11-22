@@ -5,12 +5,14 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
@@ -45,6 +47,9 @@ class Repository(context: Context) {
     private val session = SessionStore(context)
     private val files = FileStore(context)
     private val mutex = Mutex()
+    // Snapshot JSON can be large; keep its encode and file write off the main
+    // thread so a checkbox tap repaints immediately.
+    private val persistMutex = Mutex()
 
     private var outbox: MutableList<PendingOp> = files.loadOutbox().toMutableList()
     private val savedDir = File(appContext.filesDir, "attachments").apply { mkdirs() }
@@ -105,6 +110,22 @@ class Repository(context: Context) {
         }
     }
 
+    /// Tries each address from a pairing QR in order, so a LAN address that
+    /// is unreachable can fall through to Tailscale without another scan.
+    suspend fun pairAny(addresses: List<String>, code: String): Boolean {
+        for (address in addresses) {
+            if (pair(address, code)) return true
+        }
+        if (addresses.isEmpty()) {
+            _state.update { it.copy(error = "That QR code didn't include a Mac address.") }
+        }
+        return false
+    }
+
+    private suspend fun persist(snapshot: Snapshot) = persistMutex.withLock {
+        withContext(Dispatchers.IO) { files.saveSnapshot(snapshot) }
+    }
+
     suspend fun sync() {
         if (!session.paired) return
         mutex.withLock {
@@ -112,7 +133,7 @@ class Repository(context: Context) {
             try {
                 flushLocked()
                 val snapshot = api.snapshot(session.baseUrl!!, session.token!!)
-                files.saveSnapshot(snapshot)
+                persist(snapshot)
                 _state.update {
                     it.copy(
                         snapshot = snapshot,
@@ -156,8 +177,8 @@ class Repository(context: Context) {
                 inboxOrder = db.inboxOrder + id,
             ),
         )
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(PendingOp(id = "op_${UUID.randomUUID()}", text = trimmed, taskId = id, label = title), id)
         sync()
     }
@@ -165,14 +186,25 @@ class Repository(context: Context) {
     suspend fun complete(taskId: String, completed: Boolean) {
         val snapshot = _state.value.snapshot ?: return
         val task = snapshot.db.tasks[taskId] ?: return
+        if (completed) {
+            val blocker = snapshot.db.sequenceBlocker(taskId)
+            if (blocker != null) {
+                _state.update {
+                    it.copy(
+                        error = "Finish “${blocker.title}” first — this is a sequential list.",
+                    )
+                }
+                return
+            }
+        }
         val db = snapshot.db
         val updatedTask = task.copy(
             completed = completed,
             completedAt = if (completed) java.time.Instant.now().toString() else null,
         )
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (taskId to updatedTask)))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -203,8 +235,8 @@ class Repository(context: Context) {
             modifiedAt = java.time.Instant.now().toString(),
         )
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
 
         val projectJson: JsonElement = edit.project?.let { JsonPrimitive(it) } ?: JsonNull
         val priorityJson: JsonElement = edit.priority?.let { JsonPrimitive(it) } ?: JsonNull
@@ -270,8 +302,8 @@ class Repository(context: Context) {
             modifiedAt = now,
         )
         val updated = snapshot.copy(db = snapshot.db.copy(tasks = snapshot.db.tasks + (id to child)))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -327,8 +359,8 @@ class Repository(context: Context) {
             modifiedAt = java.time.Instant.now().toString(),
         )
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -366,8 +398,8 @@ class Repository(context: Context) {
             modifiedAt = java.time.Instant.now().toString(),
         )
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -396,8 +428,8 @@ class Repository(context: Context) {
             modifiedAt = java.time.Instant.now().toString(),
         )
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -420,8 +452,8 @@ class Repository(context: Context) {
             modifiedAt = java.time.Instant.now().toString(),
         )
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -441,8 +473,8 @@ class Repository(context: Context) {
             modifiedAt = java.time.Instant.now().toString(),
         )
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -469,8 +501,8 @@ class Repository(context: Context) {
             modifiedAt = java.time.Instant.now().toString(),
         )
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -510,8 +542,8 @@ class Repository(context: Context) {
         val snapshot = _state.value.snapshot ?: return
         val db = snapshot.db
         val next = snapshot.copy(db = db.copy(settings = updated))
-        files.saveSnapshot(next)
         _state.update { it.copy(snapshot = next) }
+        persist(next)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -528,8 +560,8 @@ class Repository(context: Context) {
         val db = snapshot.db
         val removed = db.tasks.filterValues { it.repeatSeries == series || it.id == task.id }.keys
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks - removed))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -550,8 +582,8 @@ class Repository(context: Context) {
                 projects = db.projects + (project.id to project.copy(nextReview = next.toString())),
             ),
         )
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -566,8 +598,8 @@ class Repository(context: Context) {
         val snapshot = _state.value.snapshot ?: return
         val db = snapshot.db
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks - taskId))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -583,8 +615,8 @@ class Repository(context: Context) {
         val task = snapshot.db.tasks[taskId] ?: return null
         val db = snapshot.db
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks - taskId))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -609,8 +641,8 @@ class Repository(context: Context) {
                 },
             ),
         )
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         enqueue(
             PendingOp(
                 id = "op_${UUID.randomUUID()}",
@@ -789,8 +821,8 @@ class Repository(context: Context) {
             modifiedAt = java.time.Instant.now().toString(),
         )
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (taskId to updatedTask)))
-        files.saveSnapshot(updated)
         _state.update { it.copy(snapshot = updated) }
+        persist(updated)
         val patch = buildJsonObject {
             put(
                 "attachments",
@@ -998,8 +1030,8 @@ class Repository(context: Context) {
         files.saveOutbox(outbox)
         if (response.db != null) {
             val snapshot = Snapshot(response.revision, db = response.db)
-            files.saveSnapshot(snapshot)
             _state.update { it.copy(snapshot = snapshot) }
+            persist(snapshot)
         }
         val failure = response.results.firstOrNull { !it.ok && it.error != null }
         _state.update {

@@ -416,12 +416,30 @@ impl Db {
         project: &ProjectId,
         include_completed: bool,
     ) -> Vec<ProjectTaskRow> {
+        self.project_outline_with(project, include_completed, false)
+    }
+
+    /// Like [`Db::project_outline`], but finished subtasks can stay in the
+    /// outline even while completed root tasks are hidden. The GUI uses this
+    /// for the per-device "Keep completed subtasks" preference.
+    pub fn project_outline_with(
+        &self,
+        project: &ProjectId,
+        include_completed: bool,
+        keep_completed_subtasks: bool,
+    ) -> Vec<ProjectTaskRow> {
         let mut out = Vec::new();
         let Some(project) = self.projects.get(project) else {
             return out;
         };
         for task_id in &project.task_order {
-            self.collect_outline(task_id, 0, include_completed, &mut out);
+            self.collect_outline(
+                task_id,
+                0,
+                include_completed,
+                keep_completed_subtasks,
+                &mut out,
+            );
         }
         out
     }
@@ -431,6 +449,7 @@ impl Db {
         task_id: &TaskId,
         depth: u32,
         include_completed: bool,
+        keep_completed_subtasks: bool,
         out: &mut Vec<ProjectTaskRow>,
     ) {
         let Some(task) = self.tasks.get(task_id) else {
@@ -439,7 +458,8 @@ impl Db {
         if task.is_trashed() {
             return;
         }
-        if task.completed && !include_completed {
+        let keep_completed = include_completed || (keep_completed_subtasks && depth > 0);
+        if task.completed && !keep_completed {
             return;
         }
         out.push(ProjectTaskRow {
@@ -447,14 +467,20 @@ impl Db {
             depth,
         });
         for child in &task.child_order {
-            self.collect_outline(child, depth + 1, include_completed, out);
+            self.collect_outline(
+                child,
+                depth + 1,
+                include_completed,
+                keep_completed_subtasks,
+                out,
+            );
         }
     }
 
     pub fn inbox_outline(&self, include_completed: bool) -> Vec<ProjectTaskRow> {
         let mut out = Vec::new();
         for task_id in &self.inbox_order {
-            self.collect_outline(task_id, 0, include_completed, &mut out);
+            self.collect_outline(task_id, 0, include_completed, false, &mut out);
         }
         out
     }
@@ -472,7 +498,7 @@ impl Db {
             if task.due.is_some() || task.defer.is_some() {
                 continue;
             }
-            self.collect_outline(task_id, 0, include_completed, &mut out);
+            self.collect_outline(task_id, 0, include_completed, false, &mut out);
         }
         out
     }
@@ -1497,6 +1523,46 @@ mod tests {
             Some(project.clone())
         );
         db.validate().unwrap();
+    }
+
+    #[test]
+    fn project_outline_can_keep_completed_subtasks_only() {
+        let mut db = Db::new();
+        let project = db.ensure_project_path("Work").unwrap();
+        let root = db.add_task_to_inbox(Task::new("root"));
+        let child = db.add_task_to_inbox(Task::new("child"));
+        {
+            let task = db.tasks.get_mut(&root).unwrap();
+            task.project = Some(project.clone());
+            task.child_order.push(child.clone());
+        }
+        db.projects
+            .get_mut(&project)
+            .unwrap()
+            .task_order
+            .push(root.clone());
+        {
+            let task = db.tasks.get_mut(&child).unwrap();
+            task.parent = Some(root.clone());
+            task.project = Some(project.clone());
+            task.completed = true;
+        }
+
+        // The default outline hides the finished subtask.
+        assert_eq!(db.project_outline(&project, false).len(), 1);
+
+        // Keeping completed subtasks shows it, under its root.
+        let rows = db.project_outline_with(&project, false, true);
+        assert_eq!(
+            rows.iter()
+                .map(|row| (row.task.clone(), row.depth))
+                .collect::<Vec<_>>(),
+            vec![(root.clone(), 0), (child, 1)]
+        );
+
+        // A finished root task still follows the view filter.
+        db.tasks.get_mut(&root).unwrap().completed = true;
+        assert!(db.project_outline_with(&project, false, true).is_empty());
     }
 
     #[test]

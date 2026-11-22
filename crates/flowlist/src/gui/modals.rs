@@ -93,6 +93,13 @@ pub enum Modal {
         occurrences: usize,
         whole: bool,
     },
+    /// Switching a task that has child tasks to one-off steps first warns
+    /// that the children will be turned into checklist items.
+    HideSubtasks {
+        id: TaskId,
+        title: String,
+        count: usize,
+    },
     /// Changing the priority of a repeating task asks whether the new value
     /// belongs to this occurrence alone or to every occurrence in the series.
     PriorityScope {
@@ -145,6 +152,9 @@ pub enum Modal {
         vim_mode: bool,
         /// Due-date reminders, per device.
         notifications: bool,
+        /// Keep finished subtasks visible under their parent while the view
+        /// hides completed work, per device.
+        keep_completed_subtasks: bool,
         follow_system: bool,
         theme: ThemeKind,
         appearance: Appearance,
@@ -369,6 +379,26 @@ impl Modal {
         }
     }
 
+    pub fn hide_subtasks(app: &FlowlistApp, id: TaskId) -> Self {
+        let db = app.store.db();
+        let title = db
+            .tasks
+            .get(&id)
+            .map(|task| task.title.clone())
+            .unwrap_or_default();
+        let count = db
+            .task_subtree(&id)
+            .into_iter()
+            .skip(1)
+            .filter(|child| {
+                db.tasks
+                    .get(child)
+                    .is_some_and(|task| !task.is_trashed())
+            })
+            .count();
+        Modal::HideSubtasks { id, title, count }
+    }
+
     pub fn attach_link(target: AttachmentTarget) -> Self {
         Modal::AttachLink {
             target,
@@ -426,6 +456,7 @@ impl Modal {
             trash_days: TextBuffer::new(settings.trash_retention_days.to_string()),
             vim_mode: app.vim_mode,
             notifications: app.due_notifications,
+            keep_completed_subtasks: app.keep_completed_subtasks,
             follow_system: app.follow_system,
             theme: app.theme.kind(),
             appearance: app.theme.appearance(),
@@ -488,6 +519,7 @@ impl Modal {
             Modal::DeleteProject { .. } => "Delete project",
             Modal::DeleteFolder { .. } => "Delete folder",
             Modal::DeleteTask { .. } => "Delete repeating task",
+            Modal::HideSubtasks { .. } => "Switch to one-off?",
             Modal::PriorityScope { .. } => "Repeating task priority",
             Modal::RemoveAttachment { .. } => "Remove attachment",
             Modal::Uninstall { .. } => "Uninstall Flowlist",
@@ -522,6 +554,9 @@ impl Modal {
             }
             Modal::DeleteTask { .. } => {
                 "This task repeats. Trash this occurrence, or the whole series; Undo restores everything."
+            }
+            Modal::HideSubtasks { .. } => {
+                "Existing subtasks stay as tasks but are hidden while One-off is selected."
             }
             Modal::PriorityScope { .. } => {
                 "This task repeats. Apply the new priority to this occurrence, or to every occurrence in the series."
@@ -568,6 +603,7 @@ impl Modal {
             Modal::DeleteProject { .. } => "Delete",
             Modal::DeleteFolder { .. } => "Delete",
             Modal::DeleteTask { .. } => "Delete",
+            Modal::HideSubtasks { .. } => "Switch",
             Modal::PriorityScope { .. } => "Apply",
             Modal::RemoveAttachment { .. } => "Remove",
             Modal::Uninstall { .. } => "Uninstall",
@@ -586,6 +622,7 @@ impl Modal {
             Modal::DeleteProject { .. } => 0,
             Modal::DeleteFolder { .. } => 0,
             Modal::DeleteTask { .. } => 0,
+            Modal::HideSubtasks { .. } => 0,
             Modal::PriorityScope { .. } => 0,
             Modal::RemoveAttachment { .. } => 0,
             Modal::Uninstall { .. } => 0,
@@ -618,6 +655,7 @@ impl Modal {
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
             Modal::DeleteTask { .. } => None,
+            Modal::HideSubtasks { .. } => None,
             Modal::PriorityScope { .. } => None,
             Modal::RemoveAttachment { .. } | Modal::Uninstall { .. } => None,
             Modal::AttachLink { url, name, .. } => match index {
@@ -672,6 +710,7 @@ impl Modal {
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
             Modal::DeleteTask { .. } => None,
+            Modal::HideSubtasks { .. } => None,
             Modal::PriorityScope { .. } => None,
             Modal::RemoveAttachment { .. } | Modal::Uninstall { .. } => None,
             Modal::AttachLink { url, name, .. } => match index {
@@ -721,6 +760,7 @@ impl Modal {
             Modal::DeleteProject { .. } => "",
             Modal::DeleteFolder { .. } => "",
             Modal::DeleteTask { .. } => "",
+            Modal::HideSubtasks { .. } => "",
             Modal::PriorityScope { .. } => "",
             Modal::RemoveAttachment { .. } | Modal::Uninstall { .. } => "",
             Modal::AttachLink { .. } => match index {
@@ -761,6 +801,7 @@ impl Modal {
         match self {
             Modal::Import { .. } | Modal::Help => 620.0,
             Modal::DeleteTask { .. } => 500.0,
+            Modal::HideSubtasks { .. } => 560.0,
             Modal::PriorityScope { .. } => 520.0,
             Modal::Perspective { .. } => 680.0,
             Modal::Settings { .. } => 880.0,
@@ -1035,6 +1076,41 @@ impl FlowlistApp {
                         }
                     },
                 ));
+            }
+            if let Modal::HideSubtasks {
+                title, count, ..
+            } = modal
+            {
+                body = body.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.warning)
+                        .bg(theme.field)
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(theme.text)
+                                .child(title.clone()),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child(if *count == 1 {
+                                    "1 subtask will be hidden. It stays a task and comes back when you switch to Parallel or Sequential.".to_string()
+                                } else {
+                                    format!(
+                                        "{count} subtasks will be hidden. They stay tasks and come back when you switch to Parallel or Sequential."
+                                    )
+                                }),
+                        ),
+                );
             }
             if let Modal::PriorityScope {
                 priority,
@@ -3193,12 +3269,47 @@ impl FlowlistApp {
                     )
                 }),
         );
+        let keep_subtasks = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                keep_completed_subtasks: true,
+                ..
+            })
+        );
+        let subtasks_card = self.settings_card(
+            "Subtasks",
+            Some(
+                "Finished subtasks can stay under their parent instead of disappearing when the list hides completed work.",
+            ),
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(div().text_sm().child("Keep completed subtasks"))
+                .child(
+                    div()
+                        .on_children_prepainted(self.theme_probe("keep-subtasks-toggle".to_string()))
+                        .id("keep-subtasks-toggle")
+                        .child(widgets::switch(theme, keep_subtasks))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(Modal::Settings {
+                                keep_completed_subtasks,
+                                ..
+                            }) = &mut this.modal
+                            {
+                                *keep_completed_subtasks = !*keep_completed_subtasks;
+                            }
+                            cx.notify();
+                        })),
+                ),
+        );
         div()
             .flex()
             .flex_col()
             .gap_3()
             .child(self.settings_card("Keyboard", None, keyboard))
             .child(reminders_card)
+            .child(subtasks_card)
             .child(
                 self.settings_card(
                     "Review and history",
@@ -3359,35 +3470,60 @@ impl FlowlistApp {
             } else {
                 format!("{} seconds", remaining)
             });
+            let code_row = div()
+                .flex()
+                .items_baseline()
+                .gap_2()
+                .child(
+                    div()
+                        .text_size(px(24.))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.text)
+                        .child(info.pairing_code.clone()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .child(format!("expires in {folders}")),
+                );
+            // The QR carries every address this Mac answers on, so the phone
+            // can try the LAN first and Tailscale second without retyping.
+            let payload = if addresses.is_empty() {
+                None
+            } else {
+                let mut payload = format!("flowlist://pair?code={}", info.pairing_code);
+                for address in &addresses {
+                    payload.push_str(&format!("&address={address}:{}", info.port));
+                }
+                Some(payload)
+            };
+            let mut body = div().flex().flex_col().gap_3();
+            if let Some(qr) = payload.as_deref().and_then(qr_code_block) {
+                body = body.child(
+                    div()
+                        .flex()
+                        .items_start()
+                        .gap_4()
+                        .child(qr)
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_2()
+                                .child(code_row)
+                                .child(addresses_column),
+                        ),
+                );
+            } else {
+                body = body.child(code_row).child(addresses_column);
+            }
             self.settings_card(
                 "Pair a phone",
                 Some(
-                    "Open Flowlist on Android, choose Pair this phone, then enter one of these addresses and the code.",
+                    "Scan this code with Flowlist on Android, or enter one of these addresses and the code.",
                 ),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(
-                        div()
-                            .flex()
-                            .items_baseline()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_size(px(24.))
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(theme.text)
-                                    .child(info.pairing_code.clone()),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(theme.text_faint)
-                                    .child(format!("expires in {folders}")),
-                            ),
-                    )
-                    .child(addresses_column),
+                body,
             )
         } else {
             self.settings_card(
@@ -3953,5 +4089,41 @@ fn help_body(theme: super::theme::Theme) -> impl IntoElement {
             .text_xs()
             .text_color(theme.text_faint)
             .child("The GUI, CLI and MCP server all write to the same library."),
+    )
+}
+
+/// Draws a pairing QR as a grid of pixel-snapped modules. True black on white
+/// keeps it readable in both themes and in a phone camera.
+fn qr_code_block(payload: &str) -> Option<AnyElement> {
+    let code = qrcodegen::QrCode::encode_text(payload, qrcodegen::QrCodeEcc::Medium).ok()?;
+    let modules = code.size();
+    let cell = 4.0;
+    let mut grid = div()
+        .flex()
+        .flex_wrap()
+        .w(px(modules as f32 * cell))
+        .h(px(modules as f32 * cell));
+    for y in 0..modules {
+        for x in 0..modules {
+            grid = grid.child(
+                div()
+                    .w(px(cell))
+                    .h(px(cell))
+                    .flex_shrink_0()
+                    .bg(if code.get_module(x, y) {
+                        gpui::black()
+                    } else {
+                        gpui::white()
+                    }),
+            );
+        }
+    }
+    Some(
+        div()
+            .p(px(16.))
+            .rounded_md()
+            .bg(gpui::white())
+            .child(grid)
+            .into_any_element(),
     )
 }

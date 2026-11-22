@@ -34,6 +34,7 @@ flowlist add 'Draft launch email #Work/Website ::Work/Launch due:tomorrow est:45
 | `due:`, `defer:` | natural-language dates (`due:(next friday 5pm)`) |
 | `est:` / `estimate:` | duration (`15m`, `1h30m`) |
 | `repeat:` | repeat rule (`every 2 weeks`, `every week after completion`) |
+| `@1`, `@2`, `@3` | priority: high, medium, low |
 | `!` | flag |
 | `//` | the rest of the line is a note |
 

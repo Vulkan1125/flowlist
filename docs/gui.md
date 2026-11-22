@@ -119,8 +119,9 @@ Draft launch email #Work/Website ::Work/Launch due:tomorrow est:45m ! // ask Sam
 
 `#Tag` and `#Parent/Child` attach tags (creating missing ones), `::Project` and
 `::Folder/Project` file the task, `due:` / `defer:` accept natural-language
-dates, `est:` takes a duration, `repeat:` takes a repeat rule, `!` flags the
-task, and `//` starts a note. Wrap phrases with spaces in parentheses.
+dates, `est:` takes a duration, `repeat:` takes a repeat rule, `@1` / `@2` /
+`@3` set priority high, medium or low, `!` flags the task, and `//` starts a
+note. Wrap phrases with spaces in parentheses.
 
 Inside a task row you can edit the title inline, open the inspector for notes,
 tags, project, dates, estimate, repeat, attachments and priority, and add
