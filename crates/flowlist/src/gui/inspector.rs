@@ -2080,6 +2080,53 @@ impl FlowlistApp {
         )
     }
 
+    /// A link's favicon once it has loaded. Fetching starts on first sight of
+    /// the host and the chain icon stands in until the bytes arrive.
+    fn favicon(&self, path: &str, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+        let host = super::favicon::host(flowlist_core::model::attachment::attachment_url(path))?;
+        if let Some(image) = self.favicons.borrow().get(&host).cloned() {
+            return Some(
+                gpui::img(gpui::ImageSource::Render(image))
+                    .w(px(14.))
+                    .h(px(14.))
+                    .rounded_sm()
+                    .into_any_element(),
+            );
+        }
+        if self.favicon_misses.borrow().contains(&host)
+            || self.favicon_requests.borrow().contains(&host)
+        {
+            return None;
+        }
+        self.favicon_requests.borrow_mut().insert(host.clone());
+        let fetch_host = host.clone();
+        cx.spawn(async move |this, cx| {
+            let bytes = cx
+                .background_executor()
+                .spawn(async move { super::favicon::fetch(&fetch_host) })
+                .await;
+            let image = bytes.and_then(|bytes| super::favicon::decode(&bytes));
+            this.update(cx, |this, cx| {
+                this.favicon_requests.borrow_mut().remove(&host);
+                match image {
+                    Some(image) => {
+                        this.favicons.borrow_mut().insert(
+                            host.clone(),
+                            std::sync::Arc::new(image),
+                        );
+                    }
+                    None => {
+                        this.favicon_misses.borrow_mut().insert(host.clone());
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        None
+    }
+
     fn inspector_attachments(
         &self,
         attachments: &[String],
@@ -2117,11 +2164,13 @@ impl FlowlistApp {
                     .px_2()
                     .rounded_md()
                     .bg(theme.raised)
-                    .child(icons::icon(
-                        if link { Icon::Link } else { Icon::Book },
-                        12.0,
-                        theme.text_faint,
-                    ))
+                    .child(if link {
+                        self.favicon(path, cx).unwrap_or_else(|| {
+                            icons::icon(Icon::Link, 12.0, theme.text_faint).into_any_element()
+                        })
+                    } else {
+                        icons::icon(Icon::Book, 12.0, theme.text_faint).into_any_element()
+                    })
                     .child(
                         div()
                             .id(super::sid(format!("attachment-name:{index}")))

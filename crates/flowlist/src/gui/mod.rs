@@ -7,6 +7,7 @@
 mod blur;
 mod content;
 mod drag;
+mod favicon;
 mod hotkey;
 mod icons;
 mod inspector;
@@ -28,6 +29,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -378,6 +380,12 @@ pub struct FlowlistApp {
     /// list reflects which subtasks are visible, not just what the query
     /// matched.
     content_rows: Rc<RefCell<Vec<PaintedTaskRow>>>,
+    /// Site favicons keyed by host, fetched once per session.
+    favicons: Rc<RefCell<BTreeMap<String, Arc<gpui::RenderImage>>>>,
+    /// Hosts currently being fetched, so a row does not ask twice.
+    favicon_requests: Rc<RefCell<BTreeSet<String>>>,
+    /// Hosts that answered without a usable icon; never retried this session.
+    favicon_misses: Rc<RefCell<BTreeSet<String>>>,
     /// Subtask disclosure chevrons, measured so the GUI probe can click them.
     task_disclosures: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Inspector subtask rows, measured so a probe can drag one onto another.
@@ -668,6 +676,9 @@ impl FlowlistApp {
             sidebar_drag_target: None,
             content_drop_target: None,
             content_rows: Rc::new(RefCell::new(Vec::new())),
+            favicons: Rc::new(RefCell::new(BTreeMap::new())),
+            favicon_requests: Rc::new(RefCell::new(BTreeSet::new())),
+            favicon_misses: Rc::new(RefCell::new(BTreeSet::new())),
             task_disclosures: Rc::new(RefCell::new(BTreeMap::new())),
             inspector_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             priority_filter,

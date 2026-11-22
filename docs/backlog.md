@@ -169,6 +169,8 @@ below; this list is the current map.
       folder and status, matching the Mac inspector and New Project sheet.
 - [x] **Android attachment previews** — images and PDFs open in a card; PDFs
       page with previous/next, and Open externally remains.
+- [x] **Mac link favicons** — link rows use the host's own favicon, cached per
+      session, with the chain icon as fallback.
 - [x] **Android search and Nearby** — search covers projects, folders, tags and
       perspectives with a view/library scope; Nearby lists tags within the
       library radius, sorted by distance. Search results also support bulk

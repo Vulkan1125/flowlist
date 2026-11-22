@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.29 — 2026-11-22
+
+- **Mac link favicons.** Link attachments in the inspector show the site's own
+  favicon instead of the chain icon. Icons are fetched from the linked host
+  (never a third-party favicon service), cached per host for the session, and
+  fall back to the chain when a site has none. Project links get the same
+  treatment.
+
 ## 0.9.28 — 2026-11-22
 
 - **Long task titles wrap in the Mac inspector.** The title field grows to two
