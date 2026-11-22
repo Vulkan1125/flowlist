@@ -191,6 +191,12 @@ remembered across app restarts.
 
 ## Saved perspectives
 
+**Flagged** is a built-in perspective next to Forecast. It lists every task
+with the flag turned on, and can be pinned to the bottom bar like any other
+perspective. Long-press a perspective in the drawer and drag it up or down to
+change the order; the new order is remembered. **Priorities** uses a level
+icon, so it is not confused with **Flagged**.
+
 The drawer has a **Saved** section. **New perspective** builds a view from any
 combination of text, project, tag, priority and due window, each chosen from a
 labelled dropdown with a scrollable menu. It then chooses grouping (project,

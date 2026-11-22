@@ -356,6 +356,9 @@ fun Db.reviewProjects(): List<ProjectDto> =
         }
         .sortedBy { it.nextReview.orEmpty() }
 
+fun Db.flaggedTasks(): List<TaskView> =
+    taskViews().filter { it.flagged }
+
 fun Db.priorityGroups(): List<Pair<String, List<TaskView>>> {
     val views = taskViews()
     return listOf(

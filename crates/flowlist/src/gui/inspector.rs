@@ -241,7 +241,7 @@ impl FlowlistApp {
             .child(self.inspector_priority(&id, priority, cx))
             .child(self.inspector_notes(&notes, cx))
             .child(self.inspector_checklist(&id, &checklist, checklist_progress, cx))
-            .child(self.inspector_task_type(sequential, cx))
+            .child(self.inspector_task_type(&id, sequential, cx))
             .child(self.inspector_attachments(&attachments, window, cx))
             .child(self.inspector_tag_section(&tags, cx))
             .child(self.inspector_project_row(project, project_id, cx))
@@ -1807,10 +1807,17 @@ impl FlowlistApp {
             .into_any_element()
     }
 
-    /// Parallel/Sequential for a task's own subtasks. Same language as the
-    /// project type chips so an action group reads the same everywhere.
-    fn inspector_task_type(&self, sequential: bool, cx: &mut Context<Self>) -> impl IntoElement {
+    /// Parallel/Sequential for a task's own subtasks, plus a direct way to
+    /// add one. Same language as the project type chips so an action group
+    /// reads the same everywhere.
+    fn inspector_task_type(
+        &self,
+        id: &TaskId,
+        sequential: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let theme = self.theme;
+        let parent = id.clone();
         div()
             .flex()
             .flex_col()
@@ -1844,6 +1851,23 @@ impl FlowlistApp {
                                 cx.listener(|this, _, _, cx| this.set_task_sequential(true, cx)),
                             ),
                     ),
+            )
+            .child(
+                div()
+                    .id("add-subtask")
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .cursor_pointer()
+                    .hover(|style| style.text_color(theme.text))
+                    .flow_tip(self, cx, theme, "Create a task under this one")
+                    .child("+ Add subtask")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.select_only(parent.clone());
+                        this.add_subtask_to_selected(cx);
+                    })),
             )
     }
 

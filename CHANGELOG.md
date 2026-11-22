@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.10 — 2026-11-22
+
+- **Flagged is a perspective on the phone.** It sits next to Forecast in the
+  drawer, lists every flagged task, and can be pinned to one of the four
+  bottom-bar slots from Settings → Bottom bar.
+- **Priorities has its own icon** instead of sharing the flag with Flagged,
+  and **Review** now shows the same coffee cup as the Mac.
+- **Drag perspectives in the phone drawer to reorder them.** The dragged row
+  lifts with an accent outline, the rows it passes slide aside to open a gap,
+  and the order is remembered after the app restarts.
+- **The Mac inspector has a + Add subtask button.** It creates the task under
+  the selected one and puts the cursor in its title. Tab-to-indent and
+  dragging a task onto another still work.
+
 ## 0.9.9 — 2026-11-22
 
 - **Clearing a priority now sticks on the phone.** An explicit `null` in a

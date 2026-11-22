@@ -4766,6 +4766,32 @@ impl FlowlistApp {
         }
     }
 
+    /// Add a subtask under the selected task and put the cursor in its title,
+    /// so creating one never depends on knowing the Tab shortcut.
+    fn add_subtask_to_selected(&mut self, cx: &mut Context<Self>) {
+        let Some(parent) = self.selected_one() else {
+            self.toast = Some("Select a task first".to_string());
+            cx.notify();
+            return;
+        };
+        let mut new_task = NewTask::new("New task");
+        new_task.parent = Some(parent.clone());
+        new_task.position = Position::End;
+        if let Some(outcome) = self.execute(Command::CreateTask(new_task)) {
+            self.expanded.insert(format!("task:{parent}"));
+            if let Some(created) = outcome.created.first() {
+                if let Ok(id) = self.store.db().resolve_task(created) {
+                    self.select_only(id.clone());
+                    self.draft_task = Some(id);
+                    self.begin_edit(EditField::Title, cx);
+                    self.field.select_all();
+                }
+            }
+        }
+        self.save_session();
+        cx.notify();
+    }
+
     fn create_adjacent_task(&mut self, above: bool, cx: &mut Context<Self>) {
         let selected = self.selected_one();
         let mut new_task = NewTask::new("New task");

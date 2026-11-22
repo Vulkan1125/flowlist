@@ -16,6 +16,8 @@ data class AppPreferences(
     val bottomBar: List<String> = listOf("inbox", "today", "forecast", "browse"),
     val saveAllAttachments: Boolean = false,
     val forecastView: String = "month",
+    /// Drawer order, by perspective key. Empty means the built-in order.
+    val perspectiveOrder: List<String> = emptyList(),
 )
 
 class PreferencesStore(context: Context) {
@@ -34,6 +36,9 @@ class PreferencesStore(context: Context) {
             .ifEmpty { listOf("inbox", "today", "forecast", "browse") },
         saveAllAttachments = prefs.getBoolean("save_all_attachments", false),
         forecastView = prefs.getString("forecast_view", "month") ?: "month",
+        perspectiveOrder = (prefs.getString("perspective_order", null) ?: "")
+            .split('|')
+            .filter { it.isNotBlank() },
     )
 
     fun save(value: AppPreferences) {
@@ -46,6 +51,7 @@ class PreferencesStore(context: Context) {
             .putString("bottom_bar", value.bottomBar.take(4).joinToString("|"))
             .putBoolean("save_all_attachments", value.saveAllAttachments)
             .putString("forecast_view", value.forecastView)
+            .putString("perspective_order", value.perspectiveOrder.joinToString("|"))
             .apply()
     }
 }

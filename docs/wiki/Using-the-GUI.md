@@ -54,6 +54,7 @@ Every capture is undoable with `⌘Z`, even after the panel has closed.
   between siblings to reorder it. Every drop is undoable.
 - `Tab` / `⇧Tab` nest and unnest the selection. `⌥↑` / `⌥↓` move it among its
   siblings.
+- `Tab` indents the selected task under the task above; `⇧Tab` outdents it.
 - The chevron on a parent opens and closes its subtasks. `za` toggles, `zo`
   opens and `zc` closes.
 - Flag with `!` or `⌘D`; the flag sits left of the title and shows on hover in
@@ -81,7 +82,9 @@ leaving the list.
   it, reorder it with the arrows, or remove it with `×`. Completing a repeating
   task copies the checklist with every step unchecked.
 - **Subtasks** switch between Parallel and Sequential for the selected task's
-  own children.
+  own children. **+ Add subtask** creates a child task and puts the cursor in
+  its title. You can also press `Tab` to indent the selected task under the one
+  above, or drag a task onto another task.
 - **Attachments** accept files and `http(s)` links. Click a file's name to
   preview an image or PDF in the app; PDFs step with `←` / `→`. `open` hands the
   file to its default app. Removing an attachment asks first and leaves the

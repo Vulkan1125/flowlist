@@ -1,6 +1,10 @@
 package dev.flowlist.android.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +33,7 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Search
@@ -70,20 +75,28 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -104,6 +117,7 @@ import dev.flowlist.android.data.today
 import dev.flowlist.android.data.taskViews
 import dev.flowlist.android.data.isToday
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -127,6 +141,7 @@ enum class Perspective(
     Inbox("inbox", "Inbox", Icons.Outlined.Inbox, tab = Tab.Inbox),
     Today("today", "Today", Icons.Outlined.WbSunny, tab = Tab.Today),
     Forecast("forecast", "Forecast", Icons.Outlined.CalendarMonth, tab = Tab.Forecast),
+    Flagged("flagged", "Flagged", Icons.Outlined.Flag, more = MoreView.Flagged),
     Library("browse", "Library", Icons.Outlined.FolderOpen, tab = Tab.Browse),
     Review("review", "Review", MoreView.Review.icon, more = MoreView.Review),
     Completed("completed", "Completed", MoreView.Completed.icon, more = MoreView.Completed),
@@ -149,6 +164,38 @@ fun resolveBottomBar(keys: List<String>): List<Perspective> {
         if (item !in chosen) chosen.add(item)
     }
     return chosen
+}
+
+/// Apply the saved drawer order, then append any perspectives the saved order
+/// does not know about yet (for example after an update adds one).
+fun orderedPerspectives(order: List<String>): List<Perspective> {
+    val result = mutableListOf<Perspective>()
+    order.forEach { key ->
+        Perspective.entries.firstOrNull { it.key == key }?.let { item ->
+            if (item !in result) result.add(item)
+        }
+    }
+    Perspective.entries.forEach { item -> if (item !in result) result.add(item) }
+    return result
+}
+
+/// Move one drawer row and keep every other row (including bottom-bar picks)
+/// in the slot it already occupied.
+fun reorderPerspectiveKeys(
+    order: List<String>,
+    moving: List<String>,
+    from: Int,
+    to: Int,
+): List<String> {
+    if (from == to || moving.isEmpty()) return order
+    val next = moving.toMutableList()
+    val item = next.removeAt(from)
+    next.add(to, item)
+    val slots = order.withIndex().filter { it.value in moving }.map { it.index }
+    if (slots.size != next.size) return order
+    val result = order.toMutableList()
+    next.forEachIndexed { index, key -> result[slots[index]] = key }
+    return result
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -250,6 +297,9 @@ fun MainScreen(
     val bottomPerspectives = remember(preferences.bottomBar) {
         resolveBottomBar(preferences.bottomBar)
     }
+    val drawerOrder = remember(preferences.perspectiveOrder) {
+        orderedPerspectives(preferences.perspectiveOrder)
+    }
     val openPerspective: (Perspective) -> Unit = { item ->
         savedPerspective = null
         val targetTab = item.tab
@@ -305,6 +355,16 @@ fun MainScreen(
                     tab = tab,
                     more = moreView,
                     bottom = bottomPerspectives,
+                    order = drawerOrder,
+                    onReorder = { moving, from, to ->
+                        val full = orderedPerspectives(preferences.perspectiveOrder)
+                            .map { it.key }
+                        onPreferencesChange(
+                            preferences.copy(
+                                perspectiveOrder = reorderPerspectiveKeys(full, moving, from, to),
+                            ),
+                        )
+                    },
                     saved = snapshot?.db?.perspectives?.values
                         ?.sortedBy { it.position }
                         .orEmpty(),
@@ -922,6 +982,8 @@ private fun LibraryDrawer(
     tab: Tab,
     more: MoreView?,
     bottom: List<Perspective>,
+    order: List<Perspective>,
+    onReorder: (List<String>, Int, Int) -> Unit,
     saved: List<PerspectiveDto>,
     state: AppState,
     onPerspective: (Perspective) -> Unit,
@@ -931,7 +993,15 @@ private fun LibraryDrawer(
     onDeletePerspective: (PerspectiveDto) -> Unit,
 ) {
     val colors = flow
-    val remaining = Perspective.entries.filterNot { it in bottom }
+    val remaining = order.filterNot { it in bottom }
+    var draggingKey by remember { mutableStateOf<String?>(null) }
+    var dragFrom by remember { mutableIntStateOf(-1) }
+    var dragTo by remember { mutableIntStateOf(-1) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var measuredRowHeight by remember { mutableFloatStateOf(0f) }
+    val fallbackRowHeight = with(LocalDensity.current) { 42.dp.toPx() }
+    val rowHeight = if (measuredRowHeight > 0f) measuredRowHeight else fallbackRowHeight
+    val haptics = LocalHapticFeedback.current
     Column(
         modifier = Modifier
             .fillMaxHeight()
@@ -945,17 +1015,82 @@ private fun LibraryDrawer(
             color = colors.ink,
             modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 12.dp),
         )
-        remaining.forEach { item ->
+        remaining.forEachIndexed { index, item ->
             val selected = if (item.tab != null) {
                 more == null && tab == item.tab
             } else {
                 more == item.more
             }
+            val dragging = draggingKey == item.key
+            // Rows between the drag origin and the live target step aside, so
+            // a gap opens exactly where the row will land.
+            val shift = when {
+                dragging -> 0f
+                dragFrom >= 0 && dragTo > dragFrom && index in (dragFrom + 1)..dragTo -> -rowHeight
+                dragFrom >= 0 && dragTo < dragFrom && index in dragTo until dragFrom -> rowHeight
+                else -> 0f
+            }
+            val animatedShift by animateFloatAsState(
+                targetValue = shift,
+                animationSpec = spring(dampingRatio = 0.82f, stiffness = 700f),
+                label = "drawer-shift-$index",
+            )
             DrawerRow(
                 label = item.label,
                 icon = item.icon,
                 selected = selected,
+                dragging = dragging,
                 onClick = { onPerspective(item) },
+                modifier = Modifier
+                    .onSizeChanged { size ->
+                        if (measuredRowHeight <= 0f && size.height > 0) {
+                            measuredRowHeight = size.height.toFloat()
+                        }
+                    }
+                    .zIndex(if (dragging) 1f else 0f)
+                    .graphicsLayer {
+                        translationY = if (dragging) dragOffset else animatedShift
+                    }
+                    .alpha(if (dragging) 0.95f else 1f)
+                    .pointerInput(remaining, item.key, rowHeight) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                draggingKey = item.key
+                                dragFrom = index
+                                dragTo = index
+                                dragOffset = 0f
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                dragOffset += dragAmount.y
+                                if (dragFrom >= 0) {
+                                    val next = (dragFrom + (dragOffset / rowHeight).roundToInt())
+                                        .coerceIn(0, remaining.lastIndex)
+                                    if (next != dragTo) {
+                                        dragTo = next
+                                        haptics.performHapticFeedback(
+                                            HapticFeedbackType.TextHandleMove,
+                                        )
+                                    }
+                                }
+                            },
+                            onDragEnd = {
+                                if (dragFrom >= 0 && dragTo != dragFrom) {
+                                    onReorder(remaining.map { it.key }, dragFrom, dragTo)
+                                }
+                                draggingKey = null
+                                dragFrom = -1
+                                dragTo = -1
+                                dragOffset = 0f
+                            },
+                            onDragCancel = {
+                                draggingKey = null
+                                dragFrom = -1
+                                dragTo = -1
+                                dragOffset = 0f
+                            },
+                        )
+                    },
             )
         }
 
@@ -1097,15 +1232,30 @@ private fun DrawerRow(
     label: String,
     icon: ImageVector,
     selected: Boolean,
+    dragging: Boolean = false,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = flow
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 42.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) colors.field else Color.Transparent)
+            .background(
+                when {
+                    dragging -> colors.field
+                    selected -> colors.field
+                    else -> Color.Transparent
+                },
+            )
+            .then(
+                if (dragging) {
+                    Modifier.border(1.dp, colors.accent, RoundedCornerShape(10.dp))
+                } else {
+                    Modifier
+                },
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1198,6 +1348,7 @@ private fun headerSubtitle(more: MoreView?, tab: Tab, state: AppState): String {
             MoreView.Archive -> "Projects put away"
             MoreView.Trash -> "Deleted tasks, still recoverable"
             MoreView.Tags -> "Browse the library by tag"
+            MoreView.Flagged -> "Everything you flagged"
             MoreView.Priorities -> "Flagged and high-priority work"
             MoreView.Changed -> "Edited in the last few weeks"
             MoreView.Attachments -> "Files attached to tasks"

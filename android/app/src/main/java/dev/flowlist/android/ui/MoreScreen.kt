@@ -29,7 +29,8 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.RateReview
+import androidx.compose.material.icons.outlined.LocalCafe
+import androidx.compose.material.icons.outlined.SignalCellularAlt
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.MoreVert
@@ -64,6 +65,7 @@ import dev.flowlist.android.data.archivedProjects
 import dev.flowlist.android.data.attachmentTasks
 import dev.flowlist.android.data.changedTasks
 import dev.flowlist.android.data.completedTasks
+import dev.flowlist.android.data.flaggedTasks
 import dev.flowlist.android.data.priorityGroups
 import dev.flowlist.android.data.reviewProjects
 import dev.flowlist.android.data.tasksForTag
@@ -71,12 +73,13 @@ import dev.flowlist.android.data.tagUsageCount
 import dev.flowlist.android.data.trashedTasks
 
 enum class MoreView(val label: String, val icon: ImageVector) {
-    Review("Review", Icons.Outlined.RateReview),
+    Flagged("Flagged", Icons.Outlined.Flag),
+    Review("Review", Icons.Outlined.LocalCafe),
     Completed("Completed", Icons.Outlined.CheckCircle),
     Archive("Archive", Icons.Outlined.Archive),
     Trash("Trash", Icons.Outlined.Delete),
     Tags("Tags", Icons.Outlined.Tag),
-    Priorities("Priorities", Icons.Outlined.Flag),
+    Priorities("Priorities", Icons.Outlined.SignalCellularAlt),
     Changed("Changed", Icons.Outlined.History),
     Attachments("Attachments", Icons.Outlined.AttachFile),
 }
@@ -86,6 +89,7 @@ fun MoreScreen(db: Db?, onOpen: (MoreView) -> Unit) {
     val colors = flow
     val counts = remember(db) {
         if (db == null) emptyMap() else mapOf(
+            MoreView.Flagged to db.flaggedTasks().size,
             MoreView.Review to db.reviewProjects().size,
             MoreView.Completed to db.completedTasks().size,
             MoreView.Archive to db.archivedProjects().size,
@@ -223,6 +227,7 @@ fun MoreDestination(
                     Hairline(Modifier.padding(horizontal = 20.dp))
                 }
             }
+            view == MoreView.Flagged -> TaskList(db.flaggedTasks(), pending, onToggle, onTask)
             view == MoreView.Completed -> TaskList(db.completedTasks(), pending, onToggle, onTask)
             view == MoreView.Archive -> LazyColumn {
                 if (db.archivedProjects().isEmpty()) {
