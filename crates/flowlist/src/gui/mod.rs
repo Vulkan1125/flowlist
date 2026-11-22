@@ -419,6 +419,9 @@ pub struct FlowlistApp {
     /// The first text field in the open sheet, measured so a GUI probe can
     /// click and drag inside it.
     modal_field_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The open inspector field editor, measured so a probe can confirm the
+    /// title editor wraps instead of clipping its caret.
+    field_editor_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// The Due and Defer field rows, measured so their calendar popover can
     /// paint under the right field.
     due_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
@@ -695,6 +698,7 @@ impl FlowlistApp {
             group_anchor: Rc::new(Cell::new(None)),
             priority_anchor: Rc::new(Cell::new(None)),
             modal_field_anchor: Rc::new(Cell::new(None)),
+            field_editor_anchor: Rc::new(Cell::new(None)),
             due_anchor: Rc::new(Cell::new(None)),
             defer_anchor: Rc::new(Cell::new(None)),
             date_picker: None,
@@ -5851,6 +5855,7 @@ impl FlowlistApp {
             })),
             _ => None,
         });
+        state["field_editor"] = serde_json::json!(anchor(self.field_editor_anchor.get()));
         state["hide_overdue"] = serde_json::json!(self.hide_overdue);
         state["hide_overdue_anchor"] = serde_json::json!(anchor(self.hide_overdue_anchor.get()));
         state["forecast_calendar_open"] = serde_json::json!(self.forecast_calendar_open);

@@ -435,9 +435,27 @@ impl FlowlistApp {
             .gap_1()
             .child(div().text_xs().text_color(theme.text_faint).child(label))
             .child(if editing {
+                let editor = if is_title {
+                    // The read-only title clamps to two lines; editing must
+                    // wrap too, or a long title puts the caret outside the
+                    // single-line field and it disappears.
+                    widgets::text_area_with_size(
+                        theme,
+                        &self.field,
+                        placeholder,
+                        true,
+                        56.0,
+                        14.0,
+                        20.0,
+                    )
+                    .into_any_element()
+                } else {
+                    widgets::text_field(theme, &self.field, placeholder, true).into_any_element()
+                };
                 div()
+                    .on_children_prepainted(self.field_editor_probe())
                     .id("field-editor")
-                    .child(widgets::text_field(theme, &self.field, placeholder, true))
+                    .child(editor)
                     .into_any_element()
             } else {
                 let field_box = div()
@@ -603,6 +621,18 @@ impl FlowlistApp {
             );
         }
         row
+    }
+
+    /// Record the open field editor's painted bounds for the GUI probe.
+    fn field_editor_probe(
+        &self,
+    ) -> impl Fn(Vec<gpui::Bounds<gpui::Pixels>>, &mut Window, &mut gpui::App) + 'static {
+        let anchor = self.field_editor_anchor.clone();
+        move |bounds, _, _| {
+            if let Some(bounds) = bounds.first() {
+                anchor.set(Some(*bounds));
+            }
+        }
     }
 
     /// Record one control's painted bounds in the date picker's probe map.

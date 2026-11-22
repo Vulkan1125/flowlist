@@ -178,6 +178,11 @@ below; this list is the current map.
       project editor and painted on Browse rows.
 - [x] **Android tag status** — Available, Blocked and On Hold are editable in
       the tag sheet, inherit to child tags, and mark affected tasks as blocked.
+- [x] **Android history disclosure** — Undo and Redo fold under a History
+      heading and stay collapsed by default.
+- [x] **Mac wrapping title editor** — the inspector title edits in a wrapping
+      field so a long title keeps its caret visible. Covered by
+      `scripts/gui/title-editor-probe.sh`.
 - [x] **Android search and Nearby** — search covers projects, folders, tags and
       perspectives with a view/library scope; Nearby lists tags within the
       library radius, sorted by distance. Search results also support bulk

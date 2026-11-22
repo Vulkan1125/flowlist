@@ -5,7 +5,7 @@ tags, repeats, reviews and a floating capture panel in one native window. A
 phone app uses the same library, and the `flowlist` CLI and MCP server expose it
 to scripts and AI assistants.
 
-**[Download Flowlist 0.9.32](https://github.com/Vulkan1125/flowlist/releases/latest)**
+**[Download Flowlist 0.9.33](https://github.com/Vulkan1125/flowlist/releases/latest)**
 · [Wiki](https://github.com/Vulkan1125/flowlist/wiki)
 · [Using the GUI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-GUI)
 · [CLI](https://github.com/Vulkan1125/flowlist/wiki/Using-the-CLI)
@@ -18,7 +18,7 @@ Settings → Appearance.*
 
 ## Install
 
-1. Download **Flowlist-0.9.32.dmg** (or the zip) from the latest release.
+1. Download **Flowlist-0.9.33.dmg** (or the zip) from the latest release.
 2. Open the DMG and drag **Flowlist** to Applications, or unzip and move the app
    yourself.
 3. The first time, right-click the app and choose **Open**. The build is
@@ -61,7 +61,7 @@ uploaded; there is no account, no sync service and no telemetry.
 | Surface | Start it with | Good for |
 | --- | --- | --- |
 | Desktop app | `open /Applications/Flowlist.app` | planning, dragging, reviewing |
-| Android app | install `Flowlist-Android-0.9.32.apk` | capture and checking off on the go |
+| Android app | install `Flowlist-Android-0.9.33.apk` | capture and checking off on the go |
 | CLI | `…/Flowlist.app/Contents/MacOS/flowlist` | scripts and terminal habits |
 | MCP server | `…/flowlist mcp` | letting an AI assistant read and change the library |
 
@@ -73,7 +73,7 @@ The phone is a client of the Mac library, not a second one. Nothing syncs
 through a cloud: the app talks to a small server inside Flowlist, on your Wi-Fi
 or over Tailscale.
 
-1. Install `Flowlist-Android-0.9.32.apk` from the release. Android will ask you
+1. Install `Flowlist-Android-0.9.33.apk` from the release. Android will ask you
    to allow installs from your browser or file manager.
 2. On the Mac, open **Settings → Mobile** and turn on **Serve to my phone**. The
    login agent keeps it running after you close the window.

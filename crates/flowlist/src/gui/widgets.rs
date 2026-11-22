@@ -281,6 +281,21 @@ pub fn text_area(
     focused: bool,
     height: f32,
 ) -> impl IntoElement {
+    text_area_with_size(theme, buffer, placeholder, focused, height, 13.0, 18.0)
+}
+
+/// A multi-line field with caller-chosen type, used by the inspector title so
+/// editing wraps exactly where the read-only title does instead of pushing the
+/// caret past a single-line field's edge.
+pub fn text_area_with_size(
+    theme: Theme,
+    buffer: &TextBuffer,
+    placeholder: &str,
+    focused: bool,
+    height: f32,
+    font_size: f32,
+    line_height: f32,
+) -> impl IntoElement {
     let (sel_start, sel_end) = buffer.selection();
     let cursor = buffer.cursor();
     let text = buffer.text().to_string();
@@ -335,8 +350,8 @@ pub fn text_area(
     let text_style = TextStyle {
         color: theme.text,
         font_family: "SF Pro Text".into(),
-        font_size: px(13.).into(),
-        line_height: px(18.).into(),
+        font_size: px(font_size).into(),
+        line_height: px(line_height).into(),
         ..Default::default()
     };
 

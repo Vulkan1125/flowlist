@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.33 — 2026-11-22
+
+- **Android history is folded away.** Undo and Redo sit under a **History**
+  heading in the drawer and stay collapsed until tapped, so a stray touch near
+  the bottom of the drawer cannot change anything.
+- **Mac title editing wraps.** A long task title now edits in a wrapping field
+  the same way it reads, keeping the caret visible instead of pushing it past
+  a single-line field. A GUI probe checks the editor's painted height.
+
 ## 0.9.32 — 2026-11-22
 
 - **Android tag status.** Tags can be Available, Blocked or On Hold, and the

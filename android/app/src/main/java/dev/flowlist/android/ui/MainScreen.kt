@@ -42,11 +42,14 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteForever
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Redo
@@ -523,6 +526,7 @@ fun MainScreen(
                 drawerContainerColor = colors.background,
             ) {
                 LibraryDrawer(
+                    open = drawer.currentValue == DrawerValue.Open,
                     tab = tab,
                     more = moreView,
                     bottom = bottomPerspectives,
@@ -1498,6 +1502,7 @@ private fun SelectionBar(
 
 @Composable
 private fun LibraryDrawer(
+    open: Boolean,
     tab: Tab,
     more: MoreView?,
     bottom: List<Perspective>,
@@ -1526,6 +1531,10 @@ private fun LibraryDrawer(
     var settleFrom by remember { mutableFloatStateOf(0f) }
     var settleTo by remember { mutableFloatStateOf(0f) }
     var settling by remember { mutableStateOf(false) }
+    // History stays folded away so a stray tap near the drawer's foot cannot
+    // undo or redo a change. Keying on `open` folds it again every time the
+    // drawer is reopened.
+    var historyOpen by remember(open) { mutableStateOf(false) }
     var measuredRowHeight by remember { mutableFloatStateOf(0f) }
     val fallbackRowHeight = with(LocalDensity.current) { 42.dp.toPx() }
     val rowHeight = if (measuredRowHeight > 0f) measuredRowHeight else fallbackRowHeight
@@ -1792,20 +1801,27 @@ private fun LibraryDrawer(
 
         Spacer(modifier = Modifier.weight(1f))
         HorizontalDivider(color = colors.hairline, modifier = Modifier.padding(horizontal = 8.dp))
-        HistoryRow(
-            icon = Icons.Rounded.Undo,
-            label = "Undo",
-            detail = undoLabel,
-            enabled = canUndo,
-            onClick = onUndo,
+        HistoryHeader(
+            open = historyOpen,
+            available = canUndo || canRedo,
+            onToggle = { historyOpen = !historyOpen },
         )
-        HistoryRow(
-            icon = Icons.Rounded.Redo,
-            label = "Redo",
-            detail = redoLabel,
-            enabled = canRedo,
-            onClick = onRedo,
-        )
+        if (historyOpen) {
+            HistoryRow(
+                icon = Icons.Rounded.Undo,
+                label = "Undo",
+                detail = undoLabel,
+                enabled = canUndo,
+                onClick = onUndo,
+            )
+            HistoryRow(
+                icon = Icons.Rounded.Redo,
+                label = "Redo",
+                detail = redoLabel,
+                enabled = canRedo,
+                onClick = onRedo,
+            )
+        }
         HorizontalDivider(color = colors.hairline, modifier = Modifier.padding(horizontal = 8.dp))
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -1825,6 +1841,49 @@ private fun LibraryDrawer(
                 maxLines = 1,
             )
         }
+    }
+}
+
+@Composable
+private fun HistoryHeader(
+    open: Boolean,
+    available: Boolean,
+    onToggle: () -> Unit,
+) {
+    val colors = flow
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.History,
+            contentDescription = null,
+            tint = colors.faint,
+            modifier = Modifier.size(17.dp),
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = "History",
+            style = MaterialTheme.typography.labelLarge,
+            color = colors.ink,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = if (available) "Undo available" else "Nothing yet",
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.faint,
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Icon(
+            imageVector = if (open) Icons.Rounded.ExpandMore else Icons.Rounded.ChevronRight,
+            contentDescription = if (open) "Hide history" else "Show history",
+            tint = colors.faint,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 
