@@ -1229,10 +1229,15 @@ class Repository(context: Context) {
         send(deleteFolderCommand(folder.id), "Delete folder “${folder.name}”")
     }
 
-    suspend fun createTag(name: String, parent: String?, location: GeoDto? = null) {
+    suspend fun createTag(
+        name: String,
+        parent: String?,
+        location: GeoDto? = null,
+        status: String = "available",
+    ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        send(createTagCommand(trimmed, parent, location), "New tag “$trimmed”")
+        send(createTagCommand(trimmed, parent, location, status), "New tag “$trimmed”")
     }
 
     suspend fun updateTag(
@@ -1240,13 +1245,21 @@ class Repository(context: Context) {
         name: String,
         parent: String?,
         location: GeoDto? = tag.location,
+        status: String = tag.status,
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         val locationChanged = location != tag.location
-        if (trimmed == tag.name && parent == tag.parent && !locationChanged) return
+        if (trimmed == tag.name && parent == tag.parent && !locationChanged && status == tag.status) return
         send(
-            updateTagCommand(tag.id, trimmed, parent, location, locationChanged),
+            updateTagCommand(
+                tag.id,
+                trimmed,
+                parent,
+                location,
+                locationChanged,
+                status.takeIf { it != tag.status },
+            ),
             "Edit tag “${tag.name}”",
         )
     }

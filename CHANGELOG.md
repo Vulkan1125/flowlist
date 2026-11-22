@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.32 — 2026-11-22
+
+- **Android tag status.** Tags can be Available, Blocked or On Hold, and the
+  status is inherited by child tags. Blocked and on-hold tags are marked in the
+  Tags list and tag sheet, and tasks carrying them show **Blocked by #tag** in
+  the list. Perspective status filters now treat blocked tags as unavailable.
+
 ## 0.9.31 — 2026-11-22
 
 - **Android project icons.** The project editor carries the Mac’s ten-icon set

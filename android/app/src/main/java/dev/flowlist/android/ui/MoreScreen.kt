@@ -83,6 +83,8 @@ import dev.flowlist.android.data.priorityGroups
 import dev.flowlist.android.data.reviewProjects
 import dev.flowlist.android.data.tasksForTag
 import dev.flowlist.android.data.tagUsageCount
+import dev.flowlist.android.data.tagIsBlocked
+import dev.flowlist.android.data.tagStatusLabel
 import dev.flowlist.android.data.trashedTasks
 
 enum class MoreView(val label: String, val icon: ImageVector) {
@@ -388,9 +390,17 @@ fun MoreDestination(
                             Text(
                                 "#${item.name}",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = colors.ink,
+                                color = if (db.tagIsBlocked(item.id)) colors.faint else colors.ink,
                                 modifier = Modifier.weight(1f),
                             )
+                            if (item.status != "available") {
+                                Text(
+                                    tagStatusLabel(item.status),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colors.warning,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
                             Text(
                                 "$count",
                                 style = MaterialTheme.typography.labelMedium,

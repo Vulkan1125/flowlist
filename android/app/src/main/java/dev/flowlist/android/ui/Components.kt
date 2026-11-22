@@ -297,6 +297,9 @@ fun TaskRow(
                     add("[$childDone/$childCount]" to colors.faint)
                 }
                 task.projectName?.let { add(it to colors.faint) }
+                if (task.blockedByTag != null && !task.completed) {
+                    add("Blocked by #${task.blockedByTag}" to colors.warning)
+                }
                 task.due?.let { add(it.label() to dueColor) }
                 if (task.checklistTotal > 0) add("${task.checklistDone}/${task.checklistTotal}" to colors.faint)
                 if (task.estimateMin != null) add("${task.estimateMin}m" to colors.faint)

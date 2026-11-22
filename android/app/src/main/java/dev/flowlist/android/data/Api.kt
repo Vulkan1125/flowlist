@@ -468,13 +468,14 @@ fun createTagCommand(
     name: String,
     parent: String?,
     location: dev.flowlist.android.data.GeoDto? = null,
+    status: String = "available",
 ): JsonObject = buildJsonObject {
     put(
         "create_tag",
         buildJsonObject {
             put("name", name)
             put("parent", parent?.let { JsonPrimitive(it) } ?: JsonNull)
-            put("status", "available")
+            put("status", status)
             put("location", location?.let(::geoJson) ?: JsonNull)
             put("position", "end")
         },
@@ -487,6 +488,7 @@ fun updateTagCommand(
     parent: String?,
     location: dev.flowlist.android.data.GeoDto?,
     locationChanged: Boolean,
+    status: String? = null,
 ): JsonObject = buildJsonObject {
     put(
         "update_tag",
@@ -497,6 +499,7 @@ fun updateTagCommand(
                 buildJsonObject {
                     put("name", name)
                     put("parent", parent?.let { JsonPrimitive(it) } ?: JsonNull)
+                    status?.let { put("status", it) }
                     if (locationChanged) {
                         put("location", location?.let(::geoJson) ?: JsonNull)
                     }

@@ -379,7 +379,7 @@ fun TagEditorDialog(
     target: TagEditorTarget,
     tags: List<TagDto>,
     onDismiss: () -> Unit,
-    onSave: (name: String, parent: String?, location: GeoDto?) -> Unit,
+    onSave: (name: String, parent: String?, location: GeoDto?, status: String) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
     val colors = flow
@@ -389,6 +389,7 @@ fun TagEditorDialog(
     var name by remember(tag?.id) { mutableStateOf(tag?.name.orEmpty()) }
     var parent by remember(tag?.id, target.parent) { mutableStateOf(tag?.parent ?: target.parent) }
     val focusManager = LocalFocusManager.current
+    var status by remember(tag?.id) { mutableStateOf(tag?.status ?: "available") }
     var selected by remember(tag?.id) { mutableStateOf(tag?.location) }
     var selectedLabel by remember(tag?.id) { mutableStateOf<String?>(null) }
     var placeQuery by remember(tag?.id) { mutableStateOf("") }
@@ -441,6 +442,30 @@ fun TagEditorDialog(
                     colors = libraryFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                LibraryLabel("Status")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf(
+                        "available" to "Available",
+                        "blocked" to "Blocked",
+                        "on_hold" to "On Hold",
+                    ).forEach { (key, label) ->
+                        LibraryPill(label, status == key) { status = key }
+                    }
+                }
+                if (status != "available") {
+                    Text(
+                        text = "Tasks with this tag or a child tag show as blocked until the status returns to Available.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.faint,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+
                 LibraryLabel("Inside")
                 Row(
                     modifier = Modifier
@@ -653,7 +678,7 @@ fun TagEditorDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(name.trim().removePrefix("#"), parent, selected) },
+                onClick = { onSave(name.trim().removePrefix("#"), parent, selected, status) },
                 enabled = name.isNotBlank(),
             ) {
                 Text(if (tag == null) "Create" else "Save", color = colors.accent)

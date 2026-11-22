@@ -176,6 +176,8 @@ below; this list is the current map.
       `/redo`.
 - [x] **Android project icons** — the Mac's ten-icon set is selectable in the
       project editor and painted on Browse rows.
+- [x] **Android tag status** — Available, Blocked and On Hold are editable in
+      the tag sheet, inherit to child tags, and mark affected tasks as blocked.
 - [x] **Android search and Nearby** — search covers projects, folders, tags and
       perspectives with a view/library scope; Nearby lists tags within the
       library radius, sorted by distance. Search results also support bulk

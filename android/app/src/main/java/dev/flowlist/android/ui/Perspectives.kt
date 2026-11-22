@@ -592,7 +592,8 @@ private fun matchesCondition(db: Db?, task: TaskView, condition: JsonObject): Bo
         "priority" -> task.priority == condition.text("value")
         "status" -> when (condition.text("value")) {
             "completed" -> task.completed
-            "available" -> !task.completed
+            "available" -> !task.completed && task.blockedByTag == null
+            "blocked" -> !task.completed && task.blockedByTag != null
             "deferred" -> task.defer?.local()?.toLocalDate()?.isAfter(today) == true
             else -> true
         }

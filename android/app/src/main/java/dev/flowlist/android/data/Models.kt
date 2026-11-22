@@ -110,6 +110,7 @@ data class ProjectDto(
     val sequential: Boolean = false,
     val kind: String = "parallel",
     val icon: String = "project",
+    val tags: List<String> = emptyList(),
     val attachments: List<String> = emptyList(),
     @SerialName("modified_at") val modifiedAt: String = "",
 )
@@ -127,6 +128,7 @@ data class TagDto(
     val id: String,
     val name: String = "",
     val parent: String? = null,
+    val status: String = "available",
     val location: GeoDto? = null,
 )
 
@@ -205,6 +207,8 @@ data class TaskView(
     val completedAt: String? = null,
     val modifiedAt: String = "",
     val trashed: Boolean = false,
+    /// The first unavailable tag (own or inherited) blocking this task.
+    val blockedByTag: String? = null,
 )
 
 val TaskDto.isActive: Boolean
@@ -243,6 +247,7 @@ fun Db.taskViews(
                 completedAt = task.completedAt,
                 modifiedAt = task.modifiedAt,
                 trashed = task.trashedAt != null,
+                blockedByTag = tagBlocking(task)?.name,
             )
         }
         .toList()
@@ -312,6 +317,11 @@ private fun TaskDto.toView(db: Db) = TaskView(
     checklistDone = checklist.count { it.completed },
     checklistTotal = checklist.size,
     estimateMin = estimateMin,
+    attachments = attachments,
+    completedAt = completedAt,
+    modifiedAt = modifiedAt,
+    trashed = trashedAt != null,
+    blockedByTag = db.tagBlocking(this)?.name,
 )
 
 fun StampDto.label(): String {
@@ -480,6 +490,40 @@ fun faviconUrl(value: String): String? {
 fun linkWithName(url: String, name: String): String {
     val trimmed = name.trim()
     return if (trimmed.isEmpty()) url.trim() else "${url.trim()}\t$trimmed"
+}
+
+/// The first tag in a task's own or project's tag chain that is not
+/// available. The chain includes ancestors, matching the Mac's inherited
+/// blocked/on-hold rules.
+fun Db.tagBlocking(task: TaskDto): TagDto? {
+    val ids = buildList {
+        addAll(task.tags)
+        task.project?.let { project -> addAll(projects[project]?.tags.orEmpty()) }
+    }
+    for (id in ids) {
+        var tag = tags[id]
+        while (tag != null) {
+            if (tag.status != "available") return tag
+            tag = tag.parent?.let { tags[it] }
+        }
+    }
+    return null
+}
+
+/// True when the tag or any ancestor is blocked or on hold.
+fun Db.tagIsBlocked(tagId: String): Boolean {
+    var tag = tags[tagId]
+    while (tag != null) {
+        if (tag.status != "available") return true
+        tag = tag.parent?.let { tags[it] }
+    }
+    return false
+}
+
+fun tagStatusLabel(status: String): String = when (status) {
+    "blocked" -> "Blocked"
+    "on_hold" -> "On Hold"
+    else -> "Available"
 }
 
 /// The earlier incomplete task that blocks this one in a sequential list, or

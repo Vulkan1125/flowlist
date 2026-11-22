@@ -141,6 +141,7 @@ import dev.flowlist.android.data.label
 import dev.flowlist.android.data.linkWithName
 import dev.flowlist.android.data.today
 import dev.flowlist.android.data.taskViews
+import dev.flowlist.android.data.tagBlocking
 import dev.flowlist.android.data.tasksForTag
 import dev.flowlist.android.data.trashedTasks
 import dev.flowlist.android.data.isToday
@@ -1134,6 +1135,7 @@ fun MainScreen(
                         checklistDone = task.checklist.count { it.completed },
                         checklistTotal = task.checklist.size,
                         estimateMin = task.estimateMin,
+                        blockedByTag = db?.tagBlocking(task)?.name,
                     )
                 }
                 .orEmpty(),
@@ -1229,13 +1231,13 @@ fun MainScreen(
             target = target,
             tags = snapshot?.db?.tags?.values?.toList().orEmpty(),
             onDismiss = { tagEditor = null },
-            onSave = { name, parent, location ->
+            onSave = { name, parent, location, status ->
                 tagEditor = null
                 scope.launch {
                     if (editing == null) {
-                        repository.createTag(name, parent, location)
+                        repository.createTag(name, parent, location, status)
                     } else {
-                        repository.updateTag(editing, name, parent, location)
+                        repository.updateTag(editing, name, parent, location, status)
                     }
                 }
             },

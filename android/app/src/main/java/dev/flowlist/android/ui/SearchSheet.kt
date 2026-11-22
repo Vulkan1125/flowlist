@@ -59,6 +59,7 @@ import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.TagDto
 import dev.flowlist.android.data.TaskView
 import dev.flowlist.android.data.taskViews
+import dev.flowlist.android.data.tagStatusLabel
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -428,12 +429,23 @@ fun TagTasksSheet(
                 color = colors.ink,
                 modifier = Modifier.padding(horizontal = 20.dp),
             )
-            Text(
-                text = if (tasks.size == 1) "1 task" else "${tasks.size} tasks",
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.faint,
+            Row(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = if (tasks.size == 1) "1 task" else "${tasks.size} tasks",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.faint,
+                )
+                if (tag.status != "available") {
+                    Text(
+                        text = "  ·  ${tagStatusLabel(tag.status)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.warning,
+                    )
+                }
+            }
             if (tasks.isEmpty()) {
                 Text(
                     text = "No open tasks with this tag.",
