@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.38 — 2026-11-22
+
+- **Removed the widget chevron.** The inline Today / Inbox / Upcoming switcher
+  was too small and could freeze on the chooser. The widget view is chosen in
+  its settings again; the header keeps the app icon, title, count and plus.
+- **Quick add stays on the home screen.** The floating capture card from 0.9.37
+  remains the widget’s **+** action.
+- **Widget settings rebuilt.** Options are grouped into Show, Layout, Appearance
+  and Content cards with a sticky Save/Cancel bar. The new **Blur** slider adds
+  a frosted veil; Android widgets cannot sample the wallpaper, so this is a
+  translucent frost rather than a true backdrop blur.
+- **Centred empty state.** An empty widget puts “Tap + to capture” in the middle
+  of the card.
+
 ## 0.9.37 — 2026-11-22
 
 - **Widget quick add stays on the home screen.** The widget’s **+** now opens a

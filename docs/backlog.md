@@ -204,9 +204,10 @@ below; this list is the current map.
       labels, completed rows and quick add. The widget can be added from
       Settings → Tasks.
 - [x] **Widget actions** — complete in place. The **+** opens a floating
-      capture card over the home screen and a header chevron switches Today /
-      Inbox / Upcoming inline. The row-level Tmrw reschedule action was removed
-      after feedback. Android widgets cannot blur the wallpaper itself, so the
+      capture card over the home screen. The inline chevron switcher was
+      removed after it proved unreliable; the view is chosen in widget
+      settings. The row-level Tmrw reschedule action was removed after
+      feedback. Android widgets cannot blur the wallpaper itself, so the
       frosted option is a translucent tint.
 - [ ] **Custom geotag notification sounds** — one arrival-reminder sound for
       every geotag, distinct from other notifications, with a preview and a

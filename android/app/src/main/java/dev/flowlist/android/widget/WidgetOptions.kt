@@ -15,6 +15,8 @@ data class WidgetOptions(
     val headerSize: String = "default",
     /// 30..100, the alpha of the widget card.
     val opacity: Int = 100,
+    /// 0..100, how much frosted veil sits over the wallpaper.
+    val blur: Int = 0,
     val frosted: Boolean = false,
     val showProject: Boolean = true,
     val showCompleted: Boolean = false,
@@ -34,14 +36,6 @@ class WidgetOptionsStore(context: Context) {
 
     fun exists(appWidgetId: Int): Boolean = prefs.contains(key(appWidgetId, "mode"))
 
-    /// A transient inline view picker opened from the widget's chevron.
-    fun chooserOpen(appWidgetId: Int): Boolean =
-        prefs.getBoolean(key(appWidgetId, "chooser"), false)
-
-    fun setChooserOpen(appWidgetId: Int, open: Boolean) {
-        prefs.edit().putBoolean(key(appWidgetId, "chooser"), open).apply()
-    }
-
     fun load(appWidgetId: Int): WidgetOptions = WidgetOptions(
         mode = prefs.getString(key(appWidgetId, "mode"), null) ?: "today",
         theme = prefs.getString(key(appWidgetId, "theme"), null) ?: "app",
@@ -49,6 +43,7 @@ class WidgetOptionsStore(context: Context) {
         textSize = prefs.getString(key(appWidgetId, "text_size"), null) ?: "default",
         headerSize = prefs.getString(key(appWidgetId, "header_size"), null) ?: "default",
         opacity = prefs.getInt(key(appWidgetId, "opacity"), 100).coerceIn(30, 100),
+        blur = prefs.getInt(key(appWidgetId, "blur"), 0).coerceIn(0, 100),
         frosted = prefs.getBoolean(key(appWidgetId, "frosted"), false),
         showProject = prefs.getBoolean(key(appWidgetId, "show_project"), true),
         showCompleted = prefs.getBoolean(key(appWidgetId, "show_completed"), false),
@@ -63,6 +58,7 @@ class WidgetOptionsStore(context: Context) {
             .putString(key(appWidgetId, "text_size"), value.textSize)
             .putString(key(appWidgetId, "header_size"), value.headerSize)
             .putInt(key(appWidgetId, "opacity"), value.opacity.coerceIn(30, 100))
+            .putInt(key(appWidgetId, "blur"), value.blur.coerceIn(0, 100))
             .putBoolean(key(appWidgetId, "frosted"), value.frosted)
             .putBoolean(key(appWidgetId, "show_project"), value.showProject)
             .putBoolean(key(appWidgetId, "show_completed"), value.showCompleted)
@@ -75,7 +71,7 @@ class WidgetOptionsStore(context: Context) {
         appWidgetIds.forEach { id ->
             listOf(
                 "mode", "theme", "limit", "text_size", "header_size", "opacity",
-                "frosted", "show_project", "show_completed", "quick_add", "chooser",
+                "blur", "frosted", "show_project", "show_completed", "quick_add",
             )
                 .forEach { name -> editor.remove(key(id, name)) }
         }

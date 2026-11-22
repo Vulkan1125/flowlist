@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/flowlist-core", "crates/flowlist"]
 
 [workspace.package]
-version = "0.9.37"
+version = "0.9.38"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
