@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.22 — 2026-11-22
+
+- **Android attachment previews.** Tapping an image or PDF in the task editor
+  opens a preview card instead of leaving the app. Images scale to fit; PDFs
+  render one page at a time with previous/next controls and a page count.
+  **Open externally** and **Close** remain on the card. The phone uses a saved
+  offline copy when present and otherwise fetches the file from the Mac.
+
 ## 0.9.21 — 2026-11-22
 
 - **Android project editing matches the Mac.** The project sheet now carries

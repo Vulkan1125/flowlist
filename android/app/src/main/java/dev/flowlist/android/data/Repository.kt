@@ -944,6 +944,28 @@ class Repository(context: Context) {
         _state.update { it.copy(savedAttachments = savedPaths.toSet()) }
     }
 
+    /// A local file for an attachment: the saved copy when present, otherwise
+    /// a cache download from the Mac.
+    suspend fun attachmentFile(path: String): File? {
+        if (canPreviewAttachment(path).not()) return null
+        val saved = savedFile(path).takeIf { path in savedPaths && it.exists() }
+        if (saved != null) return saved
+        val directory = File(appContext.cacheDir, "previews").apply { mkdirs() }
+        val name = path.substringAfterLast('/').ifBlank { "attachment" }
+        val file = File(directory, name)
+        if (file.exists()) return file
+        val base = session.baseUrl ?: return null
+        val token = session.token ?: return null
+        return try {
+            val bytes = api.downloadFile(base, token, path)
+            file.writeBytes(bytes)
+            file
+        } catch (error: Exception) {
+            _state.update { it.copy(error = friendly(error)) }
+            null
+        }
+    }
+
     suspend fun openAttachment(path: String): Boolean {
         val url = attachmentUrl(path)
         if (url.startsWith("http://") || url.startsWith("https://")) {

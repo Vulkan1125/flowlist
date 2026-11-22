@@ -445,6 +445,13 @@ fun attachmentDisplayName(value: String): String {
     return value.substringAfterLast('/')
 }
 
+/// Files the phone can render itself: images and PDFs.
+fun canPreviewAttachment(path: String): Boolean {
+    if (path.startsWith("http://") || path.startsWith("https://")) return false
+    val extension = path.substringAfterLast('.', "").lowercase()
+    return extension in setOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "pdf")
+}
+
 /// The site's own favicon. Fetching it from the host avoids a third-party
 /// favicon service; Coil shows the chain icon when it is missing.
 fun faviconUrl(value: String): String? {

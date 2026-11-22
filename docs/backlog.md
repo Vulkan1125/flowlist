@@ -167,6 +167,8 @@ below; this list is the current map.
       ripple; the circle, chevron and selection controls keep their actions.
 - [x] **Android project editing** — type, notes and review interval join name,
       folder and status, matching the Mac inspector and New Project sheet.
+- [x] **Android attachment previews** — images and PDFs open in a card; PDFs
+      page with previous/next, and Open externally remains.
 - [x] **Android multi-select** — a header checklist opens select mode; bulk
       complete/reopen, bulk trash with one Undo, and Trash select-all plus a
       confirmed delete-forever.

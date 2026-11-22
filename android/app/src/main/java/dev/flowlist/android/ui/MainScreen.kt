@@ -252,6 +252,7 @@ fun MainScreen(
     var captureAttachment by remember { mutableStateOf<String?>(null) }
     var captureAttachmentLabel by remember { mutableStateOf<String?>(null) }
     var sharePrompt by remember { mutableStateOf<SharedPayload?>(null) }
+    var previewTarget by remember { mutableStateOf<PreviewTarget?>(null) }
     var sharePicking by remember { mutableStateOf(false) }
     var selecting by rememberSaveable { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -845,6 +846,16 @@ fun MainScreen(
 
     }
 
+    previewTarget?.let { target ->
+        AttachmentPreviewSheet(
+            target = target,
+            onOpen = {
+                scope.launch { repository.openAttachment(target.path) }
+            },
+            onDismiss = { previewTarget = null },
+        )
+    }
+
     sharePrompt?.let { payload ->
         val label = when (payload) {
             is SharedPayload.Link -> payload.title?.takeIf { it.isNotBlank() } ?: payload.url
@@ -995,6 +1006,19 @@ fun MainScreen(
                                 message = "Couldn't open that attachment",
                                 duration = SnackbarDuration.Short,
                             )
+                        }
+                    }
+                },
+                onPreviewAttachment = { path ->
+                    scope.launch {
+                        val file = repository.attachmentFile(path)
+                        if (file == null) {
+                            toasts.show(
+                                message = "Couldn't load that attachment",
+                                duration = SnackbarDuration.Short,
+                            )
+                        } else {
+                            previewTarget = PreviewTarget(path, file)
                         }
                     }
                 },

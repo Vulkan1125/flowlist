@@ -109,6 +109,7 @@ import dev.flowlist.android.data.ChecklistDto
 import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.attachmentDisplayName
 import dev.flowlist.android.data.attachmentUrl
+import dev.flowlist.android.data.canPreviewAttachment
 import dev.flowlist.android.data.StampDto
 import dev.flowlist.android.data.TagDto
 import dev.flowlist.android.data.TaskDto
@@ -142,6 +143,7 @@ fun TaskEditSheet(
     onSaveAttachment: (String) -> Unit,
     onRemoveSavedAttachment: (String) -> Unit,
     onOpenAttachment: (String) -> Unit,
+    onPreviewAttachment: (String) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onAddSubtask: (String) -> Unit,
     onToggleSubtask: (TaskDto, Boolean) -> Unit,
@@ -330,7 +332,13 @@ fun TaskEditSheet(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onOpenAttachment(path) }
+                        .clickable {
+                            if (canPreviewAttachment(path)) {
+                                onPreviewAttachment(path)
+                            } else {
+                                onOpenAttachment(path)
+                            }
+                        }
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
