@@ -89,10 +89,9 @@ leaving the list.
   **One-off**. Parallel and Sequential show child tasks; One-off shows
   checklist-style steps that tick, drag and delete in place and never appear as
   tasks.
-- **Drag a subtask out of its parent** by dropping it in one of the thin gaps
-  between root-level tasks in the middle pane. The gap shows an accent line
-  while the task is over it, and the task lands at that position as a
-  top-level task.
+- **Drag a subtask out of its parent** by dropping it on the lower third of a
+  root-level task in the middle pane (or in a gap between root tasks). The row
+  tints to show the target, and the task becomes a top-level task beside it.
 - **Attachments** accept files and `http(s)` links. Click a file's name to
   preview an image or PDF in the app; PDFs step with `←` / `→`. `open` hands the
   file to its default app. Removing an attachment asks first and leaves the

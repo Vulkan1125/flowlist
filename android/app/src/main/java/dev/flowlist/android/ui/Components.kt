@@ -133,12 +133,29 @@ fun TaskRow(
     hasChildren: Boolean = false,
     expanded: Boolean = false,
     onToggleExpanded: (() -> Unit)? = null,
+    dragging: Boolean = false,
+    nestTarget: Boolean = false,
+    rootTarget: Boolean = false,
 ) {
     val colors = flow
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 54.dp)
+            .background(
+                when {
+                    dragging -> colors.raised
+                    rootTarget -> colors.accent.copy(alpha = 0.15f)
+                    else -> Color.Transparent
+                },
+            )
+            .then(
+                if (dragging || nestTarget) {
+                    Modifier.border(1.dp, colors.accent, RoundedCornerShape(10.dp))
+                } else {
+                    Modifier
+                },
+            )
             .padding(start = (20 + depth * 18).dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -243,6 +260,9 @@ fun SwipeTaskRow(
     expanded: Boolean = false,
     onToggleExpanded: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    dragging: Boolean = false,
+    nestTarget: Boolean = false,
+    rootTarget: Boolean = false,
 ) {
     val colors = flow
     val state = rememberSwipeToDismissBoxState(
@@ -292,6 +312,9 @@ fun SwipeTaskRow(
                 hasChildren = hasChildren,
                 expanded = expanded,
                 onToggleExpanded = onToggleExpanded,
+                dragging = dragging,
+                nestTarget = nestTarget,
+                rootTarget = rootTarget,
             )
         }
         Hairline(Modifier.padding(start = 58.dp))
@@ -327,6 +350,7 @@ fun TaskTreeItem(
     val rootTarget = drop?.kind == TaskDropKind.RootAfter &&
         drop.id == task.id &&
         drag?.dragging?.id != task.id
+    val dragging = drag?.dragging?.id == task.id
     val dragModifier = if (drag == null) {
         Modifier
     } else {
@@ -334,20 +358,6 @@ fun TaskTreeItem(
             .onGloballyPositioned { coordinates ->
                 drag.bounds["task:${task.id}"] = coordinates.boundsInWindow()
             }
-            .then(
-                if (nestTarget) {
-                    Modifier.border(1.dp, colors.accent, RoundedCornerShape(10.dp))
-                } else {
-                    Modifier
-                },
-            )
-            .then(
-                if (rootTarget) {
-                    Modifier.background(colors.accent.copy(alpha = 0.12f))
-                } else {
-                    Modifier
-                },
-            )
             .graphicsLayer {
                 if (drag.dragging?.id == task.id) {
                     translationY = drag.offset.y
@@ -394,6 +404,9 @@ fun TaskTreeItem(
             expanded = expanded,
             onToggleExpanded = toggleExpanded,
             modifier = dragModifier,
+            dragging = dragging,
+            nestTarget = nestTarget,
+            rootTarget = rootTarget,
         )
     } else {
         TaskRow(
@@ -405,6 +418,9 @@ fun TaskTreeItem(
             hasChildren = hasChildren,
             expanded = expanded,
             onToggleExpanded = toggleExpanded,
+            dragging = dragging,
+            nestTarget = nestTarget,
+            rootTarget = rootTarget,
         )
         Hairline(Modifier.padding(start = (58 + depth * 18).dp))
     }

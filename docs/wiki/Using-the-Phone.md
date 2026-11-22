@@ -122,7 +122,8 @@ Every subtask row also has a drag grip. Long-press it to reorder the children;
 the other rows move aside and the list settles into the new order on release.
 
 **Parallel**, **Sequential** and **One-off** are the three step modes; only one
-is active. Parallel and Sequential show child tasks. One-off shows
+is active. The drag grip for both subtasks and one-off steps is at the far right
+of the row. Parallel and Sequential show child tasks. One-off shows
 checklist-style steps that tick, drag and delete in place and never appear as
 tasks.
 
@@ -170,8 +171,8 @@ far right of its row; priorities never add their own flag.
 
 Subtasks start collapsed. Tap the chevron at the right of a parent row to open
 or close its children. Long-press a task to drag it: drop it on another task to
-nest it, or on the lower part of a root task to move it back to the project
-root at that position.
+nest it, or on the lower half of a root task to move it back to the project
+root at that position. The whole row tints while it is the target.
 
 
 Settings → About → **Check for updates** reads the latest GitHub release and

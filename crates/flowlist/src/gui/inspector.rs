@@ -1751,16 +1751,6 @@ impl FlowlistApp {
                 .hover(|style| style.bg(theme.hover))
                 .child(
                     div()
-                        .id(super::sid(format!("subtask-grip:{child_id}")))
-                        .w(px(12.))
-                        .cursor(CursorStyle::OpenHand)
-                        .text_xs()
-                        .text_color(theme.text_faint)
-                        .flow_tip(self, cx, theme, "Drag to reorder")
-                        .child("⠿"),
-                )
-                .child(
-                    div()
                         .id(super::sid(format!("subtask-toggle:{child_id}")))
                         .flex_shrink_0()
                         .flow_tip(
@@ -1825,6 +1815,16 @@ impl FlowlistApp {
                             cx.stop_propagation();
                             this.promote_subtask(separate_id.clone(), cx);
                         })),
+                )
+                .child(
+                    div()
+                        .id(super::sid(format!("subtask-grip:{child_id}")))
+                        .w(px(12.))
+                        .cursor(CursorStyle::OpenHand)
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .flow_tip(self, cx, theme, "Drag to reorder")
+                        .child("⠿"),
                 )
                 .on_drag(
                     DragTask::task(drag_id, drag_title),
@@ -1910,16 +1910,6 @@ impl FlowlistApp {
                         .hover(|style| style.bg(theme.hover))
                         .child(
                             div()
-                                .id(super::sid(format!("one-off-grip:{item_id}")))
-                                .w(px(12.))
-                                .cursor(CursorStyle::OpenHand)
-                                .text_xs()
-                                .text_color(theme.text_faint)
-                                .flow_tip(self, cx, theme, "Drag to reorder")
-                                .child("⠿"),
-                        )
-                        .child(
-                            div()
                                 .id(super::sid(format!("one-off-toggle:{item_id}")))
                                 .flex_shrink_0()
                                 .flow_tip(
@@ -1992,6 +1982,16 @@ impl FlowlistApp {
                                         cx,
                                     );
                                 })),
+                        )
+                        .child(
+                            div()
+                                .id(super::sid(format!("one-off-grip:{item_id}")))
+                                .w(px(12.))
+                                .cursor(CursorStyle::OpenHand)
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .flow_tip(self, cx, theme, "Drag to reorder")
+                                .child("⠿"),
                         )
                         .on_drag(
                             DragChecklist {

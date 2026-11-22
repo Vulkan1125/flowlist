@@ -1613,7 +1613,7 @@ impl FlowlistApp {
     fn row_is_hidden(&self, id: &TaskId) -> bool {
         let db = self.store.db();
         for ancestor in db.task_ancestors(id) {
-            if !self.is_open(&format!("task:{ancestor}"), true) {
+            if !self.is_open(&format!("task:{ancestor}"), false) {
                 return true;
             }
         }
@@ -1780,6 +1780,11 @@ impl FlowlistApp {
             theme.text_dim
         };
 
+        let root_key = format!("root-after:{id}");
+        let root_after = self.content_drop_target.as_deref() == Some(root_key.as_str());
+        let root_id = id.clone();
+        let drop_root_id = id.clone();
+        let row_depth = row.depth;
         let base = div()
             .id(super::sid(format!("task:{}", id)))
             .group(row_group.clone())
@@ -1793,7 +1798,13 @@ impl FlowlistApp {
             .py_1()
             .border_b_1()
             .border_color(theme.border_soft)
-            .bg(if selected { theme.selection } else { theme.bg })
+            .bg(if root_after {
+                theme.accent_soft
+            } else if selected {
+                theme.selection
+            } else {
+                theme.bg
+            })
             .text_sm()
             .cursor_pointer()
             .hover(|style| style.bg(theme.hover))
@@ -1827,14 +1838,23 @@ impl FlowlistApp {
                 ghost(payload, position, window, cx, theme)
             })
             .on_drag_move::<DragTask>(cx.listener(
-                |this, _: &DragMoveEvent<DragTask>, _, cx| {
-                    if this.content_drop_target.is_some() {
-                        this.set_content_drop_target(None, cx);
-                    }
+                move |this, event: &DragMoveEvent<DragTask>, _, cx| {
+                    // The bottom of a root row is a large, forgiving zone for
+                    // moving a subtask back out to the project root.
+                    let bottom = event.bounds.origin.y + event.bounds.size.height;
+                    let near_bottom = row_depth == 0
+                        && event.event.position.y > bottom - event.bounds.size.height * 0.30;
+                    let target = near_bottom.then(|| format!("root-after:{root_id}"));
+                    this.set_content_drop_target(target, cx);
                 },
             ))
             .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
-                this.drop_on_task(drop_id.clone(), payload, cx)
+                let key = format!("root-after:{drop_root_id}");
+                if this.content_drop_target.as_deref() == Some(key.as_str()) {
+                    this.drop_on_root(Some(drop_root_id.clone()), payload, cx);
+                } else {
+                    this.drop_on_task(drop_id.clone(), payload, cx);
+                }
             }))
             .child(
                 div()
@@ -1902,7 +1922,7 @@ impl FlowlistApp {
                             ))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
-                                this.toggle_expanded(format!("task:{}", disclosure_id), true, cx);
+                                this.toggle_expanded(format!("task:{}", disclosure_id), false, cx);
                             })),
                     )
                     .into_any_element()
@@ -1946,18 +1966,6 @@ impl FlowlistApp {
                         this.toggle_flag(flag_id.clone(), cx);
                     })),
             )
-            .when_some(task.priority, |this, priority| {
-                this.child(
-                    div()
-                        .id(super::sid(format!("priority-mark:{}", row.id)))
-                        .flex_shrink_0()
-                        .w(px(3.))
-                        .h(px(15.))
-                        .rounded_full()
-                        .bg(super::sidebar::priority_color(theme, priority))
-                        .flow_tip(self, cx, theme, format!("{} priority", priority.label())),
-                )
-            })
             .child(
                 div()
                     .flex_1()

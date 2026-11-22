@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.16 — 2026-11-22
+
+- **Mac: the vertical priority stripe is gone.** The task circle already carries
+  the priority colour, so the extra line was noise.
+- **Mac: the subtask chevron works on the first click.** Collapsed branches now
+  use the same default as the disclosure, so one click opens them.
+- **Easier drag-out on both platforms.** On Mac, dropping a subtask on the
+  lower third of a root row moves it out to the project root; the whole row
+  tints to show the target. On Android the root-out zone is the bottom 45% and
+  the dragged and target rows highlight as full cells, not just the text.
+- **Android drag grips sit at the far right** of subtask and one-off rows. Mac
+  keeps the grips where they were.
+
 ## 0.9.15 — 2026-11-22
 
 - **One step type per task.** The task editor now has a single **Parallel /

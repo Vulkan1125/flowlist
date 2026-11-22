@@ -622,6 +622,39 @@ fun TaskEditSheet(
                             .padding(vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        CheckCircle(
+                            checked = child.completed,
+                            onClick = { onToggleSubtask(child, !child.completed) },
+                            priority = child.priority,
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = child.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (child.completed) colors.faint else colors.ink,
+                            textDecoration = if (child.completed) {
+                                androidx.compose.ui.text.style.TextDecoration.LineThrough
+                            } else {
+                                null
+                            },
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(
+                            onClick = {
+                                movingSubtask = child
+                                targetFilter = ""
+                            },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.DriveFileMove,
+                                contentDescription = "Move subtask",
+                                tint = colors.faint,
+                                modifier = Modifier.size(17.dp),
+                            )
+                        }
                         Box(
                             modifier = Modifier
                                 .size(24.dp)
@@ -725,39 +758,6 @@ fun TaskEditSheet(
                                 color = colors.faint,
                             )
                         }
-                        CheckCircle(
-                            checked = child.completed,
-                            onClick = { onToggleSubtask(child, !child.completed) },
-                            priority = child.priority,
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = child.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (child.completed) colors.faint else colors.ink,
-                            textDecoration = if (child.completed) {
-                                androidx.compose.ui.text.style.TextDecoration.LineThrough
-                            } else {
-                                null
-                            },
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(
-                            onClick = {
-                                movingSubtask = child
-                                targetFilter = ""
-                            },
-                            modifier = Modifier.size(32.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.DriveFileMove,
-                                contentDescription = "Move subtask",
-                                tint = colors.faint,
-                                modifier = Modifier.size(17.dp),
-                            )
-                        }
                     }
                 }
             }
@@ -793,6 +793,35 @@ fun TaskEditSheet(
                             .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        CheckCircle(
+                            checked = item.completed,
+                            onClick = { onChecklist(item, !item.completed) },
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (item.completed) colors.faint else colors.ink,
+                            textDecoration = if (item.completed) {
+                                androidx.compose.ui.text.style.TextDecoration.LineThrough
+                            } else {
+                                null
+                            },
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(
+                            onClick = { onDeleteChecklist(item) },
+                            modifier = Modifier.size(30.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Delete one-off",
+                                tint = colors.faint,
+                                modifier = Modifier.size(15.dp),
+                            )
+                        }
                         Box(
                             modifier = Modifier
                                 .size(24.dp)
@@ -829,35 +858,6 @@ fun TaskEditSheet(
                                 text = "⠿",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = colors.faint,
-                            )
-                        }
-                        CheckCircle(
-                            checked = item.completed,
-                            onClick = { onChecklist(item, !item.completed) },
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = item.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (item.completed) colors.faint else colors.ink,
-                            textDecoration = if (item.completed) {
-                                androidx.compose.ui.text.style.TextDecoration.LineThrough
-                            } else {
-                                null
-                            },
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(
-                            onClick = { onDeleteChecklist(item) },
-                            modifier = Modifier.size(30.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = "Delete one-off",
-                                tint = colors.faint,
-                                modifier = Modifier.size(15.dp),
                             )
                         }
                     }

@@ -66,7 +66,7 @@ class TaskDragController {
             // The bottom third of a root row is the "move out to the root"
             // zone; the rest of a row is a nest target.
             val root = roots.containsKey(id)
-            val rootZone = root && point.y >= rect.bottom - rect.height * 0.32f
+            val rootZone = root && point.y >= rect.bottom - rect.height * 0.45f
             return if (rootZone) {
                 TaskDropTarget(TaskDropKind.RootAfter, id)
             } else {

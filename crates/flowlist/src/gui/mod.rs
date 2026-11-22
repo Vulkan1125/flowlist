@@ -2748,7 +2748,7 @@ impl FlowlistApp {
             return;
         }
         let key = format!("task:{id}");
-        let current = self.is_open(&key, true);
+        let current = self.is_open(&key, false);
         let target = open.unwrap_or(!current);
         if target == current {
             return;
