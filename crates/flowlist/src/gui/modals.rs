@@ -11,7 +11,9 @@ use gpui::{
 };
 
 use flowlist_core::ids::{FolderId, PerspectiveId, ProjectId, TaskId};
-use flowlist_core::model::{GroupBy, ProjectIcon, ProjectKind, SidebarOptions, SortBy, TaskStatus};
+use flowlist_core::model::{
+    GroupBy, Priority, ProjectIcon, ProjectKind, SidebarOptions, SortBy, TaskStatus,
+};
 use flowlist_core::query;
 use flowlist_core::time::now;
 
@@ -90,6 +92,14 @@ pub enum Modal {
         title: String,
         occurrences: usize,
         whole: bool,
+    },
+    /// Changing the priority of a repeating task asks whether the new value
+    /// belongs to this occurrence alone or to every occurrence in the series.
+    PriorityScope {
+        id: TaskId,
+        priority: Option<Priority>,
+        occurrences: usize,
+        all: bool,
     },
     /// Removing an attachment asks first. The file or link is only unlinked;
     /// nothing on disk is touched, and Undo puts the row back.
@@ -346,6 +356,16 @@ impl Modal {
         }
     }
 
+    pub fn priority_scope(app: &FlowlistApp, id: TaskId, priority: Option<Priority>) -> Self {
+        let occurrences = app.store.db().series_task_ids(&id).len().max(1);
+        Modal::PriorityScope {
+            id,
+            priority,
+            occurrences,
+            all: false,
+        }
+    }
+
     pub fn attach_link(target: AttachmentTarget) -> Self {
         Modal::AttachLink {
             target,
@@ -452,6 +472,7 @@ impl Modal {
             Modal::DeleteProject { .. } => "Delete project",
             Modal::DeleteFolder { .. } => "Delete folder",
             Modal::DeleteTask { .. } => "Delete repeating task",
+            Modal::PriorityScope { .. } => "Repeating task priority",
             Modal::RemoveAttachment { .. } => "Remove attachment",
             Modal::Uninstall { .. } => "Uninstall Flowlist",
             Modal::AttachLink { .. } => "Attach link",
@@ -484,6 +505,9 @@ impl Modal {
             }
             Modal::DeleteTask { .. } => {
                 "This task repeats. Trash this occurrence, or the whole series; Undo restores everything."
+            }
+            Modal::PriorityScope { .. } => {
+                "This task repeats. Apply the new priority to this occurrence, or to every occurrence in the series."
             }
             Modal::RemoveAttachment { .. } => {
                 "Only the link on this item goes away; the file stays on disk."
@@ -524,6 +548,7 @@ impl Modal {
             Modal::DeleteProject { .. } => "Delete",
             Modal::DeleteFolder { .. } => "Delete",
             Modal::DeleteTask { .. } => "Delete",
+            Modal::PriorityScope { .. } => "Apply",
             Modal::RemoveAttachment { .. } => "Remove",
             Modal::Uninstall { .. } => "Uninstall",
             Modal::AttachLink { .. } => "Attach",
@@ -540,6 +565,7 @@ impl Modal {
             Modal::DeleteProject { .. } => 0,
             Modal::DeleteFolder { .. } => 0,
             Modal::DeleteTask { .. } => 0,
+            Modal::PriorityScope { .. } => 0,
             Modal::RemoveAttachment { .. } => 0,
             Modal::Uninstall { .. } => 0,
             Modal::AttachLink { .. } => 1,
@@ -571,6 +597,7 @@ impl Modal {
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
             Modal::DeleteTask { .. } => None,
+            Modal::PriorityScope { .. } => None,
             Modal::RemoveAttachment { .. } | Modal::Uninstall { .. } => None,
             Modal::AttachLink { url, .. } => (index == 0).then_some(url),
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
@@ -620,6 +647,7 @@ impl Modal {
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
             Modal::DeleteTask { .. } => None,
+            Modal::PriorityScope { .. } => None,
             Modal::RemoveAttachment { .. } | Modal::Uninstall { .. } => None,
             Modal::AttachLink { url, .. } => (index == 0).then_some(url),
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
@@ -664,6 +692,7 @@ impl Modal {
             Modal::DeleteProject { .. } => "",
             Modal::DeleteFolder { .. } => "",
             Modal::DeleteTask { .. } => "",
+            Modal::PriorityScope { .. } => "",
             Modal::RemoveAttachment { .. } | Modal::Uninstall { .. } => "",
             Modal::AttachLink { .. } => "Address",
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
@@ -699,6 +728,7 @@ impl Modal {
         match self {
             Modal::Import { .. } | Modal::Help => 620.0,
             Modal::DeleteTask { .. } => 500.0,
+            Modal::PriorityScope { .. } => 520.0,
             Modal::Perspective { .. } => 680.0,
             Modal::Settings { .. } => 880.0,
             Modal::Uninstall { .. } => 560.0,
@@ -973,6 +1003,73 @@ impl FlowlistApp {
                     },
                 ));
             }
+            if let Modal::PriorityScope {
+                priority,
+                occurrences,
+                all,
+                ..
+            } = modal
+            {
+                let priority = *priority;
+                let all = *all;
+                let occurrences = *occurrences;
+                body = body.child(
+                    div()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.field)
+                        .text_sm()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.text)
+                        .child(match priority {
+                            Some(priority) => format!("{} priority", priority.label()),
+                            None => "No priority".to_string(),
+                        }),
+                );
+                let chip = |label: &'static str, active: bool, key: &'static str| {
+                    div().id(key).child(
+                        div()
+                            .on_children_prepainted(self.view_probe(key.to_string()))
+                            .child(widgets::toggle_chip(theme, label, active)),
+                    )
+                };
+                body = body.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            chip("This occurrence", !all, "priority-occurrence").on_click(
+                                cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::PriorityScope { all, .. }) = &mut this.modal {
+                                        *all = false;
+                                    }
+                                    cx.notify();
+                                }),
+                            ),
+                        )
+                        .child(
+                            chip("Whole series", all, "priority-series").on_click(
+                                cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::PriorityScope { all, .. }) = &mut this.modal {
+                                        *all = true;
+                                    }
+                                    cx.notify();
+                                }),
+                            ),
+                        ),
+                );
+                body = body.child(div().text_xs().text_color(theme.text_faint).child(
+                    match occurrences {
+                        1 => "This is the only occurrence in the series.".to_string(),
+                        count => {
+                            format!("The series has {count} occurrences, including this one.")
+                        }
+                    },
+                ));
+            }
             if !is_settings {
                 for index in 0..field_count {
                     body = body.child(self.render_modal_field(index, cx));
@@ -1025,7 +1122,10 @@ impl FlowlistApp {
                     .justify_between()
                     .pt_1()
                     .child(div().text_xs().text_color(theme.text_faint).child(
-                        if matches!(modal, Modal::DeleteTask { .. }) {
+                        if matches!(
+                            modal,
+                            Modal::DeleteTask { .. } | Modal::PriorityScope { .. }
+                        ) {
                             "Esc close · ⇥ switch choice"
                         } else if is_settings {
                             "Esc close · ⌘1–7 sections · ⇥ field"

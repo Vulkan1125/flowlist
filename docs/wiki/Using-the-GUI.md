@@ -74,7 +74,9 @@ leaving the list.
 - **Title, notes, estimate, repeat** are editable fields. `Tab` / `Enter`
   saves the field and moves to the next one; `Esc` cancels the field.
 - **Priority** is a **None** chip plus High, Medium and Low. Click **None** to
-  clear it.
+  clear it. Changing the priority of a repeating task opens a small sheet:
+  apply it to **This occurrence** or the **Whole series**. Future occurrences
+  inherit the series priority.
 - **Checklist** steps are not tasks. Add a step at the bottom, tick it, rename
   it, reorder it with the arrows, or remove it with `×`. Completing a repeating
   task copies the checklist with every step unchecked.
@@ -85,7 +87,9 @@ leaving the list.
   file to its default app. Removing an attachment asks first and leaves the
   file on disk; Undo restores the row.
 - **Tags**, **Project**, **Defer**, **Due**, **Estimate** and **Repeat** are
-  one click away. A date opens a calendar and a clock-face time picker.
+  one click away. A date opens a calendar and a clock-face time picker. A
+  defer date after the due date is refused with a toast, so the picker stays
+  open for another choice.
 - **To project** converts the task and its subtasks into a project. **Delete**
   and **Complete** finish the task.
 

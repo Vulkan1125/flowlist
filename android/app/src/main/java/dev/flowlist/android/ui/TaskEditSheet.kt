@@ -181,6 +181,8 @@ fun TaskEditSheet(
     var confirmDelete by remember { mutableStateOf(false) }
     var datePickerForDue by remember { mutableStateOf(true) }
     var showDueSheet by remember { mutableStateOf(false) }
+    var dateError by remember { mutableStateOf<String?>(null) }
+    var pendingSave by remember(task.id) { mutableStateOf<TaskEdit?>(null) }
 
     val repeatUnit = ((repeat as? JsonObject)?.get("unit") as? JsonPrimitive)?.content
     fun setRepeat(unit: String?) {
@@ -189,6 +191,7 @@ fun TaskEditSheet(
 
     fun applyStamp(value: StampDto?) {
         if (datePickerForDue) due = value else defer = value
+        dateError = null
     }
 
     ModalBottomSheet(
@@ -345,7 +348,10 @@ fun TaskEditSheet(
                     else -> colors.faint
                 },
                 clearable = due != null,
-                onClear = { due = null },
+                onClear = {
+                    due = null
+                    dateError = null
+                },
                 onClick = {
                     datePickerForDue = true
                     showDueSheet = true
@@ -356,7 +362,10 @@ fun TaskEditSheet(
                 value = defer?.label() ?: "No date",
                 valueColor = if (defer != null) colors.ink else colors.faint,
                 clearable = defer != null,
-                onClear = { defer = null },
+                onClear = {
+                    defer = null
+                    dateError = null
+                },
                 onClick = {
                     datePickerForDue = false
                     showDueSheet = true
@@ -678,9 +687,9 @@ fun TaskEditSheet(
             Label("Priority")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PriorityPill("None", priority == null, colors.ink) { priority = null }
-                PriorityPill("P1", priority == "high", colors.danger) { priority = "high" }
-                PriorityPill("P2", priority == "medium", colors.warning) { priority = "medium" }
-                PriorityPill("P3", priority == "low", colors.accent) { priority = "low" }
+                PriorityPill("H", priority == "high", colors.danger) { priority = "high" }
+                PriorityPill("M", priority == "medium", colors.warning) { priority = "medium" }
+                PriorityPill("L", priority == "low", LowPriorityBlue) { priority = "low" }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -770,22 +779,43 @@ fun TaskEditSheet(
             }
 
             Spacer(modifier = Modifier.height(26.dp))
+            dateError?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.danger,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
             Button(
                 onClick = {
-                    onSave(
-                        TaskEdit(
-                            title = title.trim(),
-                            notes = notes,
-                            project = project,
-                            due = due,
-                            defer = defer,
-                            priority = priority,
-                            flagged = flagged,
-                            estimateMin = estimate.toIntOrNull(),
-                            tags = selectedTags,
-                            repeat = repeat,
-                        ),
+                    val edit = TaskEdit(
+                        title = title.trim(),
+                        notes = notes,
+                        project = project,
+                        due = due,
+                        defer = defer,
+                        priority = priority,
+                        flagged = flagged,
+                        estimateMin = estimate.toIntOrNull(),
+                        tags = selectedTags,
+                        repeat = repeat,
                     )
+                    val dueDate = due?.local()?.toLocalDate()
+                    val deferDate = defer?.local()?.toLocalDate()
+                    dateError = if (dueDate != null && deferDate != null && deferDate.isAfter(dueDate)) {
+                        "Defer can't be after the due date"
+                    } else {
+                        null
+                    }
+                    if (dateError == null) {
+                        val repeats = task.repeat != null && edit.repeat != null
+                        if (repeats && edit.priority != task.priority) {
+                            pendingSave = edit
+                        } else {
+                            onSave(edit)
+                        }
+                    }
                 },
                 enabled = title.isNotBlank(),
                 shape = RoundedCornerShape(12.dp),
@@ -865,6 +895,44 @@ fun TaskEditSheet(
             },
             dismissButton = {
                 TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+            },
+            containerColor = colors.background,
+        )
+    }
+
+    val pending = pendingSave
+    if (pending != null) {
+        AlertDialog(
+            onDismissRequest = { pendingSave = null },
+            title = { Text("Apply to repeating tasks?") },
+            text = {
+                Text(
+                    "“${task.title}” repeats. Apply this priority to just this occurrence, " +
+                        "or to every occurrence in the series?",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingSave = null
+                        onSave(pending.copy(priorityAll = true))
+                    },
+                ) {
+                    Text("All repeats", color = colors.accent)
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { pendingSave = null }) { Text("Cancel") }
+                    TextButton(
+                        onClick = {
+                            pendingSave = null
+                            onSave(pending)
+                        },
+                    ) {
+                        Text("This task", color = colors.accent)
+                    }
+                }
             },
             containerColor = colors.background,
         )

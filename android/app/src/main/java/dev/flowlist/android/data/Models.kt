@@ -157,6 +157,8 @@ data class TaskEdit(
     val estimateMin: Int?,
     val tags: Set<String>,
     val repeat: JsonElement? = null,
+    /// Apply the priority to the whole repeating series, not just this task.
+    val priorityAll: Boolean = false,
 )
 
 data class TaskView(

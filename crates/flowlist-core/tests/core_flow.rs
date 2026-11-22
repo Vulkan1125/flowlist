@@ -7,7 +7,7 @@ use flowlist_core::command::{
 };
 use flowlist_core::db::{ContainerPosition, Position};
 use flowlist_core::ids::{FolderId, ProjectId, TagId, TaskId};
-use flowlist_core::model::{ProjectStatus, RepeatMode, RepeatRule, TagStatus, Task};
+use flowlist_core::model::{Priority, ProjectStatus, RepeatMode, RepeatRule, TagStatus, Task};
 use flowlist_core::paths::DataPaths;
 use flowlist_core::store::Store;
 use flowlist_core::time::Stamp;
@@ -2039,3 +2039,153 @@ fn deleting_a_folder_without_projects_still_removes_its_tree() {
     assert!(store.db().folders.contains_key(&client));
     assert_eq!(store.db().folders[&client].parent, Some(work));
 }
+
+#[test]
+fn json_null_in_a_patch_clears_the_field() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let mut task = NewTask::new("Clear the priority");
+    task.priority = Some(Priority::High);
+    let id = store
+        .execute(Command::CreateTask(task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let task_id = store.db().resolve_task(&id).unwrap();
+
+    // A phone sends the patch over JSON, so an explicit null has to mean
+    // "clear this field" rather than "leave it alone".
+    let command: Command = serde_json::from_str(&format!(
+        r#"{{"update_task":{{"id":"{id}","patch":{{"priority":null,"due":null}}}}}}"#
+    ))
+    .unwrap();
+    store.execute(command).unwrap();
+
+    assert_eq!(store.db().tasks[&task_id].priority, None);
+    assert!(store.db().tasks[&task_id].due.is_none());
+}
+
+#[test]
+fn series_priority_reaches_every_occurrence_and_future_spawns() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let mut new_task = NewTask::new("Water plants");
+    new_task.due = Some(Stamp::date_only(local_date(Utc::now())));
+    new_task.repeat = Some(RepeatRule::new(
+        RepeatMode::DueAgain,
+        1,
+        IntervalUnit::Weeks,
+    ));
+    let root = store
+        .execute(Command::CreateTask(new_task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let root = store.db().resolve_task(&root).unwrap();
+
+    store
+        .execute(Command::SetTaskPriority {
+            ids: vec![root.clone()],
+            priority: Some(Priority::Low),
+            series: true,
+        })
+        .unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![root.clone()],
+            completed: true,
+        })
+        .unwrap();
+
+    let first = store
+        .db()
+        .tasks
+        .values()
+        .find(|task| !task.completed)
+        .expect("next occurrence");
+    assert_eq!(first.priority, Some(Priority::Low));
+    let first_id = first.id.clone();
+
+    // Changing one occurrence alone must not rewrite the series default.
+    store
+        .execute(Command::SetTaskPriority {
+            ids: vec![first_id.clone()],
+            priority: Some(Priority::High),
+            series: false,
+        })
+        .unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![first_id],
+            completed: true,
+        })
+        .unwrap();
+
+    let second = store
+        .db()
+        .tasks
+        .values()
+        .find(|task| !task.completed)
+        .expect("second next occurrence");
+    assert_eq!(second.priority, Some(Priority::Low));
+    let second_id = second.id.clone();
+
+    store
+        .execute(Command::SetTaskPriority {
+            ids: vec![second_id],
+            priority: Some(Priority::Medium),
+            series: true,
+        })
+        .unwrap();
+
+    let series = store.db().series_task_ids(&root);
+    assert_eq!(series.len(), 3);
+    for id in series {
+        assert_eq!(store.db().tasks[&id].priority, Some(Priority::Medium));
+    }
+}
+
+#[test]
+fn defer_after_due_is_rejected_on_create_and_update() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let today = local_date(Utc::now());
+    let due = Stamp::date_only(today);
+    let late_defer = Stamp::date_only(today + chrono::Duration::days(1));
+
+    let mut impossible = NewTask::new("Impossible dates");
+    impossible.due = Some(due);
+    impossible.defer = Some(late_defer);
+    assert!(store.execute(Command::CreateTask(impossible)).is_err());
+
+    let mut valid = NewTask::new("Valid dates");
+    valid.due = Some(due);
+    valid.defer = Some(Stamp::date_only(today - chrono::Duration::days(1)));
+    let id = store
+        .execute(Command::CreateTask(valid))
+        .unwrap()
+        .created[0]
+        .clone();
+    let task_id = store.db().resolve_task(&id).unwrap();
+
+    assert!(
+        store
+            .execute(Command::UpdateTask {
+                id: task_id.clone(),
+                patch: TaskPatch {
+                    defer: Some(Some(late_defer)),
+                    ..TaskPatch::default()
+                },
+            })
+            .is_err()
+    );
+    // The rejected edit left the original defer date in place.
+    assert_eq!(
+        store.db().tasks[&task_id].defer,
+        Some(Stamp::date_only(today - chrono::Duration::days(1)))
+    );
+}
+

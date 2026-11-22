@@ -380,7 +380,7 @@ impl FlowlistApp {
                 .child(widgets::toggle_chip(theme, "None", current.is_none()))
                 .on_click(cx.listener({
                     let id = id.clone();
-                    move |this, _, _, cx| this.set_task_priority(id.clone(), None, cx)
+                    move |this, _, _, cx| this.choose_task_priority(id.clone(), None, cx)
                 })),
         );
         for priority in Priority::ALL {
@@ -392,7 +392,9 @@ impl FlowlistApp {
                     .child(widgets::toggle_chip(theme, priority.label(), active))
                     .on_click(cx.listener({
                         let id = id.clone();
-                        move |this, _, _, cx| this.set_task_priority(id.clone(), Some(priority), cx)
+                        move |this, _, _, cx| {
+                            this.choose_task_priority(id.clone(), Some(priority), cx)
+                        }
                     })),
             );
         }

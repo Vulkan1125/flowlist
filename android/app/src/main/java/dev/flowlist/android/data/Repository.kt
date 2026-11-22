@@ -225,6 +225,15 @@ class Repository(context: Context) {
                 label = edit.title,
             ),
         )
+        if (edit.priorityAll && task.repeat != null) {
+            enqueue(
+                PendingOp(
+                    id = "op_${UUID.randomUUID()}",
+                    command = priorityCommand(listOf(task.id), edit.priority, series = true),
+                    label = edit.title,
+                ),
+            )
+        }
         val before = task.tags.toSet()
         val add = (edit.tags - before).toList()
         val remove = (before - edit.tags).toList()

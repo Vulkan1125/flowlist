@@ -90,21 +90,44 @@ impl NewTask {
     }
 }
 
+/// Deserialize an `Option<Option<T>>` so an explicit JSON `null` clears a
+/// field while a missing field leaves it untouched. Serde's plain
+/// `Option<Option<T>>` collapses both cases to `None`, which made a phone's
+/// "priority: null" patch look like it had never been sent.
+fn deserialize_double_option<'de, D, T>(
+    deserializer: D,
+) -> std::result::Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TaskPatch {
     pub title: Option<String>,
     pub notes: Option<String>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub project: Option<Option<ProjectId>>,
     /// A `Folder / Project` path. Missing projects (and their folders) are
     /// created in the same undoable step.
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub project_path: Option<Option<String>>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub parent: Option<Option<TaskId>>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub due: Option<Option<Stamp>>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub defer: Option<Option<Stamp>>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub estimate_min: Option<Option<u32>>,
     pub flagged: Option<bool>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub priority: Option<Option<Priority>>,
     pub attachments: Option<Vec<String>>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub repeat: Option<Option<RepeatRule>>,
     pub sequential: Option<bool>,
 }
@@ -147,12 +170,16 @@ impl NewProject {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ProjectPatch {
     pub name: Option<String>,
     pub notes: Option<String>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub folder: Option<Option<FolderId>>,
     pub tags: Option<BTreeSet<TagId>>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub due: Option<Option<Stamp>>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub defer: Option<Option<Stamp>>,
     pub review_interval_days: Option<u32>,
     pub next_review: Option<NaiveDate>,
@@ -163,20 +190,27 @@ pub struct ProjectPatch {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TagPatch {
     pub name: Option<String>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub parent: Option<Option<TagId>>,
     pub status: Option<TagStatus>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub location: Option<Option<Geo>>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SettingsPatch {
     pub default_review_days: Option<u32>,
     pub show_completed_days: Option<u32>,
     pub week_starts_on: Option<u8>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub default_due_time: Option<Option<chrono::NaiveTime>>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub default_defer_time: Option<Option<chrono::NaiveTime>>,
+    #[serde(deserialize_with = "deserialize_double_option")]
     pub current_location: Option<Option<Geo>>,
     pub nearby_radius_km: Option<f64>,
     pub trash_retention_days: Option<u32>,
@@ -246,6 +280,10 @@ pub enum Command {
     SetTaskPriority {
         ids: Vec<TaskId>,
         priority: Option<Priority>,
+        /// Apply the priority to every occurrence in each task's repeating
+        /// series, not just the selected occurrence.
+        #[serde(default)]
+        series: bool,
     },
     /// Move tasks out of Trash without changing their place in the library.
     RestoreTasks {
@@ -412,10 +450,15 @@ impl Command {
                     task_count(ids.len())
                 )
             }
-            Command::SetTaskPriority { ids, priority } => format!(
-                "Set {} to {} priority",
+            Command::SetTaskPriority {
+                ids,
+                priority,
+                series,
+            } => format!(
+                "Set {} to {} priority{}",
                 task_count(ids.len()),
-                priority.map(|p| p.label()).unwrap_or("no")
+                priority.map(|p| p.label()).unwrap_or("no"),
+                if *series { " across the series" } else { "" }
             ),
             Command::RestoreTasks { ids } => format!("Restore {}", task_count(ids.len())),
             Command::PurgeTasks { ids } => {
@@ -534,6 +577,7 @@ impl Command {
                 task.tags = new_task.tags.into_iter().collect();
                 task.due = new_task.due;
                 task.defer = new_task.defer;
+                ensure_dates_in_order(task.due, task.defer)?;
                 task.estimate_min = new_task.estimate_min;
                 task.flagged = new_task.flagged;
                 task.priority = new_task.priority;
@@ -625,6 +669,7 @@ impl Command {
                         moved = Some((None, parent));
                     }
                     task.modified_at = at;
+                    ensure_dates_in_order(task.due, task.defer)?;
                 }
                 if let Some((project, parent)) = moved {
                     if parent.is_some() && project.is_some() {
@@ -680,6 +725,12 @@ impl Command {
                         .repeat_series
                         .clone()
                         .unwrap_or_else(|| task.id.clone());
+                    // Priority belongs to the series unless it was changed on
+                    // this occurrence alone. The first occurrence owns it.
+                    let series_priority = match db.tasks.get(&series) {
+                        Some(root) => root.priority,
+                        None => task.priority,
+                    };
                     let notes = task.notes.clone();
                     let estimate = task.estimate_min;
                     let flagged = task.flagged;
@@ -710,6 +761,7 @@ impl Command {
                                 spawned.defer = next.defer;
                                 spawned.estimate_min = estimate;
                                 spawned.flagged = flagged;
+                                spawned.priority = series_priority;
                                 spawned.sequential = sequential;
                                 spawned.checklist = db
                                     .tasks
@@ -927,21 +979,45 @@ impl Command {
                     task_count(ids.len())
                 ));
             }
-            Command::SetTaskPriority { ids, priority } => {
+            Command::SetTaskPriority {
+                ids,
+                priority,
+                series,
+            } => {
+                let mut targets: Vec<TaskId> = Vec::new();
                 for id in &ids {
+                    let members = if series {
+                        db.series_task_ids(id)
+                    } else {
+                        vec![id.clone()]
+                    };
+                    for member in members {
+                        if !targets.contains(&member) {
+                            targets.push(member);
+                        }
+                    }
+                }
+                for id in &targets {
                     let task = db.task_mut(id)?;
                     task.priority = priority;
                     task.modified_at = at;
                 }
-                outcome.affected.extend(ids.iter().map(|id| id.to_string()));
+                outcome
+                    .affected
+                    .extend(targets.iter().map(|id| id.to_string()));
                 db.touch();
                 outcome.message = Some(match priority {
                     Some(priority) => format!(
-                        "Priority set to {} for {}",
+                        "Priority set to {} for {}{}",
                         priority.label().to_lowercase(),
-                        task_count(ids.len())
+                        task_count(targets.len()),
+                        if series { " in the series" } else { "" }
                     ),
-                    None => format!("Priority cleared for {}", task_count(ids.len())),
+                    None => format!(
+                        "Priority cleared for {}{}",
+                        task_count(targets.len()),
+                        if series { " in the series" } else { "" }
+                    ),
                 });
             }
             Command::AddChecklistItem {
@@ -1038,6 +1114,7 @@ impl Command {
                 project.tags = new_project.tags.into_iter().collect();
                 project.due = new_project.due;
                 project.defer = new_project.defer;
+                ensure_dates_in_order(project.due, project.defer)?;
                 project.review_interval_days = new_project
                     .review_interval_days
                     .unwrap_or(db.settings.default_review_days)
@@ -1096,6 +1173,7 @@ impl Command {
                     if let Some(defer) = patch.defer {
                         project.defer = defer;
                     }
+                    ensure_dates_in_order(project.due, project.defer)?;
                     if let Some(interval) = patch.review_interval_days {
                         project.review_interval_days = interval.max(1);
                     }
@@ -1624,6 +1702,20 @@ fn remove_folder_tree(db: &mut Db, id: &FolderId) {
 }
 
 /// Move the given tasks and every task below them to Trash. Both plain
+/// A task cannot become available after it is already due. Comparing the
+/// local calendar dates keeps same-day defer/due pairs valid even when one side
+/// is all-day and the other carries a time.
+fn ensure_dates_in_order(due: Option<Stamp>, defer: Option<Stamp>) -> Result<()> {
+    if let (Some(due), Some(defer)) = (due, defer) {
+        if defer.local_date() > due.local_date() {
+            return Err(Error::invalid(
+                "The defer date can't be after the due date",
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// deletion and whole-series deletion use this so their snapshot is identical.
 fn trash_tasks(db: &mut Db, ids: &[TaskId], at: DateTime<Utc>) -> BTreeSet<TaskId> {
     let mut trashed: BTreeSet<TaskId> = BTreeSet::new();

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.9 — 2026-11-22
+
+- **Clearing a priority now sticks on the phone.** An explicit `null` in a
+  task patch clears the field instead of being read as "unchanged". The same
+  fix makes clearing a due date, defer date, project, estimate, repeat or
+  attachment list work from the phone. Partial patches are also accepted now.
+- **Changing the priority of a repeating task asks for a scope.** Choose
+  **This task** for one occurrence or **All repeats** for the whole series,
+  on both the Mac and the phone. Future occurrences inherit the series
+  priority.
+- **A defer date can no longer fall after the due date.** The engine rejects
+  the pair for tasks and projects; the Mac keeps its date picker open with a
+  toast, and the phone's task editor explains before saving.
+- **Phone priority pills are H, M and L**, and the selected pill takes the
+  priority colour: red, yellow or blue. Task circles use the same three
+  colours, so low priority is blue instead of the theme's red accent.
+
 ## 0.9.8 — 2026-11-21
 
 - **Task circles show priority:** red for high, yellow for medium, and the

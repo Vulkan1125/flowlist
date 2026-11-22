@@ -76,7 +76,7 @@ fun CheckCircle(
     val priorityTone = when (priority) {
         "high" -> colors.danger
         "medium" -> colors.warning
-        "low" -> colors.accent
+        "low" -> LowPriorityBlue
         else -> colors.hairline
     }
     val ring = if (checked) colors.accent else priorityTone
@@ -105,6 +105,9 @@ fun CheckCircle(
         }
     }
 }
+
+/// Low priority stays blue in every theme, so it never reads as high (red).
+internal val LowPriorityBlue = androidx.compose.ui.graphics.Color(0xFF3B82F6)
 
 @Composable
 fun TaskRow(

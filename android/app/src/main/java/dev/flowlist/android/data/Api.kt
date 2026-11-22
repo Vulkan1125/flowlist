@@ -213,6 +213,18 @@ fun repeatCommand(unit: String): JsonObject = buildJsonObject {
     put("completed_count", 0)
 }
 
+fun priorityCommand(ids: List<String>, priority: String?, series: Boolean): JsonObject =
+    buildJsonObject {
+        put(
+            "set_task_priority",
+            buildJsonObject {
+                put("ids", buildJsonArray { ids.forEach { add(JsonPrimitive(it)) } })
+                put("priority", priority?.let { JsonPrimitive(it) } ?: JsonNull)
+                put("series", series)
+            },
+        )
+    }
+
 fun deleteSeriesCommand(ids: List<String>): JsonObject = buildJsonObject {
     put(
         "delete_task_series",

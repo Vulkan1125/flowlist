@@ -1584,13 +1584,37 @@ impl FlowlistApp {
         &mut self,
         id: TaskId,
         priority: Option<Priority>,
+        series: bool,
         cx: &mut Context<Self>,
     ) {
         self.execute(Command::SetTaskPriority {
             ids: vec![id],
             priority,
+            series,
         });
         cx.notify();
+    }
+
+    /// A repeating task asks whether the new priority belongs to this
+    /// occurrence or the whole series. Ordinary tasks apply immediately.
+    fn choose_task_priority(
+        &mut self,
+        id: TaskId,
+        priority: Option<Priority>,
+        cx: &mut Context<Self>,
+    ) {
+        let repeats = self
+            .store
+            .db()
+            .tasks
+            .get(&id)
+            .is_some_and(|task| task.repeat.is_some());
+        if repeats {
+            self.modal = Some(modals::Modal::priority_scope(self, id, priority));
+            cx.notify();
+        } else {
+            self.set_task_priority(id, priority, false, cx);
+        }
     }
 
     fn select_all_trash(&mut self, cx: &mut Context<Self>) {
@@ -2346,6 +2370,11 @@ impl FlowlistApp {
             return;
         };
         let stamp = picker_stamp(date, self.date_picker_time);
+        if let Some(message) = self.date_order_error(field, date) {
+            self.toast = Some(message.to_string());
+            cx.notify();
+            return;
+        }
         self.date_picker = None;
         self.date_picker_time = None;
         self.date_picker_step = DatePickerStep::Calendar;
@@ -2357,6 +2386,26 @@ impl FlowlistApp {
         }
         self.execute(Command::UpdateTask { id, patch });
         cx.notify();
+    }
+
+    /// A defer date after its due date would leave the task hidden until it
+    /// is already overdue. Refuse the pick and explain in the toast.
+    fn date_order_error(
+        &self,
+        field: DateField,
+        date: chrono::NaiveDate,
+    ) -> Option<&'static str> {
+        let id = self.selected_one()?;
+        let task = self.store.db().tasks.get(&id)?;
+        match field {
+            DateField::Defer if task.due.is_some_and(|due| date > due.local_date()) => {
+                Some("The defer date can't be after the due date")
+            }
+            DateField::Due if task.defer.is_some_and(|defer| defer.local_date() > date) => {
+                Some("The due date can't be before the defer date")
+            }
+            _ => None,
+        }
     }
 
     fn clear_date_picker(&mut self, cx: &mut Context<Self>) {
@@ -3201,6 +3250,22 @@ impl FlowlistApp {
                     format!("Moved {} occurrence(s) to Trash · ⌘Z to undo", ids.len())
                 });
             }
+            modals::Modal::PriorityScope {
+                id, priority, all, ..
+            } => {
+                let saved = self.execute(Command::SetTaskPriority {
+                    ids: vec![id.clone()],
+                    priority: *priority,
+                    series: *all,
+                });
+                if saved.is_some() {
+                    self.toast = Some(if *all {
+                        "Priority updated for the whole series".to_string()
+                    } else {
+                        "Priority updated for this occurrence".to_string()
+                    });
+                }
+            }
             modals::Modal::NewFolder { name } => {
                 let name = name.text().trim().to_string();
                 if name.is_empty() {
@@ -3709,6 +3774,27 @@ impl FlowlistApp {
                     "tab" | "left" | "right" | "up" | "down" => {
                         if let Some(modals::Modal::DeleteTask { whole, .. }) = &mut self.modal {
                             *whole = !*whole;
+                        }
+                        cx.notify();
+                        return;
+                    }
+                    "escape" => {
+                        self.close_modal(cx);
+                        return;
+                    }
+                    "enter" | "return" => {
+                        self.commit_modal(cx);
+                        return;
+                    }
+                    _ => {}
+                }
+            }
+            // The priority-scope sheet is a two-choice switch too.
+            if matches!(self.modal, Some(modals::Modal::PriorityScope { .. })) {
+                match stroke.key.as_str() {
+                    "tab" | "left" | "right" | "up" | "down" => {
+                        if let Some(modals::Modal::PriorityScope { all, .. }) = &mut self.modal {
+                            *all = !*all;
                         }
                         cx.notify();
                         return;
