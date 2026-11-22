@@ -32,6 +32,10 @@ data class AppState(
     val online: Boolean = true,
     val error: String? = null,
     val server: String = "",
+    val canUndo: Boolean = false,
+    val canRedo: Boolean = false,
+    val undoLabel: String? = null,
+    val redoLabel: String? = null,
     /// When the Mac last answered. Used for the one-minute offline notice.
     val lastSyncAt: Long? = null,
     /// When the connection was lost, or when the app opened unpaired.
@@ -122,6 +126,43 @@ class Repository(context: Context) {
         return false
     }
 
+    suspend fun undo(): String = history(undo = true)
+
+    suspend fun redo(): String = history(undo = false)
+
+    private suspend fun history(undo: Boolean): String {
+        if (!_state.value.online) {
+            return if (undo) "Undo needs the Mac connection" else "Redo needs the Mac connection"
+        }
+        sync()
+        val base = session.baseUrl ?: return "Not paired with a Mac"
+        val token = session.token ?: return "Not paired with a Mac"
+        return try {
+            val result = api.history(base, token, undo)
+            if (!result.ok) {
+                return result.error ?: if (undo) "Nothing to undo" else "Nothing to redo"
+            }
+            val db = result.db
+            if (db != null) {
+                val snapshot = Snapshot(result.revision, db = db, history = result.history)
+                _state.update {
+                    it.copy(
+                        snapshot = snapshot,
+                        canUndo = result.history?.canUndo == true,
+                        canRedo = result.history?.canRedo == true,
+                        undoLabel = result.history?.undoLabel,
+                        redoLabel = result.history?.redoLabel,
+                    )
+                }
+                persist(snapshot)
+            }
+            result.label ?: if (undo) "Undone" else "Redone"
+        } catch (error: Exception) {
+            _state.update { it.copy(error = friendly(error)) }
+            friendly(error)
+        }
+    }
+
     private suspend fun persist(snapshot: Snapshot) = persistMutex.withLock {
         withContext(Dispatchers.IO) { files.saveSnapshot(snapshot) }
     }
@@ -142,6 +183,10 @@ class Repository(context: Context) {
                         error = null,
                         lastSyncAt = System.currentTimeMillis(),
                         offlineSince = null,
+                        canUndo = snapshot.history?.canUndo == true,
+                        canRedo = snapshot.history?.canRedo == true,
+                        undoLabel = snapshot.history?.undoLabel,
+                        redoLabel = snapshot.history?.redoLabel,
                     )
                 }
             } catch (error: Exception) {

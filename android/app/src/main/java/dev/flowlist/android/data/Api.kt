@@ -3,6 +3,7 @@ package dev.flowlist.android.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -64,6 +65,19 @@ class Api(
                 .build(),
         )
     }
+
+    suspend fun history(base: String, token: String, undo: Boolean): HistoryResponse =
+        withContext(Dispatchers.IO) {
+            val path = if (undo) "undo" else "redo"
+            val text = execute(
+                Request.Builder()
+                    .url("${base.trimEnd('/')}/api/v1/$path")
+                    .header("Authorization", "Bearer $token")
+                    .post("".toRequestBody(mediaType))
+                    .build(),
+            )
+            json.decodeFromString<HistoryResponse>(text)
+        }
 
     suspend fun snapshot(base: String, token: String): Snapshot = withContext(Dispatchers.IO) {
         val text = execute(
@@ -626,3 +640,13 @@ fun savePerspectiveCommand(
 fun deletePerspectiveCommand(id: String): JsonObject = buildJsonObject {
     put("delete_perspective", buildJsonObject { put("id", id) })
 }
+
+@Serializable
+data class HistoryResponse(
+    val ok: Boolean = false,
+    val label: String? = null,
+    val error: String? = null,
+    val revision: Long = 0,
+    val history: HistoryInfo? = null,
+    val db: Db? = null,
+)

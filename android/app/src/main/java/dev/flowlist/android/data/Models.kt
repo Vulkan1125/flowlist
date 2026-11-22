@@ -15,6 +15,15 @@ data class Snapshot(
     val revision: Long = 0,
     @SerialName("schema_version") val schemaVersion: Int = 1,
     val db: Db = Db(),
+    val history: HistoryInfo? = null,
+)
+
+@Serializable
+data class HistoryInfo(
+    @SerialName("can_undo") val canUndo: Boolean = false,
+    @SerialName("can_redo") val canRedo: Boolean = false,
+    @SerialName("undo_label") val undoLabel: String? = null,
+    @SerialName("redo_label") val redoLabel: String? = null,
 )
 
 @Serializable

@@ -600,6 +600,18 @@ fn route(request: &Request, peer: SocketAddr, shared: &Shared) -> Response {
             }
             ops(request, shared)
         }
+        ("POST", "/api/v1/undo") => {
+            if let Err(response) = authorize(request, shared) {
+                return response;
+            }
+            history(shared, true)
+        }
+        ("POST", "/api/v1/redo") => {
+            if let Err(response) = authorize(request, shared) {
+                return response;
+            }
+            history(shared, false)
+        }
         ("GET", "/api/v1/events") => {
             if let Err(response) = authorize(request, shared) {
                 return response;
@@ -847,8 +859,41 @@ fn live_snapshot(shared: &Shared) -> Result<Value> {
         "revision": store.revision(),
         "schema_version": flowlist_core::persist::SCHEMA_VERSION,
         "generated_at": now().to_rfc3339(),
+        "history": history_json(&store),
         "db": store.data().db,
     }))
+}
+
+fn history_json(store: &Store) -> Value {
+    json!({
+        "can_undo": store.can_undo(),
+        "can_redo": store.can_redo(),
+        "undo_label": store.undo_label(),
+        "redo_label": store.redo_label(),
+    })
+}
+
+fn history(shared: &Shared, undo: bool) -> Response {
+    let result = Store::open(shared.paths.clone()).and_then(|mut store| {
+        let outcome = if undo { store.undo()? } else { store.redo()? };
+        Ok((store, outcome))
+    });
+    match result {
+        Ok((store, outcome)) => Response::json(
+            200,
+            json!({
+                "ok": true,
+                "label": outcome.label,
+                "revision": store.revision(),
+                "history": history_json(&store),
+                "db": store.data().db,
+            }),
+        ),
+        Err(error) => Response::json(
+            200,
+            json!({ "ok": false, "error": error.to_string() }),
+        ),
+    }
 }
 
 #[derive(Deserialize)]

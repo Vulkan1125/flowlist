@@ -171,6 +171,9 @@ below; this list is the current map.
       page with previous/next, and Open externally remains.
 - [x] **Mac link favicons** — link rows use the host's own favicon, cached per
       session, with the chain icon as fallback.
+- [x] **Android undo/redo** — the drawer shows the next action for Undo and
+      Redo, backed by the Mac's shared history through `/api/v1/undo` and
+      `/redo`.
 - [x] **Android search and Nearby** — search covers projects, folders, tags and
       perspectives with a view/library scope; Nearby lists tags within the
       library radius, sorted by distance. Search results also support bulk

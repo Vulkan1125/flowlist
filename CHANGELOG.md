@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.30 — 2026-11-22
+
+- **Undo and redo on Android.** The drawer’s history rows name the action that
+  Undo or Redo will apply. Pending phone changes are flushed first, then the
+  Mac’s shared history performs the step and returns a fresh snapshot. The rows
+  disable while offline.
+- **The mobile API exposes history.** `POST /api/v1/undo` and `/redo` return
+  the outcome label, the new snapshot and the next undo/redo labels; the
+  snapshot response carries the same history summary.
+
 ## 0.9.29 — 2026-11-22
 
 - **Mac link favicons.** Link attachments in the inspector show the site's own

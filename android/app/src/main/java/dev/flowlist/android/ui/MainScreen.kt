@@ -49,6 +49,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Redo
 import androidx.compose.material.icons.rounded.Undo
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.rounded.Add
@@ -538,6 +539,12 @@ fun MainScreen(
                         ?.sortedBy { it.position }
                         .orEmpty(),
                     state = state,
+                    canUndo = state.canUndo && state.online,
+                    canRedo = state.canRedo && state.online,
+                    undoLabel = state.undoLabel,
+                    redoLabel = state.redoLabel,
+                    onUndo = { scope.launch { repository.undo() } },
+                    onRedo = { scope.launch { repository.redo() } },
                     onPerspective = { item ->
                         val targetTab = item.tab
                         if (targetTab != null) {
@@ -1495,6 +1502,12 @@ private fun LibraryDrawer(
     onReorder: (List<String>, Int, Int) -> Unit,
     saved: List<PerspectiveDto>,
     state: AppState,
+    canUndo: Boolean,
+    canRedo: Boolean,
+    undoLabel: String?,
+    redoLabel: String?,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
     onPerspective: (Perspective) -> Unit,
     onSaved: (PerspectiveDto) -> Unit,
     onNewPerspective: () -> Unit,
@@ -1776,6 +1789,21 @@ private fun LibraryDrawer(
 
         Spacer(modifier = Modifier.weight(1f))
         HorizontalDivider(color = colors.hairline, modifier = Modifier.padding(horizontal = 8.dp))
+        HistoryRow(
+            icon = Icons.Rounded.Undo,
+            label = "Undo",
+            detail = undoLabel,
+            enabled = canUndo,
+            onClick = onUndo,
+        )
+        HistoryRow(
+            icon = Icons.Rounded.Redo,
+            label = "Redo",
+            detail = redoLabel,
+            enabled = canRedo,
+            onClick = onRedo,
+        )
+        HorizontalDivider(color = colors.hairline, modifier = Modifier.padding(horizontal = 8.dp))
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1792,6 +1820,46 @@ private fun LibraryDrawer(
                 style = MaterialTheme.typography.labelSmall,
                 color = colors.faint,
                 maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HistoryRow(
+    icon: ImageVector,
+    label: String,
+    detail: String?,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = flow
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (enabled) colors.ink else colors.faint.copy(alpha = 0.45f),
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (enabled) colors.ink else colors.faint,
+            )
+            Text(
+                text = detail ?: if (label == "Undo") "Nothing to undo" else "Nothing to redo",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.faint,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
         }
     }
