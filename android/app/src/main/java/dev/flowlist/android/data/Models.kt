@@ -63,6 +63,7 @@ data class TaskDto(
     val repeat: JsonElement? = null,
     @SerialName("repeat_series") val repeatSeries: String? = null,
     val sequential: Boolean = false,
+    @SerialName("steps_one_off") val stepsOneOff: Boolean = false,
 )
 
 @Serializable
@@ -161,6 +162,7 @@ data class TaskEdit(
     /// Apply the priority to the whole repeating series, not just this task.
     val priorityAll: Boolean = false,
     val sequential: Boolean = false,
+    val stepsOneOff: Boolean = false,
 )
 
 data class TaskView(
@@ -427,4 +429,20 @@ fun Db.tagUsageCount(tagId: String): Int {
     return tasks.values.count { task ->
         !task.completed && task.trashedAt == null && task.tags.any { it in ids }
     }
+}
+
+/// The URL part of an attachment. A named link stores `url<TAB>name`.
+fun attachmentUrl(value: String): String = value.substringBefore('\t')
+
+/// The name shown in an attachment row: the optional name, or the last path
+/// segment for an unnamed link or file.
+fun attachmentDisplayName(value: String): String {
+    val name = value.substringAfter('\t', "").trim()
+    if (name.isNotEmpty()) return name
+    return value.substringAfterLast('/')
+}
+
+fun linkWithName(url: String, name: String): String {
+    val trimmed = name.trim()
+    return if (trimmed.isEmpty()) url.trim() else "${url.trim()}\t$trimmed"
 }

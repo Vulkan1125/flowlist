@@ -119,6 +119,9 @@ pub enum Modal {
     AttachLink {
         target: AttachmentTarget,
         url: TextBuffer,
+        name: TextBuffer,
+        /// When set, this is the original attachment string being renamed.
+        replace: Option<String>,
     },
     NewFolder {
         name: TextBuffer,
@@ -370,6 +373,19 @@ impl Modal {
         Modal::AttachLink {
             target,
             url: TextBuffer::empty(),
+            name: TextBuffer::empty(),
+            replace: None,
+        }
+    }
+
+    pub fn rename_link(target: AttachmentTarget, value: &str) -> Self {
+        let url = flowlist_core::model::attachment::attachment_url(value);
+        let name = value.split_once('\t').map(|(_, name)| name).unwrap_or("");
+        Modal::AttachLink {
+            target,
+            url: TextBuffer::new(url),
+            name: TextBuffer::new(name),
+            replace: Some(value.to_string()),
         }
     }
 
@@ -475,6 +491,7 @@ impl Modal {
             Modal::PriorityScope { .. } => "Repeating task priority",
             Modal::RemoveAttachment { .. } => "Remove attachment",
             Modal::Uninstall { .. } => "Uninstall Flowlist",
+            Modal::AttachLink { replace, .. } if replace.is_some() => "Rename link",
             Modal::AttachLink { .. } => "Attach link",
             Modal::NewFolder { .. } => "New folder",
             Modal::NewTag { .. } => "New tag",
@@ -515,6 +532,9 @@ impl Modal {
             Modal::Uninstall { .. } => {
                 "Remove the app and the flowlist command. Choose whether your library stays."
             }
+            Modal::AttachLink { replace, .. } if replace.is_some() => {
+                "Give the link a shorter name. Leave the name empty to show the address."
+            }
             Modal::AttachLink { .. } => {
                 "Paste an http(s) address; it opens in your browser. Undo removes it."
             }
@@ -551,6 +571,7 @@ impl Modal {
             Modal::PriorityScope { .. } => "Apply",
             Modal::RemoveAttachment { .. } => "Remove",
             Modal::Uninstall { .. } => "Uninstall",
+            Modal::AttachLink { replace, .. } if replace.is_some() => "Rename",
             Modal::AttachLink { .. } => "Attach",
             _ => "Save",
         }
@@ -568,7 +589,7 @@ impl Modal {
             Modal::PriorityScope { .. } => 0,
             Modal::RemoveAttachment { .. } => 0,
             Modal::Uninstall { .. } => 0,
-            Modal::AttachLink { .. } => 1,
+            Modal::AttachLink { .. } => 2,
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
             Modal::Perspective { .. } => 1,
             Modal::Import { .. } => 1,
@@ -599,7 +620,11 @@ impl Modal {
             Modal::DeleteTask { .. } => None,
             Modal::PriorityScope { .. } => None,
             Modal::RemoveAttachment { .. } | Modal::Uninstall { .. } => None,
-            Modal::AttachLink { url, .. } => (index == 0).then_some(url),
+            Modal::AttachLink { url, name, .. } => match index {
+                0 => Some(url),
+                1 => Some(name),
+                _ => None,
+            },
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&form.name),
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -649,7 +674,11 @@ impl Modal {
             Modal::DeleteTask { .. } => None,
             Modal::PriorityScope { .. } => None,
             Modal::RemoveAttachment { .. } | Modal::Uninstall { .. } => None,
-            Modal::AttachLink { url, .. } => (index == 0).then_some(url),
+            Modal::AttachLink { url, name, .. } => match index {
+                0 => Some(url),
+                1 => Some(name),
+                _ => None,
+            },
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => (index == 0).then_some(&mut form.name),
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -694,7 +723,11 @@ impl Modal {
             Modal::DeleteTask { .. } => "",
             Modal::PriorityScope { .. } => "",
             Modal::RemoveAttachment { .. } | Modal::Uninstall { .. } => "",
-            Modal::AttachLink { .. } => "Address",
+            Modal::AttachLink { .. } => match index {
+                0 => "Address",
+                1 => "Name (optional)",
+                _ => "",
+            },
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
             Modal::Perspective { .. } => "Name",
             Modal::Import { .. } => "Library text",

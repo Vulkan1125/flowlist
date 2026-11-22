@@ -199,6 +199,7 @@ class Repository(context: Context) {
             tags = edit.tags.toList(),
             repeat = edit.repeat,
             sequential = edit.sequential,
+            stepsOneOff = edit.stepsOneOff,
             modifiedAt = java.time.Instant.now().toString(),
         )
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
@@ -221,6 +222,7 @@ class Repository(context: Context) {
             put("estimate_min", estimateJson)
             put("repeat", edit.repeat ?: JsonNull)
             put("sequential", edit.sequential)
+            put("steps_one_off", edit.stepsOneOff)
         }
         enqueue(
             PendingOp(
@@ -311,14 +313,54 @@ class Repository(context: Context) {
         sync()
     }
 
-    suspend fun addAttachmentLink(task: TaskDto, url: String) {
+    suspend fun addAttachmentLink(task: TaskDto, url: String, name: String) {
         val trimmed = url.trim()
         if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) return
         val snapshot = _state.value.snapshot ?: return
         val db = snapshot.db
         val current = db.tasks[task.id] ?: task
-        if (current.attachments.contains(trimmed)) return
-        val attachments = current.attachments + trimmed
+        val link = linkWithName(trimmed, name)
+        if (current.attachments.any { attachmentUrl(it) == trimmed }) return
+        val attachments = current.attachments + link
+        val updatedTask = current.copy(
+            attachments = attachments,
+            modifiedAt = java.time.Instant.now().toString(),
+        )
+        val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = updateCommand(
+                    task.id,
+                    buildJsonObject {
+                        put(
+                            "attachments",
+                            buildJsonArray { attachments.forEach { add(JsonPrimitive(it)) } },
+                        )
+                    },
+                ),
+                label = task.title,
+            ),
+        )
+        sync()
+    }
+
+    suspend fun renameAttachmentLink(
+        task: TaskDto,
+        original: String,
+        url: String,
+        name: String,
+    ) {
+        val trimmed = url.trim()
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) return
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val current = db.tasks[task.id] ?: task
+        if (current.attachments.none { it == original }) return
+        val link = linkWithName(trimmed, name)
+        val attachments = current.attachments.map { if (it == original) link else it }
         val updatedTask = current.copy(
             attachments = attachments,
             modifiedAt = java.time.Instant.now().toString(),
@@ -693,10 +735,11 @@ class Repository(context: Context) {
     }
 
     suspend fun openAttachment(path: String): Boolean {
-        if (path.startsWith("http://") || path.startsWith("https://")) {
+        val url = attachmentUrl(path)
+        if (url.startsWith("http://") || url.startsWith("https://")) {
             return try {
                 appContext.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse(path))
+                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
                 true

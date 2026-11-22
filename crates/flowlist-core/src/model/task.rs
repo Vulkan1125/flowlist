@@ -107,6 +107,10 @@ pub struct Task {
     /// When true, children are worked through in order.
     #[serde(default)]
     pub sequential: bool,
+    /// When true, this task's steps are one-off checklist items instead of
+    /// separate child tasks. The two modes are mutually exclusive.
+    #[serde(default)]
+    pub steps_one_off: bool,
     /// Local file paths for images or PDFs attached to the task. Files are
     /// referenced, never copied, so the library stays a single JSON file.
     #[serde(default)]
@@ -144,6 +148,7 @@ impl Task {
             repeat: None,
             repeat_series: None,
             sequential: false,
+            steps_one_off: false,
             attachments: Vec::new(),
             trashed_at: None,
             child_order: Vec::new(),

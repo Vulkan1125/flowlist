@@ -236,7 +236,12 @@ impl FlowlistApp {
             .child(self.inspector_priority(&id, priority, cx))
             .child(self.inspector_notes(&notes, cx))
             .child(self.inspector_task_type(&id, sequential, cx))
-            .child(self.inspector_attachments(&attachments, window, cx))
+            .child(self.inspector_attachments(
+                &attachments,
+                super::modals::AttachmentTarget::Task(id.clone()),
+                window,
+                cx,
+            ))
             .child(self.inspector_tag_section(&tags, cx))
             .child(self.inspector_project_row(project, project_id, cx))
             .child(self.inspector_date_field(DateField::Defer, &defer.unwrap_or_default(), cx))
@@ -1575,7 +1580,12 @@ impl FlowlistApp {
             .when(!tags.is_empty(), |this| {
                 this.child(self.inspector_readonly("Tags", &tags.join(", ")))
             })
-            .child(self.inspector_attachments(&attachments, window, cx))
+            .child(self.inspector_attachments(
+                &attachments,
+                super::modals::AttachmentTarget::Project(id.clone()),
+                window,
+                cx,
+            ))
             .into_any_element()
     }
 
@@ -1614,6 +1624,7 @@ impl FlowlistApp {
             .unwrap_or_default();
         let done = children.iter().filter(|child| child.2).count();
         let total = children.len();
+        let one_off = db.tasks.get(id).is_some_and(|task| task.steps_one_off);
         let checklist: Vec<(ChecklistId, String, bool)> = db
             .tasks
             .get(id)
@@ -1648,6 +1659,14 @@ impl FlowlistApp {
                 ),
         );
 
+        let step_mode = if one_off {
+            super::TaskStepMode::OneOff
+        } else if sequential {
+            super::TaskStepMode::Sequential
+        } else {
+            super::TaskStepMode::Parallel
+        };
+        let mode_id = parent.clone();
         section = section.child(
             div()
                 .flex()
@@ -1657,22 +1676,62 @@ impl FlowlistApp {
                     div()
                         .id("task-kind-parallel")
                         .cursor_pointer()
-                        .child(widgets::toggle_chip(theme, "Parallel", !sequential))
-                        .on_click(
-                            cx.listener(|this, _, _, cx| this.set_task_sequential(false, cx)),
-                        ),
+                        .child(widgets::toggle_chip(
+                            theme,
+                            "Parallel",
+                            step_mode == super::TaskStepMode::Parallel,
+                        ))
+                        .on_click(cx.listener({
+                            let mode_id = mode_id.clone();
+                            move |this, _, _, cx| {
+                                this.set_task_step_mode(
+                                    mode_id.clone(),
+                                    super::TaskStepMode::Parallel,
+                                    cx,
+                                )
+                            }
+                        })),
                 )
                 .child(
                     div()
                         .id("task-kind-sequential")
                         .cursor_pointer()
-                        .child(widgets::toggle_chip(theme, "Sequential", sequential))
-                        .on_click(
-                            cx.listener(|this, _, _, cx| this.set_task_sequential(true, cx)),
-                        ),
+                        .child(widgets::toggle_chip(
+                            theme,
+                            "Sequential",
+                            step_mode == super::TaskStepMode::Sequential,
+                        ))
+                        .on_click(cx.listener({
+                            let mode_id = mode_id.clone();
+                            move |this, _, _, cx| {
+                                this.set_task_step_mode(
+                                    mode_id.clone(),
+                                    super::TaskStepMode::Sequential,
+                                    cx,
+                                )
+                            }
+                        })),
+                )
+                .child(
+                    div()
+                        .id("task-kind-one-off")
+                        .cursor_pointer()
+                        .child(widgets::toggle_chip(
+                            theme,
+                            "One-off",
+                            step_mode == super::TaskStepMode::OneOff,
+                        ))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.set_task_step_mode(
+                                mode_id.clone(),
+                                super::TaskStepMode::OneOff,
+                                cx,
+                            )
+                        })),
                 ),
         );
 
+        if !one_off {
         for (child_id, title, completed, priority) in children {
             let select_id = child_id.clone();
             let toggle_id = child_id.clone();
@@ -1784,7 +1843,7 @@ impl FlowlistApp {
             section = section.child(row);
         }
 
-        if total == 0 && checklist.is_empty() {
+        if total == 0 {
             section = section.child(
                 div()
                     .text_xs()
@@ -1792,8 +1851,18 @@ impl FlowlistApp {
                     .child("No subtasks yet."),
             );
         }
+        }
 
-        if !checklist.is_empty() {
+        if one_off && checklist.is_empty() {
+            section = section.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("No one-off steps yet."),
+            );
+        }
+
+        if one_off && !checklist.is_empty() {
             section = section.child(
                 div()
                     .flex()
@@ -1948,40 +2017,13 @@ impl FlowlistApp {
             }
         }
 
-        section = section.child(
-            div()
-                .flex()
-                .items_center()
-                .gap_1()
-                .child(
-                    div()
-                        .id("new-step-subtask")
-                        .cursor_pointer()
-                        .child(widgets::toggle_chip(theme, "Subtask", !self.add_one_off))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.add_one_off = false;
-                            cx.notify();
-                        })),
-                )
-                .child(
-                    div()
-                        .id("new-step-one-off")
-                        .cursor_pointer()
-                        .child(widgets::toggle_chip(theme, "One-off", self.add_one_off))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.add_one_off = true;
-                            cx.notify();
-                        })),
-                ),
-        );
-
         section.child(
             div()
                 .id("subtask-add")
                 .child(widgets::text_field(
                     theme,
                     &self.checklist_buffer,
-                    if self.add_one_off {
+                    if one_off {
                         "Add a one-off…"
                     } else {
                         "Add a subtask…"
@@ -2000,6 +2042,7 @@ impl FlowlistApp {
     fn inspector_attachments(
         &self,
         attachments: &[String],
+        target: super::modals::AttachmentTarget,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -2072,6 +2115,28 @@ impl FlowlistApp {
                             }))
                             .child(name),
                     )
+                    .when(link, |this| {
+                        let rename_target = target.clone();
+                        let rename_path = path.clone();
+                        this.child(
+                            div()
+                                .id(super::sid(format!("attachment-rename:{index}")))
+                                .flex_shrink_0()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .cursor_pointer()
+                                .hover(|style| style.text_color(theme.text))
+                                .flow_tip(self, cx, theme, "Rename this link")
+                                .child("rename")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    let modal = super::modals::Modal::rename_link(
+                                        rename_target.clone(),
+                                        &rename_path,
+                                    );
+                                    this.open_modal(modal, cx);
+                                })),
+                        )
+                    })
                     .child(
                         div()
                             .id(super::sid(format!("attachment-open:{index}")))

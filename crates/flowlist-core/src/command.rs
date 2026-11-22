@@ -130,6 +130,7 @@ pub struct TaskPatch {
     #[serde(deserialize_with = "deserialize_double_option")]
     pub repeat: Option<Option<RepeatRule>>,
     pub sequential: Option<bool>,
+    pub steps_one_off: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -659,6 +660,9 @@ impl Command {
                     }
                     if let Some(sequential) = patch.sequential {
                         task.sequential = sequential;
+                    }
+                    if let Some(one_off) = patch.steps_one_off {
+                        task.steps_one_off = one_off;
                     }
                     if let Some(project) = path_project {
                         moved = Some((project, None));

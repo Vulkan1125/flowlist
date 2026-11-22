@@ -121,6 +121,11 @@ task's project.
 Every subtask row also has a drag grip. Long-press it to reorder the children;
 the other rows move aside and the list settles into the new order on release.
 
+**Parallel**, **Sequential** and **One-off** are the three step modes; only one
+is active. Parallel and Sequential show child tasks. One-off shows
+checklist-style steps that tick, drag and delete in place and never appear as
+tasks.
+
 The project picker is as wide as its row. Its last item is **Create new
 project**, and the tag row ends with a **+** chip for a new tag; both select the
 new entity on the task. Tag chips wrap onto further lines when they run out of
@@ -137,8 +142,10 @@ files, after which the attachment opens without the Mac. Tapping that button
 again removes the offline copy.
 
 **Add link** attaches an `http(s)` URL; it opens in the browser and appears in
-the same attachment list as files. Links do not show the offline download
-button; only file attachments can be saved on the phone.
+the same attachment list as files. The dialog also takes an optional **Name**;
+leave it empty to show the address as before. Existing links have a rename
+action. Links do not show the offline download button; only file attachments
+can be saved on the phone.
 
 Uploads go over `POST /api/v1/files` and downloads over `GET /api/v1/files`.
 Both require the paired token. Files are capped at 40 MB, and the Mac only

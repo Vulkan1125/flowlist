@@ -45,6 +45,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
@@ -97,6 +98,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import dev.flowlist.android.data.ChecklistDto
 import dev.flowlist.android.data.ProjectDto
+import dev.flowlist.android.data.attachmentDisplayName
+import dev.flowlist.android.data.attachmentUrl
 import dev.flowlist.android.data.StampDto
 import dev.flowlist.android.data.TagDto
 import dev.flowlist.android.data.TaskDto
@@ -107,6 +110,8 @@ import dev.flowlist.android.data.repeatCommand
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.isToday
 import dev.flowlist.android.data.label
+
+private enum class StepMode { Parallel, Sequential, OneOff }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -133,7 +138,8 @@ fun TaskEditSheet(
     onToggleSubtask: (TaskDto, Boolean) -> Unit,
     onMoveSubtask: (TaskDto, TaskDto) -> Unit,
     onReorderSubtasks: (List<TaskDto>) -> Unit,
-    onAddLink: (String) -> Unit,
+    onAddLink: (String, String) -> Unit,
+    onRenameLink: (String, String, String) -> Unit,
     onChecklist: (ChecklistDto, Boolean) -> Unit,
     onAddChecklist: (String) -> Unit,
     onDeleteChecklist: (ChecklistDto) -> Unit,
@@ -151,7 +157,15 @@ fun TaskEditSheet(
     var defer by remember(task.id) { mutableStateOf(task.defer) }
     var priority by remember(task.id) { mutableStateOf(task.priority) }
     var flagged by remember(task.id) { mutableStateOf(task.flagged) }
-    var sequential by remember(task.id) { mutableStateOf(task.sequential) }
+    var stepMode by remember(task.id) {
+        mutableStateOf(
+            when {
+                task.stepsOneOff -> StepMode.OneOff
+                task.sequential -> StepMode.Sequential
+                else -> StepMode.Parallel
+            },
+        )
+    }
     var estimate by remember(task.id) {
         mutableStateOf(task.estimateMin?.toString().orEmpty())
     }
@@ -179,7 +193,8 @@ fun TaskEditSheet(
     val subtaskScope = rememberCoroutineScope()
     var linkOpen by remember { mutableStateOf(false) }
     var linkText by remember { mutableStateOf("") }
-    var addOneOff by remember { mutableStateOf(false) }
+    var linkName by remember { mutableStateOf("") }
+    var renamingLink by remember { mutableStateOf<String?>(null) }
     var oneOffDragId by remember(task.id) { mutableStateOf<String?>(null) }
     var oneOffDragOffset by remember(task.id) { mutableFloatStateOf(0f) }
     var oneOffRowHeight by remember(task.id) { mutableFloatStateOf(0f) }
@@ -227,7 +242,7 @@ fun TaskEditSheet(
     fun submitSubtask() {
         val name = subtaskTitle.trim()
         if (name.isEmpty()) return
-        if (addOneOff) onAddChecklist(name) else onAddSubtask(name)
+        if (stepMode == StepMode.OneOff) onAddChecklist(name) else onAddSubtask(name)
         subtaskTitle = ""
         addingSubtask = false
     }
@@ -314,7 +329,7 @@ fun TaskEditSheet(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = path.substringAfterLast('/'),
+                        text = attachmentDisplayName(path),
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.ink,
                         maxLines = 1,
@@ -341,6 +356,24 @@ fun TaskEditSheet(
                                     "Save for offline"
                                 },
                                 tint = if (saved) colors.accent else colors.faint,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                    if (isLink) {
+                        IconButton(
+                            onClick = {
+                                renamingLink = path
+                                linkText = attachmentUrl(path)
+                                linkName = path.substringAfter('\t', "").trim()
+                                linkOpen = true
+                            },
+                            modifier = Modifier.size(30.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = "Rename link",
+                                tint = colors.faint,
                                 modifier = Modifier.size(16.dp),
                             )
                         }
@@ -382,7 +415,9 @@ fun TaskEditSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
+                        renamingLink = null
                         linkText = ""
+                        linkName = ""
                         linkOpen = true
                     }
                     .padding(vertical = 8.dp),
@@ -523,17 +558,27 @@ fun TaskEditSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
             Label(
-                if (orderedSubtasks.isEmpty()) {
+                if (stepMode == StepMode.OneOff) {
+                    "One-off"
+                } else if (orderedSubtasks.isEmpty()) {
                     "Subtasks"
                 } else {
                     "Subtasks · ${orderedSubtasks.count { it.completed }}/${orderedSubtasks.size}"
                 },
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PriorityPill("Parallel", !sequential, colors.accent) { sequential = false }
-                PriorityPill("Sequential", sequential, colors.accent) { sequential = true }
+                PriorityPill("Parallel", stepMode == StepMode.Parallel, colors.accent) {
+                    stepMode = StepMode.Parallel
+                }
+                PriorityPill("Sequential", stepMode == StepMode.Sequential, colors.accent) {
+                    stepMode = StepMode.Sequential
+                }
+                PriorityPill("One-off", stepMode == StepMode.OneOff, colors.accent) {
+                    stepMode = StepMode.OneOff
+                }
             }
             Spacer(modifier = Modifier.height(6.dp))
+            if (stepMode != StepMode.OneOff) {
             orderedSubtasks.forEachIndexed { index, child ->
                 key(child.id) {
                     val dragging = subtaskDragId == child.id
@@ -716,9 +761,16 @@ fun TaskEditSheet(
                     }
                 }
             }
-            if (task.checklist.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Label("One-off")
+            }
+            if (stepMode == StepMode.OneOff) {
+                if (task.checklist.isEmpty()) {
+                    Text(
+                        text = "No one-off steps yet.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.faint,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                }
                 task.checklist.forEachIndexed { index, item ->
                     val oneOffDragging = oneOffDragId == item.id
                     val rowHeightPx = if (oneOffRowHeight > 0f) {
@@ -812,13 +864,7 @@ fun TaskEditSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PriorityPill("Subtask", !addOneOff, colors.accent) { addOneOff = false }
-                PriorityPill("One-off", addOneOff, colors.accent) { addOneOff = true }
-            }
-            Spacer(modifier = Modifier.height(2.dp))
-
+            Spacer(modifier = Modifier.height(8.dp))
             if (addingSubtask) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { addingSubtask = false; subtaskTitle = "" }) {
@@ -833,7 +879,11 @@ fun TaskEditSheet(
                     onValueChange = { subtaskTitle = it },
                     placeholder = {
                         Text(
-                            if (addOneOff) "One-off step" else "Subtask name",
+                            if (stepMode == StepMode.OneOff) {
+                                "One-off step"
+                            } else {
+                                "Subtask name"
+                            },
                             color = colors.faint,
                         )
                     },
@@ -870,7 +920,11 @@ fun TaskEditSheet(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = if (addOneOff) "Add one-off" else "Add subtask",
+                        text = if (stepMode == StepMode.OneOff) {
+                            "Add one-off"
+                        } else {
+                            "Add subtask"
+                        },
                         style = MaterialTheme.typography.labelLarge,
                         color = colors.faint,
                     )
@@ -994,7 +1048,8 @@ fun TaskEditSheet(
                         estimateMin = estimate.toIntOrNull(),
                         tags = selectedTags,
                         repeat = repeat,
-                        sequential = sequential,
+                        sequential = stepMode == StepMode.Sequential,
+                        stepsOneOff = stepMode == StepMode.OneOff,
                     )
                     val dueDate = due?.local()?.toLocalDate()
                     val deferDate = defer?.local()?.toLocalDate()
@@ -1081,39 +1136,66 @@ fun TaskEditSheet(
     if (linkOpen) {
         AlertDialog(
             onDismissRequest = { linkOpen = false },
-            title = { Text("Add a link") },
+            title = { Text(if (renamingLink == null) "Add a link" else "Rename link") },
             text = {
-                OutlinedTextField(
-                    value = linkText,
-                    onValueChange = { linkText = it },
-                    placeholder = { Text("https://…", color = colors.faint) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = colors.accent,
-                        unfocusedBorderColor = colors.hairline,
-                        focusedContainerColor = colors.background,
-                        unfocusedContainerColor = colors.background,
-                        focusedTextColor = colors.ink,
-                        unfocusedTextColor = colors.ink,
-                        cursorColor = colors.accent,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                Column {
+                    OutlinedTextField(
+                        value = linkText,
+                        onValueChange = { linkText = it },
+                        placeholder = { Text("https://…", color = colors.faint) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = colors.accent,
+                            unfocusedBorderColor = colors.hairline,
+                            focusedContainerColor = colors.background,
+                            unfocusedContainerColor = colors.background,
+                            focusedTextColor = colors.ink,
+                            unfocusedTextColor = colors.ink,
+                            cursorColor = colors.accent,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = linkName,
+                        onValueChange = { linkName = it },
+                        placeholder = { Text("Name (optional)", color = colors.faint) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = colors.accent,
+                            unfocusedBorderColor = colors.hairline,
+                            focusedContainerColor = colors.background,
+                            unfocusedContainerColor = colors.background,
+                            focusedTextColor = colors.ink,
+                            unfocusedTextColor = colors.ink,
+                            cursorColor = colors.accent,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         val url = linkText.trim()
                         if (url.startsWith("http://") || url.startsWith("https://")) {
-                            onAddLink(url)
+                            val original = renamingLink
+                            if (original == null) {
+                                onAddLink(url, linkName)
+                            } else {
+                                onRenameLink(original, url, linkName)
+                            }
                             linkOpen = false
                             linkText = ""
+                            linkName = ""
+                            renamingLink = null
                         }
                     },
                 ) {
-                    Text("Add", color = colors.accent)
+                    Text(if (renamingLink == null) "Add" else "Save", color = colors.accent)
                 }
             },
             dismissButton = {

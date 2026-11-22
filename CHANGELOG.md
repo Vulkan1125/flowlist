@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.15 — 2026-11-22
+
+- **One step type per task.** The task editor now has a single **Parallel /
+  Sequential / One-off** selector instead of two separate toggles. Only one is
+  active, and the mode is saved with the task. Parallel and Sequential show
+  child tasks; One-off shows checklist-style steps.
+- **Links can be named and renamed on Mac and Android.** The Add link dialog
+  has an optional **Name** field; leaving it empty keeps the current display.
+  Existing links get a **Rename** action, and the name is stored with the link.
+
 ## 0.9.14 — 2026-11-22
 
 - **Adding a subtask on Android works.** The create command sent both the

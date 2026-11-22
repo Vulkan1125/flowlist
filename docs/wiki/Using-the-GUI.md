@@ -85,9 +85,10 @@ leaving the list.
   **Separate** moves a child to the end of the project (or the Inbox). You can
   also press `Tab` to indent the selected task under the one above, or drag a
   task onto another task.
-- **One-off** is the second step type. Pick **One-off** above the add field and
-  the step is stored with the task like a checklist item: tick it, drag to
-  reorder or delete it, and it never appears as a task in a list.
+- **One step type per task.** Choose **Parallel**, **Sequential** or
+  **One-off**. Parallel and Sequential show child tasks; One-off shows
+  checklist-style steps that tick, drag and delete in place and never appear as
+  tasks.
 - **Drag a subtask out of its parent** by dropping it in one of the thin gaps
   between root-level tasks in the middle pane. The gap shows an accent line
   while the task is over it, and the task lands at that position as a

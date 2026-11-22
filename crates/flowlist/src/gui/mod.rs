@@ -62,6 +62,13 @@ use theme::Theme;
 use widgets::TipExt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum TaskStepMode {
+    Parallel,
+    Sequential,
+    OneOff,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FocusArea {
     Content,
     Sidebar,
@@ -488,8 +495,6 @@ pub struct FlowlistApp {
     tag_buffer: text::TextBuffer,
     checklist_buffer: text::TextBuffer,
     checklist_editing: Option<ChecklistId>,
-    /// Whether the inline subtask field adds a one-off step instead of a task.
-    add_one_off: bool,
     editing: Option<EditField>,
     field_error: Option<String>,
     /// The task created by `o`/`O` while its title is still being typed.
@@ -722,7 +727,6 @@ impl FlowlistApp {
             tag_buffer: text::TextBuffer::empty(),
             checklist_buffer: text::TextBuffer::empty(),
             checklist_editing: None,
-            add_one_off: false,
             editing: None,
             field_error: None,
             draft_task: None,
@@ -1390,6 +1394,18 @@ impl FlowlistApp {
         cx.notify();
     }
 
+    fn set_task_step_mode(&mut self, id: TaskId, mode: TaskStepMode, cx: &mut Context<Self>) {
+        self.execute(Command::UpdateTask {
+            id,
+            patch: TaskPatch {
+                sequential: Some(mode == TaskStepMode::Sequential),
+                steps_one_off: Some(mode == TaskStepMode::OneOff),
+                ..TaskPatch::default()
+            },
+        });
+        cx.notify();
+    }
+
     fn set_task_sequential(&mut self, sequential: bool, cx: &mut Context<Self>) {
         let Some(id) = self.selected_one() else {
             return;
@@ -1434,7 +1450,8 @@ impl FlowlistApp {
         } else {
             "xdg-open"
         };
-        match std::process::Command::new(opener).arg(&path).spawn() {
+        let target = flowlist_core::model::attachment::attachment_url(&path).to_string();
+        match std::process::Command::new(opener).arg(&target).spawn() {
             Ok(_) => self.toast = Some(format!("Opening {path}")),
             Err(error) => self.toast = Some(format!("Could not open {path}: {error}")),
         }
@@ -2014,7 +2031,13 @@ impl FlowlistApp {
             });
             self.checklist_buffer.clear();
             self.focus = FocusArea::Content;
-        } else if self.add_one_off {
+        } else if self
+            .store
+            .db()
+            .tasks
+            .get(&parent)
+            .is_some_and(|task| task.steps_one_off)
+        {
             self.execute(Command::AddChecklistItem {
                 task: parent,
                 title,
@@ -3422,10 +3445,33 @@ impl FlowlistApp {
                     position: ContainerPosition::End,
                 });
             }
-            modals::Modal::AttachLink { target, url } => {
+            modals::Modal::AttachLink {
+                target,
+                url,
+                name,
+                replace,
+            } => {
                 let Some(link) = flowlist_core::model::attachment::normalize_web_link(url.text())
                 else {
                     return Err("Links start with http:// or https://".to_string());
+                };
+                let link =
+                    flowlist_core::model::attachment::link_with_name(&link, name.text());
+                let apply = |attachments: &mut Vec<String>| -> std::result::Result<(), String> {
+                    if let Some(original) = replace {
+                        if let Some(index) = attachments.iter().position(|item| item == original) {
+                            attachments[index] = link.clone();
+                            return Ok(());
+                        }
+                    }
+                    if attachments.iter().any(|item| {
+                        flowlist_core::model::attachment::attachment_url(item)
+                            == flowlist_core::model::attachment::attachment_url(&link)
+                    }) {
+                        return Err("That link is already attached".to_string());
+                    }
+                    attachments.push(link.clone());
+                    Ok(())
                 };
                 match target {
                     modals::AttachmentTarget::Task(id) => {
@@ -3438,11 +3484,7 @@ impl FlowlistApp {
                         else {
                             return Err("That task no longer exists".to_string());
                         };
-                        if attachments.contains(&link) {
-                            self.toast = Some("That link is already attached".to_string());
-                            return Ok(());
-                        }
-                        attachments.push(link);
+                        apply(&mut attachments)?;
                         self.execute(Command::UpdateTask {
                             id: id.clone(),
                             patch: TaskPatch {
@@ -3461,11 +3503,7 @@ impl FlowlistApp {
                         else {
                             return Err("That project no longer exists".to_string());
                         };
-                        if attachments.contains(&link) {
-                            self.toast = Some("That link is already attached".to_string());
-                            return Ok(());
-                        }
-                        attachments.push(link);
+                        apply(&mut attachments)?;
                         self.execute(Command::UpdateProject {
                             id: id.clone(),
                             patch: ProjectPatch {

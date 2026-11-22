@@ -790,8 +790,11 @@ fun MainScreen(
                 onReorderSubtasks = { ordered ->
                     scope.launch { repository.reorderSubtasks(dto.id, ordered) }
                 },
-                onAddLink = { url ->
-                    scope.launch { repository.addAttachmentLink(dto, url) }
+                onAddLink = { url, name ->
+                    scope.launch { repository.addAttachmentLink(dto, url, name) }
+                },
+                onRenameLink = { original, url, name ->
+                    scope.launch { repository.renameAttachmentLink(dto, original, url, name) }
                 },
                 onChecklist = { item, completed ->
                     scope.launch { repository.toggleChecklist(dto, item.id, completed) }

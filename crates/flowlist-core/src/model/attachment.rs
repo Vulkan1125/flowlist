@@ -14,10 +14,32 @@ pub fn is_web_link(value: &str) -> bool {
         .is_some_and(|rest| !rest.trim().is_empty())
 }
 
+/// The URL part of an attachment. A named link stores `url<TAB>name`.
+pub fn attachment_url(value: &str) -> &str {
+    value.split_once('\t').map(|(url, _)| url).unwrap_or(value)
+}
+
+/// Store a link with an optional display name. An empty name keeps the link
+/// exactly as it was before naming existed.
+pub fn link_with_name(url: &str, name: &str) -> String {
+    let name = name.trim();
+    if name.is_empty() {
+        url.trim().to_string()
+    } else {
+        format!("{}\t{name}", url.trim())
+    }
+}
+
 /// The short label drawn in an attachment row. File paths show their file
-/// name; links drop the scheme and `www.` so a long address still starts with
-/// something recognisable.
+/// name; links use their optional name, or drop the scheme and `www.` so a
+/// long address still starts with something recognisable.
 pub fn attachment_name(value: &str) -> String {
+    if let Some((_, name)) = value.split_once('\t') {
+        let name = name.trim();
+        if !name.is_empty() {
+            return name.to_string();
+        }
+    }
     if is_web_link(value) {
         let trimmed = value.trim();
         let without_scheme = trimmed
@@ -45,7 +67,10 @@ pub fn attachment_name(value: &str) -> String {
 /// `example.com/page` gets `https://`; anything that still does not look like
 /// an http(s) link is rejected so a stray word never becomes a broken row.
 pub fn normalize_web_link(value: &str) -> Option<String> {
-    let value = value.trim();
+    let (value, name) = match value.split_once('\t') {
+        Some((url, name)) => (url.trim(), Some(name)),
+        None => (value.trim(), None),
+    };
     if value.is_empty() {
         return None;
     }
@@ -57,5 +82,5 @@ pub fn normalize_web_link(value: &str) -> Option<String> {
         return None;
     };
     // A scheme with nothing after it is not a link.
-    is_web_link(&candidate).then_some(candidate)
+    is_web_link(&candidate).then(|| link_with_name(&candidate, name.unwrap_or("")))
 }
