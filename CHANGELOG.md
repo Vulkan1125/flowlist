@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.23 — 2026-11-22
+
+- **Search covers the whole library.** Results now include projects, folders,
+  tags and saved perspectives alongside tasks. A **This view / Library** switch
+  keeps task results inside the current list or searches everything; tag
+  results open the tasks carrying that tag.
+- **Nearby comes to Android.** A new Nearby perspective lists the tags with a
+  location inside the library's radius, sorted by distance, with task counts.
+  Tapping a tag opens its tasks. The library location and radius come from the
+  Mac's Settings → Nearby.
+
 ## 0.9.22 — 2026-11-22
 
 - **Android attachment previews.** Tapping an image or PDF in the task editor

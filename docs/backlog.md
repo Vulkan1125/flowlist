@@ -169,6 +169,9 @@ below; this list is the current map.
       folder and status, matching the Mac inspector and New Project sheet.
 - [x] **Android attachment previews** — images and PDFs open in a card; PDFs
       page with previous/next, and Open externally remains.
+- [x] **Android search and Nearby** — search covers projects, folders, tags and
+      perspectives with a view/library scope; Nearby lists tags within the
+      library radius, sorted by distance.
 - [x] **Android multi-select** — a header checklist opens select mode; bulk
       complete/reopen, bulk trash with one Undo, and Trash select-all plus a
       confirmed delete-forever.

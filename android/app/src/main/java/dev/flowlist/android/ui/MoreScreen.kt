@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.LocalCafe
+import androidx.compose.material.icons.outlined.NearMe
 import androidx.compose.material.icons.outlined.SignalCellularAlt
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.rounded.Add
@@ -62,6 +63,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.flowlist.android.data.Db
+import dev.flowlist.android.data.GeoDto
 import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.TagDto
 import dev.flowlist.android.data.TaskView
@@ -83,6 +85,7 @@ enum class MoreView(val label: String, val icon: ImageVector) {
     Archive("Archive", Icons.Outlined.Archive),
     Trash("Trash", Icons.Outlined.Delete),
     Tags("Tags", Icons.Outlined.Tag),
+    Nearby("Nearby", Icons.Outlined.NearMe),
     Priorities("Priorities", Icons.Outlined.SignalCellularAlt),
     Changed("Changed", Icons.Outlined.History),
     Attachments("Attachments", Icons.Outlined.AttachFile),
@@ -99,6 +102,7 @@ fun MoreScreen(db: Db?, onOpen: (MoreView) -> Unit) {
             MoreView.Archive to db.archivedProjects().size,
             MoreView.Trash to db.trashedTasks().size,
             MoreView.Tags to db.tags.size,
+            MoreView.Nearby to db.tags.values.count { it.location != null },
             MoreView.Priorities to db.priorityGroups().sumOf { it.second.size },
             MoreView.Changed to db.changedTasks().size,
             MoreView.Attachments to db.attachmentTasks().size,
@@ -171,6 +175,7 @@ fun MoreDestination(
     onNewTag: () -> Unit,
     onEditTag: (TagDto) -> Unit,
     onDeleteTag: (TagDto) -> Unit,
+    onOpenTag: (TagDto) -> Unit,
 ) {
     val colors = flow
     var tag by remember { mutableStateOf<TagDto?>(null) }
@@ -322,6 +327,7 @@ fun MoreDestination(
                     Hairline(Modifier.padding(horizontal = 20.dp))
                 }
             }
+            view == MoreView.Nearby -> NearbyList(db, onOpenTag)
             view == MoreView.Tags -> LazyColumn {
                 item(key = "new-tag") {
                     Row(
@@ -521,4 +527,84 @@ private fun TaskList(
             }
         }
     }
+}
+
+@Composable
+private fun NearbyList(db: Db, onOpenTag: (TagDto) -> Unit) {
+    val colors = flow
+    val origin = db.settings.currentLocation
+    if (origin == null) {
+        EmptyLine("Set the library location on the Mac in Settings → Nearby.")
+        return
+    }
+    val radius = db.settings.nearbyRadiusKm
+    val nearby = db.tags.values
+        .mapNotNull { tag ->
+            tag.location?.let { place -> tag to distanceKm(origin, place) }
+        }
+        .filter { (_, km) -> km <= radius }
+        .sortedBy { (_, km) -> km }
+    if (nearby.isEmpty()) {
+        EmptyLine("No tagged places within ${radius.toInt()} km.")
+        return
+    }
+    LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
+        item(key = "nearby-header") {
+            Text(
+                text = "WITHIN ${radius.toInt()} KM",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.faint,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+            )
+        }
+        items(nearby, key = { it.first.id }) { (tag, km) ->
+            val count = db.tagUsageCount(tag.id)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenTag(tag) }
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Tag,
+                    contentDescription = null,
+                    tint = colors.faint,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "#${tag.name}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.ink,
+                    )
+                    Text(
+                        text = "${"%.1f".format(km)} km away · $count task${if (count == 1) "" else "s"}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.faint,
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Outlined.ChevronRight,
+                    contentDescription = null,
+                    tint = colors.faint,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Hairline(Modifier.padding(start = 50.dp))
+        }
+    }
+}
+
+private fun distanceKm(origin: GeoDto, place: GeoDto): Double {
+    val earth = 6371.0
+    val dLat = Math.toRadians(place.lat - origin.lat)
+    val dLon = Math.toRadians(place.lon - origin.lon)
+    val a = kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
+        kotlin.math.cos(Math.toRadians(origin.lat)) *
+        kotlin.math.cos(Math.toRadians(place.lat)) *
+        kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
+    return earth * 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
 }

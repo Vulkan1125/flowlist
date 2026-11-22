@@ -116,6 +116,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.AppState
+import dev.flowlist.android.data.TagDto
+import dev.flowlist.android.data.attachmentTasks
+import dev.flowlist.android.data.changedTasks
+import dev.flowlist.android.data.completedTasks
+import dev.flowlist.android.data.flaggedTasks
+import dev.flowlist.android.data.priorityGroups
 import dev.flowlist.android.data.FolderDto
 import dev.flowlist.android.data.PerspectiveDto
 import dev.flowlist.android.data.ProjectDto
@@ -134,6 +140,7 @@ import dev.flowlist.android.data.label
 import dev.flowlist.android.data.linkWithName
 import dev.flowlist.android.data.today
 import dev.flowlist.android.data.taskViews
+import dev.flowlist.android.data.tasksForTag
 import dev.flowlist.android.data.trashedTasks
 import dev.flowlist.android.data.isToday
 import kotlinx.coroutines.delay
@@ -171,6 +178,7 @@ enum class Perspective(
     Archive("archive", "Archive", MoreView.Archive.icon, more = MoreView.Archive),
     Trash("trash", "Trash", MoreView.Trash.icon, more = MoreView.Trash),
     Tags("tags", "Tags", MoreView.Tags.icon, more = MoreView.Tags),
+    Nearby("nearby", "Nearby", MoreView.Nearby.icon, more = MoreView.Nearby),
     Priorities("priorities", "Priorities", MoreView.Priorities.icon, more = MoreView.Priorities),
     Changed("changed", "Changed", MoreView.Changed.icon, more = MoreView.Changed),
     Attachments("attachments", "Attachments", MoreView.Attachments.icon, more = MoreView.Attachments),
@@ -253,6 +261,7 @@ fun MainScreen(
     var captureAttachmentLabel by remember { mutableStateOf<String?>(null) }
     var sharePrompt by remember { mutableStateOf<SharedPayload?>(null) }
     var previewTarget by remember { mutableStateOf<PreviewTarget?>(null) }
+    var tagTasks by remember { mutableStateOf<TagDto?>(null) }
     var sharePicking by remember { mutableStateOf(false) }
     var selecting by rememberSaveable { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -746,6 +755,7 @@ fun MainScreen(
                                 scope.launch { repository.deleteTag(item) }
                             }
                         },
+                        onOpenTag = { item -> tagTasks = item },
                     )
                 }
             } else when (tab) {
@@ -1277,15 +1287,69 @@ fun MainScreen(
     }
 
     if (search) {
+        val searchDb = snapshot?.db
+        val viewTasks = when {
+            searchDb == null -> null
+            savedPerspective != null -> null
+            moreView == MoreView.Flagged -> searchDb.flaggedTasks()
+            moreView == MoreView.Completed -> searchDb.completedTasks()
+            moreView == MoreView.Changed -> searchDb.changedTasks()
+            moreView == MoreView.Attachments -> searchDb.attachmentTasks()
+            moreView == MoreView.Trash -> searchDb.trashedTasks()
+            moreView == MoreView.Priorities -> searchDb.priorityGroups().flatMap { it.second }
+            moreView != null -> null
+            tab == Tab.Inbox -> searchDb.inbox()
+            tab == Tab.Today -> searchDb.today()
+            tab == Tab.Forecast -> searchDb.forecast().values.flatten()
+            else -> null
+        }
         SearchSheet(
-            db = snapshot?.db ?: dev.flowlist.android.data.Db(),
+            db = searchDb ?: dev.flowlist.android.data.Db(),
             pending = state.pending,
+            viewTaskIds = viewTasks?.map { it.id }?.toSet(),
+            viewName = when {
+                savedPerspective != null -> savedPerspective?.name
+                moreView != null -> moreView?.label
+                else -> tab.label
+            },
             onDismiss = { search = false },
             onToggle = { task -> complete(task, !task.completed) },
             onClick = { task ->
                 search = false
                 detail = task
             },
+            onProject = { projectItem ->
+                search = false
+                project = projectItem
+                tab = Tab.Browse
+            },
+            onFolder = {
+                search = false
+                tab = Tab.Browse
+            },
+            onTag = { tag ->
+                search = false
+                tagTasks = tag
+            },
+            onPerspective = { perspective ->
+                search = false
+                savedPerspective = perspective
+                moreView = null
+            },
+        )
+    }
+
+    tagTasks?.let { tag ->
+        TagTasksSheet(
+            tag = tag,
+            tasks = snapshot?.db?.tasksForTag(tag.id).orEmpty(),
+            pending = state.pending,
+            onToggle = { task -> complete(task, !task.completed) },
+            onClick = { task ->
+                tagTasks = null
+                detail = task
+            },
+            onDismiss = { tagTasks = null },
         )
     }
 
@@ -1839,6 +1903,7 @@ private fun headerSubtitle(more: MoreView?, tab: Tab, state: AppState): String {
             MoreView.Priorities -> "Flagged and high-priority work"
             MoreView.Changed -> "Edited in the last few weeks"
             MoreView.Attachments -> "Files attached to tasks"
+            MoreView.Nearby -> "Tagged places near the library"
         }
     }
     return when (tab) {

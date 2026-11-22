@@ -30,6 +30,9 @@ data class Db(
 )
 
 @Serializable
+data class GeoDto(val lat: Double = 0.0, val lon: Double = 0.0)
+
+@Serializable
 data class SettingsDto(
     @SerialName("default_review_days") val defaultReviewDays: Int = 7,
     @SerialName("show_completed_days") val showCompletedDays: Int = 30,
@@ -37,6 +40,8 @@ data class SettingsDto(
     @SerialName("trash_retention_days") val trashRetentionDays: Int = 30,
     @SerialName("default_due_time") val defaultDueTime: String? = "17:00:00",
     @SerialName("default_defer_time") val defaultDeferTime: String? = null,
+    @SerialName("current_location") val currentLocation: GeoDto? = null,
+    @SerialName("nearby_radius_km") val nearbyRadiusKm: Double = 25.0,
 )
 
 @Serializable
@@ -112,6 +117,7 @@ data class TagDto(
     val id: String,
     val name: String = "",
     val parent: String? = null,
+    val location: GeoDto? = null,
 )
 
 @Serializable
