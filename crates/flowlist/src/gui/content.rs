@@ -1217,10 +1217,11 @@ impl FlowlistApp {
                 self.view,
                 View::Builtin(BuiltinPerspective::Projects) | View::Folder(_) | View::Custom(_)
             );
-        // Gaps between root rows are a drop target only where a root level
-        // exists. Other perspectives sort by date or priority, so a manual
-        // position would be meaningless.
-        let root_view = matches!(
+        // Gaps before root rows accept a dragged subtask in any list: the
+        // task lands in the same project (or Inbox) as the row below the gap.
+        // The end gap only makes sense in a project or Inbox, where "the end"
+        // is well defined.
+        let end_gap = matches!(
             self.view,
             View::Project(_) | View::Builtin(BuiltinPerspective::Inbox)
         );
@@ -1304,7 +1305,7 @@ impl FlowlistApp {
                     if self.row_is_hidden(&row.id) {
                         continue;
                     }
-                    if root_view && row.depth == 0 {
+                    if row.depth == 0 {
                         list = list.child(
                             self.render_root_drop_zone(Some(row.id.clone()), cx),
                         );
@@ -1323,7 +1324,7 @@ impl FlowlistApp {
                 }
             }
         }
-        if root_view {
+        if end_gap {
             list = list.child(self.render_root_drop_zone(None, cx));
         }
         list.into_any_element()
@@ -1346,7 +1347,7 @@ impl FlowlistApp {
         let move_before = before.clone();
         div()
             .id(super::sid(key))
-            .h(px(5.))
+            .h(px(7.))
             .w_full()
             .flex()
             .items_center()
@@ -1728,9 +1729,9 @@ impl FlowlistApp {
         let title = task.title.clone();
         let painted_title = title.clone();
         let has_children = task.has_children();
-        // Subtasks sit under their parent from the start, like an outline;
-        // the disclosure collapses a branch instead of hiding it until asked.
-        let expanded = self.is_open(&format!("task:{id}"), true);
+        // Subtasks start collapsed; the disclosure opens a branch. Expanding
+        // stays view state, so sorting or grouping never changes it.
+        let expanded = self.is_open(&format!("task:{id}"), false);
         let estimate = task.estimate_min;
         let attachment_count = task.attachments.len();
         // A task whose attachments are all links reads better with a chain
@@ -1852,7 +1853,9 @@ impl FlowlistApp {
                     .child(widgets::checkbox(
                         theme,
                         completed,
-                        if flagged { theme.warning } else { theme.accent },
+                        theme.accent,
+                        task.priority
+                            .map(|priority| super::theme::priority_color(theme, priority)),
                     ))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();

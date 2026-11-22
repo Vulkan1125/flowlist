@@ -2954,19 +2954,36 @@ impl FlowlistApp {
         if payload.tag {
             return;
         }
-        let placement = match &self.view {
-            View::Project(project) => TaskPlacement::Project {
-                project: project.clone(),
-                position: before.clone().map(Position::Before).unwrap_or(Position::End),
+        // A gap before a row files the task beside that row, in that row's
+        // project. The end gap in a project or Inbox files at the end.
+        let placement = match &before {
+            Some(before) => match self
+                .store
+                .db()
+                .tasks
+                .get(before)
+                .and_then(|task| task.project.clone())
+            {
+                Some(project) => TaskPlacement::Project {
+                    project,
+                    position: Position::Before(before.clone()),
+                },
+                None => TaskPlacement::Inbox(Position::Before(before.clone())),
             },
-            View::Builtin(BuiltinPerspective::Inbox) => TaskPlacement::Inbox(
-                before.clone().map(Position::Before).unwrap_or(Position::End),
-            ),
-            _ => {
-                self.content_drop_target = None;
-                cx.notify();
-                return;
-            }
+            None => match &self.view {
+                View::Project(project) => TaskPlacement::Project {
+                    project: project.clone(),
+                    position: Position::End,
+                },
+                View::Builtin(BuiltinPerspective::Inbox) => {
+                    TaskPlacement::Inbox(Position::End)
+                }
+                _ => {
+                    self.content_drop_target = None;
+                    cx.notify();
+                    return;
+                }
+            },
         };
         let ids = self.drag_ids(payload);
         self.execute(Command::MoveTasks { ids, placement });

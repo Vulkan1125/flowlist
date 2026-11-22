@@ -134,8 +134,8 @@ read without opening anything.
 
 ### Task rows and inspector
 
-Subtasks appear indented under their parent from the start in every list, and
-keep their place through sorting and grouping. The disclosure chevron hides or
+Subtasks sit indented under their parent in every list and start collapsed, so
+they keep their place through sorting and grouping. The disclosure chevron hides or
 shows a whole branch with one click, and folding a middle task leaves its
 siblings visible. `za` toggles the selected task's branch, `zo` opens it and
 `zc` closes it; a task without children says so in the status bar instead of

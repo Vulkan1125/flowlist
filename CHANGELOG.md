@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.12 — 2026-11-22
+
+- **Root-level drop gaps work in every list.** Dragging a subtask out of its
+  parent now works in Today, Flagged, Tags and saved perspectives too, not only
+  in projects and the Inbox. The task files beside the row below the gap.
+- **Subtasks are collapsed by default on Mac and the phone.** A chevron on the
+  parent row opens the children; Mac keeps `za` / `zo` / `zc` for the keyboard.
+- **Mac task circles use priority colours:** red for high, yellow for medium
+  and blue for low, matching the phone. No priority keeps the neutral ring, and
+  completed tasks keep the filled accent check.
+
 ## 0.9.11 — 2026-11-22
 
 - **The phone drawer settles smoothly on release.** The dragged row now slides

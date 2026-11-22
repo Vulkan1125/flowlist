@@ -23,11 +23,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -38,6 +41,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -116,6 +122,9 @@ fun TaskRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     depth: Int = 0,
+    hasChildren: Boolean = false,
+    expanded: Boolean = false,
+    onToggleExpanded: (() -> Unit)? = null,
 ) {
     val colors = flow
     Row(
@@ -183,6 +192,24 @@ fun TaskRow(
             Spacer(modifier = Modifier.width(8.dp))
             PendingChip()
         }
+        if (hasChildren && onToggleExpanded != null) {
+            IconButton(onClick = onToggleExpanded, modifier = Modifier.size(28.dp)) {
+                Icon(
+                    imageVector = if (expanded) {
+                        Icons.Rounded.ExpandMore
+                    } else {
+                        Icons.Rounded.ChevronRight
+                    },
+                    contentDescription = if (expanded) {
+                        "Collapse subtasks"
+                    } else {
+                        "Expand subtasks"
+                    },
+                    tint = colors.faint,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
         if (task.flagged && !task.completed) {
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
@@ -204,6 +231,9 @@ fun SwipeTaskRow(
     onTrash: () -> Unit,
     onClick: () -> Unit,
     depth: Int = 0,
+    hasChildren: Boolean = false,
+    expanded: Boolean = false,
+    onToggleExpanded: (() -> Unit)? = null,
 ) {
     val colors = flow
     val state = rememberSwipeToDismissBoxState(
@@ -250,6 +280,9 @@ fun SwipeTaskRow(
                 onClick = onClick,
                 modifier = Modifier.background(colors.background),
                 depth = depth,
+                hasChildren = hasChildren,
+                expanded = expanded,
+                onToggleExpanded = onToggleExpanded,
             )
         }
         Hairline(Modifier.padding(start = 58.dp))
@@ -268,6 +301,9 @@ fun TaskTreeItem(
     onClick: (TaskView) -> Unit,
 ) {
     val kids = children[task.id].orEmpty()
+    var expanded by rememberSaveable(task.id) { mutableStateOf(false) }
+    val hasChildren = kids.isNotEmpty()
+    val toggleExpanded = { expanded = !expanded }
     if (swipeActions && depth == 0) {
         SwipeTaskRow(
             task = task,
@@ -275,6 +311,9 @@ fun TaskTreeItem(
             onToggle = { onToggle(task) },
             onTrash = { onTrash(task) },
             onClick = { onClick(task) },
+            hasChildren = hasChildren,
+            expanded = expanded,
+            onToggleExpanded = toggleExpanded,
         )
     } else {
         TaskRow(
@@ -282,20 +321,25 @@ fun TaskTreeItem(
             onToggle = { onToggle(task) },
             onClick = { onClick(task) },
             depth = depth,
+            hasChildren = hasChildren,
+            expanded = expanded,
+            onToggleExpanded = toggleExpanded,
         )
         Hairline(Modifier.padding(start = (58 + depth * 18).dp))
     }
-    kids.forEach { child ->
-        TaskTreeItem(
-            task = child,
-            children = children,
-            pending = pending,
-            swipeActions = swipeActions,
-            depth = depth + 1,
-            onToggle = onToggle,
-            onTrash = onTrash,
-            onClick = onClick,
-        )
+    if (expanded) {
+        kids.forEach { child ->
+            TaskTreeItem(
+                task = child,
+                children = children,
+                pending = pending,
+                swipeActions = swipeActions,
+                depth = depth + 1,
+                onToggle = onToggle,
+                onTrash = onTrash,
+                onClick = onClick,
+            )
+        }
     }
 }
 

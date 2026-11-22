@@ -402,7 +402,14 @@ pub fn tag_chip(theme: Theme, text: impl Into<String>) -> impl IntoElement {
     chip(theme, format!("#{}", text.into()), theme.text_dim)
 }
 
-pub fn checkbox(theme: Theme, completed: bool, accent: gpui::Hsla) -> impl IntoElement {
+pub fn checkbox(
+    theme: Theme,
+    completed: bool,
+    accent: gpui::Hsla,
+    priority: Option<gpui::Hsla>,
+) -> impl IntoElement {
+    let idle_ring = priority.unwrap_or(theme.text_faint.opacity(0.55));
+    let hover_ring = priority.unwrap_or(accent);
     div()
         .flex()
         .items_center()
@@ -412,11 +419,7 @@ pub fn checkbox(theme: Theme, completed: bool, accent: gpui::Hsla) -> impl IntoE
         .border_1()
         // The idle ring needs to be visible on a pure white reading surface,
         // where a plain hairline disappears. Hovering pulls it to the accent.
-        .border_color(if completed {
-            accent
-        } else {
-            theme.text_faint.opacity(0.55)
-        })
+        .border_color(if completed { accent } else { idle_ring })
         .bg(if completed { accent } else { theme.clear })
         .text_color(if completed { theme.raised } else { accent })
         .text_xs()
@@ -425,7 +428,7 @@ pub fn checkbox(theme: Theme, completed: bool, accent: gpui::Hsla) -> impl IntoE
             if completed {
                 style.opacity(0.9)
             } else {
-                style.border_color(accent).bg(theme.hover)
+                style.border_color(hover_ring).bg(theme.hover)
             }
         })
         .when(completed, |this| {

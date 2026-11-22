@@ -1230,7 +1230,7 @@ impl FlowlistApp {
                                 "Mark step complete"
                             },
                         )
-                        .child(widgets::checkbox(theme, *completed, theme.accent))
+                        .child(widgets::checkbox(theme, *completed, theme.accent, None))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
                             this.toggle_checklist_item(

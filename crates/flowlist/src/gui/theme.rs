@@ -7,6 +7,8 @@
 
 use gpui::{Hsla, rgb, rgba, transparent_black};
 
+use flowlist_core::model::Priority;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Appearance {
     Light,
@@ -353,6 +355,24 @@ pub fn readable_plain_accent(value: u32, appearance: Appearance) -> u32 {
         }
     }
     hsv_to_rgb(hue, saturation, brightness)
+}
+
+/// A blue for low priority that stays readable in both appearances. It is not
+/// part of the palette because every theme needs the same signal colour.
+pub fn low_priority_color(theme: Theme) -> Hsla {
+    match theme.appearance {
+        Appearance::Light => rgba(0x2563EBFF).into(),
+        Appearance::Dark => rgba(0x60A5FAFF).into(),
+    }
+}
+
+/// The colour a priority uses for task rings, sidebar icons and chips.
+pub fn priority_color(theme: Theme, priority: Priority) -> Hsla {
+    match priority {
+        Priority::High => theme.danger,
+        Priority::Medium => theme.warning,
+        Priority::Low => low_priority_color(theme),
+    }
 }
 
 #[derive(Clone, Copy)]

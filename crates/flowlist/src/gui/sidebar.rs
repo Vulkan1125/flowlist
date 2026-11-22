@@ -1872,11 +1872,7 @@ impl ReviewBadge for flowlist_core::model::Project {
 }
 
 pub(super) fn priority_color(theme: super::theme::Theme, priority: Priority) -> gpui::Hsla {
-    match priority {
-        Priority::High => theme.danger,
-        Priority::Medium => theme.warning,
-        Priority::Low => theme.text_faint,
-    }
+    super::theme::priority_color(theme, priority)
 }
 
 #[cfg(test)]

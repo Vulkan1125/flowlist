@@ -152,9 +152,12 @@ touched.
 
 ## Task rows
 
-Priority is shown by the task circle: red for high, yellow for medium and the
-theme accent for low. A flagged task shows a single flag at the far right of
-its row; priorities never add their own flag.
+Priority is shown by the task circle and the selected pill: red for high,
+yellow for medium and blue for low. A flagged task shows a single flag at the
+far right of its row; priorities never add their own flag.
+
+Subtasks start collapsed. Tap the chevron at the right of a parent row to open
+or close its children.
 
 ## Checklists
 

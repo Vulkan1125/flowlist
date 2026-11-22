@@ -13,7 +13,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] UTC storage with local-time date buckets and date-only stamps
 - [x] Sequential task children
 - [x] Inline subtasks: children sit indented under their parent in every list,
-      expanded by default, with a disclosure that collapses one branch.
+      collapsed by default, with a disclosure that opens one branch.
       `za`/`zo`/`zc` fold the selected branch from the keyboard
 - [x] Project types: parallel, sequential and single actions
 - [x] Optional High / Medium / Low task priorities
