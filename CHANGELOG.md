@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.35 — 2026-11-22
+
+- **Configurable Android widgets.** Each Flowlist widget can show Today, Inbox
+  or Upcoming, with its own theme, row count, project labels, completed rows and
+  quick-add button. The widget is resizable and opens its configuration sheet
+  when placed or reconfigured.
+- **Widget actions.** Checking a row completes the task, **Tmrw** moves it to
+  tomorrow, and **+** opens the capture sheet without navigating through the
+  app.
+- **Widget appearance.** Each widget has a text-size choice, a background
+  opacity slider and a frosted tint for a softer glass look. Android widgets
+  cannot blur the wallpaper behind them, so frosted is a translucent tint
+  rather than a real backdrop blur.
+- **Add from Settings.** Settings → Tasks → Home-screen widgets opens the
+  launcher's pin flow without finding the widget picker.
+
 ## 0.9.34 — 2026-11-22
 
 - **Android tablet layout.** Large screens swap the phone bottom bar for a

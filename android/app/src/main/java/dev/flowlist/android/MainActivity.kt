@@ -43,12 +43,14 @@ class MainActivity : ComponentActivity() {
     private var openTab by mutableStateOf<String?>(null)
     private var shared by mutableStateOf<SharedPayload?>(null)
     private var openMore by mutableStateOf<String?>(null)
+    private var openCapture by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         openTab = intent.getStringExtra("tab")
         openMore = intent.getStringExtra("more")
+        openCapture = intent?.getBooleanExtra("capture", false) == true
         shared = sharedPayload(intent)
         setContent {
             FlowlistApp(
@@ -58,6 +60,8 @@ class MainActivity : ComponentActivity() {
                 onSharedConsumed = { shared = null },
                 initialMore = openMore,
                 onMoreConsumed = { openMore = null },
+                initialCapture = openCapture,
+                onCaptureConsumed = { openCapture = false },
             )
         }
     }
@@ -67,6 +71,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         openTab = intent.getStringExtra("tab")
         openMore = intent.getStringExtra("more")
+        openCapture = intent.getBooleanExtra("capture", false)
         shared = sharedPayload(intent)
     }
 
@@ -137,6 +142,8 @@ private fun FlowlistApp(
     onSharedConsumed: () -> Unit,
     initialMore: String? = null,
     onMoreConsumed: () -> Unit = {},
+    initialCapture: Boolean = false,
+    onCaptureConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val repository = remember { Repository(context.applicationContext) }
@@ -185,6 +192,8 @@ private fun FlowlistApp(
                 onSharedConsumed = onSharedConsumed,
                 initialMore = initialMore,
                 onMoreConsumed = onMoreConsumed,
+                initialCapture = initialCapture,
+                onCaptureConsumed = onCaptureConsumed,
                 preferences = preferences,
                 onPreferencesChange = {
                     preferencesStore.save(it)
@@ -215,6 +224,10 @@ private fun FlowlistApp(
             FlowlistWidget().updateAll(context.applicationContext)
             NearbyReminders.sync(context, state.snapshot!!.db)
         }
+    }
+
+    LaunchedEffect(theme) {
+        FlowlistWidget().updateAll(context.applicationContext)
     }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {

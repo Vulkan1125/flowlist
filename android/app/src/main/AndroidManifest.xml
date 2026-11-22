@@ -131,6 +131,11 @@
         </activity-alias>
 
 
+        <activity
+            android:name=".widget.WidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Flowlist" />
+
         <receiver
             android:name=".widget.FlowlistWidgetReceiver"
             android:exported="true"

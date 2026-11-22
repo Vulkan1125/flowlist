@@ -285,6 +285,52 @@ fun Db.today(): List<TaskView> {
         .toList()
 }
 
+/// Tasks a home-screen widget shows for one of its modes. Completed rows are
+/// appended only when the widget opts in, newest first, so checking one off
+/// leaves a short visible trail instead of making the row vanish.
+fun Db.widgetTasks(mode: String, showCompleted: Boolean): List<TaskView> {
+    val today = LocalDate.now()
+    val active = when (mode) {
+        "inbox" -> inbox()
+        "upcoming" -> tasks.values
+            .asSequence()
+            .filter { it.isActive && it.parent == null }
+            .filter { task ->
+                val due = task.due?.local()?.toLocalDate()
+                due != null && due.isAfter(today) && !due.isAfter(today.plusDays(14))
+            }
+            .sortedWith(compareBy({ it.due?.at ?: "" }, { it.title.lowercase() }))
+            .map { it.toView(this) }
+            .toList()
+        else -> today()
+    }
+    if (!showCompleted) return active
+    val done = tasks.values
+        .asSequence()
+        .filter { it.completed && it.trashedAt == null }
+        .filter { task ->
+            when (mode) {
+                "inbox" -> task.project == null && task.parent == null
+                "upcoming" -> {
+                    val due = task.due?.local()?.toLocalDate()
+                    due != null && due.isAfter(today) && !due.isAfter(today.plusDays(14))
+                }
+                else -> {
+                    val completedToday = task.completedAt
+                        ?.let { runCatching { Instant.parse(it) }.getOrNull() }
+                        ?.atZone(ZoneId.systemDefault())
+                        ?.toLocalDate() == today
+                    completedToday || task.due?.local()?.toLocalDate() == today
+                }
+            }
+        }
+        .sortedByDescending { it.completedAt.orEmpty() }
+        .take(3)
+        .map { it.toView(this) }
+        .toList()
+    return active + done
+}
+
 fun Db.forecast(): Map<LocalDate, List<TaskView>> {
     val today = LocalDate.now()
     val horizon = today.plusDays(14)

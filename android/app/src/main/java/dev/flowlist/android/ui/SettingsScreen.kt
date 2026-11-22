@@ -45,6 +45,9 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Settings as SettingsIcon
 import androidx.compose.material3.AlertDialog
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import dev.flowlist.android.widget.FlowlistWidgetReceiver
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -364,6 +367,7 @@ private fun AppearanceSettings(
 
 @Composable
 private fun TaskSettings(preferences: AppPreferences, onChange: (AppPreferences) -> Unit) {
+    val context = LocalContext.current
     SettingsCard("Startup") {
         SmallLabel("Open on")
         ChoiceRow {
@@ -405,6 +409,30 @@ private fun TaskSettings(preferences: AppPreferences, onChange: (AppPreferences)
             preferences.keepCompletedSubtasks,
         ) {
             onChange(preferences.copy(keepCompletedSubtasks = it))
+        }
+    }
+    Spacer(modifier = Modifier.height(14.dp))
+    SettingsCard("Home-screen widgets") {
+        Text(
+            text = "Add a Today, Inbox or Upcoming widget. Each widget keeps its own theme, row count and options.",
+            style = MaterialTheme.typography.bodySmall,
+            color = flow.faint,
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Button(
+            onClick = {
+                AppWidgetManager.getInstance(context).requestPinAppWidget(
+                    ComponentName(context, FlowlistWidgetReceiver::class.java),
+                    null,
+                    null,
+                )
+            },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = flow.accent,
+                contentColor = flow.onAccent,
+            ),
+        ) {
+            Text("Add widget")
         }
     }
     Spacer(modifier = Modifier.height(14.dp))

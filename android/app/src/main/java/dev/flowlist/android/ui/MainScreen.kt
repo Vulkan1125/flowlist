@@ -252,6 +252,8 @@ fun MainScreen(
     onSharedConsumed: () -> Unit = {},
     initialMore: String? = null,
     onMoreConsumed: () -> Unit = {},
+    initialCapture: Boolean = false,
+    onCaptureConsumed: () -> Unit = {},
     preferences: AppPreferences,
     onPreferencesChange: (AppPreferences) -> Unit,
 ) {
@@ -270,6 +272,15 @@ fun MainScreen(
     var captureInitial by rememberSaveable { mutableStateOf("") }
     var captureAttachment by remember { mutableStateOf<String?>(null) }
     var captureAttachmentLabel by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(initialCapture) {
+        if (initialCapture) {
+            captureInitial = ""
+            captureAttachment = null
+            captureAttachmentLabel = null
+            capture = true
+            onCaptureConsumed()
+        }
+    }
     var sharePrompt by remember { mutableStateOf<SharedPayload?>(null) }
     var previewTarget by remember { mutableStateOf<PreviewTarget?>(null) }
     var tagTasks by remember { mutableStateOf<TagDto?>(null) }
