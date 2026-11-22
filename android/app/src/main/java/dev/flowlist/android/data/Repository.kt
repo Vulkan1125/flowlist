@@ -198,6 +198,7 @@ class Repository(context: Context) {
             estimateMin = edit.estimateMin,
             tags = edit.tags.toList(),
             repeat = edit.repeat,
+            sequential = edit.sequential,
             modifiedAt = java.time.Instant.now().toString(),
         )
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
@@ -219,6 +220,7 @@ class Repository(context: Context) {
             put("flagged", edit.flagged)
             put("estimate_min", estimateJson)
             put("repeat", edit.repeat ?: JsonNull)
+            put("sequential", edit.sequential)
         }
         enqueue(
             PendingOp(

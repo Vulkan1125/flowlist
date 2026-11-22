@@ -266,7 +266,10 @@ fun createSubtaskCommand(
             put("id", id)
             put("title", title)
             put("notes", "")
-            put("project", projectId?.let { JsonPrimitive(it) } ?: JsonNull)
+            // A subtask inherits its parent's project. Sending both would make
+            // the engine reject the command, which is why adding from the
+            // phone used to fail silently.
+            put("project", JsonNull)
             put("project_path", JsonNull)
             put("parent", parentId)
             put("tags", buildJsonArray {})

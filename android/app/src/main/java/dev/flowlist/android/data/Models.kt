@@ -62,6 +62,7 @@ data class TaskDto(
     @SerialName("modified_at") val modifiedAt: String = "",
     val repeat: JsonElement? = null,
     @SerialName("repeat_series") val repeatSeries: String? = null,
+    val sequential: Boolean = false,
 )
 
 @Serializable
@@ -159,6 +160,7 @@ data class TaskEdit(
     val repeat: JsonElement? = null,
     /// Apply the priority to the whole repeating series, not just this task.
     val priorityAll: Boolean = false,
+    val sequential: Boolean = false,
 )
 
 data class TaskView(

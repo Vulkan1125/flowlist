@@ -488,6 +488,8 @@ pub struct FlowlistApp {
     tag_buffer: text::TextBuffer,
     checklist_buffer: text::TextBuffer,
     checklist_editing: Option<ChecklistId>,
+    /// Whether the inline subtask field adds a one-off step instead of a task.
+    add_one_off: bool,
     editing: Option<EditField>,
     field_error: Option<String>,
     /// The task created by `o`/`O` while its title is still being typed.
@@ -720,6 +722,7 @@ impl FlowlistApp {
             tag_buffer: text::TextBuffer::empty(),
             checklist_buffer: text::TextBuffer::empty(),
             checklist_editing: None,
+            add_one_off: false,
             editing: None,
             field_error: None,
             draft_task: None,
@@ -2002,15 +2005,32 @@ impl FlowlistApp {
             cx.notify();
             return;
         }
-        let mut new_task = NewTask::new(title);
-        new_task.parent = Some(parent.clone());
-        new_task.position = Position::End;
-        self.execute(Command::CreateTask(new_task));
-        self.expanded.insert(format!("task:{parent}"));
-        self.checklist_editing = None;
-        self.checklist_buffer.clear();
-        // Keep the field focused so several subtasks can be typed in a row.
-        self.save_session();
+        if let Some(item) = self.checklist_editing.take() {
+            self.execute(Command::UpdateChecklistItem {
+                task: parent,
+                item,
+                title,
+                completed: None,
+            });
+            self.checklist_buffer.clear();
+            self.focus = FocusArea::Content;
+        } else if self.add_one_off {
+            self.execute(Command::AddChecklistItem {
+                task: parent,
+                title,
+                position: None,
+            });
+            self.checklist_buffer.clear();
+        } else {
+            let mut new_task = NewTask::new(title);
+            new_task.parent = Some(parent.clone());
+            new_task.position = Position::End;
+            self.execute(Command::CreateTask(new_task));
+            self.expanded.insert(format!("task:{parent}"));
+            self.checklist_buffer.clear();
+            // Keep the field focused so several subtasks can be typed in a row.
+            self.save_session();
+        }
         cx.notify();
     }
 
@@ -3004,6 +3024,28 @@ impl FlowlistApp {
             },
         });
         cx.notify();
+    }
+
+    fn drop_checklist_item(
+        &mut self,
+        task: TaskId,
+        target: ChecklistId,
+        payload: &drag::DragChecklist,
+        cx: &mut Context<Self>,
+    ) {
+        if payload.item == target {
+            return;
+        }
+        let Some(index) = self
+            .store
+            .db()
+            .tasks
+            .get(&task)
+            .and_then(|task| task.checklist.iter().position(|item| item.id == target))
+        else {
+            return;
+        };
+        self.move_checklist_item(task, payload.item.clone(), index, cx);
     }
 
     /// Move a child task to the end of its project (or the Inbox), leaving

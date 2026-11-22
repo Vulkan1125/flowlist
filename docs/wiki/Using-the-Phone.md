@@ -137,7 +137,8 @@ files, after which the attachment opens without the Mac. Tapping that button
 again removes the offline copy.
 
 **Add link** attaches an `http(s)` URL; it opens in the browser and appears in
-the same attachment list as files.
+the same attachment list as files. Links do not show the offline download
+button; only file attachments can be saved on the phone.
 
 Uploads go over `POST /api/v1/files` and downloads over `GET /api/v1/files`.
 Both require the paired token. Files are capped at 40 MB, and the Mac only

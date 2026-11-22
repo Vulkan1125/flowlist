@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,6 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -84,6 +86,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -92,6 +95,7 @@ import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import dev.flowlist.android.data.ChecklistDto
 import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.StampDto
 import dev.flowlist.android.data.TagDto
@@ -130,6 +134,10 @@ fun TaskEditSheet(
     onMoveSubtask: (TaskDto, TaskDto) -> Unit,
     onReorderSubtasks: (List<TaskDto>) -> Unit,
     onAddLink: (String) -> Unit,
+    onChecklist: (ChecklistDto, Boolean) -> Unit,
+    onAddChecklist: (String) -> Unit,
+    onDeleteChecklist: (ChecklistDto) -> Unit,
+    onMoveChecklist: (ChecklistDto, Int) -> Unit,
     onDeleteSeries: () -> Unit,
     onComplete: () -> Unit,
     onDelete: () -> Unit,
@@ -143,6 +151,7 @@ fun TaskEditSheet(
     var defer by remember(task.id) { mutableStateOf(task.defer) }
     var priority by remember(task.id) { mutableStateOf(task.priority) }
     var flagged by remember(task.id) { mutableStateOf(task.flagged) }
+    var sequential by remember(task.id) { mutableStateOf(task.sequential) }
     var estimate by remember(task.id) {
         mutableStateOf(task.estimateMin?.toString().orEmpty())
     }
@@ -170,6 +179,10 @@ fun TaskEditSheet(
     val subtaskScope = rememberCoroutineScope()
     var linkOpen by remember { mutableStateOf(false) }
     var linkText by remember { mutableStateOf("") }
+    var addOneOff by remember { mutableStateOf(false) }
+    var oneOffDragId by remember(task.id) { mutableStateOf<String?>(null) }
+    var oneOffDragOffset by remember(task.id) { mutableFloatStateOf(0f) }
+    var oneOffRowHeight by remember(task.id) { mutableFloatStateOf(0f) }
     var repeat by remember(task.id) { mutableStateOf(task.repeat) }
     var confirmSeries by remember { mutableStateOf(false) }
     val subtaskFocus = remember { FocusRequester() }
@@ -211,6 +224,14 @@ fun TaskEditSheet(
         repeat = unit?.let { repeatCommand(it) }
     }
 
+    fun submitSubtask() {
+        val name = subtaskTitle.trim()
+        if (name.isEmpty()) return
+        if (addOneOff) onAddChecklist(name) else onAddSubtask(name)
+        subtaskTitle = ""
+        addingSubtask = false
+    }
+
     fun applyStamp(value: StampDto?) {
         if (datePickerForDue) due = value else defer = value
         dateError = null
@@ -226,9 +247,11 @@ fun TaskEditSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 30.dp),
         ) {
+            Spacer(modifier = Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CheckCircle(
                     checked = task.completed,
@@ -236,25 +259,30 @@ fun TaskEditSheet(
                     priority = task.priority,
                 )
                 Spacer(modifier = Modifier.width(14.dp))
-                Text(
-                    text = if (pending) "Waiting to sync" else "Task",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (pending) colors.warning else colors.faint,
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    placeholder = { Text("Task name", color = colors.faint) },
+                    textStyle = TextStyle(
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.ink,
+                    ),
+                    colors = borderlessColors(),
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Rounded.Close, contentDescription = "Close", tint = colors.faint)
                 }
             }
-
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                placeholder = { Text("Task name", color = colors.faint) },
-                textStyle = TextStyle(fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = colors.ink),
-                colors = borderlessColors(),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (pending) {
+                Text(
+                    text = "Waiting to sync",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.warning,
+                    modifier = Modifier.padding(start = 50.dp, bottom = 2.dp),
+                )
+            }
 
             OutlinedTextField(
                 value = notes,
@@ -293,22 +321,29 @@ fun TaskEditSheet(
                         modifier = Modifier.weight(1f),
                     )
                     val saved = path in savedAttachments
-                    IconButton(
-                        onClick = {
-                            if (saved) onRemoveSavedAttachment(path) else onSaveAttachment(path)
-                        },
-                        modifier = Modifier.size(30.dp),
-                    ) {
-                        Icon(
-                            imageVector = if (saved) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
-                            contentDescription = if (saved) {
-                                "Remove offline copy"
-                            } else {
-                                "Save for offline"
+                    val isLink = path.startsWith("http://") || path.startsWith("https://")
+                    if (!isLink) {
+                        IconButton(
+                            onClick = {
+                                if (saved) onRemoveSavedAttachment(path) else onSaveAttachment(path)
                             },
-                            tint = if (saved) colors.accent else colors.faint,
-                            modifier = Modifier.size(16.dp),
-                        )
+                            modifier = Modifier.size(30.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (saved) {
+                                    Icons.Rounded.DownloadDone
+                                } else {
+                                    Icons.Rounded.Download
+                                },
+                                contentDescription = if (saved) {
+                                    "Remove offline copy"
+                                } else {
+                                    "Save for offline"
+                                },
+                                tint = if (saved) colors.accent else colors.faint,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
                     }
                     IconButton(
                         onClick = { onRemoveAttachment(path) },
@@ -494,6 +529,11 @@ fun TaskEditSheet(
                     "Subtasks · ${orderedSubtasks.count { it.completed }}/${orderedSubtasks.size}"
                 },
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PriorityPill("Parallel", !sequential, colors.accent) { sequential = false }
+                PriorityPill("Sequential", sequential, colors.accent) { sequential = true }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
             orderedSubtasks.forEachIndexed { index, child ->
                 key(child.id) {
                     val dragging = subtaskDragId == child.id
@@ -676,12 +716,130 @@ fun TaskEditSheet(
                     }
                 }
             }
+            if (task.checklist.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Label("One-off")
+                task.checklist.forEachIndexed { index, item ->
+                    val oneOffDragging = oneOffDragId == item.id
+                    val rowHeightPx = if (oneOffRowHeight > 0f) {
+                        oneOffRowHeight
+                    } else {
+                        with(LocalDensity.current) { 40.dp.toPx() }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { size ->
+                                if (oneOffRowHeight <= 0f && size.height > 0) {
+                                    oneOffRowHeight = size.height.toFloat()
+                                }
+                            }
+                            .zIndex(if (oneOffDragging) 1f else 0f)
+                            .graphicsLayer {
+                                if (oneOffDragging) translationY = oneOffDragOffset
+                            }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .pointerInput(task.id, item.id, rowHeightPx) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            oneOffDragId = item.id
+                                            oneOffDragOffset = 0f
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            oneOffDragOffset += dragAmount.y
+                                        },
+                                        onDragEnd = {
+                                            val from = task.checklist.indexOfFirst { it.id == item.id }
+                                            if (from >= 0) {
+                                                val to = (
+                                                    from + (oneOffDragOffset / rowHeightPx).roundToInt()
+                                                    ).coerceIn(0, task.checklist.lastIndex)
+                                                if (to != from) onMoveChecklist(item, to)
+                                            }
+                                            oneOffDragId = null
+                                            oneOffDragOffset = 0f
+                                        },
+                                        onDragCancel = {
+                                            oneOffDragId = null
+                                            oneOffDragOffset = 0f
+                                        },
+                                    )
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "⠿",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.faint,
+                            )
+                        }
+                        CheckCircle(
+                            checked = item.completed,
+                            onClick = { onChecklist(item, !item.completed) },
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (item.completed) colors.faint else colors.ink,
+                            textDecoration = if (item.completed) {
+                                androidx.compose.ui.text.style.TextDecoration.LineThrough
+                            } else {
+                                null
+                            },
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(
+                            onClick = { onDeleteChecklist(item) },
+                            modifier = Modifier.size(30.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Delete one-off",
+                                tint = colors.faint,
+                                modifier = Modifier.size(15.dp),
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PriorityPill("Subtask", !addOneOff, colors.accent) { addOneOff = false }
+                PriorityPill("One-off", addOneOff, colors.accent) { addOneOff = true }
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+
             if (addingSubtask) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { addingSubtask = false; subtaskTitle = "" }) {
+                        Text("Cancel", color = colors.faint)
+                    }
+                    TextButton(onClick = { submitSubtask() }) {
+                        Text("Add", color = colors.accent)
+                    }
+                }
                 OutlinedTextField(
                     value = subtaskTitle,
                     onValueChange = { subtaskTitle = it },
-                    placeholder = { Text("Subtask name", color = colors.faint) },
+                    placeholder = {
+                        Text(
+                            if (addOneOff) "One-off step" else "Subtask name",
+                            color = colors.faint,
+                        )
+                    },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { submitSubtask() }),
                     shape = RoundedCornerShape(10.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = colors.accent,
@@ -696,22 +854,6 @@ fun TaskEditSheet(
                         .fillMaxWidth()
                         .focusRequester(subtaskFocus),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { addingSubtask = false; subtaskTitle = "" }) {
-                        Text("Cancel", color = colors.faint)
-                    }
-                    TextButton(
-                        onClick = {
-                            if (subtaskTitle.isNotBlank()) {
-                                onAddSubtask(subtaskTitle)
-                                subtaskTitle = ""
-                                addingSubtask = false
-                            }
-                        },
-                    ) {
-                        Text("Add", color = colors.accent)
-                    }
-                }
             } else {
                 Row(
                     modifier = Modifier
@@ -728,7 +870,7 @@ fun TaskEditSheet(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Add subtask",
+                        text = if (addOneOff) "Add one-off" else "Add subtask",
                         style = MaterialTheme.typography.labelLarge,
                         color = colors.faint,
                     )
@@ -852,6 +994,7 @@ fun TaskEditSheet(
                         estimateMin = estimate.toIntOrNull(),
                         tags = selectedTags,
                         repeat = repeat,
+                        sequential = sequential,
                     )
                     val dueDate = due?.local()?.toLocalDate()
                     val deferDate = defer?.local()?.toLocalDate()

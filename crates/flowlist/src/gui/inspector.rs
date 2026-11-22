@@ -5,12 +5,12 @@ use chrono::{Datelike, Duration, Timelike};
 use gpui::{AnyElement, Context, CursorStyle, IntoElement, Window, div, prelude::*, px};
 
 use flowlist_core::command::{Command, ProjectPatch};
-use flowlist_core::ids::TaskId;
+use flowlist_core::ids::{ChecklistId, TaskId};
 use flowlist_core::model::{Priority, ProjectIcon, ProjectStatus};
 use flowlist_core::time::{format_duration, human_date, local_date, now};
 
 use super::content::month_grid;
-use super::drag::DragTask;
+use super::drag::{DragChecklist, DragTask, checklist_ghost};
 use super::icons::Icon;
 use super::widgets::TipExt;
 use super::{ClockUnit, DateField, DatePickerStep, EditField, FlowlistApp, View, icons, widgets};
@@ -1614,6 +1614,16 @@ impl FlowlistApp {
             .unwrap_or_default();
         let done = children.iter().filter(|child| child.2).count();
         let total = children.len();
+        let checklist: Vec<(ChecklistId, String, bool)> = db
+            .tasks
+            .get(id)
+            .map(|task| {
+                task.checklist
+                    .iter()
+                    .map(|item| (item.id.clone(), item.title.clone(), item.completed))
+                    .collect()
+            })
+            .unwrap_or_default();
 
         let mut section = div().flex().flex_col().gap_1().child(
             div()
@@ -1774,7 +1784,7 @@ impl FlowlistApp {
             section = section.child(row);
         }
 
-        if total == 0 {
+        if total == 0 && checklist.is_empty() {
             section = section.child(
                 div()
                     .text_xs()
@@ -1783,13 +1793,199 @@ impl FlowlistApp {
             );
         }
 
+        if !checklist.is_empty() {
+            section = section.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child("One-off"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child(format!(
+                                "{}/{}",
+                                checklist.iter().filter(|item| item.2).count(),
+                                checklist.len()
+                            )),
+                    ),
+            );
+            for (item_id, title, completed) in &checklist {
+                let toggle_task = parent.clone();
+                let toggle_item = item_id.clone();
+                let edit_task = parent.clone();
+                let edit_item = item_id.clone();
+                let edit_title = title.clone();
+                let delete_task = parent.clone();
+                let delete_item = item_id.clone();
+                let drag_task = parent.clone();
+                let drag_item = item_id.clone();
+                let drag_title = title.clone();
+                let drop_task = parent.clone();
+                let drop_item = item_id.clone();
+                section = section.child(
+                    div()
+                        .id(super::sid(format!("one-off:{item_id}")))
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .min_h(px(26.))
+                        .px_1()
+                        .rounded_sm()
+                        .hover(|style| style.bg(theme.hover))
+                        .child(
+                            div()
+                                .id(super::sid(format!("one-off-grip:{item_id}")))
+                                .w(px(12.))
+                                .cursor(CursorStyle::OpenHand)
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .flow_tip(self, cx, theme, "Drag to reorder")
+                                .child("⠿"),
+                        )
+                        .child(
+                            div()
+                                .id(super::sid(format!("one-off-toggle:{item_id}")))
+                                .flex_shrink_0()
+                                .flow_tip(
+                                    self,
+                                    cx,
+                                    theme,
+                                    if *completed {
+                                        "Mark one-off incomplete"
+                                    } else {
+                                        "Mark one-off complete"
+                                    },
+                                )
+                                .child(widgets::checkbox(
+                                    theme,
+                                    *completed,
+                                    theme.accent,
+                                    None,
+                                ))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.toggle_checklist_item(
+                                        toggle_task.clone(),
+                                        toggle_item.clone(),
+                                        cx,
+                                    );
+                                })),
+                        )
+                        .child(
+                            div()
+                                .id(super::sid(format!("one-off-title:{item_id}")))
+                                .flex_1()
+                                .min_w_0()
+                                .overflow_hidden()
+                                .whitespace_nowrap()
+                                .text_sm()
+                                .text_color(if *completed {
+                                    theme.text_faint
+                                } else {
+                                    theme.text
+                                })
+                                .when(*completed, |this| this.line_through())
+                                .child(title.clone())
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.begin_checklist_edit(
+                                        edit_item.clone(),
+                                        edit_title.clone(),
+                                        cx,
+                                    );
+                                    this.select_only(edit_task.clone());
+                                    this.show_inspector = true;
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            div()
+                                .id(super::sid(format!("one-off-delete:{item_id}")))
+                                .w(px(16.))
+                                .text_center()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .cursor_pointer()
+                                .hover(|style| style.text_color(theme.danger))
+                                .flow_tip(self, cx, theme, "Delete one-off")
+                                .child(icons::icon(Icon::Close, 12.0, theme.text_faint))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.delete_checklist_item(
+                                        delete_task.clone(),
+                                        delete_item.clone(),
+                                        cx,
+                                    );
+                                })),
+                        )
+                        .on_drag(
+                            DragChecklist {
+                                task: drag_task,
+                                item: drag_item,
+                                label: drag_title,
+                            },
+                            move |payload, position, window, cx| {
+                                checklist_ghost(payload, position, window, cx, theme)
+                            },
+                        )
+                        .on_drop::<DragChecklist>(cx.listener(
+                            move |this, payload: &DragChecklist, _, cx| {
+                                this.drop_checklist_item(
+                                    drop_task.clone(),
+                                    drop_item.clone(),
+                                    payload,
+                                    cx,
+                                )
+                            },
+                        )),
+                );
+            }
+        }
+
+        section = section.child(
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .child(
+                    div()
+                        .id("new-step-subtask")
+                        .cursor_pointer()
+                        .child(widgets::toggle_chip(theme, "Subtask", !self.add_one_off))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.add_one_off = false;
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    div()
+                        .id("new-step-one-off")
+                        .cursor_pointer()
+                        .child(widgets::toggle_chip(theme, "One-off", self.add_one_off))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.add_one_off = true;
+                            cx.notify();
+                        })),
+                ),
+        );
+
         section.child(
             div()
                 .id("subtask-add")
                 .child(widgets::text_field(
                     theme,
                     &self.checklist_buffer,
-                    "Add a subtask…",
+                    if self.add_one_off {
+                        "Add a one-off…"
+                    } else {
+                        "Add a subtask…"
+                    },
                     self.focus == super::FocusArea::Checklist,
                 ))
                 .on_click(cx.listener(|this, _, _, cx| {

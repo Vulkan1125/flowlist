@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.14 — 2026-11-22
+
+- **Adding a subtask on Android works.** The create command sent both the
+  parent and the parent's project, which the engine rejects; the child now
+  inherits the project from its parent.
+- **The Android editor's top row is the task title itself.** The "Task" label
+  is gone, the circle sits beside the title, and the row starts a little lower.
+- **Parallel and Sequential chips** are in the Android task editor for a
+  task's own subtasks.
+- **One-off steps are a second subtask type on Mac and Android.** Choose
+  **One-off** above the add field; one-offs tick, add inline, drag to reorder
+  and delete like checklist steps, and are stored with the task rather than
+  appearing as separate tasks.
+- **Links no longer show a download button.** The offline-copy control only
+  appears for file attachments; links open in the browser.
+
 ## 0.9.13 — 2026-11-22
 
 - **Checklists are gone from the Mac and the phone; subtasks replace them.**

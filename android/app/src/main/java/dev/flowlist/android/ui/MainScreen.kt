@@ -793,6 +793,18 @@ fun MainScreen(
                 onAddLink = { url ->
                     scope.launch { repository.addAttachmentLink(dto, url) }
                 },
+                onChecklist = { item, completed ->
+                    scope.launch { repository.toggleChecklist(dto, item.id, completed) }
+                },
+                onAddChecklist = { title ->
+                    scope.launch { repository.addChecklist(dto, title) }
+                },
+                onDeleteChecklist = { item ->
+                    scope.launch { repository.deleteChecklist(dto, item) }
+                },
+                onMoveChecklist = { item, to ->
+                    scope.launch { repository.moveChecklist(dto, item, to) }
+                },
                 onDeleteSeries = {
                     detail = null
                     scope.launch { repository.deleteSeries(dto) }

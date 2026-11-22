@@ -2,7 +2,7 @@
 
 use gpui::{App, Context, IntoElement, Pixels, Point, Render, Window, div, prelude::*, px};
 
-use flowlist_core::ids::{FolderId, ProjectId, TaskId};
+use flowlist_core::ids::{ChecklistId, FolderId, ProjectId, TaskId};
 
 use super::icons::{self, Icon};
 use super::theme::Theme;
@@ -22,6 +22,14 @@ impl DragTask {
             tag: false,
         }
     }
+}
+
+/// A one-off step being dragged inside its task's checklist.
+#[derive(Clone, Debug)]
+pub struct DragChecklist {
+    pub task: TaskId,
+    pub item: ChecklistId,
+    pub label: String,
 }
 
 /// A project row being dragged onto a folder. Projects cannot nest, so this
@@ -134,6 +142,17 @@ impl Render for ResizeGhost {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         div().size(px(0.))
     }
+}
+
+/// Constructor used by a one-off row's `.on_drag`.
+pub fn checklist_ghost(
+    payload: &DragChecklist,
+    position: Point<Pixels>,
+    _window: &mut Window,
+    cx: &mut App,
+    theme: Theme,
+) -> gpui::Entity<DragGhost> {
+    cx.new(|_| DragGhost::new(payload.label.clone(), Icon::Check, position, theme))
 }
 
 /// Constructor used by `.on_drag`.
