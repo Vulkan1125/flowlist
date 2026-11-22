@@ -52,6 +52,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
@@ -98,6 +99,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.SubcomposeAsyncImage
+import dev.flowlist.android.data.faviconUrl
 import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -331,12 +334,39 @@ fun TaskEditSheet(
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AttachFile,
-                        contentDescription = null,
-                        tint = colors.faint,
-                        modifier = Modifier.size(17.dp),
-                    )
+                    val isLink = path.startsWith("http://") || path.startsWith("https://")
+                    if (isLink) {
+                        SubcomposeAsyncImage(
+                            model = faviconUrl(path),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(17.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            loading = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Link,
+                                    contentDescription = null,
+                                    tint = colors.faint,
+                                    modifier = Modifier.size(17.dp),
+                                )
+                            },
+                            error = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Link,
+                                    contentDescription = null,
+                                    tint = colors.faint,
+                                    modifier = Modifier.size(17.dp),
+                                )
+                            },
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.AttachFile,
+                            contentDescription = null,
+                            tint = colors.faint,
+                            modifier = Modifier.size(17.dp),
+                        )
+                    }
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = attachmentDisplayName(path),
@@ -346,7 +376,6 @@ fun TaskEditSheet(
                         modifier = Modifier.weight(1f),
                     )
                     val saved = path in savedAttachments
-                    val isLink = path.startsWith("http://") || path.startsWith("https://")
                     if (!isLink) {
                         IconButton(
                             onClick = {

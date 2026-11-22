@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.19 — 2026-11-22
+
+- **Sharing asks where it goes.** A shared link or file now offers **New task**
+  or **Add to existing task**. The picker searches active tasks and attaches
+  the link or the uploaded file in place, without creating a duplicate.
+- **Link favicons.** Link rows in the Android task editor show the site's own
+  favicon, falling back to the chain icon when the site has none. The icon is
+  fetched from the link's host, not a third-party favicon service.
+
 ## 0.9.18 — 2026-11-22
 
 - **Sharing asks for a name first.** Sharing a link or file now opens the

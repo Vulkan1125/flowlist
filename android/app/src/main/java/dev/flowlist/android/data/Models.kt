@@ -444,6 +444,15 @@ fun attachmentDisplayName(value: String): String {
     return value.substringAfterLast('/')
 }
 
+/// The site's own favicon. Fetching it from the host avoids a third-party
+/// favicon service; Coil shows the chain icon when it is missing.
+fun faviconUrl(value: String): String? {
+    val url = attachmentUrl(value)
+    val host = runCatching { java.net.URI(url).host }.getOrNull() ?: return null
+    val scheme = if (url.startsWith("http://")) "http" else "https"
+    return "$scheme://$host/favicon.ico"
+}
+
 fun linkWithName(url: String, name: String): String {
     val trimmed = name.trim()
     return if (trimmed.isEmpty()) url.trim() else "${url.trim()}\t$trimmed"

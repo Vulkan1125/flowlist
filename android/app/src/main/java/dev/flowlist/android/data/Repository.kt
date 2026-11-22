@@ -219,6 +219,14 @@ class Repository(context: Context) {
         return _state.value.snapshot?.db?.tasks?.get(id) ?: task
     }
 
+    /// Attaches an already-uploaded file path to an existing task.
+    suspend fun addAttachment(taskId: String, path: String) {
+        val snapshot = _state.value.snapshot ?: return
+        val task = snapshot.db.tasks[taskId] ?: return
+        if (path in task.attachments) return
+        updateAttachments(taskId, task.attachments + path)
+    }
+
     /// Uploads a file to the Mac and returns its library path, ready to be
     /// stored on a task in the same command.
     suspend fun uploadSharedFile(uri: Uri): String? {

@@ -251,6 +251,8 @@ fun MainScreen(
     var captureInitial by rememberSaveable { mutableStateOf("") }
     var captureAttachment by remember { mutableStateOf<String?>(null) }
     var captureAttachmentLabel by remember { mutableStateOf<String?>(null) }
+    var sharePrompt by remember { mutableStateOf<SharedPayload?>(null) }
+    var sharePicking by remember { mutableStateOf(false) }
     var selecting by rememberSaveable { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var search by rememberSaveable { mutableStateOf(false) }
@@ -329,33 +331,8 @@ fun MainScreen(
                 captureAttachmentLabel = null
                 capture = true
             }
-            is SharedPayload.Link -> {
-                val title = payload.title?.takeIf { it.isNotBlank() }
-                    ?: android.net.Uri.parse(payload.url).host
-                    ?: payload.url
-                captureInitial = title
-                captureAttachment = linkWithName(payload.url, payload.title.orEmpty())
-                captureAttachmentLabel = payload.title?.takeIf { it.isNotBlank() } ?: payload.url
-                capture = true
-            }
-            is SharedPayload.File -> scope.launch {
-                val title = payload.name
-                    ?.substringBeforeLast('.', payload.name)
-                    ?.takeIf { it.isNotBlank() }
-                    ?: "Shared file"
-                val path = repository.uploadSharedFile(payload.uri)
-                if (path == null) {
-                    toasts.show(
-                        message = "Couldn't attach that file",
-                        duration = SnackbarDuration.Short,
-                    )
-                } else {
-                    captureInitial = title
-                    captureAttachment = path
-                    captureAttachmentLabel = payload.name ?: path.substringAfterLast('/')
-                    capture = true
-                }
-            }
+            is SharedPayload.Link -> sharePrompt = payload
+            is SharedPayload.File -> sharePrompt = payload
         }
         onSharedConsumed()
     }
@@ -866,6 +843,99 @@ fun MainScreen(
         }
     }
 
+    }
+
+    sharePrompt?.let { payload ->
+        val label = when (payload) {
+            is SharedPayload.Link -> payload.title?.takeIf { it.isNotBlank() } ?: payload.url
+            is SharedPayload.File -> payload.name ?: "Shared file"
+            is SharedPayload.Text -> payload.text
+        }
+        if (sharePicking) {
+            ShareTaskPickerSheet(
+                label = label,
+                tasks = snapshot?.db?.taskViews().orEmpty(),
+                onDismiss = {
+                    sharePicking = false
+                    sharePrompt = null
+                },
+                onPick = { task ->
+                    sharePicking = false
+                    sharePrompt = null
+                    when (payload) {
+                        is SharedPayload.Link -> scope.launch {
+                            val dto = snapshot?.db?.tasks?.get(task.id)
+                            if (dto != null) {
+                                repository.addAttachmentLink(dto, payload.url, payload.title.orEmpty())
+                                toasts.show(
+                                    message = "Added link to “${task.title}”",
+                                    duration = SnackbarDuration.Short,
+                                )
+                            }
+                        }
+                        is SharedPayload.File -> scope.launch {
+                            toasts.show(
+                                message = "Uploading “${payload.name ?: "file"}”…",
+                                duration = SnackbarDuration.Short,
+                            )
+                            val path = repository.uploadSharedFile(payload.uri)
+                            if (path == null) {
+                                toasts.show(
+                                    message = "Couldn't attach that file",
+                                    duration = SnackbarDuration.Short,
+                                )
+                            } else {
+                                repository.addAttachment(task.id, path)
+                                toasts.show(
+                                    message = "Attached to “${task.title}”",
+                                    duration = SnackbarDuration.Short,
+                                )
+                            }
+                        }
+                        is SharedPayload.Text -> Unit
+                    }
+                },
+            )
+        } else {
+            ShareChoiceSheet(
+                label = label,
+                onNewTask = {
+                    sharePrompt = null
+                    when (payload) {
+                        is SharedPayload.Link -> {
+                            captureInitial = payload.title?.takeIf { it.isNotBlank() }
+                                ?: android.net.Uri.parse(payload.url).host
+                                ?: payload.url
+                            captureAttachment = linkWithName(payload.url, payload.title.orEmpty())
+                            captureAttachmentLabel =
+                                payload.title?.takeIf { it.isNotBlank() } ?: payload.url
+                            capture = true
+                        }
+                        is SharedPayload.File -> scope.launch {
+                            val title = payload.name
+                                ?.substringBeforeLast('.', payload.name)
+                                ?.takeIf { it.isNotBlank() }
+                                ?: "Shared file"
+                            val path = repository.uploadSharedFile(payload.uri)
+                            if (path == null) {
+                                toasts.show(
+                                    message = "Couldn't attach that file",
+                                    duration = SnackbarDuration.Short,
+                                )
+                            } else {
+                                captureInitial = title
+                                captureAttachment = path
+                                captureAttachmentLabel = payload.name ?: path.substringAfterLast('/')
+                                capture = true
+                            }
+                        }
+                        is SharedPayload.Text -> Unit
+                    }
+                },
+                onExisting = { sharePicking = true },
+                onDismiss = { sharePrompt = null },
+            )
+        }
     }
 
     detail?.let { taskView ->

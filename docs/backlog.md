@@ -160,8 +160,9 @@ below; this list is the current map.
       and the live pairing code; the phone scans it and tries each address in
       order, so a LAN address can fall through to Tailscale.
 - [x] **Android share-sheet capture** — text opens the capture sheet
-      prefilled; a shared URL or uploaded file opens it with a suggested name
-      and an attachment chip, so the task can be renamed first.
+      prefilled; a shared URL or file asks whether to start a new task or join
+      an existing one, then attaches the link or upload. Link rows show the
+      site's favicon.
 - [x] **Android multi-select** — a header checklist opens select mode; bulk
       complete/reopen, bulk trash with one Undo, and Trash select-all plus a
       confirmed delete-forever.
