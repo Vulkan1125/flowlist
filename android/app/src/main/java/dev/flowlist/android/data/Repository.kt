@@ -1125,11 +1125,12 @@ class Repository(context: Context) {
         kind: String = "parallel",
         notes: String = "",
         reviewDays: Int? = null,
+        icon: String = "project",
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         send(
-            createProjectCommand(trimmed, folder, kind, notes, reviewDays),
+            createProjectCommand(trimmed, folder, kind, notes, reviewDays, icon),
             "New project “$trimmed”",
         )
     }
@@ -1142,6 +1143,7 @@ class Repository(context: Context) {
         kind: String = project.kind,
         notes: String = project.notes,
         reviewDays: Int = project.reviewIntervalDays,
+        icon: String = project.icon,
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
@@ -1157,6 +1159,7 @@ class Repository(context: Context) {
             if (reviewDays != project.reviewIntervalDays) {
                 put("review_interval_days", reviewDays)
             }
+            if (icon != project.icon) put("icon", icon)
         }
         if (patch.isNotEmpty()) {
             enqueue(

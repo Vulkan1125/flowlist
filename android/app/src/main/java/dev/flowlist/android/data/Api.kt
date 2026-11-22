@@ -390,6 +390,7 @@ fun createProjectCommand(
     kind: String = "parallel",
     notes: String = "",
     reviewDays: Int? = null,
+    icon: String = "project",
 ): JsonObject = buildJsonObject {
     put(
         "create_project",
@@ -404,7 +405,7 @@ fun createProjectCommand(
             put("next_review", JsonNull)
             put("sequential", kind == "sequential")
             put("kind", kind)
-            put("icon", "project")
+            put("icon", icon)
             put("attachments", buildJsonArray {})
             put("position", "end")
         },

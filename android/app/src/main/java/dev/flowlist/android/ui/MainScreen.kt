@@ -1158,11 +1158,11 @@ fun MainScreen(
             folders = snapshot?.db?.folders?.values?.toList().orEmpty(),
             defaultReviewDays = snapshot?.db?.settings?.defaultReviewDays ?: 7,
             onDismiss = { projectEditor = null },
-            onSave = { name, folder, status, kind, notes, reviewDays ->
+            onSave = { name, folder, status, kind, notes, reviewDays, icon ->
                 projectEditor = null
                 scope.launch {
                     if (editing == null) {
-                        repository.createProject(name, folder, kind, notes, reviewDays)
+                        repository.createProject(name, folder, kind, notes, reviewDays, icon)
                     } else {
                         repository.updateProject(
                             editing,
@@ -1172,6 +1172,7 @@ fun MainScreen(
                             kind,
                             notes,
                             reviewDays,
+                            icon,
                         )
                     }
                 }
@@ -2428,13 +2429,13 @@ private fun BrowseList(
                                 ),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(if (active == 0) colors.hairline else colors.accent),
+                            Icon(
+                                imageVector = projectIcon(entry.project.icon),
+                                contentDescription = null,
+                                tint = if (active == 0) colors.faint else colors.accent,
+                                modifier = Modifier.size(16.dp),
                             )
-                            Spacer(modifier = Modifier.width(14.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
                             Text(
                                 text = entry.project.name,
                                 style = MaterialTheme.typography.bodyMedium,

@@ -22,6 +22,7 @@ import dev.flowlist.android.data.GeoDto
 import dev.flowlist.android.notify.DeviceLocation
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -112,6 +113,7 @@ fun ProjectEditorSheet(
         kind: String,
         notes: String,
         reviewDays: Int,
+        icon: String,
     ) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
@@ -124,6 +126,7 @@ fun ProjectEditorSheet(
     }
     var status by remember(project?.id) { mutableStateOf(project?.status ?: "active") }
     var kind by remember(project?.id) { mutableStateOf(project?.kind ?: "parallel") }
+    var iconSlug by remember(project?.id) { mutableStateOf(project?.icon ?: "project") }
     var notes by remember(project?.id) { mutableStateOf(project?.notes.orEmpty()) }
     var reviewDays by remember(project?.id) {
         mutableStateOf((project?.reviewIntervalDays ?: defaultReviewDays).toString())
@@ -184,6 +187,38 @@ fun ProjectEditorSheet(
                     "single_actions" to "Single action",
                 ).forEach { (key, label) ->
                     LibraryPill(label, kind == key) { kind = key }
+                }
+            }
+
+            LibraryLabel("Icon")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                projectIconChoices.forEach { (slug, label) ->
+                    val chosen = iconSlug == slug
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (chosen) colors.field else colors.background)
+                            .border(
+                                1.dp,
+                                if (chosen) colors.accent else colors.hairline,
+                                RoundedCornerShape(10.dp),
+                            )
+                            .clickable { iconSlug = slug },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = projectIcon(slug),
+                            contentDescription = label,
+                            tint = if (chosen) colors.accent else colors.faint,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
 
@@ -253,6 +288,7 @@ fun ProjectEditorSheet(
                             kind,
                             notes.trim(),
                             reviewDays.toIntOrNull()?.coerceIn(1, 365) ?: defaultReviewDays,
+                            iconSlug,
                         )
                     },
                     enabled = canSave,

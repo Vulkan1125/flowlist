@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.31 — 2026-11-22
+
+- **Android project icons.** The project editor carries the Mac’s ten-icon set
+  (project, folder, star, briefcase, home, heart, book, code, rocket, coffee)
+  as a scrollable picker. Browse rows use the chosen icon instead of a status
+  dot, tinted by whether the project still has open work. The default project
+  icon is a clipboard, distinct from the folder icon.
+
 ## 0.9.30 — 2026-11-22
 
 - **Undo and redo on Android.** The drawer’s history rows name the action that

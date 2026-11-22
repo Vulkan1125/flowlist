@@ -109,6 +109,7 @@ data class ProjectDto(
     @SerialName("task_order") val taskOrder: List<String> = emptyList(),
     val sequential: Boolean = false,
     val kind: String = "parallel",
+    val icon: String = "project",
     val attachments: List<String> = emptyList(),
     @SerialName("modified_at") val modifiedAt: String = "",
 )

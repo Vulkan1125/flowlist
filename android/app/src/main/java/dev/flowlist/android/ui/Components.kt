@@ -22,6 +22,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.Assignment
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Favorite
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.LocalCafe
+import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.RocketLaunch
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.Work
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -699,4 +710,31 @@ fun SyncDot(label: String, color: Color, modifier: Modifier = Modifier) {
             color = flow.faint,
         )
     }
+}
+
+/** The fixed project icon set, mirrored from the Mac's `ProjectIcon`. */
+val projectIconChoices = listOf(
+    "project" to "Project",
+    "folder" to "Folder",
+    "star" to "Star",
+    "briefcase" to "Briefcase",
+    "home" to "Home",
+    "heart" to "Heart",
+    "book" to "Book",
+    "code" to "Code",
+    "rocket" to "Rocket",
+    "coffee" to "Coffee",
+)
+
+fun projectIcon(slug: String): ImageVector = when (slug) {
+    "folder" -> Icons.Outlined.Folder
+    "star" -> Icons.Outlined.Star
+    "briefcase" -> Icons.Outlined.Work
+    "home" -> Icons.Outlined.Home
+    "heart" -> Icons.Outlined.Favorite
+    "book" -> Icons.Outlined.MenuBook
+    "code" -> Icons.Outlined.Code
+    "rocket" -> Icons.Outlined.RocketLaunch
+    "coffee" -> Icons.Outlined.LocalCafe
+    else -> Icons.Outlined.Assignment
 }
