@@ -21,6 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,6 +33,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,6 +75,8 @@ fun SearchSheet(
     onFolder: (FolderDto) -> Unit,
     onTag: (TagDto) -> Unit,
     onPerspective: (PerspectiveDto) -> Unit,
+    onBulkComplete: (List<String>) -> Unit,
+    onBulkTrash: (List<String>) -> Unit,
 ) {
     val colors = flow
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -79,6 +84,8 @@ fun SearchSheet(
     var scope by rememberSaveable {
         mutableStateOf(if (viewTaskIds == null) "library" else "view")
     }
+    var selecting by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         delay(220)
@@ -151,13 +158,79 @@ fun SearchSheet(
         containerColor = colors.background,
         dragHandle = { SheetHandle() },
     ) {
+        CompositionLocalProvider(
+            LocalTaskSelection provides if (selecting) {
+                TaskSelection(selected) { id ->
+                    selected = if (id in selected) selected - id else selected + id
+                }
+            } else {
+                null
+            },
+        ) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            Text(
-                text = "Search",
-                style = MaterialTheme.typography.headlineMedium,
-                color = colors.ink,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Search",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = colors.ink,
+                    modifier = Modifier.weight(1f),
+                )
+                if (tasks.isNotEmpty() || selecting) {
+                    IconButton(onClick = {
+                        selecting = !selecting
+                        selected = emptySet()
+                    }) {
+                        Icon(
+                            Icons.Rounded.Checklist,
+                            contentDescription = if (selecting) "Done selecting" else "Select tasks",
+                            tint = if (selecting) colors.accent else colors.faint,
+                        )
+                    }
+                }
+            }
+            if (selecting) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = if (selected.size == 1) "1 selected" else "${selected.size} selected",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = colors.ink,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        onClick = {
+                            if (selected.isNotEmpty()) {
+                                onBulkComplete(selected.toList())
+                                selected = emptySet()
+                                selecting = false
+                            }
+                        },
+                    ) {
+                        Text("Complete", color = colors.success)
+                    }
+                    TextButton(
+                        onClick = {
+                            if (selected.isNotEmpty()) {
+                                onBulkTrash(selected.toList())
+                                selected = emptySet()
+                                selecting = false
+                            }
+                        },
+                    ) {
+                        Text("Trash", color = colors.danger)
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(10.dp))
             OutlinedTextField(
                 value = query,
@@ -232,25 +305,25 @@ fun SearchSheet(
                             Hairline(Modifier.padding(start = 58.dp))
                         }
                     }
-                    if (projects.isNotEmpty()) {
+                    if (!selecting && projects.isNotEmpty()) {
                         item(key = "projects-header") { SearchSection("Projects") }
                         items(projects, key = { "project-${it.id}" }) { project ->
                             EntityRow(Icons.Outlined.Folder, project.name) { onProject(project) }
                         }
                     }
-                    if (folders.isNotEmpty()) {
+                    if (!selecting && folders.isNotEmpty()) {
                         item(key = "folders-header") { SearchSection("Folders") }
                         items(folders, key = { "folder-${it.id}" }) { folder ->
                             EntityRow(Icons.Outlined.Folder, folder.name) { onFolder(folder) }
                         }
                     }
-                    if (tags.isNotEmpty()) {
+                    if (!selecting && tags.isNotEmpty()) {
                         item(key = "tags-header") { SearchSection("Tags") }
                         items(tags, key = { "tag-${it.id}" }) { tag ->
                             EntityRow(Icons.Outlined.Tag, "#${tag.name}") { onTag(tag) }
                         }
                     }
-                    if (perspectives.isNotEmpty()) {
+                    if (!selecting && perspectives.isNotEmpty()) {
                         item(key = "perspectives-header") { SearchSection("Perspectives") }
                         items(perspectives, key = { "perspective-${it.id}" }) { perspective ->
                             EntityRow(Icons.Rounded.BookmarkBorder, perspective.name) {
@@ -260,6 +333,7 @@ fun SearchSheet(
                     }
                 }
             }
+        }
         }
     }
 }

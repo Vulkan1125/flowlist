@@ -1336,6 +1336,30 @@ fun MainScreen(
                 savedPerspective = perspective
                 moreView = null
             },
+            onBulkComplete = { ids ->
+                search = false
+                scope.launch {
+                    repository.completeMany(ids, true)
+                    toasts.show(
+                        message = "Completed ${taskCount(ids.size)}",
+                        actionLabel = "Undo",
+                        duration = SnackbarDuration.Long,
+                        onAction = { repository.completeMany(ids, false) },
+                    )
+                }
+            },
+            onBulkTrash = { ids ->
+                search = false
+                scope.launch {
+                    val removed = repository.deleteMany(ids)
+                    toasts.show(
+                        message = "Moved ${taskCount(ids.size)} to Trash",
+                        actionLabel = "Undo",
+                        duration = SnackbarDuration.Long,
+                        onAction = { repository.restoreMany(removed) },
+                    )
+                }
+            },
         )
     }
 

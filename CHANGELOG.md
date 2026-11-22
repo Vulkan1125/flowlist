@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.24 — 2026-11-22
+
+- **Bulk actions on search results.** A checklist button in the search sheet
+  selects matching tasks; Complete or Trash applies to the whole selection in
+  one go. The sheet closes so the Undo toast stays visible.
+
 ## 0.9.23 — 2026-11-22
 
 - **Search covers the whole library.** Results now include projects, folders,
