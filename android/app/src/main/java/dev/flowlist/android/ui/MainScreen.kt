@@ -11,6 +11,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -517,8 +521,15 @@ fun MainScreen(
         }
     }
 
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    // A tablet has room for a rail; landscape phones keep the bottom bar.
+    val wide = maxWidth >= 720.dp && maxHeight >= 560.dp
+    LaunchedEffect(wide) {
+        if (wide) drawer.close()
+    }
     ModalNavigationDrawer(
         drawerState = drawer,
+        gesturesEnabled = !wide,
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier.width(310.dp).fillMaxHeight(),
@@ -604,7 +615,7 @@ fun MainScreen(
                     onTrash = bulkTrash,
                     onPurge = bulkPurge,
                 )
-            } else {
+            } else if (!wide) {
             NavigationBar(
                 containerColor = colors.background,
                 tonalElevation = 0.dp,
@@ -701,12 +712,38 @@ fun MainScreen(
             LocalTaskDrag provides taskDrag,
             LocalTaskSelection provides selectionState,
         ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .background(colors.background),
         ) {
+            if (wide) {
+                TabletRail(
+                    tab = tab,
+                    more = moreView,
+                    savedPerspective = savedPerspective,
+                    perspectives = bottomPerspectives,
+                    onPerspective = { item -> openPerspective(item) },
+                    onSettings = {
+                        tab = Tab.Settings
+                        moreView = null
+                        savedPerspective = null
+                    },
+                )
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(colors.hairline),
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(colors.background),
+            ) {
             HorizontalDivider(thickness = 1.dp, color = colors.background)
             val activeMore = moreView
             val activeSaved = savedPerspective
@@ -874,7 +911,8 @@ fun MainScreen(
             }
         }
     }
-
+    }
+    }
     }
 
     previewTarget?.let { target ->
@@ -1497,6 +1535,76 @@ private fun SelectionBar(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TabletRail(
+    tab: Tab,
+    more: MoreView?,
+    savedPerspective: PerspectiveDto?,
+    perspectives: List<Perspective>,
+    onPerspective: (Perspective) -> Unit,
+    onSettings: () -> Unit,
+) {
+    val colors = flow
+    NavigationRail(
+        modifier = Modifier.fillMaxHeight(),
+        containerColor = colors.background,
+    ) {
+        Spacer(modifier = Modifier.height(8.dp))
+        perspectives.forEach { item ->
+            val selected = savedPerspective == null && (
+                (item.tab != null && more == null && tab == item.tab) ||
+                    (item.more != null && more == item.more)
+                )
+            NavigationRailItem(
+                selected = selected,
+                onClick = { onPerspective(item) },
+                icon = {
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = item.label,
+                        modifier = Modifier.size(21.dp),
+                    )
+                },
+                label = {
+                    Text(item.label, style = MaterialTheme.typography.labelSmall)
+                },
+                alwaysShowLabel = true,
+                colors = NavigationRailItemDefaults.colors(
+                    selectedIconColor = colors.accent,
+                    selectedTextColor = colors.accent,
+                    unselectedIconColor = colors.faint,
+                    unselectedTextColor = colors.faint,
+                    indicatorColor = Color.Transparent,
+                ),
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        NavigationRailItem(
+            selected = tab == Tab.Settings && more == null && savedPerspective == null,
+            onClick = onSettings,
+            icon = {
+                Icon(
+                    imageVector = Icons.Outlined.Settings,
+                    contentDescription = "Settings",
+                    modifier = Modifier.size(21.dp),
+                )
+            },
+            label = {
+                Text("Settings", style = MaterialTheme.typography.labelSmall)
+            },
+            alwaysShowLabel = true,
+            colors = NavigationRailItemDefaults.colors(
+                selectedIconColor = colors.accent,
+                selectedTextColor = colors.accent,
+                unselectedIconColor = colors.faint,
+                unselectedTextColor = colors.faint,
+                indicatorColor = Color.Transparent,
+            ),
+        )
+        Spacer(modifier = Modifier.height(8.dp))
     }
 }
 

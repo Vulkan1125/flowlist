@@ -194,6 +194,16 @@ below; this list is the current map.
 - [x] **Android multi-select** — a header checklist opens select mode; bulk
       complete/reopen, bulk trash with one Undo, and Trash select-all plus a
       confirmed delete-forever.
+- [x] **Android tablet layout** — a navigation rail carries the chosen
+      perspectives and Settings on large screens, with the phone bottom bar
+      hidden and content sized for the extra width.
+- [ ] **Todoist-inspired Android widgets** — Today, Inbox and Upcoming
+      home-screen widgets with configuration for theme, list length,
+      completed rows and quick add.
+- [ ] **Widget actions** — complete, reschedule and quick add directly from a
+      widget without opening the app.
+- [ ] **Custom geotag notification sounds** — per-tag arrival-reminder sound
+      selection with a preview, falling back to the system default.
 - [x] **Inline subtasks** — outlines are expanded by default, so children sit
       under their parent without a first click. The disclosure previously
       disagreed with the render default, which made its first click a no-op;

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.34 — 2026-11-22
+
+- **Android tablet layout.** Large screens swap the phone bottom bar for a
+  navigation rail with the chosen perspectives and Settings. The drawer still
+  holds the other perspectives, selection actions keep their bottom bar, and
+  edge-swipe drawer gestures are disabled on tablets so lists scroll freely.
+- **Planned next.** Todoist-inspired configurable widgets, widget actions and
+  per-geotag notification sounds are recorded in the plan and backlog.
+
 ## 0.9.33 — 2026-11-22
 
 - **Android history is folded away.** Undo and Redo sit under a **History**
