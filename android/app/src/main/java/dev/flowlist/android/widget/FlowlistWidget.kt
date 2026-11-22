@@ -8,6 +8,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.GlanceModifier
 import androidx.glance.action.actionParametersOf
 import androidx.glance.appwidget.action.actionStartActivity
@@ -26,6 +28,7 @@ import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
+import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.height
@@ -40,7 +43,9 @@ import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import dev.flowlist.android.MainActivity
+import dev.flowlist.android.R
 import dev.flowlist.android.data.FileStore
+import dev.flowlist.android.data.TaskView
 import dev.flowlist.android.data.ThemeStore
 import dev.flowlist.android.data.label
 import dev.flowlist.android.data.widgetTasks
@@ -79,6 +84,12 @@ class FlowlistWidget : GlanceAppWidget() {
             "xlarge" -> 1.5f
             else -> 1f
         }
+        val headerScale = when (options.headerSize) {
+            "compact" -> 0.85f
+            "large" -> 1.15f
+            "xlarge" -> 1.3f
+            else -> 1f
+        }
         val alpha = (options.opacity / 100f).coerceIn(0.3f, 1f)
         val tinted = if (options.frosted) {
             blend(colors.raised, colors.field, 0.5f).copy(alpha = alpha.coerceAtMost(0.82f))
@@ -105,39 +116,49 @@ class FlowlistWidget : GlanceAppWidget() {
                     modifier = GlanceModifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Spacer(
+                    Image(
+                        provider = ImageProvider(R.mipmap.ic_launcher_red),
+                        contentDescription = null,
                         modifier = GlanceModifier
-                            .width(3.dp)
-                            .height((30f * scale).dp)
-                            .cornerRadius(2.dp)
-                            .background(ColorProvider(colors.accent)),
+                            .size((24f * headerScale).dp)
+                            .cornerRadius(7.dp),
+                        contentScale = ContentScale.Fit,
                     )
-                    Spacer(modifier = GlanceModifier.width(10.dp))
-                    Column(modifier = GlanceModifier.defaultWeight()) {
-                        Text(
-                            text = options.title,
-                            style = TextStyle(
-                                color = ColorProvider(colors.ink),
-                                fontSize = (21f * scale).sp,
-                                fontWeight = FontWeight.Bold,
-                            ),
-                            maxLines = 1,
-                        )
-                        Text(
-                            text = headerSubtitle(options, openCount),
-                            style = TextStyle(
-                                color = ColorProvider(colors.faint),
-                                fontSize = (13f * scale).sp,
-                            ),
-                            modifier = GlanceModifier.padding(top = 1.dp),
-                            maxLines = 1,
-                        )
+                    Spacer(modifier = GlanceModifier.width(8.dp))
+                    Text(
+                        text = options.title,
+                        style = TextStyle(
+                            color = ColorProvider(colors.ink),
+                            fontSize = (18f * headerScale).sp,
+                            fontWeight = FontWeight.Bold,
+                        ),
+                        maxLines = 1,
+                    )
+                    if (openCount > 0) {
+                        Spacer(modifier = GlanceModifier.width(7.dp))
+                        Box(
+                            modifier = GlanceModifier
+                                .cornerRadius(8.dp)
+                                .background(ColorProvider(colors.accent.copy(alpha = 0.16f)))
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "$openCount",
+                                style = TextStyle(
+                                    color = ColorProvider(colors.accent),
+                                    fontSize = (11f * headerScale).sp,
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                            )
+                        }
                     }
+                    Spacer(modifier = GlanceModifier.defaultWeight())
                     if (options.quickAdd) {
                         Box(
                             modifier = GlanceModifier
-                                .size((34f * scale).dp)
-                                .cornerRadius((17f * scale).dp)
+                                .size((30f * headerScale).dp)
+                                .cornerRadius((15f * headerScale).dp)
                                 .background(ColorProvider(colors.accent))
                                 .clickable(actionStartActivity(quickAdd)),
                             contentAlignment = Alignment.Center,
@@ -146,7 +167,7 @@ class FlowlistWidget : GlanceAppWidget() {
                                 text = "+",
                                 style = TextStyle(
                                     color = ColorProvider(colors.onAccent),
-                                    fontSize = (22f * scale).sp,
+                                    fontSize = (20f * headerScale).sp,
                                     fontWeight = FontWeight.Bold,
                                 ),
                             )
@@ -176,81 +197,105 @@ class FlowlistWidget : GlanceAppWidget() {
                         modifier = GlanceModifier
                             .fillMaxWidth()
                             .defaultWeight()
-                            .padding(top = 6.dp),
+                            .padding(top = 4.dp),
                     ) {
-                        items(tasks) { task ->
-                            Row(
-                                modifier = GlanceModifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                CheckBox(
-                                    checked = task.completed,
-                                    onCheckedChange = if (task.completed) {
-                                        null
-                                    } else {
-                                        actionRunCallback<
-                                            CompleteWidgetTaskAction
-                                            >(
-                                            actionParametersOf(WidgetTaskKey to task.id),
-                                        )
-                                    },
-                                    text = "",
-                                    colors = CheckboxDefaults.colors(
-                                        checkedColor = ColorProvider(colors.accent),
-                                        uncheckedColor = ColorProvider(colors.faint),
-                                    ),
-                                )
-                                Column(
-                                    modifier = GlanceModifier
-                                        .defaultWeight()
-                                        .clickable(actionStartActivity(openApp)),
-                                ) {
+                        widgetSections(options.mode, tasks).forEach { section ->
+                            section.label?.let { label ->
+                                item {
                                     Text(
-                                        text = task.title,
+                                        text = label,
                                         style = TextStyle(
                                             color = ColorProvider(
-                                                if (task.completed) colors.faint else colors.ink,
+                                                if (label == "Overdue") colors.danger else colors.faint,
                                             ),
-                                            fontSize = (14f * scale).sp,
-                                            textDecoration = if (task.completed) {
-                                                TextDecoration.LineThrough
-                                            } else {
-                                                TextDecoration.None
-                                            },
-                                        ),
-                                        maxLines = 2,
-                                    )
-                                    val detail = detail(task, options.showProject)
-                                    if (detail != null) {
-                                        Text(
-                                            text = detail,
-                                            style = TextStyle(
-                                                color = ColorProvider(colors.faint),
-                                                fontSize = (11f * scale).sp,
-                                            ),
-                                            maxLines = 1,
-                                        )
-                                    }
-                                }
-                                if (!task.completed) {
-                                    Text(
-                                        text = "Tmrw",
-                                        style = TextStyle(
-                                            color = ColorProvider(colors.faint),
                                             fontSize = (11f * scale).sp,
+                                            fontWeight = FontWeight.Bold,
                                         ),
-                                        modifier = GlanceModifier
-                                            .padding(start = 4.dp)
-                                            .clickable(
-                                                actionRunCallback<
-                                                    RescheduleWidgetTaskAction
-                                                    >(
-                                                    actionParametersOf(WidgetTaskKey to task.id),
-                                                ),
-                                            ),
+                                        modifier = GlanceModifier.padding(top = 7.dp, bottom = 2.dp),
+                                        maxLines = 1,
                                     )
+                                }
+                            }
+                            items(section.tasks) { task ->
+                                Row(
+                                    modifier = GlanceModifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    CheckBox(
+                                        checked = task.completed,
+                                        onCheckedChange = if (task.completed) {
+                                            null
+                                        } else {
+                                            actionRunCallback<
+                                                CompleteWidgetTaskAction
+                                                >(
+                                                actionParametersOf(WidgetTaskKey to task.id),
+                                            )
+                                        },
+                                        text = "",
+                                        colors = CheckboxDefaults.colors(
+                                            checkedColor = ColorProvider(colors.accent),
+                                            uncheckedColor = ColorProvider(colors.faint),
+                                        ),
+                                    )
+                                    Column(
+                                        modifier = GlanceModifier
+                                            .defaultWeight()
+                                            .clickable(actionStartActivity(openApp)),
+                                    ) {
+                                        Text(
+                                            text = task.title,
+                                            style = TextStyle(
+                                                color = ColorProvider(
+                                                    if (task.completed) colors.faint else colors.ink,
+                                                ),
+                                                fontSize = (14f * scale).sp,
+                                                textDecoration = if (task.completed) {
+                                                    TextDecoration.LineThrough
+                                                } else {
+                                                    TextDecoration.None
+                                                },
+                                            ),
+                                            maxLines = 2,
+                                        )
+                                        val due = task.due?.label()?.takeIf { it.isNotBlank() }
+                                        if (due != null) {
+                                            val overdue = !task.completed && task.due
+                                                ?.local()
+                                                ?.toLocalDate()
+                                                ?.isBefore(LocalDate.now()) == true
+                                            Text(
+                                                text = due,
+                                                style = TextStyle(
+                                                    color = ColorProvider(
+                                                        if (overdue) colors.danger else colors.faint,
+                                                    ),
+                                                    fontSize = (11f * scale).sp,
+                                                ),
+                                                maxLines = 1,
+                                            )
+                                        }
+                                    }
+                                    if (options.showProject) {
+                                        val project = if (options.mode == "inbox") {
+                                            task.projectName
+                                        } else {
+                                            task.projectName ?: "Inbox"
+                                        }
+                                        if (project != null) {
+                                            Spacer(modifier = GlanceModifier.width(6.dp))
+                                            Text(
+                                                text = project,
+                                                style = TextStyle(
+                                                    color = ColorProvider(colors.faint),
+                                                    fontSize = (10f * scale).sp,
+                                                ),
+                                                maxLines = 1,
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -261,31 +306,33 @@ class FlowlistWidget : GlanceAppWidget() {
     }
 }
 
-private fun headerSubtitle(options: WidgetOptions, open: Int): String {
-    val count = when {
-        open == 0 -> "All clear"
-        open == 1 -> "1 task"
-        else -> "$open tasks"
+private data class WidgetSection(val label: String?, val tasks: List<TaskView>)
+
+private fun widgetSections(mode: String, tasks: List<TaskView>): List<WidgetSection> {
+    if (tasks.isEmpty()) return emptyList()
+    if (mode == "inbox") return listOf(WidgetSection(null, tasks))
+    val today = LocalDate.now()
+    if (mode == "upcoming") {
+        return tasks
+            .groupBy { it.due?.local()?.toLocalDate() ?: today }
+            .toSortedMap()
+            .map { (date, items) -> WidgetSection(dayLabel(date, today), items) }
     }
-    val tail = when (options.mode) {
-        "inbox" -> "captured"
-        "upcoming" -> "next two weeks"
-        else -> LocalDate.now().format(
-            DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault()),
-        )
+    val overdue = tasks.filter { task ->
+        !task.completed && task.due?.local()?.toLocalDate()?.isBefore(today) == true
     }
-    return "$count · $tail"
+    val overdueIds = overdue.map { it.id }.toSet()
+    val todayTasks = tasks.filterNot { it.id in overdueIds }
+    return buildList {
+        if (overdue.isNotEmpty()) add(WidgetSection("Overdue", overdue))
+        if (todayTasks.isNotEmpty()) add(WidgetSection(dayLabel(today, today), todayTasks))
+    }
 }
 
-private fun detail(
-    task: dev.flowlist.android.data.TaskView,
-    showProject: Boolean,
-): String? {
-    val parts = buildList {
-        if (showProject) task.projectName?.let { add(it) }
-        task.due?.label()?.takeIf { it.isNotBlank() }?.let { add(it) }
-    }
-    return parts.joinToString(" · ").takeIf { it.isNotBlank() }
+private fun dayLabel(date: LocalDate, today: LocalDate): String = when (date) {
+    today -> date.format(DateTimeFormatter.ofPattern("EEEE, d MMM", Locale.getDefault()))
+    today.plusDays(1) -> "Tomorrow"
+    else -> date.format(DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault()))
 }
 
 private fun blend(base: Color, tint: Color, amount: Float): Color = Color(

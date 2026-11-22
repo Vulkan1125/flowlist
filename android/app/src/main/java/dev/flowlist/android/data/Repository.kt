@@ -21,9 +21,6 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.put
 import java.io.File
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
 import java.util.UUID
 
 data class AppState(
@@ -330,40 +327,6 @@ class Repository(context: Context) {
                 id = "op_${UUID.randomUUID()}",
                 command = completeCommand(listOf(taskId), completed),
                 label = task.title,
-            ),
-        )
-        sync()
-    }
-
-    /// Moves a task to tomorrow, keeping its time of day when it had one.
-    /// Used by the home-screen widget's reschedule action.
-    suspend fun rescheduleTomorrow(taskId: String) {
-        val snapshot = _state.value.snapshot ?: return
-        val task = snapshot.db.tasks[taskId] ?: return
-        val zone = ZoneId.systemDefault()
-        val tomorrow = LocalDate.now(zone).plusDays(1)
-        val hasTime = task.due?.hasTime == true
-        val at = if (hasTime) {
-            val time = task.due?.local()?.toLocalTime() ?: java.time.LocalTime.of(9, 0)
-            tomorrow.atTime(time).atZone(zone).toInstant()
-        } else {
-            tomorrow.atStartOfDay(zone).toInstant()
-        }
-        val due = StampDto(at.toString(), hasTime = hasTime)
-        val updatedTask = task.copy(
-            due = due,
-            modifiedAt = Instant.now().toString(),
-        )
-        val db = snapshot.db
-        val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (taskId to updatedTask)))
-        _state.update { it.copy(snapshot = updated) }
-        persist(updated)
-        val patch = buildJsonObject { put("due", stampJson(due)) }
-        enqueue(
-            PendingOp(
-                id = "op_${UUID.randomUUID()}",
-                command = patchCommand(taskId, patch),
-                label = "Reschedule “${task.title}”",
             ),
         )
         sync()

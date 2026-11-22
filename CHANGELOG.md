@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.36 — 2026-11-22
+
+- **Independent widget header size.** The title bar has its own Compact,
+  Default, Large and Extra large choice, separate from the task text, and the
+  default is smaller than the oversized header in 0.9.35.
+- **Widget layout closer to the reference.** The header now uses the app icon,
+  a compact title and a count pill, with the date and **Overdue** as section
+  headings. Each row puts the due date under the title and the project on the
+  right.
+- **Widget rows are calmer.** The **Tmrw** reschedule action is gone; the row
+  is just checkbox, title and details again. Quick add and in-place completion
+  remain.
+
 ## 0.9.35 — 2026-11-22
 
 - **Configurable Android widgets.** Each Flowlist widget can show Today, Inbox

@@ -198,12 +198,15 @@ below; this list is the current map.
       perspectives and Settings on large screens, with the phone bottom bar
       hidden and content sized for the extra width.
 - [x] **Todoist-inspired Android widgets** — Today, Inbox and Upcoming
-      home-screen widgets with configuration for theme, list length, text
-      size, background opacity, frosted tint, project labels, completed rows
-      and quick add. The widget can be added from Settings → Tasks.
-- [x] **Widget actions** — complete and reschedule in place; quick add opens
-      the capture sheet. Android widgets cannot blur the wallpaper itself,
-      so the frosted option is a translucent tint.
+      home-screen widgets with an app-icon header, count, Overdue/date
+      sections, and configuration for theme, list length, text size,
+      independent header size, background opacity, frosted tint, project
+      labels, completed rows and quick add. The widget can be added from
+      Settings → Tasks.
+- [x] **Widget actions** — complete in place; quick add opens the capture
+      sheet. The row-level Tmrw reschedule action was removed after feedback.
+      Android widgets cannot blur the wallpaper itself, so the frosted option
+      is a translucent tint.
 - [ ] **Custom geotag notification sounds** — one arrival-reminder sound for
       every geotag, distinct from other notifications, with a preview and a
       system-default fallback.

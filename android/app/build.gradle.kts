@@ -13,8 +13,8 @@ android {
         applicationId = "dev.flowlist.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 55
-        versionName = "0.9.35"
+        versionCode = 56
+        versionName = "0.9.36"
     }
 
     val releaseStore = System.getenv("FLOWLIST_ANDROID_STORE")

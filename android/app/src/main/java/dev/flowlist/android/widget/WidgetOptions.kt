@@ -10,6 +10,9 @@ data class WidgetOptions(
     val limit: Int = 5,
     /// compact, default, or large. Kept as a name so old widgets read safely.
     val textSize: String = "default",
+    /// Independent from the body text so a large task font does not make the
+    /// title bar huge.
+    val headerSize: String = "default",
     /// 30..100, the alpha of the widget card.
     val opacity: Int = 100,
     val frosted: Boolean = false,
@@ -36,6 +39,7 @@ class WidgetOptionsStore(context: Context) {
         theme = prefs.getString(key(appWidgetId, "theme"), null) ?: "app",
         limit = prefs.getInt(key(appWidgetId, "limit"), 5).coerceIn(3, 8),
         textSize = prefs.getString(key(appWidgetId, "text_size"), null) ?: "default",
+        headerSize = prefs.getString(key(appWidgetId, "header_size"), null) ?: "default",
         opacity = prefs.getInt(key(appWidgetId, "opacity"), 100).coerceIn(30, 100),
         frosted = prefs.getBoolean(key(appWidgetId, "frosted"), false),
         showProject = prefs.getBoolean(key(appWidgetId, "show_project"), true),
@@ -49,6 +53,7 @@ class WidgetOptionsStore(context: Context) {
             .putString(key(appWidgetId, "theme"), value.theme)
             .putInt(key(appWidgetId, "limit"), value.limit.coerceIn(3, 8))
             .putString(key(appWidgetId, "text_size"), value.textSize)
+            .putString(key(appWidgetId, "header_size"), value.headerSize)
             .putInt(key(appWidgetId, "opacity"), value.opacity.coerceIn(30, 100))
             .putBoolean(key(appWidgetId, "frosted"), value.frosted)
             .putBoolean(key(appWidgetId, "show_project"), value.showProject)
@@ -61,8 +66,8 @@ class WidgetOptionsStore(context: Context) {
         val editor = prefs.edit()
         appWidgetIds.forEach { id ->
             listOf(
-                "mode", "theme", "limit", "text_size", "opacity", "frosted",
-                "show_project", "show_completed", "quick_add",
+                "mode", "theme", "limit", "text_size", "header_size", "opacity",
+                "frosted", "show_project", "show_completed", "quick_add",
             )
                 .forEach { name -> editor.remove(key(id, name)) }
         }

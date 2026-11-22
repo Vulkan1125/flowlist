@@ -102,6 +102,7 @@ private fun WidgetConfigScreen(
     var theme by remember { mutableStateOf(initial.theme) }
     var limit by remember { mutableIntStateOf(initial.limit) }
     var textSize by remember { mutableStateOf(initial.textSize) }
+    var headerSize by remember { mutableStateOf(initial.headerSize) }
     var opacity by remember { mutableIntStateOf(initial.opacity) }
     var frosted by remember { mutableStateOf(initial.frosted) }
     var showProject by remember { mutableStateOf(initial.showProject) }
@@ -173,6 +174,18 @@ private fun WidgetConfigScreen(
             onSelect = { textSize = it },
         )
 
+        SectionLabel("Header size")
+        ChoiceRow(
+            choices = listOf(
+                "compact" to "Compact",
+                "default" to "Default",
+                "large" to "Large",
+                "xlarge" to "Extra large",
+            ),
+            selected = headerSize,
+            onSelect = { headerSize = it },
+        )
+
         SectionLabel("Background")
         Text(
             text = "Opacity · $opacity%",
@@ -220,6 +233,7 @@ private fun WidgetConfigScreen(
                             theme = theme,
                             limit = limit,
                             textSize = textSize,
+                            headerSize = headerSize,
                             opacity = opacity,
                             frosted = frosted,
                             showProject = showProject,
