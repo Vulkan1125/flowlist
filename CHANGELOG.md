@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.27 — 2026-11-22
+
+- **Cleaner geotagging.** The tag editor no longer shows latitude and longitude
+  fields. Search a town or address, pick a suggestion, and the chosen place
+  appears as a compact card with its coordinates, a Maps action and a clear
+  button. “Use my location” sits below it. The “No places found” hint only
+  appears after a search that returned nothing.
+
 ## 0.9.26 — 2026-11-22
 
 - **Search for a place when geotagging.** The tag editor now has a place field:

@@ -9,6 +9,8 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import android.content.Context
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.rounded.MyLocation
+import androidx.compose.ui.platform.LocalFocusManager
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -57,6 +59,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
@@ -349,14 +352,10 @@ fun TagEditorDialog(
     val tag = target.tag
     var name by remember(tag?.id) { mutableStateOf(tag?.name.orEmpty()) }
     var parent by remember(tag?.id, target.parent) { mutableStateOf(tag?.parent ?: target.parent) }
-    var lat by remember(tag?.id) {
-        mutableStateOf(tag?.location?.lat?.let { "%.5f".format(it) }.orEmpty())
-    }
-    var lon by remember(tag?.id) {
-        mutableStateOf(tag?.location?.lon?.let { "%.5f".format(it) }.orEmpty())
-    }
+    val focusManager = LocalFocusManager.current
+    var selected by remember(tag?.id) { mutableStateOf(tag?.location) }
+    var selectedLabel by remember(tag?.id) { mutableStateOf<String?>(null) }
     var placeQuery by remember(tag?.id) { mutableStateOf("") }
-    var placeLabel by remember(tag?.id) { mutableStateOf<String?>(null) }
     var suggestions by remember(tag?.id) { mutableStateOf<List<PlaceSuggestion>>(emptyList()) }
     var searching by remember(tag?.id) { mutableStateOf(false) }
     var searched by remember(tag?.id) { mutableStateOf(false) }
@@ -372,25 +371,14 @@ fun TagEditorDialog(
             }
         }
     }
-    val place = remember(lat, lon) {
-        val latitude = lat.toDoubleOrNull()
-        val longitude = lon.toDoubleOrNull()
-        if (latitude == null || longitude == null) {
-            null
-        } else if (latitude in -90.0..90.0 && longitude in -180.0..180.0) {
-            GeoDto(latitude, longitude)
-        } else {
-            null
-        }
-    }
     val locationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { grants ->
         if (grants.values.any { it }) {
             scope.launch {
                 DeviceLocation.current(context)?.let { fix ->
-                    lat = "%.5f".format(fix.lat)
-                    lon = "%.5f".format(fix.lon)
+                    selected = fix
+                    selectedLabel = "Current location"
                 }
             }
         }
@@ -430,116 +418,148 @@ fun TagEditorDialog(
                     }
                 }
                 LibraryLabel("Geotag")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = lat,
-                        onValueChange = { lat = it.filter { ch -> ch.isDigit() || ch == '-' || ch == '.' }.take(12) },
-                        label = { Text("Latitude") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        colors = libraryFieldColors(),
-                        modifier = Modifier.weight(1f),
-                    )
-                    OutlinedTextField(
-                        value = lon,
-                        onValueChange = { lon = it.filter { ch -> ch.isDigit() || ch == '-' || ch == '.' }.take(12) },
-                        label = { Text("Longitude") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        colors = libraryFieldColors(),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = placeQuery,
-                        onValueChange = { placeQuery = it },
-                        placeholder = { Text("Search a place, e.g. Guntur", color = colors.faint) },
-                        singleLine = true,
-                        colors = libraryFieldColors(),
-                        keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                            onSearch = { findPlace() },
-                        ),
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = { findPlace() }) {
-                        Icon(Icons.Rounded.Search, contentDescription = "Search places", tint = colors.accent)
-                    }
-                }
+                OutlinedTextField(
+                    value = placeQuery,
+                    onValueChange = { placeQuery = it },
+                    placeholder = { Text("Search a town or address", color = colors.faint) },
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = null,
+                            tint = colors.faint,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    },
+                    trailingIcon = {
+                        if (placeQuery.isNotEmpty()) {
+                            IconButton(onClick = { placeQuery = "" }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Clear search",
+                                    tint = colors.faint,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    },
+                    colors = libraryFieldColors(),
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onSearch = { findPlace() },
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 if (searching) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(14.dp),
                             strokeWidth = 2.dp,
                             color = colors.accent,
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Searching…", style = MaterialTheme.typography.labelMedium, color = colors.faint)
+                        Text(
+                            text = "Searching…",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.faint,
+                        )
                     }
                 }
-                suggestions.forEach { place ->
+                if (searched && placeQuery.isNotBlank() && !searching && suggestions.isEmpty()) {
+                    Text(
+                        text = "No places found. Try a nearby town or a full address.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.faint,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                if (suggestions.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.field),
+                    ) {
+                        suggestions.forEachIndexed { index, place ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selected = GeoDto(place.lat, place.lon)
+                                        selectedLabel = place.name
+                                        placeQuery = ""
+                                        suggestions = emptyList()
+                                        searched = false
+                                        focusManager.clearFocus()
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Place,
+                                    contentDescription = null,
+                                    tint = colors.accent,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = place.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = colors.ink,
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = "%.5f, %.5f".format(place.lat, place.lon),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = colors.faint,
+                                    )
+                                }
+                            }
+                            if (index != suggestions.lastIndex) {
+                                Hairline(Modifier.padding(start = 38.dp))
+                            }
+                        }
+                    }
+                }
+                if (selected != null) {
                     Row(
                         modifier = Modifier
+                            .padding(top = 8.dp)
                             .fillMaxWidth()
-                            .clickable {
-                                lat = "%.5f".format(place.lat)
-                                lon = "%.5f".format(place.lon)
-                                placeLabel = place.name
-                                suggestions = emptyList()
-                            }
-                            .padding(vertical = 6.dp),
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.field)
+                            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Place,
                             contentDescription = null,
-                            tint = colors.faint,
-                            modifier = Modifier.size(16.dp),
+                            tint = colors.accent,
+                            modifier = Modifier.size(18.dp),
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = place.name,
+                                text = selectedLabel ?: "Pinned location",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = colors.ink,
                                 maxLines = 2,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = "%.5f, %.5f".format(place.lat, place.lon),
+                                text = "%.5f, %.5f".format(selected!!.lat, selected!!.lon),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = colors.faint,
                             )
                         }
-                    }
-                }
-                if (searched && !searching && suggestions.isEmpty()) {
-                    Text(
-                        text = "No places found. Check the spelling or enter coordinates.",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = colors.faint,
-                    )
-                }
-                if (placeLabel != null) {
-                    Text(
-                        text = placeLabel!!,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = colors.accent,
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = {
-                        locationPermission.launch(
-                            arrayOf(
-                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                Manifest.permission.ACCESS_COARSE_LOCATION,
-                            ),
-                        )
-                    }) {
-                        Text("Use my location", color = colors.accent)
-                    }
-                    if (place != null) {
                         TextButton(onClick = {
                             val label = Uri.encode(name.ifBlank { "Tag" })
                             runCatching {
@@ -547,7 +567,7 @@ fun TagEditorDialog(
                                     Intent(
                                         Intent.ACTION_VIEW,
                                         Uri.parse(
-                                            "geo:${place.lat},${place.lon}?q=${place.lat},${place.lon}($label)",
+                                            "geo:${selected!!.lat},${selected!!.lon}?q=${selected!!.lat},${selected!!.lon}($label)",
                                         ),
                                     ),
                                 )
@@ -555,14 +575,38 @@ fun TagEditorDialog(
                         }) {
                             Text("Maps", color = colors.accent)
                         }
-                        TextButton(onClick = {
-                            lat = ""
-                            lon = ""
-                            placeLabel = null
+                        IconButton(onClick = {
+                            selected = null
+                            selectedLabel = null
                         }) {
-                            Text("Clear", color = colors.faint)
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Clear geotag",
+                                tint = colors.faint,
+                                modifier = Modifier.size(16.dp),
+                            )
                         }
                     }
+                }
+                TextButton(
+                    onClick = {
+                        locationPermission.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                            ),
+                        )
+                    },
+                    modifier = Modifier.padding(top = 2.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.MyLocation,
+                        contentDescription = null,
+                        tint = colors.accent,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Use my location", color = colors.accent)
                 }
                 if (onDelete != null) {
                     TextButton(onClick = onDelete, modifier = Modifier.padding(top = 10.dp)) {
@@ -573,7 +617,7 @@ fun TagEditorDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(name.trim().removePrefix("#"), parent, place) },
+                onClick = { onSave(name.trim().removePrefix("#"), parent, selected) },
                 enabled = name.isNotBlank(),
             ) {
                 Text(if (tag == null) "Create" else "Save", color = colors.accent)
