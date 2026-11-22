@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.26 — 2026-11-22
+
+- **Search for a place when geotagging.** The tag editor now has a place field:
+  type a town or address (for example “Guntur”), pick a suggestion, and its
+  latitude/longitude fill in. Results come from the phone's geocoder, so no API
+  key or map SDK is needed. Manual coordinates and **Use my location** remain.
+
 ## 0.9.25 — 2026-11-22
 
 - **Nearby uses the phone's location.** The Nearby perspective asks for location

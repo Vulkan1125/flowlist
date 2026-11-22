@@ -174,9 +174,9 @@ below; this list is the current map.
       library radius, sorted by distance. Search results also support bulk
       complete/trash.
 - [x] **Android geotags and arrival reminders** — tags carry latitude/longitude
-      from the tag editor (current location or Maps), Nearby measures from the
-      phone, and geofenced notifications fire when arriving near a geotagged
-      tag with open tasks.
+      from a place search, the current location or Maps; Nearby measures from
+      the phone, and geofenced notifications fire when arriving near a
+      geotagged tag with open tasks.
 - [x] **Android multi-select** — a header checklist opens select mode; bulk
       complete/reopen, bulk trash with one Undo, and Trash select-all plus a
       confirmed delete-forever.

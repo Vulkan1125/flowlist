@@ -1,5 +1,14 @@
 package dev.flowlist.android.ui
 
+import android.location.Geocoder
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.material.icons.rounded.Place
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.CircularProgressIndicator
+import android.content.Context
+import androidx.compose.foundation.layout.size
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -346,6 +355,23 @@ fun TagEditorDialog(
     var lon by remember(tag?.id) {
         mutableStateOf(tag?.location?.lon?.let { "%.5f".format(it) }.orEmpty())
     }
+    var placeQuery by remember(tag?.id) { mutableStateOf("") }
+    var placeLabel by remember(tag?.id) { mutableStateOf<String?>(null) }
+    var suggestions by remember(tag?.id) { mutableStateOf<List<PlaceSuggestion>>(emptyList()) }
+    var searching by remember(tag?.id) { mutableStateOf(false) }
+    var searched by remember(tag?.id) { mutableStateOf(false) }
+    val findPlace = {
+        val query = placeQuery.trim()
+        if (query.isNotEmpty()) {
+            searching = true
+            searched = true
+            suggestions = emptyList()
+            scope.launch {
+                suggestions = geocodePlaces(context, query)
+                searching = false
+            }
+        }
+    }
     val place = remember(lat, lon) {
         val latitude = lat.toDoubleOrNull()
         val longitude = lon.toDoubleOrNull()
@@ -425,6 +451,84 @@ fun TagEditorDialog(
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = placeQuery,
+                        onValueChange = { placeQuery = it },
+                        placeholder = { Text("Search a place, e.g. Guntur", color = colors.faint) },
+                        singleLine = true,
+                        colors = libraryFieldColors(),
+                        keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                            onSearch = { findPlace() },
+                        ),
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { findPlace() }) {
+                        Icon(Icons.Rounded.Search, contentDescription = "Search places", tint = colors.accent)
+                    }
+                }
+                if (searching) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = colors.accent,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Searching…", style = MaterialTheme.typography.labelMedium, color = colors.faint)
+                    }
+                }
+                suggestions.forEach { place ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                lat = "%.5f".format(place.lat)
+                                lon = "%.5f".format(place.lon)
+                                placeLabel = place.name
+                                suggestions = emptyList()
+                            }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Place,
+                            contentDescription = null,
+                            tint = colors.faint,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = place.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.ink,
+                                maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = "%.5f, %.5f".format(place.lat, place.lon),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.faint,
+                            )
+                        }
+                    }
+                }
+                if (searched && !searching && suggestions.isEmpty()) {
+                    Text(
+                        text = "No places found. Check the spelling or enter coordinates.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.faint,
+                    )
+                }
+                if (placeLabel != null) {
+                    Text(
+                        text = placeLabel!!,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.accent,
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = {
                         locationPermission.launch(
                             arrayOf(
@@ -454,6 +558,7 @@ fun TagEditorDialog(
                         TextButton(onClick = {
                             lat = ""
                             lon = ""
+                            placeLabel = null
                         }) {
                             Text("Clear", color = colors.faint)
                         }
@@ -565,3 +670,26 @@ private fun libraryFieldColors() = androidx.compose.material3.OutlinedTextFieldD
     focusedTextColor = flow.ink,
     unfocusedTextColor = flow.ink,
 )
+
+private data class PlaceSuggestion(val name: String, val lat: Double, val lon: Double)
+
+private suspend fun geocodePlaces(context: Context, query: String): List<PlaceSuggestion> =
+    withContext(Dispatchers.IO) {
+        if (!Geocoder.isPresent()) return@withContext emptyList()
+        runCatching {
+            @Suppress("DEPRECATION")
+            Geocoder(context, Locale.getDefault())
+                .getFromLocationName(query, 6)
+                .orEmpty()
+                .filter { it.hasLatitude() && it.hasLongitude() }
+                .map { address ->
+                    val name = address.getAddressLine(0)?.takeIf { it.isNotBlank() }
+                        ?: listOfNotNull(
+                            address.locality,
+                            address.adminArea,
+                            address.countryName,
+                        ).joinToString(", ")
+                    PlaceSuggestion(name.ifBlank { query }, address.latitude, address.longitude)
+                }
+        }.getOrDefault(emptyList())
+    }
