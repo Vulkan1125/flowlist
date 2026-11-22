@@ -165,6 +165,8 @@ below; this list is the current map.
       site's favicon.
 - [x] **Android row touch target** — the whole task cell shows the press
       ripple; the circle, chevron and selection controls keep their actions.
+- [x] **Android project editing** — type, notes and review interval join name,
+      folder and status, matching the Mac inspector and New Project sheet.
 - [x] **Android multi-select** — a header checklist opens select mode; bulk
       complete/reopen, bulk trash with one Undo, and Trash select-all plus a
       confirmed delete-forever.

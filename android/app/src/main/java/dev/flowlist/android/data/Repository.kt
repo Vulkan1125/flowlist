@@ -1052,19 +1052,44 @@ class Repository(context: Context) {
         send(deletePerspectiveCommand(perspective.id), "Delete perspective “${perspective.name}”")
     }
 
-    suspend fun createProject(name: String, folder: String?) {
+    suspend fun createProject(
+        name: String,
+        folder: String?,
+        kind: String = "parallel",
+        notes: String = "",
+        reviewDays: Int? = null,
+    ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        send(createProjectCommand(trimmed, folder), "New project “$trimmed”")
+        send(
+            createProjectCommand(trimmed, folder, kind, notes, reviewDays),
+            "New project “$trimmed”",
+        )
     }
 
-    suspend fun updateProject(project: ProjectDto, name: String, folder: String?, status: String) {
+    suspend fun updateProject(
+        project: ProjectDto,
+        name: String,
+        folder: String?,
+        status: String,
+        kind: String = project.kind,
+        notes: String = project.notes,
+        reviewDays: Int = project.reviewIntervalDays,
+    ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         var queued = false
         val patch = buildJsonObject {
             if (trimmed != project.name) put("name", trimmed)
             if (folder != project.folder) put("folder", folder?.let { JsonPrimitive(it) } ?: JsonNull)
+            if (kind != project.kind) {
+                put("kind", kind)
+                put("sequential", kind == "sequential")
+            }
+            if (notes != project.notes) put("notes", notes)
+            if (reviewDays != project.reviewIntervalDays) {
+                put("review_interval_days", reviewDays)
+            }
         }
         if (patch.isNotEmpty()) {
             enqueue(

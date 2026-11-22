@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.21 — 2026-11-22
+
+- **Android project editing matches the Mac.** The project sheet now carries
+  the project **type** (Parallel, Sequential, Single action), **notes** and the
+  **review interval**, alongside name, folder and status. New projects start
+  with the library's default review interval.
+
 ## 0.9.20 — 2026-11-22
 
 - **The whole Android task row is the touch target.** Tapping anywhere in a

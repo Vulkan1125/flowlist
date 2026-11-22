@@ -370,20 +370,26 @@ fun patchCommand(id: String, patch: JsonObject): JsonObject = buildJsonObject {
 fun jsonString(value: String?): kotlinx.serialization.json.JsonElement? =
     value?.let { kotlinx.serialization.json.JsonPrimitive(it) }
 
-fun createProjectCommand(name: String, folder: String?): JsonObject = buildJsonObject {
+fun createProjectCommand(
+    name: String,
+    folder: String?,
+    kind: String = "parallel",
+    notes: String = "",
+    reviewDays: Int? = null,
+): JsonObject = buildJsonObject {
     put(
         "create_project",
         buildJsonObject {
             put("name", name)
-            put("notes", "")
+            put("notes", notes)
             put("folder", folder?.let { JsonPrimitive(it) } ?: JsonNull)
             put("tags", buildJsonArray {})
             put("due", JsonNull)
             put("defer", JsonNull)
-            put("review_interval_days", JsonNull)
+            put("review_interval_days", reviewDays?.let { JsonPrimitive(it) } ?: JsonNull)
             put("next_review", JsonNull)
-            put("sequential", false)
-            put("kind", "parallel")
+            put("sequential", kind == "sequential")
+            put("kind", kind)
             put("icon", "project")
             put("attachments", buildJsonArray {})
             put("position", "end")

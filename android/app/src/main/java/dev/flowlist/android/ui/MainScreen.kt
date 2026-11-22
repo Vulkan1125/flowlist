@@ -1106,14 +1106,23 @@ fun MainScreen(
         ProjectEditorSheet(
             target = target,
             folders = snapshot?.db?.folders?.values?.toList().orEmpty(),
+            defaultReviewDays = snapshot?.db?.settings?.defaultReviewDays ?: 7,
             onDismiss = { projectEditor = null },
-            onSave = { name, folder, status ->
+            onSave = { name, folder, status, kind, notes, reviewDays ->
                 projectEditor = null
                 scope.launch {
                     if (editing == null) {
-                        repository.createProject(name, folder)
+                        repository.createProject(name, folder, kind, notes, reviewDays)
                     } else {
-                        repository.updateProject(editing, name, folder, status)
+                        repository.updateProject(
+                            editing,
+                            name,
+                            folder,
+                            status,
+                            kind,
+                            notes,
+                            reviewDays,
+                        )
                     }
                 }
             },

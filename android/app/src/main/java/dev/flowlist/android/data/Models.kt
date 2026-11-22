@@ -87,6 +87,7 @@ data class StampDto(
 data class ProjectDto(
     val id: String,
     val name: String = "",
+    val notes: String = "",
     val status: String = "active",
     val folder: String? = null,
     @SerialName("next_review") val nextReview: String? = null,

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
@@ -38,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.flowlist.android.data.FolderDto
@@ -79,8 +81,16 @@ fun tagFamily(tagId: String, tags: List<TagDto>): Set<String> {
 fun ProjectEditorSheet(
     target: ProjectEditorTarget,
     folders: List<FolderDto>,
+    defaultReviewDays: Int = 7,
     onDismiss: () -> Unit,
-    onSave: (name: String, folder: String?, status: String) -> Unit,
+    onSave: (
+        name: String,
+        folder: String?,
+        status: String,
+        kind: String,
+        notes: String,
+        reviewDays: Int,
+    ) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
     val colors = flow
@@ -91,6 +101,11 @@ fun ProjectEditorSheet(
         mutableStateOf(project?.folder ?: target.folder)
     }
     var status by remember(project?.id) { mutableStateOf(project?.status ?: "active") }
+    var kind by remember(project?.id) { mutableStateOf(project?.kind ?: "parallel") }
+    var notes by remember(project?.id) { mutableStateOf(project?.notes.orEmpty()) }
+    var reviewDays by remember(project?.id) {
+        mutableStateOf((project?.reviewIntervalDays ?: defaultReviewDays).toString())
+    }
     val sortedFolders = remember(folders) { folders.sortedBy { it.name.lowercase() } }
     val canSave = name.isNotBlank()
 
@@ -134,6 +149,48 @@ fun ProjectEditorSheet(
                 }
             }
 
+            LibraryLabel("Type")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(
+                    "parallel" to "Parallel",
+                    "sequential" to "Sequential",
+                    "single_actions" to "Single action",
+                ).forEach { (key, label) ->
+                    LibraryPill(label, kind == key) { kind = key }
+                }
+            }
+
+            LibraryLabel("Notes")
+            OutlinedTextField(
+                value = notes,
+                onValueChange = { notes = it },
+                placeholder = { Text("Anything worth keeping", color = colors.faint) },
+                minLines = 3,
+                colors = libraryFieldColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            LibraryLabel("Review every")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = reviewDays,
+                    onValueChange = { value ->
+                        reviewDays = value.filter { it.isDigit() }.take(3)
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = libraryFieldColors(),
+                    modifier = Modifier.width(110.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("days", style = MaterialTheme.typography.bodyMedium, color = colors.faint)
+            }
+
             if (project != null) {
                 LibraryLabel("Status")
                 Row(
@@ -166,7 +223,16 @@ fun ProjectEditorSheet(
                 }
                 Spacer(modifier = Modifier.width(6.dp))
                 Button(
-                    onClick = { onSave(name.trim(), folder, status) },
+                    onClick = {
+                        onSave(
+                            name.trim(),
+                            folder,
+                            status,
+                            kind,
+                            notes.trim(),
+                            reviewDays.toIntOrNull()?.coerceIn(1, 365) ?: defaultReviewDays,
+                        )
+                    },
                     enabled = canSave,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = colors.accent,
