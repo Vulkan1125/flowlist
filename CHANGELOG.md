@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.28 — 2026-11-22
+
+- **Long task titles wrap in the Mac inspector.** The title field grows to two
+  lines instead of overflowing its box; every other inspector field stays one
+  line tall.
+
 ## 0.9.27 — 2026-11-22
 
 - **Cleaner geotagging.** The tag editor no longer shows latitude and longitude

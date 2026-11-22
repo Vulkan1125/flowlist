@@ -419,6 +419,7 @@ impl FlowlistApp {
     ) -> impl IntoElement {
         let theme = self.theme;
         let editing = self.editing == Some(field) && self.focus == super::FocusArea::Field;
+        let is_title = field == EditField::Title;
         let placeholder = match field {
             EditField::Title => "Task title",
             EditField::Defer => "No defer date",
@@ -439,12 +440,11 @@ impl FlowlistApp {
                     .child(widgets::text_field(theme, &self.field, placeholder, true))
                     .into_any_element()
             } else {
-                div()
+                let field_box = div()
                     .id(super::sid(format!(
                         "field:{}",
                         label.to_lowercase().replace(' ', "-")
                     )))
-                    .h(px(28.))
                     .px_2()
                     .flex()
                     .items_center()
@@ -462,13 +462,23 @@ impl FlowlistApp {
                     } else {
                         theme.text
                     })
-                    .child(if value.is_empty() {
-                        placeholder.to_string()
-                    } else {
-                        value.to_string()
-                    })
-                    .on_click(cx.listener(move |this, _, _, cx| this.begin_edit(field, cx)))
-                    .into_any_element()
+                    .child(
+                        div()
+                            .when(is_title, |this| this.line_clamp(2))
+                            .child(if value.is_empty() {
+                                placeholder.to_string()
+                            } else {
+                                value.to_string()
+                            }),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| this.begin_edit(field, cx)));
+                // A task title gets two lines in the inspector instead of
+                // running off the card; every other field stays one line tall.
+                if is_title {
+                    field_box.min_h(px(28.)).py_1().into_any_element()
+                } else {
+                    field_box.h(px(28.)).into_any_element()
+                }
             });
         if editing {
             row = row.child(
