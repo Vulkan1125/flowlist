@@ -45,11 +45,20 @@ import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CaptureSheet(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
+fun CaptureSheet(
+    onDismiss: () -> Unit,
+    onAdd: (String) -> Unit,
+    initialText: String = "",
+) {
     val colors = flow
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var text by rememberSaveable(stateSaver = TextFieldValue.Saver) {
-        mutableStateOf(TextFieldValue(""))
+    var text by rememberSaveable(initialText, stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(
+            TextFieldValue(
+                text = initialText,
+                selection = TextRange(initialText.length),
+            ),
+        )
     }
     val focus = remember { FocusRequester() }
 

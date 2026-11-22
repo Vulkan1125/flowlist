@@ -36,13 +36,20 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var openTab by mutableStateOf<String?>(null)
+    private var sharedText by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         openTab = intent.getStringExtra("tab")
+        sharedText = sharedText(intent)
         setContent {
-            FlowlistApp(openTab = openTab, onTabConsumed = { openTab = null })
+            FlowlistApp(
+                openTab = openTab,
+                onTabConsumed = { openTab = null },
+                sharedText = sharedText,
+                onSharedConsumed = { sharedText = null },
+            )
         }
     }
 
@@ -50,11 +57,28 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         openTab = intent.getStringExtra("tab")
+        sharedText = sharedText(intent)
+    }
+
+    /** Text shared from another app, or selected text sent from its menu. */
+    private fun sharedText(intent: Intent?): String? {
+        if (intent == null) return null
+        return when (intent.action) {
+            Intent.ACTION_SEND -> intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+            Intent.ACTION_PROCESS_TEXT ->
+                intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
+            else -> null
+        }?.takeIf { it.isNotBlank() }
     }
 }
 
 @Composable
-private fun FlowlistApp(openTab: String?, onTabConsumed: () -> Unit) {
+private fun FlowlistApp(
+    openTab: String?,
+    onTabConsumed: () -> Unit,
+    sharedText: String?,
+    onSharedConsumed: () -> Unit,
+) {
     val context = LocalContext.current
     val repository = remember { Repository(context.applicationContext) }
     val themeStore = remember { ThemeStore(context.applicationContext) }
@@ -98,6 +122,8 @@ private fun FlowlistApp(openTab: String?, onTabConsumed: () -> Unit) {
                 },
                 initialTab = openTab,
                 onTabConsumed = onTabConsumed,
+                sharedText = sharedText,
+                onSharedConsumed = onSharedConsumed,
                 preferences = preferences,
                 onPreferencesChange = {
                     preferencesStore.save(it)

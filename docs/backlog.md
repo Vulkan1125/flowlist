@@ -159,6 +159,9 @@ below; this list is the current map.
 - [x] **QR pairing** — Settings → Mobile draws a QR carrying every Mac address
       and the live pairing code; the phone scans it and tries each address in
       order, so a LAN address can fall through to Tailscale.
+- [x] **Android share-sheet capture** — `ACTION_SEND` and `ACTION_PROCESS_TEXT`
+      open the capture sheet prefilled, so text from any app reaches the same
+      quick-entry parser.
 - [x] **Inline subtasks** — outlines are expanded by default, so children sit
       under their parent without a first click. The disclosure previously
       disagreed with the render default, which made its first click a no-op;

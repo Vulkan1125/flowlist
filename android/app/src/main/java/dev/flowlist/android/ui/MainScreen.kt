@@ -222,6 +222,8 @@ fun MainScreen(
     onThemeChange: (ThemeSettings) -> Unit,
     initialTab: String?,
     onTabConsumed: () -> Unit,
+    sharedText: String? = null,
+    onSharedConsumed: () -> Unit = {},
     preferences: AppPreferences,
     onPreferencesChange: (AppPreferences) -> Unit,
 ) {
@@ -237,6 +239,7 @@ fun MainScreen(
         )
     }
     var capture by rememberSaveable { mutableStateOf(false) }
+    var captureInitial by rememberSaveable { mutableStateOf("") }
     var search by rememberSaveable { mutableStateOf(false) }
     var detail by remember { mutableStateOf<TaskView?>(null) }
     var project by remember { mutableStateOf<ProjectDto?>(null) }
@@ -296,6 +299,14 @@ fun MainScreen(
                 val extras = views.filter { it.parent == dto.id && it.id !in seen }
                 dto.id to (ordered + extras)
             }.filterValues { it.isNotEmpty() }
+        }
+    }
+    LaunchedEffect(sharedText) {
+        val text = sharedText?.trim().orEmpty()
+        if (text.isNotEmpty()) {
+            captureInitial = text
+            capture = true
+            onSharedConsumed()
         }
     }
     val toasts = remember { Toasts(scope) }
@@ -524,6 +535,7 @@ fun MainScreen(
                     if (preferences.haptics) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     }
+                    captureInitial = ""
                     capture = true
                 },
                 containerColor = colors.accent,
@@ -698,17 +710,6 @@ fun MainScreen(
         }
     }
 
-    }
-
-    if (capture) {
-        CaptureSheet(
-            onDismiss = { capture = false },
-            onAdd = { text ->
-                capture = false
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                scope.launch { repository.capture(text) }
-            },
-        )
     }
 
     detail?.let { taskView ->
@@ -1033,6 +1034,7 @@ fun MainScreen(
 
     if (capture) {
         CaptureSheet(
+            initialText = captureInitial,
             onDismiss = { capture = false },
             onAdd = { text ->
                 capture = false
