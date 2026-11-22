@@ -183,13 +183,29 @@ class FlowlistWidget : GlanceAppWidget() {
                         .background(ColorProvider(colors.hairline)),
                 )
                 if (tasks.isEmpty()) {
-                    if (options.quickAdd) {
-                        Box(
+                    Column(
+                        modifier = GlanceModifier
+                            .fillMaxWidth()
+                            .defaultWeight(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Image(
+                            provider = ImageProvider(
+                                if (dark) {
+                                    R.drawable.widget_empty_dark
+                                } else {
+                                    R.drawable.widget_empty_light
+                                },
+                            ),
+                            contentDescription = "No tasks",
                             modifier = GlanceModifier
-                                .fillMaxWidth()
-                                .defaultWeight(),
-                            contentAlignment = Alignment.Center,
-                        ) {
+                                .width((110f * scale).dp)
+                                .height((84f * scale).dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                        if (options.quickAdd) {
+                            Spacer(modifier = GlanceModifier.height(4.dp))
                             Text(
                                 text = "Tap + to capture",
                                 style = TextStyle(

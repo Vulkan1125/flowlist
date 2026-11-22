@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.39 — 2026-11-22
+
+- **Empty widget illustration.** An empty widget now shows a light/dark 2D
+  checklist drawing instead of only the capture hint.
+- **Translucent bottom bar.** The phone navigation bar uses a translucent
+  surface with a hairline divider, so it reads as a floating bar rather than a
+  solid block.
+
 ## 0.9.38 — 2026-11-22
 
 - **Removed the widget chevron.** The inline Today / Inbox / Upcoming switcher

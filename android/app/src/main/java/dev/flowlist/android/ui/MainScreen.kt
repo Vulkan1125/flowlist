@@ -627,8 +627,13 @@ fun MainScreen(
                     onPurge = bulkPurge,
                 )
             } else if (!wide) {
+            Column {
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = colors.hairline.copy(alpha = 0.65f),
+            )
             NavigationBar(
-                containerColor = colors.background,
+                containerColor = colors.field.copy(alpha = 0.86f),
                 tonalElevation = 0.dp,
             ) {
                 bottomPerspectives.forEach { item ->
@@ -683,6 +688,7 @@ fun MainScreen(
                         indicatorColor = Color.Transparent,
                     ),
                 )
+            }
             }
             }
         },
@@ -1499,7 +1505,7 @@ private fun SelectionBar(
     onPurge: () -> Unit,
 ) {
     val colors = flow
-    Surface(color = colors.background, tonalElevation = 0.dp) {
+    Surface(color = colors.field.copy(alpha = 0.92f), tonalElevation = 2.dp) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
