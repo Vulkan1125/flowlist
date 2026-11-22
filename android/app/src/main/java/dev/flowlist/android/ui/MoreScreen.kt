@@ -2,6 +2,7 @@ package dev.flowlist.android.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.outlined.LocalCafe
 import androidx.compose.material.icons.outlined.SignalCellularAlt
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -53,6 +55,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -260,10 +264,44 @@ fun MoreDestination(
                     }
                 }
                 items(db.trashedTasks(), key = { it.id }) { task ->
+                    val selection = LocalTaskSelection.current
+                    val selected = selection?.ids?.contains(task.id) == true
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (selected) colors.accent.copy(alpha = 0.10f) else Color.Transparent,
+                            )
+                            .clickable(enabled = selection != null) {
+                                selection?.toggle(task.id)
+                            }
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        if (selection != null) {
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .clip(CircleShape)
+                                    .border(
+                                        1.5.dp,
+                                        if (selected) colors.accent else colors.hairline,
+                                        CircleShape,
+                                    )
+                                    .background(if (selected) colors.accent else Color.Transparent),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (selected) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = "Selected",
+                                        tint = colors.onAccent,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(task.title, style = MaterialTheme.typography.bodyMedium, color = colors.ink)
                             Text(
@@ -272,11 +310,13 @@ fun MoreDestination(
                                 color = colors.faint,
                             )
                         }
-                        TextButton(onClick = { onRestore(task.id) }) {
-                            Text("Restore", color = colors.accent)
-                        }
-                        TextButton(onClick = { purgeTarget = task }) {
-                            Text("Delete", color = colors.danger)
+                        if (selection == null) {
+                            TextButton(onClick = { onRestore(task.id) }) {
+                                Text("Restore", color = colors.accent)
+                            }
+                            TextButton(onClick = { purgeTarget = task }) {
+                                Text("Delete", color = colors.danger)
+                            }
                         }
                     }
                     Hairline(Modifier.padding(horizontal = 20.dp))

@@ -42,9 +42,14 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Undo
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -74,6 +79,7 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -126,6 +132,7 @@ import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.label
 import dev.flowlist.android.data.today
 import dev.flowlist.android.data.taskViews
+import dev.flowlist.android.data.trashedTasks
 import dev.flowlist.android.data.isToday
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -240,6 +247,8 @@ fun MainScreen(
     }
     var capture by rememberSaveable { mutableStateOf(false) }
     var captureInitial by rememberSaveable { mutableStateOf("") }
+    var selecting by rememberSaveable { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var search by rememberSaveable { mutableStateOf(false) }
     var detail by remember { mutableStateOf<TaskView?>(null) }
     var project by remember { mutableStateOf<ProjectDto?>(null) }
@@ -300,6 +309,10 @@ fun MainScreen(
                 dto.id to (ordered + extras)
             }.filterValues { it.isNotEmpty() }
         }
+    }
+    LaunchedEffect(tab, moreView, savedPerspective) {
+        selecting = false
+        selectedIds = emptySet()
     }
     LaunchedEffect(sharedText) {
         val text = sharedText?.trim().orEmpty()
@@ -402,6 +415,72 @@ fun MainScreen(
         }
     }
 
+    val closeSelection: () -> Unit = {
+        selecting = false
+        selectedIds = emptySet()
+    }
+    val selectAllTrash: () -> Unit = {
+        selectedIds = snapshot?.db?.trashedTasks()?.map { it.id }?.toSet().orEmpty()
+    }
+    val bulkComplete: () -> Unit = {
+        val ids = selectedIds.toList()
+        if (ids.isNotEmpty()) {
+            val reopen = moreView == MoreView.Completed
+            closeSelection()
+            scope.launch {
+                repository.completeMany(ids, !reopen)
+                toasts.show(
+                    message = if (reopen) {
+                        "Reopened ${taskCount(ids.size)}"
+                    } else {
+                        "Completed ${taskCount(ids.size)}"
+                    },
+                    actionLabel = "Undo",
+                    duration = SnackbarDuration.Long,
+                    onAction = { repository.completeMany(ids, reopen) },
+                )
+            }
+        }
+    }
+    val bulkTrash: () -> Unit = {
+        val ids = selectedIds.toList()
+        if (ids.isNotEmpty()) {
+            closeSelection()
+            scope.launch {
+                val removed = repository.deleteMany(ids)
+                toasts.show(
+                    message = "Moved ${taskCount(ids.size)} to Trash",
+                    actionLabel = "Undo",
+                    duration = SnackbarDuration.Long,
+                    onAction = { repository.restoreMany(removed) },
+                )
+            }
+        }
+    }
+    val bulkPurge: () -> Unit = {
+        val ids = selectedIds.toList()
+        if (ids.isNotEmpty()) {
+            confirm = ConfirmRequest(
+                title = if (ids.size == 1) {
+                    "Delete task forever?"
+                } else {
+                    "Delete ${ids.size} tasks forever?"
+                },
+                body = "This cannot be undone.",
+                confirmLabel = "Delete forever",
+            ) {
+                closeSelection()
+                scope.launch {
+                    repository.purgeMany(ids)
+                    toasts.show(
+                        message = "Deleted ${taskCount(ids.size)}",
+                        duration = SnackbarDuration.Short,
+                    )
+                }
+            }
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawer,
         drawerContent = {
@@ -470,6 +549,19 @@ fun MainScreen(
         containerColor = colors.background,
         snackbarHost = { FlowSnackbarHost(snackbarHost) },
         bottomBar = {
+            if (selecting) {
+                SelectionBar(
+                    count = selectedIds.size,
+                    trashMode = moreView == MoreView.Trash,
+                    reopenMode = moreView == MoreView.Completed,
+                    canSelectAll = moreView == MoreView.Trash,
+                    onClose = closeSelection,
+                    onSelectAll = selectAllTrash,
+                    onComplete = bulkComplete,
+                    onTrash = bulkTrash,
+                    onPurge = bulkPurge,
+                )
+            } else {
             NavigationBar(
                 containerColor = colors.background,
                 tonalElevation = 0.dp,
@@ -527,6 +619,7 @@ fun MainScreen(
                     ),
                 )
             }
+            }
         },
         floatingActionButton = {
             if (tab != Tab.Settings) {
@@ -552,7 +645,17 @@ fun MainScreen(
             }
         },
     ) { padding ->
-        CompositionLocalProvider(LocalTaskDrag provides taskDrag) {
+        val selectionState = if (selecting) {
+            TaskSelection(selectedIds) { id ->
+                selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+            }
+        } else {
+            null
+        }
+        CompositionLocalProvider(
+            LocalTaskDrag provides taskDrag,
+            LocalTaskSelection provides selectionState,
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -562,6 +665,14 @@ fun MainScreen(
             HorizontalDivider(thickness = 1.dp, color = colors.background)
             val activeMore = moreView
             val activeSaved = savedPerspective
+            val canSelect = activeSaved != null ||
+                activeMore == MoreView.Flagged ||
+                activeMore == MoreView.Completed ||
+                activeMore == MoreView.Trash ||
+                activeMore == MoreView.Changed ||
+                activeMore == MoreView.Priorities ||
+                (activeMore == null &&
+                    (tab == Tab.Inbox || tab == Tab.Today || tab == Tab.Forecast))
             Header(
                 title = activeSaved?.name ?: activeMore?.label ?: tab.label,
                 subtitle = when {
@@ -570,6 +681,14 @@ fun MainScreen(
                 },
                 onMenu = { scope.launch { drawer.open() } },
                 onSearch = { search = true },
+                onSelect = if (canSelect) {
+                    {
+                        selectedIds = emptySet()
+                        selecting = true
+                    }
+                } else {
+                    null
+                },
             )
             if (offlineWarning) {
                 OfflineNotice(onRetry = { scope.launch { repository.sync() } })
@@ -1048,6 +1167,69 @@ fun MainScreen(
 }
 
 @Composable
+private fun SelectionBar(
+    count: Int,
+    trashMode: Boolean,
+    reopenMode: Boolean,
+    canSelectAll: Boolean,
+    onClose: () -> Unit,
+    onSelectAll: () -> Unit,
+    onComplete: () -> Unit,
+    onTrash: () -> Unit,
+    onPurge: () -> Unit,
+) {
+    val colors = flow
+    Surface(color = colors.background, tonalElevation = 0.dp) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onClose) {
+                Icon(Icons.Rounded.Close, contentDescription = "Cancel selection", tint = colors.ink)
+            }
+            Text(
+                text = if (count == 1) "1 selected" else "$count selected",
+                style = MaterialTheme.typography.titleSmall,
+                color = colors.ink,
+                modifier = Modifier.weight(1f),
+            )
+            if (canSelectAll) {
+                TextButton(onClick = onSelectAll) {
+                    Text("Select all", color = colors.accent)
+                }
+            }
+            if (trashMode) {
+                IconButton(onClick = onPurge, enabled = count > 0) {
+                    Icon(
+                        imageVector = Icons.Rounded.DeleteForever,
+                        contentDescription = "Delete forever",
+                        tint = if (count > 0) colors.danger else colors.faint,
+                    )
+                }
+            } else {
+                IconButton(onClick = onComplete, enabled = count > 0) {
+                    Icon(
+                        imageVector = if (reopenMode) Icons.Rounded.Undo else Icons.Rounded.CheckCircle,
+                        contentDescription = if (reopenMode) "Reopen" else "Complete",
+                        tint = if (count > 0) colors.success else colors.faint,
+                    )
+                }
+                IconButton(onClick = onTrash, enabled = count > 0) {
+                    Icon(
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = "Trash",
+                        tint = if (count > 0) colors.danger else colors.faint,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun LibraryDrawer(
     tab: Tab,
     more: MoreView?,
@@ -1413,6 +1595,7 @@ private fun Header(
     subtitle: String,
     onMenu: () -> Unit,
     onSearch: () -> Unit,
+    onSelect: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = flow
@@ -1454,6 +1637,17 @@ private fun Header(
                     color = colors.faint,
                 )
             }
+            if (onSelect != null) {
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(onClick = onSelect, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        imageVector = Icons.Rounded.Checklist,
+                        contentDescription = "Select tasks",
+                        tint = colors.faint,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -1470,6 +1664,8 @@ private fun Header(
         )
     }
 }
+
+private fun taskCount(count: Int): String = if (count == 1) "1 task" else "$count tasks"
 
 private fun headerSubtitle(more: MoreView?, tab: Tab, state: AppState): String {
     if (more != null) {

@@ -162,6 +162,9 @@ below; this list is the current map.
 - [x] **Android share-sheet capture** — `ACTION_SEND` and `ACTION_PROCESS_TEXT`
       open the capture sheet prefilled, so text from any app reaches the same
       quick-entry parser.
+- [x] **Android multi-select** — a header checklist opens select mode; bulk
+      complete/reopen, bulk trash with one Undo, and Trash select-all plus a
+      confirmed delete-forever.
 - [x] **Inline subtasks** — outlines are expanded by default, so children sit
       under their parent without a first click. The disclosure previously
       disagreed with the render default, which made its first click a no-op;

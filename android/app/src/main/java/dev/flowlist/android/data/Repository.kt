@@ -215,6 +215,112 @@ class Repository(context: Context) {
         sync()
     }
 
+    /// Completes or reopens a whole selection with one command and one sync.
+    suspend fun completeMany(taskIds: List<String>, completed: Boolean) {
+        if (taskIds.isEmpty()) return
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val ids = taskIds.filter { db.tasks[it] != null }
+        if (ids.isEmpty()) return
+        if (completed) {
+            val blocker = ids.firstNotNullOfOrNull { db.sequenceBlocker(it) }
+            if (blocker != null) {
+                _state.update {
+                    it.copy(
+                        error = "Finish “${blocker.title}” first — this is a sequential list.",
+                    )
+                }
+                return
+            }
+        }
+        val now = java.time.Instant.now().toString()
+        val tasks = db.tasks.toMutableMap()
+        for (id in ids) {
+            val task = tasks[id] ?: continue
+            tasks[id] = task.copy(
+                completed = completed,
+                completedAt = if (completed) now else null,
+            )
+        }
+        val updated = snapshot.copy(db = db.copy(tasks = tasks))
+        _state.update { it.copy(snapshot = updated) }
+        persist(updated)
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = completeCommand(ids, completed),
+                label = "${ids.size} tasks",
+            ),
+        )
+        sync()
+    }
+
+    /// Trashes a selection and returns the local copies so Undo can put them back.
+    suspend fun deleteMany(taskIds: List<String>): List<TaskDto> {
+        val snapshot = _state.value.snapshot ?: return emptyList()
+        val db = snapshot.db
+        val removed = taskIds.mapNotNull { db.tasks[it] }
+        if (removed.isEmpty()) return emptyList()
+        val ids = removed.map { it.id }
+        val updated = snapshot.copy(db = db.copy(tasks = db.tasks - ids.toSet()))
+        _state.update { it.copy(snapshot = updated) }
+        persist(updated)
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = deleteCommand(ids),
+                label = "${ids.size} tasks",
+            ),
+        )
+        sync()
+        return removed
+    }
+
+    suspend fun restoreMany(tasks: List<TaskDto>) {
+        if (tasks.isEmpty()) return
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val restored = tasks.associateBy { it.id }
+        val roots = tasks
+            .filter { it.project == null && it.parent == null }
+            .map { it.id }
+        val updated = snapshot.copy(
+            db = db.copy(
+                tasks = db.tasks + restored,
+                inboxOrder = (db.inboxOrder + roots).distinct(),
+            ),
+        )
+        _state.update { it.copy(snapshot = updated) }
+        persist(updated)
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = restoreCommand(tasks.map { it.id }),
+                label = "Restore ${tasks.size} tasks",
+            ),
+        )
+        sync()
+    }
+
+    suspend fun purgeMany(taskIds: List<String>) {
+        if (taskIds.isEmpty()) return
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val ids = taskIds.filter { db.tasks[it] != null }
+        if (ids.isEmpty()) return
+        val updated = snapshot.copy(db = db.copy(tasks = db.tasks - ids.toSet()))
+        _state.update { it.copy(snapshot = updated) }
+        persist(updated)
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = purgeCommand(ids),
+                label = "Delete ${ids.size} tasks",
+            ),
+        )
+        sync()
+    }
+
     suspend fun update(task: TaskDto, edit: TaskEdit) {
         val snapshot = _state.value.snapshot ?: return
         if (edit.title.isBlank()) return

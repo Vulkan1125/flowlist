@@ -44,6 +44,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -129,6 +130,10 @@ fun CheckCircle(
 /// Low priority stays blue in every theme, so it never reads as high (red).
 internal val LowPriorityBlue = androidx.compose.ui.graphics.Color(0xFF3B82F6)
 
+/** Set while the list is in select mode; rows then toggle ids instead of opening. */
+class TaskSelection(val ids: Set<String>, val toggle: (String) -> Unit)
+val LocalTaskSelection = compositionLocalOf<TaskSelection?> { null }
+
 @Composable
 fun TaskRow(
     task: TaskView,
@@ -146,6 +151,8 @@ fun TaskRow(
     rootTarget: Boolean = false,
 ) {
     val colors = flow
+    val selection = LocalTaskSelection.current
+    val selected = selection?.ids?.contains(task.id) == true
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -154,6 +161,7 @@ fun TaskRow(
                 when {
                     dragging -> colors.raised
                     rootTarget -> colors.accent.copy(alpha = 0.15f)
+                    selected -> colors.accent.copy(alpha = 0.10f)
                     else -> Color.Transparent
                 },
             )
@@ -168,17 +176,45 @@ fun TaskRow(
         verticalAlignment = Alignment.Top,
     ) {
         Spacer(modifier = Modifier.height(1.dp))
-        CheckCircle(
-            checked = task.completed,
-            onClick = onToggle,
-            modifier = Modifier.padding(top = 1.dp),
-            priority = task.priority,
-        )
+        if (selection != null) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 1.dp)
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .border(
+                        1.5.dp,
+                        if (selected) colors.accent else colors.hairline,
+                        CircleShape,
+                    )
+                    .background(if (selected) colors.accent else Color.Transparent)
+                    .clickable { selection.toggle(task.id) },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (selected) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = "Selected",
+                        tint = colors.onAccent,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+            }
+        } else {
+            CheckCircle(
+                checked = task.completed,
+                onClick = onToggle,
+                modifier = Modifier.padding(top = 1.dp),
+                priority = task.priority,
+            )
+        }
         Spacer(modifier = Modifier.width(14.dp))
         Column(
             modifier = Modifier
                 .weight(1f)
-                .clickable(onClick = onClick),
+                .clickable {
+                    if (selection != null) selection.toggle(task.id) else onClick()
+                },
         ) {
             Row(verticalAlignment = Alignment.Top) {
                 Text(
@@ -205,7 +241,13 @@ fun TaskRow(
                             modifier = Modifier
                                 .height(20.dp)
                                 .width(30.dp)
-                                .clickable(onClick = onToggleExpanded),
+                                .clickable {
+                                    if (selection != null) {
+                                        selection.toggle(task.id)
+                                    } else {
+                                        onToggleExpanded()
+                                    }
+                                },
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
@@ -291,6 +333,7 @@ fun SwipeTaskRow(
     rootTarget: Boolean = false,
 ) {
     val colors = flow
+    val selection = LocalTaskSelection.current
     val state = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             when (value) {
@@ -309,8 +352,8 @@ fun SwipeTaskRow(
     Column {
         SwipeToDismissBox(
             state = state,
-            enableDismissFromStartToEnd = true,
-            enableDismissFromEndToStart = true,
+            enableDismissFromStartToEnd = selection == null,
+            enableDismissFromEndToStart = selection == null,
             backgroundContent = {
                 val start = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
                 Box(
@@ -371,6 +414,7 @@ fun TaskTreeItem(
         if (!next) drag?.revealed?.remove(task.id)
     }
     val colors = flow
+    val selection = LocalTaskSelection.current
     val drop = drag?.target
     val nestTarget = drop?.kind == TaskDropKind.Nest &&
         drop.id == task.id &&
@@ -379,7 +423,7 @@ fun TaskTreeItem(
         drop.id == task.id &&
         drag?.dragging?.id != task.id
     val dragging = drag?.dragging?.id == task.id
-    val dragModifier = if (drag == null) {
+    val dragModifier = if (drag == null || selection != null) {
         Modifier
     } else {
         Modifier
