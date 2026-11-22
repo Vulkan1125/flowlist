@@ -59,11 +59,13 @@ class FlowlistWidget : GlanceAppWidget() {
         val appWidgetId = runCatching {
             GlanceAppWidgetManager(context).getAppWidgetId(id)
         }.getOrDefault(-1)
+        val store = WidgetOptionsStore(context)
         val options = if (appWidgetId >= 0) {
-            WidgetOptionsStore(context).load(appWidgetId)
+            store.load(appWidgetId)
         } else {
             WidgetOptions()
         }
+        val chooserOpen = appWidgetId >= 0 && store.chooserOpen(appWidgetId)
         val snapshot = FileStore(context).loadSnapshot()
         val allTasks = snapshot?.db?.widgetTasks(options.mode, options.showCompleted).orEmpty()
         val tasks = allTasks.take(options.limit)
@@ -99,10 +101,12 @@ class FlowlistWidget : GlanceAppWidget() {
         val openApp = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        val quickAdd = Intent(context, MainActivity::class.java).apply {
+        val quickAdd = Intent(context, WidgetQuickAddActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("capture", true)
         }
+        val chooserAction = actionRunCallback<ToggleWidgetChooserAction>(
+            actionParametersOf(WidgetIdKey to appWidgetId),
+        )
         provideContent {
             Column(
                 modifier = GlanceModifier
@@ -126,7 +130,7 @@ class FlowlistWidget : GlanceAppWidget() {
                     )
                     Spacer(modifier = GlanceModifier.width(8.dp))
                     Text(
-                        text = options.title,
+                        text = if (chooserOpen) "Choose view" else options.title,
                         style = TextStyle(
                             color = ColorProvider(colors.ink),
                             fontSize = (18f * headerScale).sp,
@@ -134,7 +138,17 @@ class FlowlistWidget : GlanceAppWidget() {
                         ),
                         maxLines = 1,
                     )
-                    if (openCount > 0) {
+                    Text(
+                        text = if (chooserOpen) "▴" else "▾",
+                        style = TextStyle(
+                            color = ColorProvider(colors.faint),
+                            fontSize = (12f * headerScale).sp,
+                        ),
+                        modifier = GlanceModifier
+                            .padding(horizontal = 4.dp)
+                            .clickable(chooserAction),
+                    )
+                    if (!chooserOpen && openCount > 0) {
                         Spacer(modifier = GlanceModifier.width(7.dp))
                         Box(
                             modifier = GlanceModifier
@@ -154,7 +168,7 @@ class FlowlistWidget : GlanceAppWidget() {
                         }
                     }
                     Spacer(modifier = GlanceModifier.defaultWeight())
-                    if (options.quickAdd) {
+                    if (options.quickAdd && !chooserOpen) {
                         Box(
                             modifier = GlanceModifier
                                 .size((30f * headerScale).dp)
@@ -181,7 +195,57 @@ class FlowlistWidget : GlanceAppWidget() {
                         .height(1.dp)
                         .background(ColorProvider(colors.hairline)),
                 )
-                if (tasks.isEmpty()) {
+                if (chooserOpen) {
+                    Column(modifier = GlanceModifier.fillMaxWidth().padding(top = 2.dp)) {
+                        listOf(
+                            "today" to "Today",
+                            "inbox" to "Inbox",
+                            "upcoming" to "Upcoming",
+                        ).forEach { (key, label) ->
+                            val selected = options.mode == key
+                            Row(
+                                modifier = GlanceModifier
+                                    .fillMaxWidth()
+                                    .clickable(
+                                        actionRunCallback<SetWidgetModeAction>(
+                                            actionParametersOf(
+                                                WidgetIdKey to appWidgetId,
+                                                WidgetModeKey to key,
+                                            ),
+                                        ),
+                                    )
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = TextStyle(
+                                        color = ColorProvider(
+                                            if (selected) colors.ink else colors.faint,
+                                        ),
+                                        fontSize = (15f * scale).sp,
+                                        fontWeight = if (selected) {
+                                            FontWeight.Bold
+                                        } else {
+                                            FontWeight.Normal
+                                        },
+                                    ),
+                                    modifier = GlanceModifier.defaultWeight(),
+                                )
+                                if (selected) {
+                                    Text(
+                                        text = "✓",
+                                        style = TextStyle(
+                                            color = ColorProvider(colors.accent),
+                                            fontSize = (14f * scale).sp,
+                                            fontWeight = FontWeight.Bold,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else if (tasks.isEmpty()) {
                     if (options.quickAdd) {
                         Text(
                             text = "Tap + to capture",

@@ -136,6 +136,13 @@
             android:exported="true"
             android:theme="@style/Theme.Flowlist" />
 
+        <activity
+            android:name=".widget.WidgetQuickAddActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Flowlist.Floating" />
+
         <receiver
             android:name=".widget.FlowlistWidgetReceiver"
             android:exported="true"

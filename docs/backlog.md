@@ -203,10 +203,11 @@ below; this list is the current map.
       independent header size, background opacity, frosted tint, project
       labels, completed rows and quick add. The widget can be added from
       Settings → Tasks.
-- [x] **Widget actions** — complete in place; quick add opens the capture
-      sheet. The row-level Tmrw reschedule action was removed after feedback.
-      Android widgets cannot blur the wallpaper itself, so the frosted option
-      is a translucent tint.
+- [x] **Widget actions** — complete in place. The **+** opens a floating
+      capture card over the home screen and a header chevron switches Today /
+      Inbox / Upcoming inline. The row-level Tmrw reschedule action was removed
+      after feedback. Android widgets cannot blur the wallpaper itself, so the
+      frosted option is a translucent tint.
 - [ ] **Custom geotag notification sounds** — one arrival-reminder sound for
       every geotag, distinct from other notifications, with a preview and a
       system-default fallback.

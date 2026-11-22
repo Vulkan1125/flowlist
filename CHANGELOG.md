@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.37 — 2026-11-22
+
+- **Widget quick add stays on the home screen.** The widget’s **+** now opens a
+  small floating capture card instead of the full app. It parses the same quick
+  entry, adds to Inbox and refreshes the widget.
+- **Switch views from the widget.** A chevron beside the header title opens an
+  inline Today / Inbox / Upcoming chooser, so changing the widget’s view no
+  longer means reopening its settings.
+
 ## 0.9.36 — 2026-11-22
 
 - **Independent widget header size.** The title bar has its own Compact,

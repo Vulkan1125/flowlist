@@ -34,6 +34,14 @@ class WidgetOptionsStore(context: Context) {
 
     fun exists(appWidgetId: Int): Boolean = prefs.contains(key(appWidgetId, "mode"))
 
+    /// A transient inline view picker opened from the widget's chevron.
+    fun chooserOpen(appWidgetId: Int): Boolean =
+        prefs.getBoolean(key(appWidgetId, "chooser"), false)
+
+    fun setChooserOpen(appWidgetId: Int, open: Boolean) {
+        prefs.edit().putBoolean(key(appWidgetId, "chooser"), open).apply()
+    }
+
     fun load(appWidgetId: Int): WidgetOptions = WidgetOptions(
         mode = prefs.getString(key(appWidgetId, "mode"), null) ?: "today",
         theme = prefs.getString(key(appWidgetId, "theme"), null) ?: "app",
@@ -67,7 +75,7 @@ class WidgetOptionsStore(context: Context) {
         appWidgetIds.forEach { id ->
             listOf(
                 "mode", "theme", "limit", "text_size", "header_size", "opacity",
-                "frosted", "show_project", "show_completed", "quick_add",
+                "frosted", "show_project", "show_completed", "quick_add", "chooser",
             )
                 .forEach { name -> editor.remove(key(id, name)) }
         }

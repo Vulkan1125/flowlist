@@ -71,6 +71,7 @@ class WidgetConfigActivity : ComponentActivity() {
                     isNew = isNew,
                     onSave = { options ->
                         store.save(appWidgetId, options)
+                        store.setChooserOpen(appWidgetId, false)
                         lifecycleScope.launch {
                             FlowlistWidget().updateAll(applicationContext)
                             setResult(
