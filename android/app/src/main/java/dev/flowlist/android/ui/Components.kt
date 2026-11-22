@@ -172,6 +172,9 @@ fun TaskRow(
                     Modifier
                 },
             )
+            .clickable {
+                if (selection != null) selection.toggle(task.id) else onClick()
+            }
             .padding(start = (20 + depth * 18).dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -210,11 +213,7 @@ fun TaskRow(
         }
         Spacer(modifier = Modifier.width(14.dp))
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .clickable {
-                    if (selection != null) selection.toggle(task.id) else onClick()
-                },
+            modifier = Modifier.weight(1f),
         ) {
             Row(verticalAlignment = Alignment.Top) {
                 Text(

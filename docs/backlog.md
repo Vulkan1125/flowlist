@@ -163,6 +163,8 @@ below; this list is the current map.
       prefilled; a shared URL or file asks whether to start a new task or join
       an existing one, then attaches the link or upload. Link rows show the
       site's favicon.
+- [x] **Android row touch target** — the whole task cell shows the press
+      ripple; the circle, chevron and selection controls keep their actions.
 - [x] **Android multi-select** — a header checklist opens select mode; bulk
       complete/reopen, bulk trash with one Undo, and Trash select-all plus a
       confirmed delete-forever.

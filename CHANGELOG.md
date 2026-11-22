@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.20 — 2026-11-22
+
+- **The whole Android task row is the touch target.** Tapping anywhere in a
+  row now shows the press ripple across the full cell instead of only under the
+  title text. The circle, chevron, flag and selection controls keep their own
+  actions.
+
 ## 0.9.19 — 2026-11-22
 
 - **Sharing asks where it goes.** A shared link or file now offers **New task**
