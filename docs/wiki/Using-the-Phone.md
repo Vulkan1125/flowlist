@@ -46,7 +46,8 @@ Tap a task to open the editor. Change the title and notes, then set:
 
 - due and defer dates with Android's date and time pickers (or clear either),
 - project, priority (H, M or L), the flag and an estimate. The selected pill and the task circle share the priority colour: red for H, yellow for M and blue for L,
-- any existing tag.
+- any existing tag,
+- files through **Add attachment**, and web links through **Add link**.
 
 **Save** sends one `update_task` command through the same engine as the Mac, plus a `set_task_tags` command when tags changed. On a repeating task, changing the priority asks whether to apply it to **This task** or **All repeats**; the series choice uses `set_task_priority` with `series: true`.
 
@@ -61,7 +62,7 @@ A defer date after the due date is rejected before saving, with the message unde
 - **Browse** lists projects with their open counts.
 - **Capture** parses the same syntax: `#tag`, `#parent/child`, `::Project`,
   `due:friday`, `defer:tomorrow`, `est:45m`, `repeat:every week` and `!`.
-- **Task detail** shows notes, dates, tags and checklist progress, with complete,
+- **Task detail** shows notes, dates, tags and subtasks, with complete,
   reopen and move to Trash.
 
 ## Security
@@ -101,13 +102,10 @@ The sync badge is intentionally absent from the top bar. If the Mac has been
 unreachable for more than a minute while the app is open, a slim line appears
 below the heading; tapping it retries.
 
-## Search and checklists
+## Search
 
 The magnifier in the header searches the cached library by task title, notes,
 project or tag. Results can be completed in place or opened.
-
-Checklist steps appear in the task editor. Tapping one sends
-`update_checklist_item` through the same offline queue as every other edit.
 
 ## Subtasks
 
@@ -119,6 +117,9 @@ subtask uses the same optimistic offline queue.
 Each subtask row has a **move** button that opens a searchable picker of
 top-level tasks; choosing one re-parents the subtask there and inherits that
 task's project.
+
+Every subtask row also has a drag grip. Long-press it to reorder the children;
+the other rows move aside and the list settles into the new order on release.
 
 The project picker is as wide as its row. Its last item is **Create new
 project**, and the tag row ends with a **+** chip for a new tag; both select the
@@ -134,6 +135,9 @@ cache and opens it with any installed viewer; the close button removes it from
 the task. The download button saves a durable copy inside the app's private
 files, after which the attachment opens without the Mac. Tapping that button
 again removes the offline copy.
+
+**Add link** attaches an `http(s)` URL; it opens in the browser and appears in
+the same attachment list as files.
 
 Uploads go over `POST /api/v1/files` and downloads over `GET /api/v1/files`.
 Both require the paired token. Files are capped at 40 MB, and the Mac only
@@ -157,13 +161,10 @@ yellow for medium and blue for low. A flagged task shows a single flag at the
 far right of its row; priorities never add their own flag.
 
 Subtasks start collapsed. Tap the chevron at the right of a parent row to open
-or close its children.
+or close its children. Long-press a task to drag it: drop it on another task to
+nest it, or on the lower part of a root task to move it back to the project
+root at that position.
 
-## Checklists
-
-**Add checklist item** appends a step to the current task. Every step has up
-and down arrows for reordering and a delete button. Ticking a step is
-independent of completing the task, and all edits use the same offline queue.
 
 Settings → About → **Check for updates** reads the latest GitHub release and
 offers the APK when a newer version exists.

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.13 — 2026-11-22
+
+- **Checklists are gone from the Mac and the phone; subtasks replace them.**
+  The checklist panel and the phone's checklist section are removed. Existing
+  checklist data stays in the library file but is no longer shown.
+- **The Mac inspector shows subtasks like the old checklist.** Rows tick in
+  place, click to select, drag to reorder, and **Separate** moves one out from
+  under its parent. The field at the bottom adds a subtask without leaving the
+  inspector; `⌘L` focuses it.
+- **The Android task editor reorders subtasks by dragging** the grip, with the
+  other rows moving aside and the list settling into place on release.
+- **Drag tasks in the Android list.** Long-press a task and drop it on another
+  task to nest it; drop it on the lower third of a root row to move it back out
+  to the project or Inbox at that position.
+- **Android can attach links.** **Add link** sits under **Add attachment**;
+  links open in the browser and sync through the same attachment list.
+
 ## 0.9.12 — 2026-11-22
 
 - **Root-level drop gaps work in every list.** Dragging a subtask out of its

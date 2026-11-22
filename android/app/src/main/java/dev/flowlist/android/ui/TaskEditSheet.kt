@@ -1,6 +1,13 @@
 package dev.flowlist.android.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +35,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.DriveFileMove
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
@@ -58,14 +66,20 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -74,8 +88,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
-import dev.flowlist.android.data.ChecklistDto
+import kotlinx.coroutines.launch
 import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.StampDto
 import dev.flowlist.android.data.TagDto
@@ -101,10 +117,6 @@ fun TaskEditSheet(
     defaultTimeMinutes: Int = 9 * 60,
     onDismiss: () -> Unit,
     onSave: (TaskEdit) -> Unit,
-    onChecklist: (ChecklistDto, Boolean) -> Unit,
-    onAddChecklist: (String) -> Unit,
-    onDeleteChecklist: (ChecklistDto) -> Unit,
-    onMoveChecklist: (ChecklistDto, Int) -> Unit,
     onCreateProject: (String) -> Unit,
     onCreateTag: (String) -> Unit,
     savedAttachments: Set<String>,
@@ -116,6 +128,8 @@ fun TaskEditSheet(
     onAddSubtask: (String) -> Unit,
     onToggleSubtask: (TaskDto, Boolean) -> Unit,
     onMoveSubtask: (TaskDto, TaskDto) -> Unit,
+    onReorderSubtasks: (List<TaskDto>) -> Unit,
+    onAddLink: (String) -> Unit,
     onDeleteSeries: () -> Unit,
     onComplete: () -> Unit,
     onDelete: () -> Unit,
@@ -133,30 +147,38 @@ fun TaskEditSheet(
         mutableStateOf(task.estimateMin?.toString().orEmpty())
     }
     var selectedTags by remember(task.id) { mutableStateOf(task.tags.toSet()) }
-    var checklist by remember(task.id) { mutableStateOf(task.checklist) }
-    LaunchedEffect(task.checklist) { checklist = task.checklist }
-    var addingChecklist by remember { mutableStateOf(false) }
-    var checklistTitle by remember { mutableStateOf("") }
     var movingSubtask by remember { mutableStateOf<TaskDto?>(null) }
     var targetFilter by remember { mutableStateOf("") }
     var addingSubtask by remember { mutableStateOf(false) }
     var subtaskTitle by remember { mutableStateOf("") }
+    var orderedSubtasks by remember(task.id) { mutableStateOf(subtasks) }
+    LaunchedEffect(task.id, subtasks.map { it.id }) { orderedSubtasks = subtasks }
+    var subtaskDragId by remember(task.id) { mutableStateOf<String?>(null) }
+    var subtaskDragFrom by remember(task.id) { mutableIntStateOf(-1) }
+    var subtaskDragTo by remember(task.id) { mutableIntStateOf(-1) }
+    var subtaskDragOffset by remember(task.id) { mutableFloatStateOf(0f) }
+    var subtaskSettleFrom by remember(task.id) { mutableFloatStateOf(0f) }
+    var subtaskSettleTo by remember(task.id) { mutableFloatStateOf(0f) }
+    var subtaskSettling by remember(task.id) { mutableStateOf(false) }
+    var subtaskRowHeight by remember(task.id) { mutableFloatStateOf(0f) }
+    val subtaskRowPx = if (subtaskRowHeight > 0f) {
+        subtaskRowHeight
+    } else {
+        with(LocalDensity.current) { 48.dp.toPx() }
+    }
+    val subtaskSettle = remember { Animatable(0f) }
+    val subtaskScope = rememberCoroutineScope()
+    var linkOpen by remember { mutableStateOf(false) }
+    var linkText by remember { mutableStateOf("") }
     var repeat by remember(task.id) { mutableStateOf(task.repeat) }
     var confirmSeries by remember { mutableStateOf(false) }
     val subtaskFocus = remember { FocusRequester() }
-    val checklistFocus = remember { FocusRequester() }
     var pendingProjectName by remember { mutableStateOf<String?>(null) }
     var pendingTagName by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(addingSubtask) {
         if (addingSubtask) {
             delay(120)
             subtaskFocus.requestFocus()
-        }
-    }
-    LaunchedEffect(addingChecklist) {
-        if (addingChecklist) {
-            delay(120)
-            checklistFocus.requestFocus()
         }
     }
     LaunchedEffect(projects, pendingProjectName) {
@@ -321,6 +343,29 @@ fun TaskEditSheet(
                     color = colors.faint,
                 )
             }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        linkText = ""
+                        linkOpen = true
+                    }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Link,
+                    contentDescription = null,
+                    tint = colors.accent,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Add link",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.faint,
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
             Label("Repeat")
@@ -442,44 +487,192 @@ fun TaskEditSheet(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Label("Subtasks")
-            subtasks.forEach { child ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CheckCircle(
-                        checked = child.completed,
-                        onClick = { onToggleSubtask(child, !child.completed) },
-                        priority = child.priority,
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = child.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (child.completed) colors.faint else colors.ink,
-                        textDecoration = if (child.completed) {
-                            androidx.compose.ui.text.style.TextDecoration.LineThrough
+            Label(
+                if (orderedSubtasks.isEmpty()) {
+                    "Subtasks"
+                } else {
+                    "Subtasks · ${orderedSubtasks.count { it.completed }}/${orderedSubtasks.size}"
+                },
+            )
+            orderedSubtasks.forEachIndexed { index, child ->
+                key(child.id) {
+                    val dragging = subtaskDragId == child.id
+                    val settlingThis = dragging && subtaskSettling
+                    val shift = when {
+                        dragging -> 0f
+                        subtaskDragFrom >= 0 &&
+                            subtaskDragTo > subtaskDragFrom &&
+                            index in (subtaskDragFrom + 1)..subtaskDragTo -> -subtaskRowPx
+                        subtaskDragFrom >= 0 &&
+                            subtaskDragTo < subtaskDragFrom &&
+                            index in subtaskDragTo until subtaskDragFrom -> subtaskRowPx
+                        else -> 0f
+                    }
+                    val animatedShift by animateFloatAsState(
+                        targetValue = shift,
+                        animationSpec = if (subtaskDragFrom >= 0) {
+                            spring(dampingRatio = 0.82f, stiffness = 700f)
                         } else {
-                            null
+                            snap()
                         },
-                        modifier = Modifier.weight(1f),
+                        label = "subtask-shift-$index",
                     )
-                    IconButton(
-                        onClick = {
-                            movingSubtask = child
-                            targetFilter = ""
-                        },
-                        modifier = Modifier.size(32.dp),
+                    val translation = when {
+                        settlingThis ->
+                            subtaskSettleFrom +
+                                (subtaskSettleTo - subtaskSettleFrom) * subtaskSettle.value
+                        dragging -> subtaskDragOffset
+                        else -> animatedShift
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { size ->
+                                if (subtaskRowHeight <= 0f && size.height > 0) {
+                                    subtaskRowHeight = size.height.toFloat()
+                                }
+                            }
+                            .zIndex(if (dragging) 1f else 0f)
+                            .graphicsLayer { translationY = translation }
+                            .padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.DriveFileMove,
-                            contentDescription = "Move subtask",
-                            tint = colors.faint,
-                            modifier = Modifier.size(17.dp),
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .pointerInput(orderedSubtasks, child.id, subtaskRowPx) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            subtaskDragId = child.id
+                                            subtaskDragFrom = index
+                                            subtaskDragTo = index
+                                            subtaskDragOffset = 0f
+                                            subtaskSettling = false
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            subtaskDragOffset += dragAmount.y
+                                            if (subtaskDragFrom >= 0) {
+                                                val next = (
+                                                    subtaskDragFrom +
+                                                        (subtaskDragOffset / subtaskRowPx).roundToInt()
+                                                    ).coerceIn(0, orderedSubtasks.lastIndex)
+                                                if (next != subtaskDragTo) {
+                                                    subtaskDragTo = next
+                                                }
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            val from = subtaskDragFrom
+                                            val to = subtaskDragTo
+                                            if (from < 0) {
+                                                subtaskDragId = null
+                                                return@detectDragGesturesAfterLongPress
+                                            }
+                                            subtaskSettleFrom = subtaskDragOffset
+                                            subtaskSettleTo = if (to != from) {
+                                                (to - from) * subtaskRowPx
+                                            } else {
+                                                0f
+                                            }
+                                            subtaskSettling = true
+                                            subtaskScope.launch {
+                                                subtaskSettle.snapTo(0f)
+                                                subtaskSettle.animateTo(
+                                                    1f,
+                                                    tween(
+                                                        durationMillis = 180,
+                                                        easing = FastOutSlowInEasing,
+                                                    ),
+                                                )
+                                                if (from >= 0 && to != from) {
+                                                    val reordered =
+                                                        orderedSubtasks.toMutableList()
+                                                    val item = reordered.removeAt(from)
+                                                    reordered.add(to, item)
+                                                    orderedSubtasks = reordered
+                                                    onReorderSubtasks(reordered)
+                                                }
+                                                subtaskDragId = null
+                                                subtaskDragFrom = -1
+                                                subtaskDragTo = -1
+                                                subtaskDragOffset = 0f
+                                                subtaskSettleFrom = 0f
+                                                subtaskSettleTo = 0f
+                                                subtaskSettling = false
+                                                subtaskSettle.snapTo(0f)
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            if (subtaskDragFrom < 0) {
+                                                subtaskDragId = null
+                                                return@detectDragGesturesAfterLongPress
+                                            }
+                                            subtaskSettleFrom = subtaskDragOffset
+                                            subtaskSettleTo = 0f
+                                            subtaskSettling = true
+                                            subtaskScope.launch {
+                                                subtaskSettle.snapTo(0f)
+                                                subtaskSettle.animateTo(
+                                                    1f,
+                                                    tween(
+                                                        durationMillis = 160,
+                                                        easing = FastOutSlowInEasing,
+                                                    ),
+                                                )
+                                                subtaskDragId = null
+                                                subtaskDragFrom = -1
+                                                subtaskDragTo = -1
+                                                subtaskDragOffset = 0f
+                                                subtaskSettleFrom = 0f
+                                                subtaskSettleTo = 0f
+                                                subtaskSettling = false
+                                                subtaskSettle.snapTo(0f)
+                                            }
+                                        },
+                                    )
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "⠿",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.faint,
+                            )
+                        }
+                        CheckCircle(
+                            checked = child.completed,
+                            onClick = { onToggleSubtask(child, !child.completed) },
+                            priority = child.priority,
                         )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = child.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (child.completed) colors.faint else colors.ink,
+                            textDecoration = if (child.completed) {
+                                androidx.compose.ui.text.style.TextDecoration.LineThrough
+                            } else {
+                                null
+                            },
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(
+                            onClick = {
+                                movingSubtask = child
+                                targetFilter = ""
+                            },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.DriveFileMove,
+                                contentDescription = "Move subtask",
+                                tint = colors.faint,
+                                modifier = Modifier.size(17.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -536,147 +729,6 @@ fun TaskEditSheet(
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = "Add subtask",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = colors.faint,
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Label(
-                if (checklist.isEmpty()) {
-                    "Checklist"
-                } else {
-                    "Checklist · ${checklist.count { it.completed }}/${checklist.size}"
-                },
-            )
-            checklist.forEachIndexed { index, item ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CheckCircle(
-                        checked = item.completed,
-                        onClick = {
-                            val next = !item.completed
-                            checklist = checklist.map {
-                                if (it.id == item.id) it.copy(completed = next) else it
-                            }
-                            onChecklist(item.copy(completed = next), next)
-                        },
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = item.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (item.completed) colors.faint else colors.ink,
-                        textDecoration = if (item.completed) {
-                            androidx.compose.ui.text.style.TextDecoration.LineThrough
-                        } else {
-                            null
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable {
-                                val next = !item.completed
-                                checklist = checklist.map {
-                                    if (it.id == item.id) it.copy(completed = next) else it
-                                }
-                                onChecklist(item.copy(completed = next), next)
-                            },
-                    )
-                    IconButton(
-                        onClick = { onMoveChecklist(item, index - 1) },
-                        enabled = index > 0,
-                        modifier = Modifier.size(30.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.ArrowUpward,
-                            contentDescription = "Move step up",
-                            tint = if (index > 0) colors.faint else colors.hairline,
-                            modifier = Modifier.size(15.dp),
-                        )
-                    }
-                    IconButton(
-                        onClick = { onMoveChecklist(item, index + 1) },
-                        enabled = index < checklist.lastIndex,
-                        modifier = Modifier.size(30.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.ArrowDownward,
-                            contentDescription = "Move step down",
-                            tint = if (index < checklist.lastIndex) colors.faint else colors.hairline,
-                            modifier = Modifier.size(15.dp),
-                        )
-                    }
-                    IconButton(
-                        onClick = { onDeleteChecklist(item) },
-                        modifier = Modifier.size(30.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.DeleteOutline,
-                            contentDescription = "Delete step",
-                            tint = colors.faint,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
-            }
-            if (addingChecklist) {
-                OutlinedTextField(
-                    value = checklistTitle,
-                    onValueChange = { checklistTitle = it },
-                    placeholder = { Text("Checklist step", color = colors.faint) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = colors.accent,
-                        unfocusedBorderColor = colors.hairline,
-                        focusedContainerColor = colors.background,
-                        unfocusedContainerColor = colors.background,
-                        focusedTextColor = colors.ink,
-                        unfocusedTextColor = colors.ink,
-                        cursorColor = colors.accent,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(checklistFocus),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { addingChecklist = false; checklistTitle = "" }) {
-                        Text("Cancel", color = colors.faint)
-                    }
-                    TextButton(
-                        onClick = {
-                            if (checklistTitle.isNotBlank()) {
-                                onAddChecklist(checklistTitle)
-                                checklistTitle = ""
-                                addingChecklist = false
-                            }
-                        },
-                    ) {
-                        Text("Add", color = colors.accent)
-                    }
-                }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { addingChecklist = true }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Rounded.Add,
-                        contentDescription = null,
-                        tint = colors.accent,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Add checklist item",
                         style = MaterialTheme.typography.labelLarge,
                         color = colors.faint,
                     )
@@ -880,6 +932,51 @@ fun TaskEditSheet(
                 applyStamp(value)
                 showDueSheet = false
             },
+        )
+    }
+
+    if (linkOpen) {
+        AlertDialog(
+            onDismissRequest = { linkOpen = false },
+            title = { Text("Add a link") },
+            text = {
+                OutlinedTextField(
+                    value = linkText,
+                    onValueChange = { linkText = it },
+                    placeholder = { Text("https://…", color = colors.faint) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = colors.accent,
+                        unfocusedBorderColor = colors.hairline,
+                        focusedContainerColor = colors.background,
+                        unfocusedContainerColor = colors.background,
+                        focusedTextColor = colors.ink,
+                        unfocusedTextColor = colors.ink,
+                        cursorColor = colors.accent,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val url = linkText.trim()
+                        if (url.startsWith("http://") || url.startsWith("https://")) {
+                            onAddLink(url)
+                            linkOpen = false
+                            linkText = ""
+                        }
+                    },
+                ) {
+                    Text("Add", color = colors.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { linkOpen = false }) { Text("Cancel", color = colors.faint) }
+            },
+            containerColor = colors.background,
         )
     }
 

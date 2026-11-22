@@ -359,6 +359,25 @@ fun Db.reviewProjects(): List<ProjectDto> =
 fun Db.flaggedTasks(): List<TaskView> =
     taskViews().filter { it.flagged }
 
+/// Children in their outline order, with any child missing from the parent's
+/// order appended by title so a hand-edited library still shows everything.
+fun Db.orderedChildTasks(parentId: String): List<TaskDto> {
+    val parent = tasks[parentId] ?: return emptyList()
+    val seen = mutableSetOf<String>()
+    val result = mutableListOf<TaskDto>()
+    parent.childOrder.forEach { id ->
+        tasks[id]?.takeIf { it.parent == parentId && it.isActive }?.let {
+            result.add(it)
+            seen.add(id)
+        }
+    }
+    tasks.values
+        .filter { it.parent == parentId && it.isActive && it.id !in seen }
+        .sortedBy { it.title.lowercase() }
+        .forEach { result.add(it) }
+    return result
+}
+
 fun Db.priorityGroups(): List<Pair<String, List<TaskView>>> {
     val views = taskViews()
     return listOf(

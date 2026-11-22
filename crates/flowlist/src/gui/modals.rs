@@ -3791,13 +3791,13 @@ fn help_body(theme: super::theme::Theme) -> impl IntoElement {
             ],
         ),
         (
-            "Checklists",
+            "Subtasks",
             vec![
-                ("⌘L", "add a checklist step"),
-                ("Click ○", "tick or untick a step"),
-                ("Click step", "rename a step"),
-                ("↑ / ↓ in inspector", "reorder a step"),
-                ("×", "delete a step"),
+                ("⌘L", "add a subtask"),
+                ("Click ○", "complete or reopen a subtask"),
+                ("Click title", "open the subtask"),
+                ("Drag ⠿", "reorder within the parent"),
+                ("Separate", "move a subtask out from under its parent"),
             ],
         ),
         (

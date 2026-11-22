@@ -1988,7 +1988,7 @@ impl FlowlistApp {
     }
 
     fn commit_checklist(&mut self, cx: &mut Context<Self>) {
-        let Some(task_id) = self.selected_one() else {
+        let Some(parent) = self.selected_one() else {
             self.checklist_editing = None;
             self.checklist_buffer.clear();
             self.focus = FocusArea::Content;
@@ -1997,34 +1997,20 @@ impl FlowlistApp {
         };
         let title = self.checklist_buffer.text().trim().to_string();
         if title.is_empty() {
-            if self.checklist_editing.is_some() {
-                self.toast = Some("A checklist item needs a title".to_string());
-            } else {
-                self.focus = FocusArea::Content;
-            }
+            self.focus = FocusArea::Content;
+            self.checklist_editing = None;
             cx.notify();
             return;
         }
-        match self.checklist_editing.take() {
-            Some(item) => {
-                self.execute(Command::UpdateChecklistItem {
-                    task: task_id,
-                    item,
-                    title,
-                    completed: None,
-                });
-                self.checklist_buffer.clear();
-                self.focus = FocusArea::Content;
-            }
-            None => {
-                self.execute(Command::AddChecklistItem {
-                    task: task_id,
-                    title,
-                    position: None,
-                });
-                self.checklist_buffer.clear();
-            }
-        }
+        let mut new_task = NewTask::new(title);
+        new_task.parent = Some(parent.clone());
+        new_task.position = Position::End;
+        self.execute(Command::CreateTask(new_task));
+        self.expanded.insert(format!("task:{parent}"));
+        self.checklist_editing = None;
+        self.checklist_buffer.clear();
+        // Keep the field focused so several subtasks can be typed in a row.
+        self.save_session();
         cx.notify();
     }
 
@@ -2990,6 +2976,34 @@ impl FlowlistApp {
         self.content_drop_target = None;
         cx.notify();
         self.repaint_after_drop(cx);
+    }
+
+    /// Reorder or reparent a dragged task beside an inspector subtask row.
+    fn drop_subtask_beside(
+        &mut self,
+        parent: TaskId,
+        target: TaskId,
+        payload: &DragTask,
+        cx: &mut Context<Self>,
+    ) {
+        if payload.tag || payload.id == target {
+            return;
+        }
+        let db = self.store.db();
+        if db.task_subtree(&payload.id).contains(&target) {
+            self.toast = Some("A task cannot be nested inside itself".to_string());
+            cx.notify();
+            return;
+        }
+        let ids = self.drag_ids(payload);
+        self.execute(Command::MoveTasks {
+            ids,
+            placement: TaskPlacement::Parent {
+                parent,
+                position: Position::After(target),
+            },
+        });
+        cx.notify();
     }
 
     /// Move a child task to the end of its project (or the Inbox), leaving

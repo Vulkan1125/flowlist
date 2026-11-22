@@ -2,14 +2,15 @@
 //! list. Every field commits through the same command layer as the CLI.
 
 use chrono::{Datelike, Duration, Timelike};
-use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px};
+use gpui::{AnyElement, Context, CursorStyle, IntoElement, Window, div, prelude::*, px};
 
 use flowlist_core::command::{Command, ProjectPatch};
-use flowlist_core::ids::{ChecklistId, TaskId};
+use flowlist_core::ids::TaskId;
 use flowlist_core::model::{Priority, ProjectIcon, ProjectStatus};
 use flowlist_core::time::{format_duration, human_date, local_date, now};
 
 use super::content::month_grid;
+use super::drag::DragTask;
 use super::icons::Icon;
 use super::widgets::TipExt;
 use super::{ClockUnit, DateField, DatePickerStep, EditField, FlowlistApp, View, icons, widgets};
@@ -158,12 +159,6 @@ impl FlowlistApp {
         let due = task.due.map(|stamp| human_date(&stamp, now()));
         let estimate = task.estimate_min.map(format_duration);
         let repeat = task.repeat.as_ref().map(|rule| rule.description());
-        let checklist: Vec<(ChecklistId, String, bool)> = task
-            .checklist
-            .iter()
-            .map(|item| (item.id.clone(), item.title.clone(), item.completed))
-            .collect();
-        let checklist_progress = task.checklist_progress();
         let attachments = task.attachments.clone();
         let sequential = task.sequential;
         let availability = flowlist_core::query::availability::availability(db, &id, now());
@@ -240,7 +235,6 @@ impl FlowlistApp {
             .child(self.inspector_text_field("Title", EditField::Title, &title, cx))
             .child(self.inspector_priority(&id, priority, cx))
             .child(self.inspector_notes(&notes, cx))
-            .child(self.inspector_checklist(&id, &checklist, checklist_progress, cx))
             .child(self.inspector_task_type(&id, sequential, cx))
             .child(self.inspector_attachments(&attachments, window, cx))
             .child(self.inspector_tag_section(&tags, cx))
@@ -1158,228 +1152,6 @@ impl FlowlistApp {
         row
     }
 
-    fn inspector_checklist(
-        &self,
-        task_id: &TaskId,
-        items: &[(ChecklistId, String, bool)],
-        progress: (usize, usize),
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let theme = self.theme;
-        let editing_item = self
-            .checklist_editing
-            .as_ref()
-            .filter(|_| self.focus == super::FocusArea::Checklist);
-        let mut section = div().flex().flex_col().gap_1().child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(theme.text_faint)
-                        .child("Checklist"),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(if progress.1 > 0 && progress.0 == progress.1 {
-                            theme.success
-                        } else {
-                            theme.text_faint
-                        })
-                        .child(format!("{}/{}", progress.0, progress.1)),
-                ),
-        );
-
-        for (index, (item_id, title, completed)) in items.iter().enumerate() {
-            let is_editing = editing_item == Some(item_id);
-            let cursor = self.focus == super::FocusArea::ChecklistList
-                && self.checklist_cursor == Some(index);
-            let toggle_task = task_id.clone();
-            let toggle_item = item_id.clone();
-            let edit_item = item_id.clone();
-            let edit_title = title.clone();
-            let move_task = task_id.clone();
-            let move_item = item_id.clone();
-            let delete_task = task_id.clone();
-            let delete_item = item_id.clone();
-
-            let mut row = div()
-                .id(super::sid(format!("checklist:{item_id}")))
-                .flex()
-                .items_center()
-                .gap_2()
-                .min_h(px(26.))
-                .px_1()
-                .rounded_sm()
-                .hover(|style| style.bg(theme.hover))
-                .when(cursor, |this| this.bg(theme.selection))
-                .child(
-                    div()
-                        .id(super::sid(format!("checklist-toggle:{item_id}")))
-                        .flex_shrink_0()
-                        .flow_tip(
-                            self,
-                            cx,
-                            theme,
-                            if *completed {
-                                "Mark step incomplete"
-                            } else {
-                                "Mark step complete"
-                            },
-                        )
-                        .child(widgets::checkbox(theme, *completed, theme.accent, None))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            cx.stop_propagation();
-                            this.toggle_checklist_item(
-                                toggle_task.clone(),
-                                toggle_item.clone(),
-                                cx,
-                            );
-                        })),
-                );
-
-            if is_editing {
-                row = row.child(
-                    div()
-                        .id("checklist-editor")
-                        .flex_1()
-                        .child(widgets::text_field(
-                            theme,
-                            &self.checklist_buffer,
-                            "Checklist item",
-                            true,
-                        )),
-                );
-            } else {
-                row = row.child(
-                    div()
-                        .id(super::sid(format!("checklist-title:{item_id}")))
-                        .flex_1()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .text_sm()
-                        .text_color(if *completed {
-                            theme.text_faint
-                        } else {
-                            theme.text
-                        })
-                        .when(*completed, |this| this.line_through())
-                        .child(title.clone())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.begin_checklist_edit(edit_item.clone(), edit_title.clone(), cx)
-                        })),
-                );
-            }
-
-            row = row.child(
-                div()
-                    .id(super::sid(format!("checklist-up:{item_id}")))
-                    .w(px(16.))
-                    .text_center()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .opacity(if index == 0 { 0.3 } else { 0.8 })
-                    .cursor_pointer()
-                    .hover(|style| style.text_color(theme.text).opacity(1.0))
-                    .flow_tip(self, cx, theme, "Move step up")
-                    .child(icons::icon(Icon::ArrowUp, 12.0, theme.text_faint))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.move_checklist_item(
-                            move_task.clone(),
-                            move_item.clone(),
-                            index.saturating_sub(1),
-                            cx,
-                        );
-                    })),
-            );
-            let down_task = task_id.clone();
-            let down_item = item_id.clone();
-            row = row.child(
-                div()
-                    .id(super::sid(format!("checklist-down:{item_id}")))
-                    .w(px(16.))
-                    .text_center()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .opacity(if index + 1 >= items.len() { 0.3 } else { 0.8 })
-                    .cursor_pointer()
-                    .hover(|style| style.text_color(theme.text).opacity(1.0))
-                    .flow_tip(self, cx, theme, "Move step down")
-                    .child(icons::icon(Icon::ArrowDown, 12.0, theme.text_faint))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.move_checklist_item(
-                            down_task.clone(),
-                            down_item.clone(),
-                            index + 1,
-                            cx,
-                        );
-                    })),
-            );
-            row = row.child(
-                div()
-                    .id(super::sid(format!("checklist-delete:{item_id}")))
-                    .w(px(16.))
-                    .text_center()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .cursor_pointer()
-                    .hover(|style| style.text_color(theme.danger))
-                    .flow_tip(self, cx, theme, "Delete step")
-                    .child(icons::icon(Icon::Close, 12.0, theme.text_faint))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.delete_checklist_item(delete_task.clone(), delete_item.clone(), cx);
-                    })),
-            );
-            section = section.child(row);
-        }
-
-        if items.is_empty() && editing_item.is_none() {
-            section = section.child(
-                div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child("No steps yet."),
-            );
-        }
-
-        if editing_item.is_none() {
-            section = section.child(
-                div()
-                    .id("checklist-add")
-                    .child(widgets::text_field(
-                        theme,
-                        &self.checklist_buffer,
-                        "Add a step…",
-                        self.focus == super::FocusArea::Checklist,
-                    ))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.focus = super::FocusArea::Checklist;
-                        this.checklist_editing = None;
-                        this.checklist_buffer.clear();
-                        cx.notify();
-                    })),
-            );
-        } else {
-            section = section.child(
-                div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child("⏎ save · esc cancel"),
-            );
-        }
-
-        section
-    }
-
-    /// A compact completion list under the project and tag fields. Rows are
-    /// clickable and Tab accepts the highlighted one.
     fn inspector_suggestions(
         &self,
         suggestions: Vec<String>,
@@ -1807,9 +1579,8 @@ impl FlowlistApp {
             .into_any_element()
     }
 
-    /// Parallel/Sequential for a task's own subtasks, plus a direct way to
-    /// add one. Same language as the project type chips so an action group
-    /// reads the same everywhere.
+    /// Subtasks as an inline checklist-style list: tick, click to select,
+    /// drag to reorder, or type in the field at the bottom to add one.
     fn inspector_task_type(
         &self,
         id: &TaskId,
@@ -1819,7 +1590,7 @@ impl FlowlistApp {
         let theme = self.theme;
         let parent = id.clone();
         let db = self.store.db();
-        let children: Vec<(TaskId, String, bool)> = db
+        let children: Vec<(TaskId, String, bool, Option<Priority>)> = db
             .tasks
             .get(id)
             .map(|task| {
@@ -1830,124 +1601,204 @@ impl FlowlistApp {
                             .get(child_id)
                             .filter(|child| !child.is_trashed())
                             .map(|child| {
-                                (child.id.clone(), child.title.clone(), child.completed)
+                                (
+                                    child.id.clone(),
+                                    child.title.clone(),
+                                    child.completed,
+                                    child.priority,
+                                )
                             })
                     })
                     .collect()
             })
             .unwrap_or_default();
-        let mut child_rows = div().flex().flex_col().gap_1();
-        if children.is_empty() {
-            child_rows = child_rows.child(
+        let done = children.iter().filter(|child| child.2).count();
+        let total = children.len();
+
+        let mut section = div().flex().flex_col().gap_1().child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .child("Subtasks"),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(if total > 0 && done == total {
+                            theme.success
+                        } else {
+                            theme.text_faint
+                        })
+                        .child(format!("{done}/{total}")),
+                ),
+        );
+
+        section = section.child(
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .child(
+                    div()
+                        .id("task-kind-parallel")
+                        .cursor_pointer()
+                        .child(widgets::toggle_chip(theme, "Parallel", !sequential))
+                        .on_click(
+                            cx.listener(|this, _, _, cx| this.set_task_sequential(false, cx)),
+                        ),
+                )
+                .child(
+                    div()
+                        .id("task-kind-sequential")
+                        .cursor_pointer()
+                        .child(widgets::toggle_chip(theme, "Sequential", sequential))
+                        .on_click(
+                            cx.listener(|this, _, _, cx| this.set_task_sequential(true, cx)),
+                        ),
+                ),
+        );
+
+        for (child_id, title, completed, priority) in children {
+            let select_id = child_id.clone();
+            let toggle_id = child_id.clone();
+            let separate_id = child_id.clone();
+            let drag_id = child_id.clone();
+            let drag_title = title.clone();
+            let drop_parent = parent.clone();
+            let drop_target = child_id.clone();
+            let row = div()
+                .id(super::sid(format!("subtask:{child_id}")))
+                .flex()
+                .items_center()
+                .gap_2()
+                .min_h(px(26.))
+                .px_1()
+                .rounded_sm()
+                .hover(|style| style.bg(theme.hover))
+                .child(
+                    div()
+                        .id(super::sid(format!("subtask-grip:{child_id}")))
+                        .w(px(12.))
+                        .cursor(CursorStyle::OpenHand)
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .flow_tip(self, cx, theme, "Drag to reorder")
+                        .child("⠿"),
+                )
+                .child(
+                    div()
+                        .id(super::sid(format!("subtask-toggle:{child_id}")))
+                        .flex_shrink_0()
+                        .flow_tip(
+                            self,
+                            cx,
+                            theme,
+                            if completed {
+                                "Mark subtask incomplete"
+                            } else {
+                                "Mark subtask complete"
+                            },
+                        )
+                        .child(widgets::checkbox(
+                            theme,
+                            completed,
+                            theme.accent,
+                            priority.map(|priority| {
+                                super::theme::priority_color(theme, priority)
+                            }),
+                        ))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.toggle_complete(toggle_id.clone(), cx);
+                        })),
+                )
+                .child(
+                    div()
+                        .id(super::sid(format!("subtask-title:{child_id}")))
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_sm()
+                        .text_color(if completed {
+                            theme.text_faint
+                        } else {
+                            theme.text
+                        })
+                        .when(completed, |this| this.line_through())
+                        .child(title)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.select_only(select_id.clone());
+                            this.show_inspector = true;
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    div()
+                        .id(super::sid(format!("separate-subtask:{child_id}")))
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .cursor_pointer()
+                        .hover(|style| style.text_color(theme.text))
+                        .flow_tip(
+                            self,
+                            cx,
+                            theme,
+                            "Move this task out from under its parent",
+                        )
+                        .child("Separate")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.promote_subtask(separate_id.clone(), cx);
+                        })),
+                )
+                .on_drag(
+                    DragTask::task(drag_id, drag_title),
+                    move |payload, position, window, cx| {
+                        super::drag::ghost(payload, position, window, cx, theme)
+                    },
+                )
+                .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
+                    this.drop_subtask_beside(
+                        drop_parent.clone(),
+                        drop_target.clone(),
+                        payload,
+                        cx,
+                    )
+                }));
+            section = section.child(row);
+        }
+
+        if total == 0 {
+            section = section.child(
                 div()
                     .text_xs()
                     .text_color(theme.text_faint)
                     .child("No subtasks yet."),
             );
         }
-        for (child_id, title, completed) in children {
-            let select_id = child_id.clone();
-            let separate_id = child_id.clone();
-            child_rows = child_rows.child(
-                div()
-                    .id(super::sid(format!("subtask:{child_id}")))
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .min_h(px(22.))
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .text_xs()
-                            .text_color(if completed {
-                                theme.text_faint
-                            } else {
-                                theme.text
-                            })
-                            .child(title),
-                    )
-                    .child(
-                        div()
-                            .id(super::sid(format!("separate-subtask:{child_id}")))
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .cursor_pointer()
-                            .hover(|style| style.text_color(theme.text))
-                            .flow_tip(
-                                self,
-                                cx,
-                                theme,
-                                "Move this task out from under its parent",
-                            )
-                            .child("Separate")
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.promote_subtask(separate_id.clone(), cx);
-                            })),
-                    )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.select_only(select_id.clone());
-                        this.show_inspector = true;
-                        cx.notify();
-                    })),
-            );
-        }
-        div()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child("Subtasks"),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        div()
-                            .id("task-kind-parallel")
-                            .cursor_pointer()
-                            .child(widgets::toggle_chip(theme, "Parallel", !sequential))
-                            .on_click(
-                                cx.listener(|this, _, _, cx| this.set_task_sequential(false, cx)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .id("task-kind-sequential")
-                            .cursor_pointer()
-                            .child(widgets::toggle_chip(theme, "Sequential", sequential))
-                            .on_click(
-                                cx.listener(|this, _, _, cx| this.set_task_sequential(true, cx)),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .id("add-subtask")
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .mt(px(6.))
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .cursor_pointer()
-                    .hover(|style| style.text_color(theme.text))
-                    .flow_tip(self, cx, theme, "Create a task under this one")
-                    .child("+ Add subtask")
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.select_only(parent.clone());
-                        this.add_subtask_to_selected(cx);
-                    })),
-            )
-            .child(child_rows)
+
+        section.child(
+            div()
+                .id("subtask-add")
+                .child(widgets::text_field(
+                    theme,
+                    &self.checklist_buffer,
+                    "Add a subtask…",
+                    self.focus == super::FocusArea::Checklist,
+                ))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.focus = super::FocusArea::Checklist;
+                    this.checklist_editing = None;
+                    this.checklist_buffer.clear();
+                    cx.notify();
+                })),
+        )
     }
 
     fn inspector_attachments(

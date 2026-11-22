@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -490,6 +491,40 @@ fun moveSubtaskCommand(childId: String, parentId: String): JsonObject = buildJso
             )
         },
     )
+}
+
+fun moveTaskCommand(taskId: String, placement: JsonObject): JsonObject = buildJsonObject {
+    put(
+        "move_tasks",
+        buildJsonObject {
+            put("ids", buildJsonArray { add(JsonPrimitive(taskId)) })
+            put("placement", placement)
+        },
+    )
+}
+
+fun parentPlacement(parentId: String, position: JsonElement): JsonObject = buildJsonObject {
+    put(
+        "parent",
+        buildJsonObject {
+            put("parent", parentId)
+            put("position", position)
+        },
+    )
+}
+
+fun projectPlacement(projectId: String, position: JsonElement): JsonObject = buildJsonObject {
+    put(
+        "project",
+        buildJsonObject {
+            put("project", projectId)
+            put("position", position)
+        },
+    )
+}
+
+fun inboxPlacement(position: JsonElement): JsonObject = buildJsonObject {
+    put("inbox", position)
 }
 
 fun savePerspectiveCommand(

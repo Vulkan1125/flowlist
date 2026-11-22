@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
@@ -271,6 +273,70 @@ class Repository(context: Context) {
                 id = "op_${UUID.randomUUID()}",
                 command = createSubtaskCommand(id, trimmed, parent.id, parent.project),
                 label = trimmed,
+            ),
+        )
+        sync()
+    }
+
+    suspend fun moveTask(taskId: String, placement: JsonObject) {
+        val title = _state.value.snapshot?.db?.tasks?.get(taskId)?.title.orEmpty()
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = moveTaskCommand(taskId, placement),
+                label = title,
+            ),
+        )
+        sync()
+    }
+
+    suspend fun reorderSubtasks(parentId: String, ordered: List<TaskDto>) {
+        if (ordered.isEmpty()) return
+        ordered.forEachIndexed { index, child ->
+            val position: JsonElement = if (index == 0) {
+                JsonPrimitive("start")
+            } else {
+                buildJsonObject { put("after", ordered[index - 1].id) }
+            }
+            enqueue(
+                PendingOp(
+                    id = "op_${UUID.randomUUID()}",
+                    command = moveTaskCommand(child.id, parentPlacement(parentId, position)),
+                    label = child.title,
+                ),
+            )
+        }
+        sync()
+    }
+
+    suspend fun addAttachmentLink(task: TaskDto, url: String) {
+        val trimmed = url.trim()
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) return
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val current = db.tasks[task.id] ?: task
+        if (current.attachments.contains(trimmed)) return
+        val attachments = current.attachments + trimmed
+        val updatedTask = current.copy(
+            attachments = attachments,
+            modifiedAt = java.time.Instant.now().toString(),
+        )
+        val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
+        files.saveSnapshot(updated)
+        _state.update { it.copy(snapshot = updated) }
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = updateCommand(
+                    task.id,
+                    buildJsonObject {
+                        put(
+                            "attachments",
+                            buildJsonArray { attachments.forEach { add(JsonPrimitive(it)) } },
+                        )
+                    },
+                ),
+                label = task.title,
             ),
         )
         sync()
@@ -625,6 +691,18 @@ class Repository(context: Context) {
     }
 
     suspend fun openAttachment(path: String): Boolean {
+        if (path.startsWith("http://") || path.startsWith("https://")) {
+            return try {
+                appContext.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(path))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+                true
+            } catch (error: Exception) {
+                _state.update { it.copy(error = friendly(error)) }
+                false
+            }
+        }
         val base = session.baseUrl ?: return false
         val token = session.token ?: return false
         return try {

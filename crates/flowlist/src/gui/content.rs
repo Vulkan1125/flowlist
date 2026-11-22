@@ -1741,7 +1741,6 @@ impl FlowlistApp {
                 .attachments
                 .iter()
                 .all(|value| flowlist_core::model::attachment::is_web_link(value));
-        let (checklist_done, checklist_total) = task.checklist_progress();
         let due = task.due;
         let defer = task.defer;
         let tags: Vec<String> = task
@@ -2051,18 +2050,6 @@ impl FlowlistApp {
                                 .child(icons::icon(Icon::Repeat, 11.0, theme.text_faint))
                                 .child(label),
                         )
-                    })
-                    .when(checklist_total > 0, |this| {
-                        this.child(widgets::chip_with_icon(
-                            theme,
-                            Icon::Check,
-                            format!("{checklist_done}/{checklist_total}"),
-                            if checklist_done == checklist_total {
-                                theme.success
-                            } else {
-                                theme.text_faint
-                            },
-                        ))
                     })
                     .when(!availability.is_available() && !completed, |this| {
                         this.child(

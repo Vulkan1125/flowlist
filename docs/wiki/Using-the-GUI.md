@@ -65,7 +65,7 @@ Every capture is undoable with `⌘Z`, even after the panel has closed.
   flag, move and delete work on the whole selection.
 
 The right edge of each row reads in one order: attachments, project, `#tag`
-chips, estimate, due date, deferred date, repeat and checklist progress.
+chips, estimate, due date, deferred date and repeat.
 
 ## The inspector
 
@@ -80,15 +80,11 @@ leaving the list.
   clear it. Changing the priority of a repeating task opens a small sheet:
   apply it to **This occurrence** or the **Whole series**. Future occurrences
   inherit the series priority.
-- **Checklist** steps are not tasks. Add a step at the bottom, tick it, rename
-  it, reorder it with the arrows, or remove it with `×`. Completing a repeating
-  task copies the checklist with every step unchecked.
-- **Subtasks** switch between Parallel and Sequential for the selected task's
-  own children. **+ Add subtask** creates a child task and puts the cursor in
-  its title. The section lists the existing children; **Separate** on a child
-  moves it to the end of the project (or the Inbox). You can also press `Tab`
-  to indent the selected task under the one above, or drag a task onto another
-  task.
+- **Subtasks** are an inline list: tick a child, click its title to open it,
+  drag the grip to reorder, or type in the field at the bottom to add one.
+  **Separate** moves a child to the end of the project (or the Inbox). You can
+  also press `Tab` to indent the selected task under the one above, or drag a
+  task onto another task.
 - **Drag a subtask out of its parent** by dropping it in one of the thin gaps
   between root-level tasks in the middle pane. The gap shows an accent line
   while the task is over it, and the task lands at that position as a
@@ -150,8 +146,8 @@ The rail is the map of the library:
 ## Search
 
 Press `/` or `⌘F`. Matching is fuzzy: `bcf` finds “Buy coffee filters”, and
-typing a project name finds its tasks. Search reads titles, notes, checklist
-steps, tags and project paths.
+typing a project name finds its tasks. Search reads titles, notes, tags and
+project paths.
 
 The scope chip under the view title switches between **This view** and
 **Library**, as does `⌘⇧F`. A library search looks at every task outside Trash,
@@ -221,13 +217,13 @@ Press **`?`** for the full keyboard and mouse help. The essentials:
 | `Tab` / `⇧Tab` | nest / unnest |
 | `⌘Z` / `⇧⌘Z` | undo / redo |
 | `⌘⌫` | delete the selection or sidebar item |
-| `⌘L` | add a checklist step |
+| `⌘L` | add a subtask |
 | `⌘T` | toggle light / dark |
 | `⇧⌘T` / `⌥⌘T` | next / previous theme |
 | `⌘O` | import TaskPaper or JSON |
 | `⌘,` | settings |
 
-Vim mode is on by default and covers the list, sidebar and checklist: `j`/`k`,
+Vim mode is on by default and covers the list, sidebar and subtask field: `j`/`k`,
 `h`/`l`, `gg`/`G`, `o`/`O`, `x`, `dd`, `yy`, `p`, `u`, `Ctrl-r`, counts and
 `/` all work. Turn it off in **Settings → Workflow**.
 

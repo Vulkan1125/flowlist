@@ -4,8 +4,10 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +42,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -48,7 +51,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +64,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import dev.flowlist.android.data.TaskView
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.isToday
@@ -234,6 +242,7 @@ fun SwipeTaskRow(
     hasChildren: Boolean = false,
     expanded: Boolean = false,
     onToggleExpanded: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
 ) {
     val colors = flow
     val state = rememberSwipeToDismissBoxState(
@@ -278,7 +287,7 @@ fun SwipeTaskRow(
                 task = task.copy(pending = pending),
                 onToggle = onToggle,
                 onClick = onClick,
-                modifier = Modifier.background(colors.background),
+                modifier = Modifier.background(colors.background).then(modifier),
                 depth = depth,
                 hasChildren = hasChildren,
                 expanded = expanded,
@@ -301,9 +310,79 @@ fun TaskTreeItem(
     onClick: (TaskView) -> Unit,
 ) {
     val kids = children[task.id].orEmpty()
-    var expanded by rememberSaveable(task.id) { mutableStateOf(false) }
+    var opened by rememberSaveable(task.id) { mutableStateOf(false) }
+    val drag = LocalTaskDrag.current
+    val expanded = opened || drag?.revealed?.containsKey(task.id) == true
     val hasChildren = kids.isNotEmpty()
-    val toggleExpanded = { expanded = !expanded }
+    val toggleExpanded = {
+        val next = !expanded
+        opened = next
+        if (!next) drag?.revealed?.remove(task.id)
+    }
+    val colors = flow
+    val drop = drag?.target
+    val nestTarget = drop?.kind == TaskDropKind.Nest &&
+        drop.id == task.id &&
+        drag?.dragging?.id != task.id
+    val rootTarget = drop?.kind == TaskDropKind.RootAfter &&
+        drop.id == task.id &&
+        drag?.dragging?.id != task.id
+    val dragModifier = if (drag == null) {
+        Modifier
+    } else {
+        Modifier
+            .onGloballyPositioned { coordinates ->
+                drag.bounds["task:${task.id}"] = coordinates.boundsInWindow()
+            }
+            .then(
+                if (nestTarget) {
+                    Modifier.border(1.dp, colors.accent, RoundedCornerShape(10.dp))
+                } else {
+                    Modifier
+                },
+            )
+            .then(
+                if (rootTarget) {
+                    Modifier.background(colors.accent.copy(alpha = 0.12f))
+                } else {
+                    Modifier
+                },
+            )
+            .graphicsLayer {
+                if (drag.dragging?.id == task.id) {
+                    translationY = drag.offset.y
+                }
+            }
+            .zIndex(if (drag.dragging?.id == task.id) 1f else 0f)
+            .pointerInput(task.id, drag) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { local ->
+                        drag.bounds["task:${task.id}"]?.let { row ->
+                            drag.start(task, row, local)
+                        }
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        drag.move(dragAmount)
+                    },
+                    onDragEnd = { drag.end() },
+                    onDragCancel = { drag.cancel() },
+                )
+            }
+    }
+    if (drag != null) {
+        DisposableEffect(drag, task.id, depth) {
+            if (depth == 0) {
+                drag.roots[task.id] = true
+            } else {
+                drag.roots.remove(task.id)
+            }
+            onDispose {
+                drag.bounds.remove("task:${task.id}")
+                drag.roots.remove(task.id)
+            }
+        }
+    }
     if (swipeActions && depth == 0) {
         SwipeTaskRow(
             task = task,
@@ -314,12 +393,14 @@ fun TaskTreeItem(
             hasChildren = hasChildren,
             expanded = expanded,
             onToggleExpanded = toggleExpanded,
+            modifier = dragModifier,
         )
     } else {
         TaskRow(
             task = task.copy(pending = pending),
             onToggle = { onToggle(task) },
             onClick = { onClick(task) },
+            modifier = dragModifier,
             depth = depth,
             hasChildren = hasChildren,
             expanded = expanded,

@@ -77,6 +77,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -116,6 +117,10 @@ import dev.flowlist.android.data.Repository
 import dev.flowlist.android.data.TaskView
 import dev.flowlist.android.data.forecast
 import dev.flowlist.android.data.inbox
+import dev.flowlist.android.data.inboxPlacement
+import dev.flowlist.android.data.parentPlacement
+import dev.flowlist.android.data.projectPlacement
+import dev.flowlist.android.data.orderedChildTasks
 import dev.flowlist.android.data.isActive
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.label
@@ -125,6 +130,9 @@ import dev.flowlist.android.data.isToday
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -273,10 +281,21 @@ fun MainScreen(
         }
     }
     val children = remember(snapshot?.revision) {
-        snapshot?.db?.taskViews()
-            ?.filter { it.parent != null }
-            ?.groupBy { it.parent!! }
-            .orEmpty()
+        val db = snapshot?.db
+        if (db == null) {
+            emptyMap()
+        } else {
+            val views = db.taskViews().filter { it.parent != null }
+            val byId = views.associateBy { it.id }
+            db.tasks.values.associate { dto ->
+                val ordered = dto.childOrder.mapNotNull { id ->
+                    byId[id]?.takeIf { view -> view.parent == dto.id }
+                }
+                val seen = ordered.map { it.id }.toSet()
+                val extras = views.filter { it.parent == dto.id && it.id !in seen }
+                dto.id to (ordered + extras)
+            }.filterValues { it.isNotEmpty() }
+        }
     }
     val snackbarHost = remember { SnackbarHostState() }
     val attachmentPicker = rememberLauncherForActivityResult(
@@ -305,6 +324,33 @@ fun MainScreen(
     }
     val drawerOrder = remember(preferences.perspectiveOrder) {
         orderedPerspectives(preferences.perspectiveOrder)
+    }
+    val taskDrag = remember { TaskDragController() }
+    taskDrag.onDrop = { task, drop ->
+        val db = state.snapshot?.db
+        if (db != null && task.id != drop.id && !isTaskDescendant(db, task.id, drop.id)) {
+            when (drop.kind) {
+                TaskDropKind.Nest -> {
+                    taskDrag.revealed[drop.id] = true
+                    scope.launch {
+                        repository.moveTask(
+                            task.id,
+                            parentPlacement(drop.id, JsonPrimitive("end")),
+                        )
+                    }
+                }
+                TaskDropKind.RootAfter -> {
+                    val target = db.tasks[drop.id]
+                    val position = buildJsonObject { put("after", drop.id) }
+                    val placement = if (target?.project != null) {
+                        projectPlacement(target.project, position)
+                    } else {
+                        inboxPlacement(position)
+                    }
+                    scope.launch { repository.moveTask(task.id, placement) }
+                }
+            }
+        }
     }
     val openPerspective: (Perspective) -> Unit = { item ->
         savedPerspective = null
@@ -498,6 +544,7 @@ fun MainScreen(
             }
         },
     ) { padding ->
+        CompositionLocalProvider(LocalTaskDrag provides taskDrag) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -676,9 +723,7 @@ fun MainScreen(
                 task = dto,
                 projects = db.projects.values.toList(),
                 tags = db.tags.values.toList(),
-                subtasks = db.tasks.values
-                    .filter { it.parent == taskView.id && it.isActive }
-                    .sortedBy { it.title.lowercase() },
+                subtasks = db.orderedChildTasks(taskView.id),
                 moveTargets = db.tasks.values
                     .filter { it.isActive && it.parent == null && it.id != taskView.id }
                     .sortedBy { it.title.lowercase() },
@@ -695,18 +740,6 @@ fun MainScreen(
                             duration = SnackbarDuration.Short,
                         )
                     }
-                },
-                onChecklist = { item, completed ->
-                    scope.launch { repository.toggleChecklist(dto, item.id, completed) }
-                },
-                onAddChecklist = { title ->
-                    scope.launch { repository.addChecklist(dto, title) }
-                },
-                onDeleteChecklist = { item ->
-                    scope.launch { repository.deleteChecklist(dto, item) }
-                },
-                onMoveChecklist = { item, to ->
-                    scope.launch { repository.moveChecklist(dto, item, to) }
                 },
                 savedAttachments = state.savedAttachments,
                 onCreateProject = { name ->
@@ -754,6 +787,12 @@ fun MainScreen(
                 onMoveSubtask = { child, parent ->
                     scope.launch { repository.moveSubtask(child, parent) }
                 },
+                onReorderSubtasks = { ordered ->
+                    scope.launch { repository.reorderSubtasks(dto.id, ordered) }
+                },
+                onAddLink = { url ->
+                    scope.launch { repository.addAttachmentLink(dto, url) }
+                },
                 onDeleteSeries = {
                     detail = null
                     scope.launch { repository.deleteSeries(dto) }
@@ -767,6 +806,7 @@ fun MainScreen(
                     detail = null
                 },
             )
+        }
         }
     }
 
@@ -1980,4 +2020,13 @@ fun SheetHandle() {
                 .background(flow.hairline),
         )
     }
+}
+
+private fun isTaskDescendant(db: dev.flowlist.android.data.Db, ancestorId: String, candidateId: String): Boolean {
+    var current = db.tasks[candidateId]?.parent
+    while (current != null) {
+        if (current == ancestorId) return true
+        current = db.tasks[current]?.parent
+    }
+    return false
 }
