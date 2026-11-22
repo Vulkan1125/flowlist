@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.11 — 2026-11-22
+
+- **The phone drawer settles smoothly on release.** The dragged row now slides
+  into the gap instead of jumping when the saved order is applied.
+- **The Mac inspector lists subtasks.** Each child has a **Separate** action
+  that moves it out from under the parent to the end of the project or Inbox.
+- **Drag a subtask out of its parent in the Mac middle pane.** While dragging,
+  a line appears in the gaps between root-level tasks; dropping there moves the
+  task out and places it at that position.
+
 ## 0.9.10 — 2026-11-22
 
 - **Flagged is a perspective on the phone.** It sits next to Forecast in the
@@ -11,8 +21,7 @@
   lifts with an accent outline, the rows it passes slide aside to open a gap,
   and the order is remembered after the app restarts.
 - **The Mac inspector has a + Add subtask button.** It creates the task under
-  the selected one and puts the cursor in its title. Tab-to-indent and
-  dragging a task onto another still work.
+  the selected one and puts the cursor in its title.
 
 ## 0.9.9 — 2026-11-22
 

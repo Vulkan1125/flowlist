@@ -364,6 +364,9 @@ pub struct FlowlistApp {
     /// that row can highlight and the test state can report the drop target.
     /// A project drag owns the sidebar highlight only while it is live.
     sidebar_drag_target: Option<String>,
+    /// The root-level gap under the pointer while a task is dragged in the
+    /// middle pane, so the drop line can show where it will land.
+    content_drop_target: Option<String>,
     /// Task rows painted on the last frame, in order, with their depth. The
     /// list reflects which subtasks are visible, not just what the query
     /// matched.
@@ -650,6 +653,7 @@ impl FlowlistApp {
             view_history: vec![initial_view],
             view_history_index: 0,
             sidebar_drag_target: None,
+            content_drop_target: None,
             content_rows: Rc::new(RefCell::new(Vec::new())),
             task_disclosures: Rc::new(RefCell::new(BTreeMap::new())),
             priority_filter,
@@ -2773,6 +2777,13 @@ impl FlowlistApp {
         }
     }
 
+    fn set_content_drop_target(&mut self, target: Option<String>, cx: &mut Context<Self>) {
+        if self.content_drop_target != target {
+            self.content_drop_target = target;
+            cx.notify();
+        }
+    }
+
     /// A drop fires during mouse-up while the window is mid-frame, so a plain
     /// `notify` records the change without scheduling the redraw that shows it.
     /// Notify again from a background tick, once the frame has finished. This
@@ -2930,6 +2941,63 @@ impl FlowlistApp {
         });
         cx.notify();
         self.repaint_after_drop(cx);
+    }
+
+    /// Dropping a task in a gap between root rows moves it out of any parent
+    /// and into the project or Inbox at that position.
+    fn drop_on_root(
+        &mut self,
+        before: Option<TaskId>,
+        payload: &DragTask,
+        cx: &mut Context<Self>,
+    ) {
+        if payload.tag {
+            return;
+        }
+        let placement = match &self.view {
+            View::Project(project) => TaskPlacement::Project {
+                project: project.clone(),
+                position: before.clone().map(Position::Before).unwrap_or(Position::End),
+            },
+            View::Builtin(BuiltinPerspective::Inbox) => TaskPlacement::Inbox(
+                before.clone().map(Position::Before).unwrap_or(Position::End),
+            ),
+            _ => {
+                self.content_drop_target = None;
+                cx.notify();
+                return;
+            }
+        };
+        let ids = self.drag_ids(payload);
+        self.execute(Command::MoveTasks { ids, placement });
+        self.content_drop_target = None;
+        cx.notify();
+        self.repaint_after_drop(cx);
+    }
+
+    /// Move a child task to the end of its project (or the Inbox), leaving
+    /// its former parent behind.
+    fn promote_subtask(&mut self, id: TaskId, cx: &mut Context<Self>) {
+        let project = self
+            .store
+            .db()
+            .tasks
+            .get(&id)
+            .and_then(|task| task.project.clone());
+        let placement = match project {
+            Some(project) => TaskPlacement::Project {
+                project,
+                position: Position::End,
+            },
+            None => TaskPlacement::Inbox(Position::End),
+        };
+        self.execute(Command::MoveTasks {
+            ids: vec![id],
+            placement,
+        });
+        self.toast = Some("Moved out from under its parent".to_string());
+        self.save_session();
+        cx.notify();
     }
 
     /// Dropping a task on a Forecast day rewrites its due date. A timed task
@@ -5637,6 +5705,7 @@ impl FlowlistApp {
         });
         state["sidebar_rows"] = serde_json::json!(self.sidebar_row_boxes.borrow().clone());
         state["sidebar_drag_target"] = serde_json::json!(self.sidebar_drag_target);
+        state["content_drop_target"] = serde_json::json!(self.content_drop_target);
         state["sidebar_names"] = serde_json::json!(self.sidebar_name_boxes.borrow().clone());
         state["content_rows"] = serde_json::json!(
             self.content_rows

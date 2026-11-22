@@ -1217,6 +1217,13 @@ impl FlowlistApp {
                 self.view,
                 View::Builtin(BuiltinPerspective::Projects) | View::Folder(_) | View::Custom(_)
             );
+        // Gaps between root rows are a drop target only where a root level
+        // exists. Other perspectives sort by date or priority, so a manual
+        // position would be meaningless.
+        let root_view = matches!(
+            self.view,
+            View::Project(_) | View::Builtin(BuiltinPerspective::Inbox)
+        );
         // A view with a single empty group is really an empty view: give it
         // the same illustrated empty state instead of a lonely caption.
         let entirely_empty = groups.len() == 1 && groups[0].rows.is_empty() && !show_headers;
@@ -1297,6 +1304,11 @@ impl FlowlistApp {
                     if self.row_is_hidden(&row.id) {
                         continue;
                     }
+                    if root_view && row.depth == 0 {
+                        list = list.child(
+                            self.render_root_drop_zone(Some(row.id.clone()), cx),
+                        );
+                    }
                     list = list.child(self.render_task_row(row, cx));
                 }
                 if group.rows.is_empty() {
@@ -1311,7 +1323,50 @@ impl FlowlistApp {
                 }
             }
         }
+        if root_view {
+            list = list.child(self.render_root_drop_zone(None, cx));
+        }
         list.into_any_element()
+    }
+
+    /// A thin root-level gap that accepts a dragged task. It only shows a
+    /// line while the pointer is over it, so it costs almost no space.
+    fn render_root_drop_zone(
+        &self,
+        before: Option<TaskId>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let key = match &before {
+            Some(id) => format!("root-before:{id}"),
+            None => "root-end".to_string(),
+        };
+        let active = self.content_drop_target.as_deref() == Some(key.as_str());
+        let hover_key = key.clone();
+        let move_before = before.clone();
+        div()
+            .id(super::sid(key))
+            .h(px(5.))
+            .w_full()
+            .flex()
+            .items_center()
+            .child(
+                div()
+                    .h(px(2.))
+                    .w_full()
+                    .when(active, |this| this.bg(theme.accent)),
+            )
+            .on_drag_move::<DragTask>(cx.listener(
+                move |this, event: &DragMoveEvent<DragTask>, _, cx| {
+                    if event.bounds.contains(&event.event.position) {
+                        this.set_content_drop_target(Some(hover_key.clone()), cx);
+                    }
+                },
+            ))
+            .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
+                this.drop_on_root(move_before.clone(), payload, cx)
+            }))
+            .into_any_element()
     }
 
     /// Record where an Archive row or its Reopen button painted, so a probe
@@ -1771,6 +1826,13 @@ impl FlowlistApp {
             .on_drag(drag_payload, move |payload, position, window, cx| {
                 ghost(payload, position, window, cx, theme)
             })
+            .on_drag_move::<DragTask>(cx.listener(
+                |this, _: &DragMoveEvent<DragTask>, _, cx| {
+                    if this.content_drop_target.is_some() {
+                        this.set_content_drop_target(None, cx);
+                    }
+                },
+            ))
             .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
                 this.drop_on_task(drop_id.clone(), payload, cx)
             }))

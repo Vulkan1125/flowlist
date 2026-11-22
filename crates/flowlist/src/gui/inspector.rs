@@ -1818,6 +1818,83 @@ impl FlowlistApp {
     ) -> impl IntoElement {
         let theme = self.theme;
         let parent = id.clone();
+        let db = self.store.db();
+        let children: Vec<(TaskId, String, bool)> = db
+            .tasks
+            .get(id)
+            .map(|task| {
+                task.child_order
+                    .iter()
+                    .filter_map(|child_id| {
+                        db.tasks
+                            .get(child_id)
+                            .filter(|child| !child.is_trashed())
+                            .map(|child| {
+                                (child.id.clone(), child.title.clone(), child.completed)
+                            })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut child_rows = div().flex().flex_col().gap_1();
+        if children.is_empty() {
+            child_rows = child_rows.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("No subtasks yet."),
+            );
+        }
+        for (child_id, title, completed) in children {
+            let select_id = child_id.clone();
+            let separate_id = child_id.clone();
+            child_rows = child_rows.child(
+                div()
+                    .id(super::sid(format!("subtask:{child_id}")))
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .min_h(px(22.))
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_xs()
+                            .text_color(if completed {
+                                theme.text_faint
+                            } else {
+                                theme.text
+                            })
+                            .child(title),
+                    )
+                    .child(
+                        div()
+                            .id(super::sid(format!("separate-subtask:{child_id}")))
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .cursor_pointer()
+                            .hover(|style| style.text_color(theme.text))
+                            .flow_tip(
+                                self,
+                                cx,
+                                theme,
+                                "Move this task out from under its parent",
+                            )
+                            .child("Separate")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.promote_subtask(separate_id.clone(), cx);
+                            })),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.select_only(select_id.clone());
+                        this.show_inspector = true;
+                        cx.notify();
+                    })),
+            );
+        }
         div()
             .flex()
             .flex_col()
@@ -1858,6 +1935,7 @@ impl FlowlistApp {
                     .flex()
                     .items_center()
                     .gap_1()
+                    .mt(px(6.))
                     .text_xs()
                     .text_color(theme.text_faint)
                     .cursor_pointer()
@@ -1869,6 +1947,7 @@ impl FlowlistApp {
                         this.add_subtask_to_selected(cx);
                     })),
             )
+            .child(child_rows)
     }
 
     fn inspector_attachments(

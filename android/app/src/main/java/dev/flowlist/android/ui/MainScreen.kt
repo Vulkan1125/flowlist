@@ -1,7 +1,11 @@
 package dev.flowlist.android.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -78,7 +82,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -998,10 +1004,15 @@ private fun LibraryDrawer(
     var dragFrom by remember { mutableIntStateOf(-1) }
     var dragTo by remember { mutableIntStateOf(-1) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
+    var settleFrom by remember { mutableFloatStateOf(0f) }
+    var settleTo by remember { mutableFloatStateOf(0f) }
+    var settling by remember { mutableStateOf(false) }
     var measuredRowHeight by remember { mutableFloatStateOf(0f) }
     val fallbackRowHeight = with(LocalDensity.current) { 42.dp.toPx() }
     val rowHeight = if (measuredRowHeight > 0f) measuredRowHeight else fallbackRowHeight
     val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val settleAnim = remember { Animatable(0f) }
     Column(
         modifier = Modifier
             .fillMaxHeight()
@@ -1016,82 +1027,138 @@ private fun LibraryDrawer(
             modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 12.dp),
         )
         remaining.forEachIndexed { index, item ->
-            val selected = if (item.tab != null) {
-                more == null && tab == item.tab
-            } else {
-                more == item.more
-            }
-            val dragging = draggingKey == item.key
-            // Rows between the drag origin and the live target step aside, so
-            // a gap opens exactly where the row will land.
-            val shift = when {
-                dragging -> 0f
-                dragFrom >= 0 && dragTo > dragFrom && index in (dragFrom + 1)..dragTo -> -rowHeight
-                dragFrom >= 0 && dragTo < dragFrom && index in dragTo until dragFrom -> rowHeight
-                else -> 0f
-            }
-            val animatedShift by animateFloatAsState(
-                targetValue = shift,
-                animationSpec = spring(dampingRatio = 0.82f, stiffness = 700f),
-                label = "drawer-shift-$index",
-            )
-            DrawerRow(
-                label = item.label,
-                icon = item.icon,
-                selected = selected,
-                dragging = dragging,
-                onClick = { onPerspective(item) },
-                modifier = Modifier
-                    .onSizeChanged { size ->
-                        if (measuredRowHeight <= 0f && size.height > 0) {
-                            measuredRowHeight = size.height.toFloat()
-                        }
-                    }
-                    .zIndex(if (dragging) 1f else 0f)
-                    .graphicsLayer {
-                        translationY = if (dragging) dragOffset else animatedShift
-                    }
-                    .alpha(if (dragging) 0.95f else 1f)
-                    .pointerInput(remaining, item.key, rowHeight) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = {
-                                draggingKey = item.key
-                                dragFrom = index
-                                dragTo = index
-                                dragOffset = 0f
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                dragOffset += dragAmount.y
-                                if (dragFrom >= 0) {
-                                    val next = (dragFrom + (dragOffset / rowHeight).roundToInt())
-                                        .coerceIn(0, remaining.lastIndex)
-                                    if (next != dragTo) {
-                                        dragTo = next
-                                        haptics.performHapticFeedback(
-                                            HapticFeedbackType.TextHandleMove,
-                                        )
-                                    }
-                                }
-                            },
-                            onDragEnd = {
-                                if (dragFrom >= 0 && dragTo != dragFrom) {
-                                    onReorder(remaining.map { it.key }, dragFrom, dragTo)
-                                }
-                                draggingKey = null
-                                dragFrom = -1
-                                dragTo = -1
-                                dragOffset = 0f
-                            },
-                            onDragCancel = {
-                                draggingKey = null
-                                dragFrom = -1
-                                dragTo = -1
-                                dragOffset = 0f
-                            },
-                        )
+            key(item.key) {
+                val selected = if (item.tab != null) {
+                    more == null && tab == item.tab
+                } else {
+                    more == item.more
+                }
+                val dragging = draggingKey == item.key
+                val settlingThis = dragging && settling
+                // Rows between the drag origin and the live target step aside, so
+                // a gap opens exactly where the row will land.
+                val shift = when {
+                    dragging -> 0f
+                    dragFrom >= 0 && dragTo > dragFrom && index in (dragFrom + 1)..dragTo -> -rowHeight
+                    dragFrom >= 0 && dragTo < dragFrom && index in dragTo until dragFrom -> rowHeight
+                    else -> 0f
+                }
+                val animatedShift by animateFloatAsState(
+                    targetValue = shift,
+                    // The snap when the drag clears keeps the reordered rows from
+                    // animating a second time as their base position changes.
+                    animationSpec = if (dragFrom >= 0) {
+                        spring(dampingRatio = 0.82f, stiffness = 700f)
+                    } else {
+                        snap()
                     },
-            )
+                    label = "drawer-shift-$index",
+                )
+                val translation = when {
+                    settlingThis -> settleFrom + (settleTo - settleFrom) * settleAnim.value
+                    dragging -> dragOffset
+                    else -> animatedShift
+                }
+                DrawerRow(
+                    label = item.label,
+                    icon = item.icon,
+                    selected = selected,
+                    dragging = dragging,
+                    onClick = { onPerspective(item) },
+                    modifier = Modifier
+                        .onSizeChanged { size ->
+                            if (measuredRowHeight <= 0f && size.height > 0) {
+                                measuredRowHeight = size.height.toFloat()
+                            }
+                        }
+                        .zIndex(if (dragging) 1f else 0f)
+                        .graphicsLayer {
+                            translationY = translation
+                        }
+                        .alpha(if (dragging) 0.95f else 1f)
+                        .pointerInput(remaining, item.key, rowHeight) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    draggingKey = item.key
+                                    dragFrom = index
+                                    dragTo = index
+                                    dragOffset = 0f
+                                    settling = false
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    dragOffset += dragAmount.y
+                                    if (dragFrom >= 0) {
+                                        val next = (dragFrom + (dragOffset / rowHeight).roundToInt())
+                                            .coerceIn(0, remaining.lastIndex)
+                                        if (next != dragTo) {
+                                            dragTo = next
+                                            haptics.performHapticFeedback(
+                                                HapticFeedbackType.TextHandleMove,
+                                            )
+                                        }
+                                    }
+                                },
+                                onDragEnd = {
+                                    val from = dragFrom
+                                    val to = dragTo
+                                    if (from < 0) {
+                                        draggingKey = null
+                                        return@detectDragGesturesAfterLongPress
+                                    }
+                                    settleFrom = dragOffset
+                                    settleTo = if (to != from) (to - from) * rowHeight else 0f
+                                    settling = true
+                                    scope.launch {
+                                        settleAnim.snapTo(0f)
+                                        settleAnim.animateTo(
+                                            1f,
+                                            tween(
+                                                durationMillis = 190,
+                                                easing = FastOutSlowInEasing,
+                                            ),
+                                        )
+                                        if (from >= 0 && to != from) {
+                                            onReorder(remaining.map { it.key }, from, to)
+                                        }
+                                        draggingKey = null
+                                        dragFrom = -1
+                                        dragTo = -1
+                                        dragOffset = 0f
+                                        settleFrom = 0f
+                                        settleTo = 0f
+                                        settling = false
+                                        settleAnim.snapTo(0f)
+                                    }
+                                },
+                                onDragCancel = {
+                                    if (dragFrom < 0) return@detectDragGesturesAfterLongPress
+                                    settleFrom = dragOffset
+                                    settleTo = 0f
+                                    settling = true
+                                    scope.launch {
+                                        settleAnim.snapTo(0f)
+                                        settleAnim.animateTo(
+                                            1f,
+                                            tween(
+                                                durationMillis = 160,
+                                                easing = FastOutSlowInEasing,
+                                            ),
+                                        )
+                                        draggingKey = null
+                                        dragFrom = -1
+                                        dragTo = -1
+                                        dragOffset = 0f
+                                        settleFrom = 0f
+                                        settleTo = 0f
+                                        settling = false
+                                        settleAnim.snapTo(0f)
+                                    }
+                                },
+                            )
+                        },
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))

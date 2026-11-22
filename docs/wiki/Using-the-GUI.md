@@ -83,8 +83,14 @@ leaving the list.
   task copies the checklist with every step unchecked.
 - **Subtasks** switch between Parallel and Sequential for the selected task's
   own children. **+ Add subtask** creates a child task and puts the cursor in
-  its title. You can also press `Tab` to indent the selected task under the one
-  above, or drag a task onto another task.
+  its title. The section lists the existing children; **Separate** on a child
+  moves it to the end of the project (or the Inbox). You can also press `Tab`
+  to indent the selected task under the one above, or drag a task onto another
+  task.
+- **Drag a subtask out of its parent** by dropping it in one of the thin gaps
+  between root-level tasks in the middle pane. The gap shows an accent line
+  while the task is over it, and the task lands at that position as a
+  top-level task.
 - **Attachments** accept files and `http(s)` links. Click a file's name to
   preview an image or PDF in the app; PDFs step with `←` / `→`. `open` hands the
   file to its default app. Removing an attachment asks first and leaves the
