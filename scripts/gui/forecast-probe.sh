@@ -141,12 +141,42 @@ assert d["forecast_calendar_height"] is None, d["forecast_calendar_height"]
 print("  calendar: %d day cells, %d chips, natural height" % (len(d["forecast_days"]), len(d["forecast_chips"])))
 PY
 
-# 2. Fold the grid away from the header chip and bring it back.
+# 2. Fold the grid away from the header chip. The collapsed week strip takes
+#    its place: seven day cells, a header expand control and a day pick that
+#    still filters the list.
 click_box forecast_toggle_anchor
 wait_value forecast_calendar_open False
-click_box forecast_toggle_anchor
+python3 - "$state" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["forecast_week"], "no collapsed week"
+assert len(d["forecast_strip"]) == 7, len(d["forecast_strip"])
+assert d["forecast_strip_expand"], "no expand control"
+print("  collapsed week: %s, %d days" % (d["forecast_week"], len(d["forecast_strip"])))
+PY
+cell=$(python3 - "$state" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+box = d["forecast_strip"]["2026-11-25"]
+print(int(box[0] + box[2] / 2), int(box[1] + box[3] / 2))
+PY
+)
+set -- $cell
+"$helpers/flowctl" mouse $((WX + $1)) $((WY + $2))
+sleep 0.9
+wait_value forecast_day 2026-11-25
+pill=$(python3 - "$state" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+box = d["forecast_strip_pill"]
+print(int(box[0] + box[2] / 2), int(box[1] + box[3] / 2))
+PY
+)
+set -- $pill
+"$helpers/flowctl" drag $((WX + $1)) $((WY + $2)) $((WX + $1)) $((WY + $2 + 60))
+sleep 0.9
 wait_value forecast_calendar_open True
-echo "  fold: chip closes and reopens the grid"
+echo "  fold: chip folds to a week strip; a day and pill drag work"
 
 # 3. Click 20 November: the list keeps that day's two tasks, and a second
 #    click clears the filter.

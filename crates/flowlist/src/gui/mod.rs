@@ -330,10 +330,12 @@ pub struct FlowlistApp {
     view: View,
     /// First day of the month the Forecast calendar shows.
     forecast_month: chrono::NaiveDate,
+    /// Monday of the week the collapsed Forecast strip shows.
+    forecast_week: chrono::NaiveDate,
     /// A clicked calendar date; `None` shows the normal Forecast buckets.
     forecast_date: Option<chrono::NaiveDate>,
-    /// Whether the Forecast month grid is showing. Collapsed, Forecast is a
-    /// plain upcoming list.
+    /// Whether the Forecast month grid is showing. Collapsed, Forecast keeps
+    /// a compact week strip above the upcoming list.
     forecast_calendar_open: bool,
     /// The height the user dragged the Forecast month grid to. `None` keeps
     /// the grid at its natural size.
@@ -343,6 +345,12 @@ pub struct FlowlistApp {
     /// Forecast day cells and task chips measured for the GUI probe.
     forecast_day_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     forecast_chip_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Collapsed Forecast week cells and header controls, measured for the
+    /// GUI probe.
+    forecast_strip_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    forecast_strip_next_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    forecast_strip_expand_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    forecast_strip_pill_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// The box the Forecast calendar painted on the last frame, so a GUI
     /// probe can confirm the block spans the pane.
     forecast_calendar_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
@@ -671,12 +679,21 @@ impl FlowlistApp {
             app_icon,
             view,
             forecast_month,
+            forecast_week: {
+                let today = local_date(now());
+                let monday = chrono::Datelike::weekday(&today).num_days_from_monday() as i64;
+                today - chrono::Duration::days(monday)
+            },
             forecast_date: None,
             forecast_calendar_open,
             forecast_calendar_height,
             forecast_height_dirty: false,
             forecast_day_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             forecast_chip_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            forecast_strip_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            forecast_strip_next_anchor: Rc::new(Cell::new(None)),
+            forecast_strip_expand_anchor: Rc::new(Cell::new(None)),
+            forecast_strip_pill_anchor: Rc::new(Cell::new(None)),
             forecast_calendar_anchor: Rc::new(Cell::new(None)),
             forecast_toggle_anchor: Rc::new(Cell::new(None)),
             forecast_grip_anchor: Rc::new(Cell::new(None)),
@@ -5980,6 +5997,11 @@ impl FlowlistApp {
         state["hide_overdue"] = serde_json::json!(self.hide_overdue);
         state["hide_overdue_anchor"] = serde_json::json!(anchor(self.hide_overdue_anchor.get()));
         state["forecast_calendar_open"] = serde_json::json!(self.forecast_calendar_open);
+        state["forecast_week"] = serde_json::json!(self.forecast_week.to_string());
+        state["forecast_strip"] = serde_json::json!(self.forecast_strip_boxes.borrow().clone());
+        state["forecast_strip_next"] = serde_json::json!(anchor(self.forecast_strip_next_anchor.get()));
+        state["forecast_strip_expand"] = serde_json::json!(anchor(self.forecast_strip_expand_anchor.get()));
+        state["forecast_strip_pill"] = serde_json::json!(anchor(self.forecast_strip_pill_anchor.get()));
         state["forecast_days"] = serde_json::json!(self.forecast_day_boxes.borrow().clone());
         state["forecast_chips"] = serde_json::json!(self.forecast_chip_boxes.borrow().clone());
         state["forecast_day"] = serde_json::json!(self.forecast_date.map(|date| date.to_string()));

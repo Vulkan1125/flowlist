@@ -6,8 +6,8 @@ use std::rc::Rc;
 
 use chrono::{Datelike, Duration, NaiveDate};
 use gpui::{
-    AnyElement, Context, CursorStyle, DragMoveEvent, IntoElement, MouseButton, SharedString,
-    TextRun, Window, div, font, prelude::*, px,
+    AnyElement, Context, CursorStyle, DragMoveEvent, IntoElement, MouseButton, ScrollDelta,
+    SharedString, TextRun, Window, div, font, prelude::*, px,
 };
 
 use flowlist_core::command::{Command, ProjectPatch};
@@ -19,7 +19,9 @@ use flowlist_core::model::{
 use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
 
-use super::drag::{DragForecastResize, DragTask, ghost, resize_ghost};
+use super::drag::{
+    DragForecastResize, DragForecastStrip, DragTask, forecast_strip_ghost, ghost, resize_ghost,
+};
 use super::icons::{self, Icon};
 use super::widgets::TipExt;
 use super::{
@@ -71,10 +73,12 @@ impl FlowlistApp {
                 this.child(self.render_capture_bar(cx))
             });
 
-        if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast))
-            && self.forecast_calendar_open
-        {
-            column = column.child(self.render_forecast_calendar(cx));
+        if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) {
+            column = column.child(if self.forecast_calendar_open {
+                self.render_forecast_calendar(cx).into_any_element()
+            } else {
+                self.render_forecast_week_strip(cx).into_any_element()
+            });
         }
 
         if let View::Project(id) = self.view.clone() {
@@ -142,6 +146,7 @@ impl FlowlistApp {
             .unwrap_or(today);
         self.forecast_date = Some(next);
         self.forecast_month = NaiveDate::from_ymd_opt(next.year(), next.month(), 1).unwrap_or(next);
+        self.forecast_week = week_start(next);
         self.forecast_calendar_open = true;
         self.selected.clear();
         self.anchor = None;
@@ -159,6 +164,7 @@ impl FlowlistApp {
         self.forecast_month =
             NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
         self.forecast_date = Some(today);
+        self.forecast_week = week_start(today);
         self.forecast_calendar_open = true;
         self.selected.clear();
         self.anchor = None;
@@ -169,6 +175,52 @@ impl FlowlistApp {
     /// calendar the user folded away stays folded.
     pub(super) fn toggle_forecast_calendar(&mut self) {
         self.forecast_calendar_open = !self.forecast_calendar_open;
+        if !self.forecast_calendar_open {
+            let today = local_date(now());
+            let base = week_start(today);
+            let anchor = match self.forecast_date {
+                Some(date) if date < today => {
+                    self.forecast_date = Some(today);
+                    self.forecast_month =
+                        NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
+                    today
+                }
+                Some(date) => date,
+                None => today,
+            };
+            self.forecast_week = week_start(anchor).max(base);
+        }
+        self.save_session();
+    }
+
+    /// Move the collapsed Forecast strip one week forward or back. The strip
+    /// never moves before the current week; the full month grid has no such
+    /// limit. The selected weekday follows the week.
+    pub(super) fn forecast_shift_week(&mut self, delta: i64) {
+        let today = local_date(now());
+        let base = week_start(today);
+        let current = week_start(self.forecast_week).max(base);
+        let next = (current + Duration::days(delta * 7)).max(base);
+        let anchor = self.forecast_date.unwrap_or(today);
+        let offset = anchor.weekday().num_days_from_monday() as i64;
+        let date = next + Duration::days(offset);
+        self.forecast_week = next;
+        self.forecast_date = Some(date);
+        self.forecast_month =
+            NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date);
+        self.selected.clear();
+        self.anchor = None;
+        self.save_session();
+    }
+
+    /// Pick a day from the collapsed week strip.
+    pub(super) fn forecast_pick_day(&mut self, date: NaiveDate) {
+        self.forecast_date = Some(date);
+        self.forecast_month =
+            NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date);
+        self.forecast_week = week_start(date).max(week_start(local_date(now())));
+        self.selected.clear();
+        self.anchor = None;
         self.save_session();
     }
 
@@ -374,7 +426,222 @@ impl FlowlistApp {
             )
     }
 
-    /// One month's macOS-style grid. Each day is a cell in a single continuous
+    /// The collapsed Forecast calendar: a compact week strip under a month
+    /// heading, with a bottom pill that opens the full month grid. The full
+    /// calendar itself stays exactly as it was.
+    fn render_forecast_week_strip(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let today = local_date(now());
+        let base = week_start(today);
+        let week = week_start(self.forecast_week).max(base);
+        let anchor = self.forecast_date.unwrap_or(week);
+        let days = self.forecast_tasks_by_day();
+        let at_base = week <= base;
+        let labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        let title = anchor.format("%B %Y").to_string();
+        let strip_boxes = self.forecast_strip_boxes.clone();
+        let next_anchor = self.forecast_strip_next_anchor.clone();
+        let expand_anchor = self.forecast_strip_expand_anchor.clone();
+        let pill_anchor = self.forecast_strip_pill_anchor.clone();
+
+        let mut header = div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child(title),
+            )
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            expand_anchor.set(Some(*bounds));
+                        }
+                    })
+                    .id("forecast-week-expand")
+                    .flow_tip(self, cx, theme, "Show the full month")
+                    .child(div().flex().items_center().justify_center().size(px(20.)).rounded_md().cursor_pointer().hover(|style| style.bg(theme.hover)).child(icons::icon(Icon::ChevronDown, 12.0, theme.text_faint)))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.forecast_calendar_open = true;
+                        this.save_session();
+                        cx.notify();
+                    })),
+            )
+            .child(div().flex_grow());
+        header = header.child(
+            div()
+                .id("forecast-week-prev")
+                .flow_tip(self, cx, theme, "Previous week")
+                .when(at_base, |this| this.opacity(0.35))
+                .child(widgets::icon_button(theme, Icon::ArrowLeft, false))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if !at_base {
+                        this.forecast_shift_week(-1);
+                        cx.notify();
+                    }
+                })),
+        );
+        header = header.child(
+            div()
+                .on_children_prepainted(move |bounds, _, _| {
+                    if let Some(bounds) = bounds.first() {
+                        next_anchor.set(Some(*bounds));
+                    }
+                })
+                .id("forecast-week-next")
+                .flow_tip(self, cx, theme, "Next week")
+                .child(widgets::icon_button(theme, Icon::ArrowRight, false))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.forecast_shift_week(1);
+                    cx.notify();
+                })),
+        );
+
+        let mut row = div().flex().w_full().gap_1().pt_2();
+        for (index, label) in labels.iter().enumerate() {
+            let date = week + Duration::days(index as i64);
+            let count = days.get(&date).map_or(0, Vec::len);
+            let selected = self.forecast_date == Some(date);
+            let is_today = date == today;
+            let drop_date = date;
+            let box_sink = strip_boxes.clone();
+            let box_key = date.to_string();
+            row = row.child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        record_box(&box_sink, &box_key, bounds.first().copied());
+                    })
+                    .id(super::sid(format!("forecast-week-date:{date}")))
+                    .flex_1()
+                    .min_w_0()
+                    .h(px(58.))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap_1()
+                    .rounded_md()
+                    .bg(if selected {
+                        theme.selection
+                    } else if is_today {
+                        theme.field
+                    } else {
+                        theme.clear
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child(*label),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(22.))
+                            .rounded_full()
+                            .when(is_today, |this| this.bg(theme.accent))
+                            .text_sm()
+                            .font_weight(if is_today {
+                                gpui::FontWeight::SEMIBOLD
+                            } else {
+                                gpui::FontWeight::NORMAL
+                            })
+                            .text_color(if is_today {
+                                theme.bg
+                            } else if selected {
+                                theme.accent
+                            } else {
+                                theme.text
+                            })
+                            .child(date.day().to_string()),
+                    )
+                    .child(
+                        div()
+                            .h(px(12.))
+                            .text_xs()
+                            .text_color(if selected { theme.accent } else { theme.text_faint })
+                            .child(if count > 0 { count.to_string() } else { String::new() }),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.forecast_pick_day(drop_date);
+                        cx.notify();
+                    }))
+                    .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
+                        this.drop_on_forecast_day(drop_date, payload, cx)
+                    })),
+            );
+        }
+
+        div()
+            .flex()
+            .flex_col()
+            .w_full()
+            .px_4()
+            .pt_2()
+            .pb_1()
+            .border_b_1()
+            .border_color(theme.border_soft)
+            .child(header)
+            .child(
+                div()
+                    .on_scroll_wheel(cx.listener(|this, event: &gpui::ScrollWheelEvent, _, cx| {
+                        let dx = match event.delta {
+                            ScrollDelta::Pixels(delta) => f32::from(delta.x),
+                            ScrollDelta::Lines(delta) => delta.x,
+                        };
+                        if dx > 0.5 {
+                            this.forecast_shift_week(-1);
+                            cx.notify();
+                        } else if dx < -0.5 {
+                            this.forecast_shift_week(1);
+                            cx.notify();
+                        }
+                    }))
+                    .child(row),
+            )
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            pill_anchor.set(Some(*bounds));
+                        }
+                    })
+                    .id("forecast-week-pill")
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .w_full()
+                    .h(px(16.))
+                    .cursor(CursorStyle::ResizeUpDown)
+                    .hover(|style| style.bg(theme.hover))
+                    .flow_tip(self, cx, theme, "Drag down for the full month")
+                    .child(div().w(px(38.)).h(px(3.)).rounded_full().bg(theme.border))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.forecast_calendar_open = true;
+                        this.save_session();
+                        cx.notify();
+                    }))
+                    .on_drag(DragForecastStrip, forecast_strip_ghost)
+                    .on_drag_move::<DragForecastStrip>(cx.listener(
+                        |this, event: &DragMoveEvent<DragForecastStrip>, _, cx| {
+                            if event.event.position.y > event.bounds.bottom() + px(10.) {
+                                this.forecast_calendar_open = true;
+                                this.save_session();
+                                cx.notify();
+                            }
+                        },
+                    )),
+            )
+    }
+
+    /// One month's macOS-style grid. Each day is a cell in a single continuous    /// One month's macOS-style grid. Each day is a cell in a single continuous
     /// surface: separators instead of cards, the day number in the corner, and
     /// up to two event pills.
     fn render_forecast_month(
@@ -454,6 +721,7 @@ impl FlowlistApp {
                         } else {
                             this.forecast_date = Some(select_date);
                             this.forecast_month = select_month;
+                            this.forecast_week = week_start(select_date);
                         }
                         this.selected.clear();
                         this.anchor = None;
@@ -536,6 +804,7 @@ impl FlowlistApp {
                                         cx.stop_propagation();
                                         this.forecast_date = Some(date);
                                         this.forecast_month = select_month;
+                                        this.forecast_week = week_start(date);
                                         this.select_only(click_id.clone());
                                         this.anchor = Some(click_id.clone());
                                         this.focus = FocusArea::Content;
@@ -2602,7 +2871,13 @@ pub(super) fn add_months(month: NaiveDate, delta: i32) -> NaiveDate {
     NaiveDate::from_ymd_opt(year, month_number as u32, 1).unwrap_or(month)
 }
 
-/// The Monday-first grid for a month: the first visible date, how many days
+/// Monday of the week containing `date`. Forecast's strip and month grid both
+/// use a Monday-first week.
+pub(super) fn week_start(date: NaiveDate) -> NaiveDate {
+    date - Duration::days(date.weekday().num_days_from_monday() as i64)
+}
+
+/// The Monday-first grid for a month: the first visible date, how many days/// The Monday-first grid for a month: the first visible date, how many days
 /// the month has, and how many week rows the grid needs.
 pub(super) fn month_grid(month: NaiveDate) -> (NaiveDate, i64, usize) {
     let first = NaiveDate::from_ymd_opt(month.year(), month.month(), 1).unwrap_or(month);

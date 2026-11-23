@@ -73,6 +73,11 @@ impl DragFolder {
 #[derive(Clone, Copy, Debug)]
 pub struct DragForecastResize;
 
+/// Dragging the collapsed Forecast week strip's bottom pill. Moving downward
+/// opens the full month grid; the strip paints no ghost.
+#[derive(Clone, Copy, Debug)]
+pub struct DragForecastStrip;
+
 pub struct DragGhost {
     label: String,
     position: Point<Pixels>,
@@ -156,6 +161,15 @@ pub fn settings_resize_ghost(
 /// live height, so the drag paints nothing under the pointer.
 pub fn resize_ghost(
     _payload: &DragForecastResize,
+    _position: Point<Pixels>,
+    _window: &mut Window,
+    cx: &mut App,
+) -> gpui::Entity<ResizeGhost> {
+    cx.new(|_| ResizeGhost)
+}
+
+pub fn forecast_strip_ghost(
+    _payload: &DragForecastStrip,
     _position: Point<Pixels>,
     _window: &mut Window,
     cx: &mut App,
