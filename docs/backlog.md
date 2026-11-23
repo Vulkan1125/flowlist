@@ -220,6 +220,10 @@ below; this list is the current map.
       when the body no longer fits. The thumb tracks the pointer exactly, the
       track jumps to a click, and the corner grip uses the correct diagonal
       resize cursor.
+- [x] **Non-Tomato warning yellow** — Plain, Paper, Mist, Catppuccin, Nord,
+      Gruvbox, Dracula, Tokyo Night, Vesper, Graphite and Midnight use a clear
+      gold (#C69214) in light mode and bright yellow (#FACC15) in dark mode for
+      warnings and medium priority. Tomato keeps its orange.
 - [x] **Mac window lifecycle** — ⌘Q is bound to Quit (and appears in a small
       Flowlist app menu), double-clicking the drag handle zooms the window, and
       closing the red button then clicking the Dock icon rebuilds the window

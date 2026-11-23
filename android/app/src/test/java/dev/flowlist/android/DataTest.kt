@@ -14,6 +14,8 @@ import dev.flowlist.android.data.PerspectiveDto
 import dev.flowlist.android.ui.Family
 import dev.flowlist.android.ui.Perspective
 import dev.flowlist.android.ui.drawerCount
+import dev.flowlist.android.ui.ThemeSettings
+import dev.flowlist.android.ui.themeColors
 import dev.flowlist.android.ui.PerspectiveDraft
 import dev.flowlist.android.ui.draftFrom
 import dev.flowlist.android.ui.toFilter
@@ -149,5 +151,15 @@ class DataTest {
         )
         assertEquals(2, db.taggedTaskCount())
         assertEquals(1, db.geotaggedTaskCount())
+    }
+
+    @Test
+    fun non_tomato_warnings_stay_clearly_yellow() {
+        val light = themeColors(ThemeSettings(family = Family.Plain), dark = false)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFC69214), light.warning)
+        val dark = themeColors(ThemeSettings(darkFamily = Family.Plain), dark = true)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFFACC15), dark.warning)
+        val tomato = themeColors(ThemeSettings(family = Family.Tomato), dark = false)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFEB8909), tomato.warning)
     }
 }
