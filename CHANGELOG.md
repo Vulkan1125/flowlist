@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.41 — 2026-11-23
+
+- **Task rows are joined again.** The thin drag zone that sat between every
+  top-level row is gone, so consecutive rows touch as before. One drop target
+  remains before the first row of each group, and rows still accept a drop
+  after themselves. Metadata keeps its normal gaps and still wraps.
+
 ## 0.9.40 — 2026-11-23
 
 - **Mac metadata cells sit together again.** Project, tags, estimate, due and

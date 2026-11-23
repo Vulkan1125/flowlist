@@ -1302,14 +1302,19 @@ impl FlowlistApp {
                 list = list.child(self.render_group_header(group, open, cx));
             }
             if open {
+                // One root drop target before the first top-level row. Rows
+                // themselves handle "after this row", so no spacer is needed
+                // between every pair and the rows stay visually joined.
+                let mut first_root = true;
                 for row in self.expanded_rows(&group.rows) {
                     if self.row_is_hidden(&row.id) {
                         continue;
                     }
-                    if row.depth == 0 {
+                    if row.depth == 0 && first_root {
                         list = list.child(
                             self.render_root_drop_zone(Some(row.id.clone()), cx),
                         );
+                        first_root = false;
                     }
                     list = list.child(self.render_task_row(&row, cx));
                 }
@@ -1873,9 +1878,7 @@ impl FlowlistApp {
                     .flex()
                     .flex_wrap()
                     .items_center()
-                    // Keep the metadata cells touching as one run, while
-                    // still allowing the run to fall onto a second line.
-                    .gap_1()
+                    .gap_2()
                     .flex_shrink_0()
                     // Right-edge metadata reads in a fixed order: what is
                     // attached, where it lives, what it is tagged, how long it
