@@ -209,18 +209,17 @@ open project or toggle its tags.
 
 Forecast opens on a **Todoist-style date strip**. The Month/Agenda selector uses
 roomy pills with clear space between them. Under the month name and its chevron,
-a single row of seven dates shows how many tasks are due each day. The strip
-starts at today and shows the next seven days; it does not scroll back before
-today. Swipe it left to move seven days forward, through future months. Drag the
-strip down, or drag the pill below it, to open the full month grid; drag up on
-the pill to fold it back. The change animates smoothly. The month title and its
-chevron also toggle the grid. The grid opens on the month that was visible, and
-in full mode the **Today** button and previous/next month arrows appear and the
-calendar can move backwards. The full month grid scrolls with the task list, so
-a long day does not squash it; the collapsed strip keeps its space under the
-month name. Tapping a day lists its tasks below the calendar. **Agenda** switches
-back to the rolling two-week list and hides the month heading and its controls;
-the choice is remembered across app restarts.
+a single week strip shows how many tasks are due each day. The strip begins on
+the current week and does not scroll back before it; swipe left to move a week
+forward, through future months. Drag the strip down, or drag the pill below it,
+to open the full month grid; drag up on the pill to fold it back. The change
+animates smoothly. The month title and its chevron also toggle the grid. The
+grid opens on the month that was visible, and in full mode the **Today** button
+and previous/next month arrows appear and the calendar can move backwards. The
+full month grid scrolls with the task list, so a long day does not squash it.
+Tapping a day lists its tasks below the calendar. **Agenda** switches back to the
+rolling two-week list and hides the month heading and its controls; the choice
+is remembered across app restarts.
 
 ## Saved perspectives
 

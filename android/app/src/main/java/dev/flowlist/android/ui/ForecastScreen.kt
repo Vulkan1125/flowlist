@@ -1,11 +1,16 @@
 package dev.flowlist.android.ui
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,16 +42,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -57,6 +64,7 @@ import dev.flowlist.android.data.forecast
 import dev.flowlist.android.data.isActive
 import dev.flowlist.android.data.taskViews
 import kotlin.math.abs
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -153,10 +161,15 @@ fun ForecastScreen(
                     modifier = Modifier.size(22.dp),
                 )
             }
-            if (expanded) {
-                Spacer(modifier = Modifier.height(6.dp))
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn(tween(160)) + expandVertically(tween(220)),
+                exit = fadeOut(tween(120)) + shrinkVertically(tween(180)),
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
@@ -278,18 +291,47 @@ private fun ForecastCalendar(
     onExpandedChange: (Boolean) -> Unit,
 ) {
     val colors = flow
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(animationSpec = tween(260)),
-    ) {
-        Crossfade(
-            targetState = expanded,
-            animationSpec = tween(180),
-            label = "forecast-calendar",
-        ) { open ->
-            if (open) {
-                Column {
+    val density = LocalDensity.current
+    var dragTotal by remember { mutableFloatStateOf(0f) }
+    val threshold = with(density) { 34.dp.toPx() }
+    val progress by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = tween(260),
+        label = "calendar-expansion",
+    )
+    val weeks = weeksInMonth(month, weekStartsMonday)
+    val collapsedHeight = with(density) { 70.dp.toPx() }
+    val expandedHeight = with(density) { (22.dp + 50.dp * weeks).toPx() }
+    val height = collapsedHeight + (expandedHeight - collapsedHeight) * progress
+    val stripAlpha = (1f - progress * 1.6f).coerceIn(0f, 1f)
+    val fullAlpha = ((progress - 0.15f) / 0.85f).coerceIn(0f, 1f)
+
+    fun dragStarted() {
+        dragTotal = 0f
+    }
+
+    fun dragBy(amount: Float) {
+        dragTotal += amount
+    }
+
+    fun dragEnded() {
+        if (dragTotal > threshold) {
+            onExpandedChange(true)
+        } else if (dragTotal < -threshold) {
+            onExpandedChange(false)
+        }
+        dragTotal = 0f
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(with(density) { height.toDp() })
+                .clipToBounds(),
+        ) {
+            if (progress > 0.005f) {
+                Column(modifier = Modifier.alpha(fullAlpha)) {
                     WeekdayHeader(weekStartsMonday)
                     MonthGrid(
                         month = month,
@@ -299,15 +341,19 @@ private fun ForecastCalendar(
                         onSelect = onSelect,
                     )
                 }
-            } else {
-                Column {
+            }
+            if (progress < 0.995f) {
+                Column(modifier = Modifier.alpha(stripAlpha)) {
                     Spacer(modifier = Modifier.height(10.dp))
-                    ExpandOnDrag(
-                        onExpand = { onExpandedChange(true) },
+                    VerticalDragSurface(
+                        onDragStart = ::dragStarted,
+                        onDrag = ::dragBy,
+                        onDragEnd = ::dragEnded,
                     ) {
                         WeekStrip(
                             today = today,
                             selected = selected,
+                            weekStartsMonday = weekStartsMonday,
                             counts = counts,
                             onSelect = onSelect,
                             onWeekChange = onWeekChange,
@@ -316,132 +362,88 @@ private fun ForecastCalendar(
                 }
             }
         }
-        CalendarPill(
-            expanded = expanded,
-            onExpandedChange = onExpandedChange,
-        )
+        VerticalDragSurface(
+            modifier = Modifier.height(30.dp),
+            onDragStart = ::dragStarted,
+            onDrag = ::dragBy,
+            onDragEnd = ::dragEnded,
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(36.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(colors.hairline),
+                )
+            }
+        }
     }
 }
 
+
 @Composable
-private fun ExpandOnDrag(
-    onExpand: () -> Unit,
+private fun VerticalDragSurface(
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val threshold = with(LocalDensity.current) { 32.dp.toPx() }
+    val dragStart = rememberUpdatedState(onDragStart)
+    val drag = rememberUpdatedState(onDrag)
+    val dragEnd = rememberUpdatedState(onDragEnd)
+    val state = rememberDraggableState { delta ->
+        drag.value(delta)
+    }
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    var lastY = down.position.y
-                    var totalY = 0f
-                    var vertical = false
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        totalY += change.position.y - lastY
-                        lastY = change.position.y
-                        val totalX = change.position.x - down.position.x
-                        if (!vertical &&
-                            abs(totalY) > viewConfiguration.touchSlop &&
-                            abs(totalY) > abs(totalX)
-                        ) {
-                            vertical = true
-                        }
-                        if (vertical) {
-                            change.consume()
-                        }
-                        if (!change.pressed) break
-                    }
-                    if (vertical && totalY > threshold) {
-                        onExpand()
-                    }
-                }
-            },
+            .draggable(
+                state = state,
+                orientation = Orientation.Vertical,
+                onDragStarted = { dragStart.value() },
+                onDragStopped = { dragEnd.value() },
+            ),
     ) {
         content()
     }
 }
 
-@Composable
-private fun CalendarPill(
-    expanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
-) {
-    val colors = flow
-    val threshold = with(LocalDensity.current) { 24.dp.toPx() }
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(30.dp)
-            .pointerInput(expanded) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    var lastY = down.position.y
-                    var totalY = 0f
-                    var vertical = false
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        totalY += change.position.y - lastY
-                        lastY = change.position.y
-                        val totalX = change.position.x - down.position.x
-                        if (!vertical &&
-                            abs(totalY) > viewConfiguration.touchSlop &&
-                            abs(totalY) > abs(totalX)
-                        ) {
-                            vertical = true
-                        }
-                        if (vertical) {
-                            change.consume()
-                        }
-                        if (!change.pressed) break
-                    }
-                    if (vertical) {
-                        if (totalY > threshold) {
-                            onExpandedChange(true)
-                        } else if (totalY < -threshold) {
-                            onExpandedChange(false)
-                        }
-                    } else {
-                        onExpandedChange(!expanded)
-                    }
-                }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .width(36.dp)
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(colors.hairline),
-        )
-    }
+
+private fun weeksInMonth(month: YearMonth, weekStartsMonday: Boolean): Int {
+    val startIndex = if (weekStartsMonday) 1 else 7
+    val firstOffset = (month.atDay(1).dayOfWeek.value - startIndex + 7) % 7
+    return (firstOffset + month.lengthOfMonth() + 6) / 7
 }
 
 @Composable
 private fun WeekStrip(
     today: LocalDate,
     selected: LocalDate,
+    weekStartsMonday: Boolean,
     counts: Map<LocalDate, Int>,
     onSelect: (LocalDate) -> Unit,
     onWeekChange: (LocalDate) -> Unit,
 ) {
+    val base = startOfWeek(today, weekStartsMonday)
     val pagerState = rememberPagerState(
-        initialPage = stripPage(selected, today),
+        initialPage = weekPage(selected, base, weekStartsMonday),
         pageCount = { STRIP_PAGE_COUNT },
     )
     LaunchedEffect(pagerState.settledPage) {
-        val start = today.plusDays(pagerState.settledPage.toLong() * 7)
+        val start = base.plusWeeks(pagerState.settledPage.toLong())
         if (selected < start || selected > start.plusDays(6)) {
-            onWeekChange(start)
+            val offset =
+                ((selected.dayOfWeek.value - start.dayOfWeek.value + 7) % 7).toLong()
+            onWeekChange(start.plusDays(offset))
         }
     }
     LaunchedEffect(selected) {
-        val page = stripPage(selected, today)
+        val page = weekPage(selected, base, weekStartsMonday)
         if (page != pagerState.currentPage) {
             pagerState.animateScrollToPage(page)
         }
@@ -453,7 +455,7 @@ private fun WeekStrip(
             .height(60.dp),
         beyondViewportPageCount = 1,
     ) { page ->
-        val start = today.plusDays(page.toLong() * 7)
+        val start = base.plusWeeks(page.toLong())
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
             repeat(7) { index ->
                 val date = start.plusDays(index.toLong())
@@ -522,10 +524,19 @@ private fun RowScope.WeekDayCell(
 
 private const val STRIP_PAGE_COUNT = 5_000
 
-private fun stripPage(date: LocalDate, today: LocalDate): Int {
-    if (date <= today) return 0
-    val days = date.toEpochDay() - today.toEpochDay()
-    return (days / 7).coerceIn(0, (STRIP_PAGE_COUNT - 1).toLong()).toInt()
+private fun startOfWeek(date: LocalDate, weekStartsMonday: Boolean): LocalDate {
+    val first = if (weekStartsMonday) DayOfWeek.MONDAY else DayOfWeek.SUNDAY
+    return date.minusDays(((date.dayOfWeek.value - first.value + 7) % 7).toLong())
+}
+
+private fun weekPage(
+    date: LocalDate,
+    base: LocalDate,
+    weekStartsMonday: Boolean,
+): Int {
+    val target = startOfWeek(date, weekStartsMonday)
+    val weeks = (target.toEpochDay() - base.toEpochDay()) / 7
+    return weeks.coerceIn(0, (STRIP_PAGE_COUNT - 1).toLong()).toInt()
 }
 
 @Composable
@@ -554,7 +565,13 @@ private fun WeekdayHeader(weekStartsMonday: Boolean) {
     } else {
         listOf("S", "M", "T", "W", "T", "F", "S")
     }
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(22.dp)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         days.forEach { day ->
             Text(
                 text = day,

@@ -231,11 +231,11 @@ below; this list is the current map.
       vivid red/yellow pair across every Mac theme, and priority rings are 2 px
       instead of 1 px so the colour reads more clearly.
 - [x] **Todoist-style Forecast calendar** — the month view opens on a
-      forward-only seven-day strip starting today, with breathing room below
-      the month name and its chevron. The bottom pill drags to expand/collapse
-      the full month grid with a smooth size/fade animation. The full grid
-      scrolls with the task list, keeps Today and the month arrows, and allows
-      moving backwards.
+      forward-only week strip starting with the current week, with breathing
+      room below the month name and its chevron. The bottom pill drags to
+      expand/collapse the full month grid with a smooth height/fade animation.
+      The full grid scrolls with the task list, keeps Today and the month
+      arrows, and allows moving backwards.
 - [x] **Trash swipe actions** — trash rows use right-swipe to restore and
       left-swipe to delete instead of two buttons. Settings → Tasks → Trash
       swipes can swap the sides or turn swipes off, which restores the
