@@ -230,6 +230,10 @@ below; this list is the current map.
 - [x] **Mac priority signals** — high and medium task circles use the same
       vivid red/yellow pair across every Mac theme, and priority rings are 2 px
       instead of 1 px so the colour reads more clearly.
+- [x] **Mac task-row icon cluster** — the flag sits immediately before the
+      subtask chevron, and the chevron sits directly beside the title. The
+      reserved empty chevron slot is gone, so the title starts much closer to
+      the completion circle.
 - [x] **Mac window lifecycle** — ⌘Q is bound to Quit (and appears in a small
       Flowlist app menu), double-clicking the drag handle zooms the window, and
       closing the red button then clicking the Dock icon rebuilds the window

@@ -1973,10 +1973,90 @@ impl FlowlistApp {
                                 .child(availability.label()),
                         )
                     });
+        let flag_color = if flagged {
+            super::theme::priority_color(theme, Priority::High)
+        } else {
+            theme.text_faint
+        };
+        let flag = div()
+            .id(super::sid(format!("flag:{}", flag_id)))
+            .w(px(12.))
+            .text_color(flag_color)
+            .opacity(if flagged { 1.0 } else { 0.0 })
+            .cursor_pointer()
+            .group_hover(row_group.clone(), |style| style.opacity(1.0))
+            .hover(|style| style.opacity(1.0))
+            .flow_tip(
+                self,
+                cx,
+                theme,
+                if flagged {
+                    "Unflag task (!)"
+                } else {
+                    "Flag task (!)"
+                },
+            )
+            .child(icons::icon(Icon::Flagged, 12.0, flag_color))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                this.toggle_flag(flag_id.clone(), cx);
+            }));
+        let disclosure = has_children.then(|| {
+            div()
+                .on_children_prepainted(move |bounds, _, _| {
+                    if let Some(bounds) = bounds.first() {
+                        disclosure_anchor.borrow_mut().insert(
+                            disclosure_key.clone(),
+                            [
+                                f32::from(bounds.origin.x),
+                                f32::from(bounds.origin.y),
+                                f32::from(bounds.size.width),
+                                f32::from(bounds.size.height),
+                            ],
+                        );
+                    }
+                })
+                .child(
+                    div()
+                        .id(super::sid(format!("disclosure:{}", disclosure_id)))
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .text_color(theme.text_faint)
+                        .flow_tip(
+                            self,
+                            cx,
+                            theme,
+                            if expanded {
+                                "Collapse subtasks"
+                            } else {
+                                "Expand subtasks"
+                            },
+                        )
+                        .child(icons::icon(
+                            if expanded {
+                                Icon::ChevronDown
+                            } else {
+                                Icon::ChevronRight
+                            },
+                            12.0,
+                            theme.text_faint,
+                        ))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.set_branch_open(
+                                format!("task:{}", disclosure_id),
+                                !expanded,
+                            );
+                            cx.notify();
+                        })),
+                )
+                .into_any_element()
+        });
         let first_line = div()
             .flex()
             .items_center()
-            .gap_2()
+            .gap_1()
             .flex_grow()
             .flex_shrink()
             .min_w_0()
@@ -2006,97 +2086,8 @@ impl FlowlistApp {
                         this.toggle_complete(checkbox_id.clone(), cx);
                     })),
             )
-            .child(if has_children {
-                div()
-                    .on_children_prepainted(move |bounds, _, _| {
-                        if let Some(bounds) = bounds.first() {
-                            disclosure_anchor.borrow_mut().insert(
-                                disclosure_key.clone(),
-                                [
-                                    f32::from(bounds.origin.x),
-                                    f32::from(bounds.origin.y),
-                                    f32::from(bounds.size.width),
-                                    f32::from(bounds.size.height),
-                                ],
-                            );
-                        }
-                    })
-                    .child(
-                        div()
-                            .id(super::sid(format!("disclosure:{}", disclosure_id)))
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .text_color(theme.text_faint)
-                            .flow_tip(
-                                self,
-                                cx,
-                                theme,
-                                if expanded {
-                                    "Collapse subtasks"
-                                } else {
-                                    "Expand subtasks"
-                                },
-                            )
-                            .child(icons::icon(
-                                if expanded {
-                                    Icon::ChevronDown
-                                } else {
-                                    Icon::ChevronRight
-                                },
-                                12.0,
-                                theme.text_faint,
-                            ))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.set_branch_open(
-                                    format!("task:{}", disclosure_id),
-                                    !expanded,
-                                );
-                                cx.notify();
-                            })),
-                    )
-                    .into_any_element()
-            } else {
-                div().w(px(12.)).into_any_element()
-            })
-            .child(
-                div()
-                    .id(super::sid(format!("flag:{}", flag_id)))
-                    .w(px(14.))
-                    .text_color(if flagged {
-                        theme.danger
-                    } else {
-                        theme.text_faint
-                    })
-                    .opacity(if flagged { 1.0 } else { 0.0 })
-                    .cursor_pointer()
-                    .group_hover(row_group.clone(), |style| style.opacity(1.0))
-                    .hover(|style| style.opacity(1.0))
-                    .flow_tip(
-                        self,
-                        cx,
-                        theme,
-                        if flagged {
-                            "Unflag task (!)"
-                        } else {
-                            "Flag task (!)"
-                        },
-                    )
-                    .child(icons::icon(
-                        Icon::Flagged,
-                        12.0,
-                        if flagged {
-                            theme.danger
-                        } else {
-                            theme.text_faint
-                        },
-                    ))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.toggle_flag(flag_id.clone(), cx);
-                    })),
-            )
+            .child(flag)
+            .when_some(disclosure, |this, disclosure| this.child(disclosure))
             .child(title_line);
         let content = div()
             .flex_1()
