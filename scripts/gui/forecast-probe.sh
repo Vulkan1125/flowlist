@@ -175,6 +175,24 @@ set -- $cell
 "$helpers/flowctl" mouse $((WX + $1)) $((WY + $2))
 sleep 0.9
 wait_value forecast_day 2026-11-25
+
+# Clicking the same strip day again clears the filter.
+set -- $cell
+"$helpers/flowctl" mouse $((WX + $1)) $((WY + $2))
+sleep 0.9
+wait_value forecast_day ""
+python3 - "$state" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+titles = {row["title"] for row in d["content_rows"]}
+assert {"Book flight", "Later thing"} <= titles, titles
+PY
+
+# Pick it once more so the hide check below has a filter to clear.
+set -- $cell
+"$helpers/flowctl" mouse $((WX + $1)) $((WY + $2))
+sleep 0.9
+wait_value forecast_day 2026-11-25
 click_box forecast_toggle_anchor
 wait_value forecast_calendar_open False
 click_box forecast_toggle_anchor
@@ -182,7 +200,7 @@ wait_value forecast_calendar_open True
 wait_value forecast_calendar_expanded False
 click_box forecast_strip_expand
 wait_value forecast_calendar_expanded True
-echo "  modes: chip remembers full and week, both chevrons switch, a day works"
+echo "  modes: chip remembers full and week, both chevrons switch, a strip day toggles"
 
 # 3. Click 20 November: the list keeps that day's two tasks; hiding the
 #    calendar clears the filter and restores the full agenda.

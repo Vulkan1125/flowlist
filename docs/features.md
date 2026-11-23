@@ -174,7 +174,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       full month; hiding clears any picked day so the list returns to the full
       agenda. A chevron beside the month name folds the full month to a
       Monday-first current-week strip (forward-only paging, day counts, a
-      selected day), and the strip's chevron opens the full month again.
+      selected day that clears on a second click), and the strip's chevron
+      opens the full month again.
       Dragging the full grid's bottom grip (or `-` / `=`) changes its height;
       the visibility, mode, week and height are saved with the session. Chips
       drag onto a day to reschedule through the ordinary command, so the move

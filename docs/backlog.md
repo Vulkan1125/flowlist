@@ -233,7 +233,8 @@ below; this list is the current map.
 - [x] **Mac Forecast week strip** — the Calendar chip hides and restores the
       calendar, remembering whether it was the week strip or the full month.
       Hiding clears any picked day, so the list always returns to the full
-      agenda. The current-week strip remembers its week, moves one Monday-first
+      agenda. In the strip, clicking the selected day again also clears the
+      filter. The current-week strip remembers its week, moves one Monday-first
       week at a time (forward only), and switches to the unchanged full month
       from the month chevron; the full month's chevron folds back to the strip.
       Taller day cells keep the number and count clear of the edges, and the

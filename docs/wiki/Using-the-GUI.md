@@ -194,8 +194,9 @@ titles itself **Search** and ranks the closest matches first.
   beside the month name folds the full month to the current-week strip; the
   strip's chevron opens the full month again. The week strip remembers the week
   it was on, moves one Monday-first week at a time (forward only) with the
-  arrows or horizontal scroll, and keeps the selected weekday. The full month
-  is unchanged, including its bottom resize grip.
+  arrows or horizontal scroll, and keeps the selected weekday; clicking the
+  selected day again clears the filter. The full month is unchanged, including
+  its bottom resize grip.
 
 ## Undo
 

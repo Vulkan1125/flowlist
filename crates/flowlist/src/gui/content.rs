@@ -215,12 +215,17 @@ impl FlowlistApp {
         self.save_session();
     }
 
-    /// Pick a day from the collapsed week strip.
+    /// Pick a day from the collapsed week strip, or clear the filter when the
+    /// same day is clicked again.
     pub(super) fn forecast_pick_day(&mut self, date: NaiveDate) {
-        self.forecast_date = Some(date);
-        self.forecast_month =
-            NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date);
-        self.forecast_week = week_start(date).max(week_start(local_date(now())));
+        if self.forecast_date == Some(date) {
+            self.forecast_date = None;
+        } else {
+            self.forecast_date = Some(date);
+            self.forecast_month =
+                NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date);
+            self.forecast_week = week_start(date).max(week_start(local_date(now())));
+        }
         self.selected.clear();
         self.anchor = None;
         self.save_session();
