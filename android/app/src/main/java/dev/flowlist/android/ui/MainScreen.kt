@@ -799,6 +799,7 @@ fun MainScreen(
                 activeMore == MoreView.Trash ||
                 activeMore == MoreView.Changed ||
                 activeMore == MoreView.Priorities ||
+                activeMore == MoreView.Attachments ||
                 (activeMore == null &&
                     (tab == Tab.Inbox || tab == Tab.Today || tab == Tab.Forecast))
             val sortable = activeSaved == null && when {

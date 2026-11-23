@@ -497,18 +497,66 @@ fun MoreDestination(
                         item(key = "attach-section-$label") { AttachmentSectionLabel(label) }
                     }
                 items(section.tasks, key = { it.id }) { task ->
-                    Column(
-                        modifier = Modifier.clickable { onTask(task) }
+                    val selection = LocalTaskSelection.current
+                    val selected = selection?.ids?.contains(task.id) == true
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (selected) colors.accent.copy(alpha = 0.10f) else Color.Transparent,
+                            )
+                            .clickable {
+                                if (selection != null) {
+                                    selection.toggle(task.id)
+                                } else {
+                                    onTask(task)
+                                }
+                            }
                             .padding(horizontal = 20.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(task.title, style = MaterialTheme.typography.bodyMedium, color = colors.ink)
-                        Text(
-                            text = task.attachments.joinToString(" · ") { it.substringAfterLast('/') },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = colors.faint,
-                        )
+                        if (selection != null) {
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .clip(CircleShape)
+                                    .border(
+                                        1.5.dp,
+                                        if (selected) colors.accent else colors.hairline,
+                                        CircleShape,
+                                    )
+                                    .background(if (selected) colors.accent else Color.Transparent),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (selected) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = "Selected",
+                                        tint = colors.onAccent,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                task.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.ink,
+                            )
+                            Text(
+                                text = task.attachments.joinToString(" · ") {
+                                    it.substringAfterLast('/')
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.faint,
+                            )
+                        }
                     }
-                    Hairline(Modifier.padding(start = 20.dp))
+                    Hairline(
+                        Modifier.padding(start = if (selection != null) 70.dp else 20.dp),
+                    )
                 }
                 }
             }

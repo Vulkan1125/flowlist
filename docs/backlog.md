@@ -220,6 +220,9 @@ below; this list is the current map.
       when the body no longer fits. The thumb tracks the pointer exactly, the
       track jumps to a click, and the corner grip uses the correct diagonal
       resize cursor.
+- [x] **Attachment row selection** — the whole Attachments row selects,
+      including its padding and empty space, and Attachments supports the same
+      bulk select mode as the other task lists.
 - [x] **Attachment headings** — only Attachments uses the coloured headings:
       date headings in the theme accent and priorities in red/amber/blue. No
       priority or a missing date is a filled badge, which inverts to white with
