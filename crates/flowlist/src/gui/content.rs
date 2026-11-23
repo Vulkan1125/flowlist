@@ -19,9 +19,7 @@ use flowlist_core::model::{
 use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
 
-use super::drag::{
-    DragForecastResize, DragForecastStrip, DragTask, forecast_strip_ghost, ghost, resize_ghost,
-};
+use super::drag::{DragForecastResize, DragTask, ghost, resize_ghost};
 use super::icons::{self, Icon};
 use super::widgets::TipExt;
 use super::{
@@ -73,8 +71,10 @@ impl FlowlistApp {
                 this.child(self.render_capture_bar(cx))
             });
 
-        if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) {
-            column = column.child(if self.forecast_calendar_open {
+        if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast))
+            && self.forecast_calendar_open
+        {
+            column = column.child(if self.forecast_calendar_expanded {
                 self.render_forecast_calendar(cx).into_any_element()
             } else {
                 self.render_forecast_week_strip(cx).into_any_element()
@@ -148,6 +148,7 @@ impl FlowlistApp {
         self.forecast_month = NaiveDate::from_ymd_opt(next.year(), next.month(), 1).unwrap_or(next);
         self.forecast_week = week_start(next);
         self.forecast_calendar_open = true;
+        self.forecast_calendar_expanded = true;
         self.selected.clear();
         self.anchor = None;
         self.save_session();
@@ -166,6 +167,7 @@ impl FlowlistApp {
         self.forecast_date = Some(today);
         self.forecast_week = week_start(today);
         self.forecast_calendar_open = true;
+        self.forecast_calendar_expanded = true;
         self.selected.clear();
         self.anchor = None;
         self.save_session();
@@ -174,8 +176,17 @@ impl FlowlistApp {
     /// Show or hide the Forecast month grid. The choice is remembered, so a
     /// calendar the user folded away stays folded.
     pub(super) fn toggle_forecast_calendar(&mut self) {
-        self.forecast_calendar_open = !self.forecast_calendar_open;
         if !self.forecast_calendar_open {
+            // First press brings the compact week strip back, remembering the
+            // week it was last on.
+            self.forecast_calendar_open = true;
+            self.forecast_calendar_expanded = false;
+        } else if !self.forecast_calendar_expanded {
+            // Second press opens the full month grid.
+            self.forecast_calendar_expanded = true;
+        } else {
+            // Third press hides the calendar entirely.
+            self.forecast_calendar_open = false;
             let today = local_date(now());
             let base = week_start(today);
             let anchor = match self.forecast_date {
@@ -442,7 +453,6 @@ impl FlowlistApp {
         let strip_boxes = self.forecast_strip_boxes.clone();
         let next_anchor = self.forecast_strip_next_anchor.clone();
         let expand_anchor = self.forecast_strip_expand_anchor.clone();
-        let pill_anchor = self.forecast_strip_pill_anchor.clone();
 
         let mut header = div()
             .flex()
@@ -465,7 +475,7 @@ impl FlowlistApp {
                     .flow_tip(self, cx, theme, "Show the full month")
                     .child(div().flex().items_center().justify_center().size(px(20.)).rounded_md().cursor_pointer().hover(|style| style.bg(theme.hover)).child(icons::icon(Icon::ChevronDown, 12.0, theme.text_faint)))
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.forecast_calendar_open = true;
+                        this.forecast_calendar_expanded = true;
                         this.save_session();
                         cx.notify();
                     })),
@@ -517,7 +527,7 @@ impl FlowlistApp {
                     .id(super::sid(format!("forecast-week-date:{date}")))
                     .flex_1()
                     .min_w_0()
-                    .h(px(58.))
+                    .h(px(68.))
                     .flex()
                     .flex_col()
                     .items_center()
@@ -606,42 +616,9 @@ impl FlowlistApp {
                     }))
                     .child(row),
             )
-            .child(
-                div()
-                    .on_children_prepainted(move |bounds, _, _| {
-                        if let Some(bounds) = bounds.first() {
-                            pill_anchor.set(Some(*bounds));
-                        }
-                    })
-                    .id("forecast-week-pill")
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .w_full()
-                    .h(px(16.))
-                    .cursor(CursorStyle::ResizeUpDown)
-                    .hover(|style| style.bg(theme.hover))
-                    .flow_tip(self, cx, theme, "Drag down for the full month")
-                    .child(div().w(px(38.)).h(px(3.)).rounded_full().bg(theme.border))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.forecast_calendar_open = true;
-                        this.save_session();
-                        cx.notify();
-                    }))
-                    .on_drag(DragForecastStrip, forecast_strip_ghost)
-                    .on_drag_move::<DragForecastStrip>(cx.listener(
-                        |this, event: &DragMoveEvent<DragForecastStrip>, _, cx| {
-                            if event.event.position.y > event.bounds.bottom() + px(10.) {
-                                this.forecast_calendar_open = true;
-                                this.save_session();
-                                cx.notify();
-                            }
-                        },
-                    )),
-            )
     }
 
-    /// One month's macOS-style grid. Each day is a cell in a single continuous    /// One month's macOS-style grid. Each day is a cell in a single continuous
+    /// One month's macOS-style grid. Each day is a cell in a single continuous
     /// surface: separators instead of cards, the day number in the corner, and
     /// up to two event pills.
     fn render_forecast_month(

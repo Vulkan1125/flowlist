@@ -26,6 +26,7 @@ pub enum Icon {
     Tag,
     ChevronRight,
     ChevronDown,
+    ChevronUp,
     Pencil,
     Crosshair,
     Close,
@@ -105,7 +106,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    pub const ALL: [Icon; 91] = [
+    pub const ALL: [Icon; 92] = [
         Icon::Inbox,
         Icon::Projects,
         Icon::Forecast,
@@ -121,6 +122,7 @@ impl Icon {
         Icon::Tag,
         Icon::ChevronRight,
         Icon::ChevronDown,
+        Icon::ChevronUp,
         Icon::Pencil,
         Icon::Crosshair,
         Icon::Close,
@@ -216,6 +218,7 @@ impl Icon {
             Icon::Tag => "icons/tag.svg",
             Icon::ChevronRight => "icons/chevron-right.svg",
             Icon::ChevronDown => "icons/chevron-down.svg",
+            Icon::ChevronUp => "icons/chevron-up.svg",
             Icon::Pencil => "icons/pencil.svg",
             Icon::Crosshair => "icons/crosshair.svg",
             Icon::Close => "icons/close.svg",
@@ -336,6 +339,7 @@ impl Icon {
             }
             Icon::ChevronRight => r#"<path d="m9 18 6-6-6-6"/>"#,
             Icon::ChevronDown => r#"<path d="m6 9 6 6 6-6"/>"#,
+            Icon::ChevronUp => r#"<path d="m18 15-6-6-6 6"/>"#,
             Icon::Pencil => {
                 r#"<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>"#
             }
@@ -589,7 +593,7 @@ mod tests {
 
     #[test]
     fn icon_set_is_complete_and_unique() {
-        assert_eq!(Icon::ALL.len(), 91);
+        assert_eq!(Icon::ALL.len(), 92);
         let mut paths: Vec<&str> = Icon::ALL.iter().map(|icon| icon.path()).collect();
         paths.sort_unstable();
         paths.dedup();

@@ -334,9 +334,11 @@ pub struct FlowlistApp {
     forecast_week: chrono::NaiveDate,
     /// A clicked calendar date; `None` shows the normal Forecast buckets.
     forecast_date: Option<chrono::NaiveDate>,
-    /// Whether the Forecast month grid is showing. Collapsed, Forecast keeps
-    /// a compact week strip above the upcoming list.
+    /// Whether any Forecast calendar is showing.
     forecast_calendar_open: bool,
+    /// Whether the open calendar is the full month grid; otherwise it is the
+    /// compact week strip.
+    forecast_calendar_expanded: bool,
     /// The height the user dragged the Forecast month grid to. `None` keeps
     /// the grid at its natural size.
     forecast_calendar_height: Option<f32>,
@@ -350,7 +352,6 @@ pub struct FlowlistApp {
     forecast_strip_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     forecast_strip_next_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     forecast_strip_expand_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
-    forecast_strip_pill_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// The box the Forecast calendar painted on the last frame, so a GUI
     /// probe can confirm the block spans the pane.
     forecast_calendar_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
@@ -671,6 +672,7 @@ impl FlowlistApp {
         let forecast_month =
             chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
         let forecast_calendar_open = session.forecast_calendar_open.unwrap_or(true);
+        let forecast_calendar_expanded = session.forecast_calendar_expanded.unwrap_or(true);
         let forecast_calendar_height = session.forecast_calendar_height;
 
         let mut app = Self {
@@ -686,6 +688,7 @@ impl FlowlistApp {
             },
             forecast_date: None,
             forecast_calendar_open,
+            forecast_calendar_expanded,
             forecast_calendar_height,
             forecast_height_dirty: false,
             forecast_day_boxes: Rc::new(RefCell::new(BTreeMap::new())),
@@ -693,7 +696,6 @@ impl FlowlistApp {
             forecast_strip_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             forecast_strip_next_anchor: Rc::new(Cell::new(None)),
             forecast_strip_expand_anchor: Rc::new(Cell::new(None)),
-            forecast_strip_pill_anchor: Rc::new(Cell::new(None)),
             forecast_calendar_anchor: Rc::new(Cell::new(None)),
             forecast_toggle_anchor: Rc::new(Cell::new(None)),
             forecast_grip_anchor: Rc::new(Cell::new(None)),
@@ -923,6 +925,7 @@ impl FlowlistApp {
             follow_system: Some(self.follow_system),
             traffic_lights: Some(self.traffic_lights_visible),
             forecast_calendar_open: Some(self.forecast_calendar_open),
+            forecast_calendar_expanded: Some(self.forecast_calendar_expanded),
             forecast_calendar_height: self.forecast_calendar_height,
             view_options: {
                 let mut map = self.view_options.clone();
@@ -5997,11 +6000,11 @@ impl FlowlistApp {
         state["hide_overdue"] = serde_json::json!(self.hide_overdue);
         state["hide_overdue_anchor"] = serde_json::json!(anchor(self.hide_overdue_anchor.get()));
         state["forecast_calendar_open"] = serde_json::json!(self.forecast_calendar_open);
+        state["forecast_calendar_expanded"] = serde_json::json!(self.forecast_calendar_expanded);
         state["forecast_week"] = serde_json::json!(self.forecast_week.to_string());
         state["forecast_strip"] = serde_json::json!(self.forecast_strip_boxes.borrow().clone());
         state["forecast_strip_next"] = serde_json::json!(anchor(self.forecast_strip_next_anchor.get()));
         state["forecast_strip_expand"] = serde_json::json!(anchor(self.forecast_strip_expand_anchor.get()));
-        state["forecast_strip_pill"] = serde_json::json!(anchor(self.forecast_strip_pill_anchor.get()));
         state["forecast_days"] = serde_json::json!(self.forecast_day_boxes.borrow().clone());
         state["forecast_chips"] = serde_json::json!(self.forecast_chip_boxes.borrow().clone());
         state["forecast_day"] = serde_json::json!(self.forecast_date.map(|date| date.to_string()));

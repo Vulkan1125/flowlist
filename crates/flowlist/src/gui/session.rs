@@ -195,9 +195,13 @@ pub struct Session {
     /// setting existed.
     #[serde(default)]
     pub traffic_lights: Option<bool>,
-    /// Whether the Forecast month grid is expanded.
+    /// Whether the Forecast calendar is showing at all.
     #[serde(default)]
     pub forecast_calendar_open: Option<bool>,
+    /// Whether the open Forecast calendar is the full month grid rather than
+    /// the week strip. Absent means expanded.
+    #[serde(default)]
+    pub forecast_calendar_expanded: Option<bool>,
     /// The height the user dragged the Forecast calendar to, in pixels. Absent
     /// means the calendar sizes itself to the month's week count.
     #[serde(default)]
