@@ -2086,11 +2086,10 @@ impl FlowlistApp {
                     })),
             )
             .child(title_line)
-            // Two to three circle widths keep the flag from crowding the
-            // title without pushing the title away from the completion circle.
-            .child(div().w(px(24.)))
-            .child(flag)
+            // The chevron belongs to the title, so it comes first; the flag
+            // follows it before the row's spare space.
             .when_some(disclosure, |this, disclosure| this.child(disclosure))
+            .child(flag)
             .child(div().flex_grow());
         let content = div()
             .flex_1()
