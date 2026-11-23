@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.9.46 — 2026-11-23
+
+- **Mac Forecast week strip.** The Calendar chip now only hides and restores
+  the calendar, remembering whether it was the week strip or the full month,
+  and hiding clears any picked day so the list always returns to the full
+  agenda. A chevron beside the month name folds the full month to a
+  Monday-first current-week strip with day counts, forward-only week arrows or
+  horizontal scroll, and a selected day that clears on a second click. The
+  week strip's chevron opens the unchanged full month, which keeps its resize
+  grip. Taller strip cells stop the day number and count clipping, and the
+  header count reads “1 task for 23 Nov” while a day is picked.
+- **Mac inspector.** Text fields gained a thin overlay caret, click placement,
+  double-click word selection, triple-click select-all and drag selection.
+  Step modes show only the active list, dim blocked children, and confirm the
+  destructive one-off conversion; each child gets its own separate and delete
+  controls.
+- **Mac task rows and colours.** The subtask chevron hit area now includes the
+  gap before the flag, priority circles use vivid red and yellow with thicker
+  rings, and the row icon cluster has more breathing room.
+- **Mac window and library.** Quit, titlebar zoom and Dock reopen behave, and
+  Attachments rows are fully selectable.
+- **Android Forecast.** Added the forward-only current-week strip with a month
+  chevron, a draggable bottom pill, animated expand/collapse, scrolling full
+  month, and the same day-filter header count.
+- **Android trash, sorting and capture.** Trash uses right-swipe restore and
+  left-swipe delete with a settings choice, each view keeps its own sort, quick
+  add opens in a separate task affinity, and the widget refreshes its theme on
+  stop.
+- **Faster sorting.** Case-insensitive list, forecast, tag and selector sorts
+  precompute their keys once per row instead of once per comparison. Android
+  Forecast reuses its derived day counts, sorted day list and date formatters
+  across recompositions. The 10,000-task `list` check in
+  `scripts/perf-check.sh` dropped from about 160 ms to about 155 ms, with the
+  largest gains on larger libraries.
+
 ## 0.9.45 — 2026-11-23
 
 - **Mac sidebar and Settings rebuilt.** Saved perspectives show a count or a
