@@ -226,4 +226,65 @@ launch
 wait_value traffic_lights "hidden"
 echo "  hidden buttons survive a relaunch"
 
+echo "8. Settings can be resized and grows a scrollbar when squeezed"
+open_settings
+wait_map settings_toggle_rows "settings-resize"
+python3 - "$state" > "$tmp/pt" <<'PY'
+import json, sys
+b = json.load(open(sys.argv[1]))["settings_toggle_rows"]["settings-resize"]
+print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
+PY
+read -r grip_x grip_y < "$tmp/pt"
+"$helpers/flowctl" down $((WX + grip_x)) $((WY + grip_y))
+sleep 0.2
+i=1
+while [ "$i" -le 5 ]; do
+  tx=$((grip_x + (977 - grip_x) * i / 5))
+  ty=$((grip_y + (952 - grip_y) * i / 5))
+  "$helpers/flowctl" dragto $((WX + tx)) $((WY + ty))
+  sleep 0.12
+  i=$((i + 1))
+done
+"$helpers/flowctl" up $((WX + 977)) $((WY + 952))
+sleep 0.6
+size=$(value settings_size)
+if [ -z "$size" ]; then
+  echo "FAIL: settings size did not change" >&2
+  exit 1
+fi
+python3 - "$state" <<'PY'
+import json, sys
+size = json.load(open(sys.argv[1])).get("settings_size")
+if not size or size[0] >= 880 or size[1] >= 1040:
+    print("FAIL: settings size is", size, file=sys.stderr)
+    sys.exit(1)
+PY
+wait_map settings_toggle_rows "settings-scrollbar"
+echo "  resized to $size and the scrollbar appeared"
+
+echo "9. The scrollbar thumb drags the body"
+python3 - "$state" > "$tmp/pt" <<'PY'
+import json, sys
+b = json.load(open(sys.argv[1]))["settings_toggle_rows"]["settings-scrollbar"]
+print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
+PY
+read -r sx sy < "$tmp/pt"
+"$helpers/flowctl" down $((WX + sx)) $((WY + sy))
+sleep 0.2
+"$helpers/flowctl" dragto $((WX + sx)) $((WY + sy + 90))
+sleep 0.12
+"$helpers/flowctl" dragto $((WX + sx)) $((WY + sy + 170))
+sleep 0.12
+"$helpers/flowctl" up $((WX + sx)) $((WY + sy + 170))
+sleep 0.4
+scroll=$(value settings_scroll)
+python3 - "$state" <<'PY'
+import json, sys
+offset = json.load(open(sys.argv[1])).get("settings_scroll", 0)
+if not offset or offset <= 0:
+    print("FAIL: scrollbar did not move the body", file=sys.stderr)
+    sys.exit(1)
+PY
+echo "  dragged the body to offset $scroll"
+
 echo "ALL SETTINGS CHECKS PASSED"

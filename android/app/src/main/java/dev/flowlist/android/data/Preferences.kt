@@ -18,6 +18,9 @@ data class AppPreferences(
     val forecastView: String = "month",
     val keepCompletedSubtasks: Boolean = false,
     val nearbyReminders: Boolean = true,
+    /// Global sort used by the task lists: manual, due, defer, name, priority,
+    /// flagged, estimate, created or completed_at.
+    val sortBy: String = "manual",
     /// Drawer order, by perspective key. Empty means the built-in order.
     val perspectiveOrder: List<String> = emptyList(),
 )
@@ -40,6 +43,7 @@ class PreferencesStore(context: Context) {
         forecastView = prefs.getString("forecast_view", "month") ?: "month",
         keepCompletedSubtasks = prefs.getBoolean("keep_completed_subtasks", false),
         nearbyReminders = prefs.getBoolean("nearby_reminders", true),
+        sortBy = prefs.getString("sort_by", "manual") ?: "manual",
         perspectiveOrder = (prefs.getString("perspective_order", null) ?: "")
             .split('|')
             .filter { it.isNotBlank() },
@@ -57,6 +61,7 @@ class PreferencesStore(context: Context) {
             .putString("forecast_view", value.forecastView)
             .putBoolean("keep_completed_subtasks", value.keepCompletedSubtasks)
         .putBoolean("nearby_reminders", value.nearbyReminders)
+            .putString("sort_by", value.sortBy)
             .putString("perspective_order", value.perspectiveOrder.joinToString("|"))
             .apply()
     }

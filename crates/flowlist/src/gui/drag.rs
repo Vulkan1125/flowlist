@@ -125,6 +125,33 @@ impl Render for DragGhost {
     }
 }
 
+/// Dragging the Settings sheet's bottom-right corner. Like the calendar grip,
+/// the live size comes from the pointer's position inside the sheet.
+#[derive(Clone, Copy, Debug)]
+pub struct DragSettingsResize;
+
+/// Dragging the Settings sheet's custom scrollbar thumb.
+#[derive(Clone, Copy, Debug)]
+pub struct DragSettingsScroll;
+
+pub fn settings_scroll_ghost(
+    _payload: &DragSettingsScroll,
+    _position: Point<Pixels>,
+    _window: &mut Window,
+    cx: &mut App,
+) -> gpui::Entity<ResizeGhost> {
+    cx.new(|_| ResizeGhost)
+}
+
+pub fn settings_resize_ghost(
+    _payload: &DragSettingsResize,
+    _position: Point<Pixels>,
+    _window: &mut Window,
+    cx: &mut App,
+) -> gpui::Entity<ResizeGhost> {
+    cx.new(|_| ResizeGhost)
+}
+
 /// Constructor used by the calendar's resize grip. The block itself shows the
 /// live height, so the drag paints nothing under the pointer.
 pub fn resize_ghost(

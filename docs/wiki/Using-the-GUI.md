@@ -159,6 +159,11 @@ titles itself **Search** and ranks the closest matches first.
 ## Organising
 
 - **New project / folder / tag / perspective**: `⇧⌘N`, `⌥⌘N`, `⌃⌘N`, `⇧⌘P`.
+- **Saved perspectives** share one editor with the phone: text, Inbox only,
+  Flagged only, Status, Projects, Tags with child tags, Priorities, Due and
+  Defer windows, an estimate range, grouping and sorting, and completed tasks.
+  Both platforms offer project/folder/tag/due/defer/flagged/estimate grouping
+  and manual/due/defer/name/priority/flagged/estimate/created/completed sorting.
 - Right-click a sidebar row for Open, Rename, Delete, New child, project status
   and tag location. Rename is also `⌘R`.
 - Drag tasks between projects, tags and parents; drag projects into folders.
@@ -175,13 +180,15 @@ The status bar names the last action and its Undo until the next one.
 
 ## Settings
 
-Press `⌘,`. The sheet has seven sections on the left (`⌘1`…`⌘7` jump between
-them):
+Press `⌘,`. The sheet opens at a fixed size and can be resized from the grip in
+its bottom-right corner. When the content no longer fits, a thin Zed-style
+scrollbar appears along the right edge; drag its thumb or click the track to
+move. It has seven sections on the left (`⌘1`…`⌘7` jump between them):
 
 - **Appearance** — theme family, light/dark, Plain's accent presets and custom
   colour picker, screen eyedropper, six Dock icon colours, and the window
   controls.
-- **Sidebar** — which rail sections appear and which rows carry counts.
+- **Sidebar** — a collapsible matrix of every rail item with **Hide** and **Hide count** boxes, indented under their heading. Every heading starts collapsed and opening one closes the rest. A ticked box hides the row and strikes its name through; hiding a row also greys out its count box, since a count on a hidden row makes no sense. Inbox, Today and Trash always stay and have no Hide box at all. Saved perspectives show their open count, or a bare tick when nothing matches.
 - **Workflow** — Vim mode, macOS due reminders, and the review/changed/completed windows.
 - **Nearby** — the radius used by the Nearby view.
 - **Trash** — how many days deleted tasks stay restorable.

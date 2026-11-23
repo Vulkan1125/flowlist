@@ -10,21 +10,28 @@ use gpui::{
     point, prelude::*, px, rgb, rgba, size,
 };
 
-use flowlist_core::ids::{FolderId, PerspectiveId, ProjectId, TaskId};
+use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TaskId};
 use flowlist_core::model::{
-    GroupBy, Priority, ProjectIcon, ProjectKind, SidebarOptions, SortBy, TaskStatus,
+    BuiltinPerspective, GroupBy, Priority, ProjectIcon, ProjectKind, SidebarOptions, SortBy,
+    TaskStatus,
 };
 use flowlist_core::query;
 use flowlist_core::time::now;
 
+use super::drag::{
+    DragSettingsResize, DragSettingsScroll, settings_resize_ghost, settings_scroll_ghost,
+};
 use super::icons::Icon;
-use super::perspective::{PerspectiveForm, ViewChoice, ViewField};
+use super::perspective::{DeferChoice, DueChoice, PerspectiveForm, ViewChoice, ViewField};
 use super::screen_picker;
 use super::text::TextBuffer;
 use super::theme::{self, Appearance, PLAIN_ACCENTS, Theme, ThemeKind};
 use super::widgets::TipExt;
 use super::{FlowlistApp, icons, widgets};
 use crate::app_icon::{self, AppIcon};
+
+/// The smallest thumb Zed's regular scrollbar uses.
+const SETTINGS_SCROLL_MIN_THUMB: f32 = 25.0;
 
 /// What a rename sheet is editing. Keeping the typed id means a rename can
 /// never accidentally target the wrong entity kind.
@@ -42,6 +49,29 @@ pub enum EntityRef {
 pub enum AttachmentTarget {
     Task(TaskId),
     Project(ProjectId),
+}
+
+/// One accordion group in the Sidebar settings matrix. Exactly one group is
+/// open at a time, so the sheet never turns into a long list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SidebarGroup {
+    Perspectives,
+    Priorities,
+    Library,
+    Saved,
+    Tags,
+}
+
+impl SidebarGroup {
+    pub(super) fn slug(self) -> &'static str {
+        match self {
+            SidebarGroup::Perspectives => "perspectives",
+            SidebarGroup::Priorities => "priorities",
+            SidebarGroup::Library => "library",
+            SidebarGroup::Saved => "saved",
+            SidebarGroup::Tags => "tags",
+        }
+    }
 }
 
 pub enum Modal {
@@ -167,6 +197,7 @@ pub enum Modal {
         /// eyedropper is unavailable or times out.
         accent_note: Option<String>,
         section: SettingsSection,
+        sidebar_group: Option<SidebarGroup>,
     },
     Location {
         lat: TextBuffer,
@@ -178,37 +209,6 @@ pub enum Modal {
         lon: TextBuffer,
     },
     Help,
-}
-
-/// Which sidebar preference a Settings toggle flips.
-#[derive(Clone, Copy, Debug)]
-enum SidebarFlag {
-    ShowPerspectives,
-    ShowPriorities,
-    ShowLibrary,
-    ShowSaved,
-    ShowTags,
-    CountsPerspectives,
-    CountsPriorities,
-    CountsLibrary,
-    CountsTags,
-}
-
-impl SidebarFlag {
-    fn toggle(self, sidebar: &mut SidebarOptions) {
-        let value = match self {
-            SidebarFlag::ShowPerspectives => &mut sidebar.show_perspectives,
-            SidebarFlag::ShowPriorities => &mut sidebar.show_priorities,
-            SidebarFlag::ShowLibrary => &mut sidebar.show_library,
-            SidebarFlag::ShowSaved => &mut sidebar.show_saved,
-            SidebarFlag::ShowTags => &mut sidebar.show_tags,
-            SidebarFlag::CountsPerspectives => &mut sidebar.counts_perspectives,
-            SidebarFlag::CountsPriorities => &mut sidebar.counts_priorities,
-            SidebarFlag::CountsLibrary => &mut sidebar.counts_library,
-            SidebarFlag::CountsTags => &mut sidebar.counts_tags,
-        };
-        *value = !*value;
-    }
 }
 
 /// The left rail of Settings. Sections keep the sheet navigable as more
@@ -264,7 +264,7 @@ impl SettingsSection {
             SettingsSection::Appearance => {
                 "Theme, accent, window controls and how light and dark are chosen."
             }
-            SettingsSection::Sidebar => "Which sections and counts the rail shows.",
+            SettingsSection::Sidebar => "Which sections, items and counts the rail shows.",
             SettingsSection::Workflow => "Keyboard, reminders, review cadence and history windows.",
             SettingsSection::Nearby => "How distance ranks tasks with tagged locations.",
             SettingsSection::Trash => "How long deleted tasks stay restorable.",
@@ -298,6 +298,41 @@ impl SettingsSection {
             SettingsSection::About => Icon::Info,
         }
     }
+}
+
+/// Turn the old section-level count flags into explicit per-item states the
+/// first time the sidebar matrix is opened. Saving Settings then preserves the
+/// rail the user already has instead of showing every count at once.
+fn materialize_sidebar_counts(sidebar: &mut SidebarOptions, db: &flowlist_core::db::Db) {
+    if sidebar.counts_configured {
+        return;
+    }
+    let mut keys: Vec<String> = BuiltinPerspective::ALL
+        .iter()
+        .map(|perspective| format!("builtin:{}", perspective.slug()))
+        .collect();
+    keys.extend(
+        Priority::ALL
+            .iter()
+            .map(|priority| format!("priority:{}", priority.slug())),
+    );
+    for row in db.flatten_containers() {
+        keys.push(match row.container {
+            ContainerId::Folder(id) => format!("folder:{id}"),
+            ContainerId::Project(id) => format!("project:{id}"),
+        });
+    }
+    keys.extend(
+        db.perspectives
+            .values()
+            .map(|perspective| format!("custom:{}", perspective.id)),
+    );
+    keys.extend(db.tags.keys().map(|tag| format!("tag:{tag}")));
+    sidebar.counts_hidden = keys
+        .into_iter()
+        .filter(|key| sidebar.is_count_hidden(key))
+        .collect();
+    sidebar.counts_configured = true;
 }
 
 impl Modal {
@@ -447,7 +482,10 @@ impl Modal {
     }
 
     pub fn settings(app: &FlowlistApp) -> Self {
-        let settings = &app.store.db().settings;
+        let db = app.store.db();
+        let settings = &db.settings;
+        let mut sidebar = settings.sidebar.clone();
+        materialize_sidebar_counts(&mut sidebar, db);
         Modal::Settings {
             review_days: TextBuffer::new(settings.default_review_days.to_string()),
             completed_days: TextBuffer::new(settings.show_completed_days.to_string()),
@@ -460,12 +498,13 @@ impl Modal {
             follow_system: app.follow_system,
             theme: app.theme.kind(),
             appearance: app.theme.appearance(),
-            sidebar: settings.sidebar.clone(),
+            sidebar,
             traffic_lights: app.traffic_lights_visible,
             accent_light: app.plain_accent_light,
             accent_dark: app.plain_accent_dark,
             accent_note: None,
             section: SettingsSection::Appearance,
+            sidebar_group: None,
         }
     }
 
@@ -628,7 +667,7 @@ impl Modal {
             Modal::Uninstall { .. } => 0,
             Modal::AttachLink { .. } => 2,
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
-            Modal::Perspective { .. } => 1,
+            Modal::Perspective { .. } => 4,
             Modal::Import { .. } => 1,
             Modal::Settings { .. } => 5,
             Modal::Location { .. } | Modal::TagLocation { .. } => 2,
@@ -664,7 +703,13 @@ impl Modal {
                 _ => None,
             },
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
-            Modal::Perspective { form } => (index == 0).then_some(&form.name),
+            Modal::Perspective { form } => match index {
+                0 => Some(&form.name),
+                1 => Some(&form.text),
+                2 => Some(&form.estimate_min),
+                3 => Some(&form.estimate_max),
+                _ => None,
+            },
             Modal::Import { text, .. } => (index == 0).then_some(text),
             Modal::Settings {
                 review_days,
@@ -719,7 +764,13 @@ impl Modal {
                 _ => None,
             },
             Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
-            Modal::Perspective { form } => (index == 0).then_some(&mut form.name),
+            Modal::Perspective { form } => match index {
+                0 => Some(&mut form.name),
+                1 => Some(&mut form.text),
+                2 => Some(&mut form.estimate_min),
+                3 => Some(&mut form.estimate_max),
+                _ => None,
+            },
             Modal::Import { text, .. } => (index == 0).then_some(text),
             Modal::Settings {
                 review_days,
@@ -769,7 +820,13 @@ impl Modal {
                 _ => "",
             },
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
-            Modal::Perspective { .. } => "Name",
+            Modal::Perspective { .. } => match index {
+                0 => "Name",
+                1 => "Contains text",
+                2 => "Minimum estimate (minutes)",
+                3 => "Maximum estimate (minutes)",
+                _ => "",
+            },
             Modal::Import { .. } => "Library text",
             Modal::Settings { .. } => match index {
                 0 => "Default review days",
@@ -809,6 +866,19 @@ impl Modal {
             _ => 460.0,
         }
     }
+}
+
+fn view_checkbox(theme: super::theme::Theme, selected: bool) -> gpui::Div {
+    div()
+        .size(px(13.))
+        .rounded_sm()
+        .border_1()
+        .border_color(if selected { theme.accent } else { theme.border })
+        .bg(if selected { theme.accent } else { theme.clear })
+        .flex()
+        .items_center()
+        .justify_center()
+        .when(selected, |this| this.child(icons::icon(Icon::Check, 9.0, theme.bg)))
 }
 
 impl FlowlistApp {
@@ -880,7 +950,7 @@ impl FlowlistApp {
             .gap_3()
             .flex_1()
             .min_h_0()
-            .pr_1()
+            .pr(px(14.))
             .overflow_y_scroll()
             .track_scroll(&self.modal_scroll);
 
@@ -1180,8 +1250,31 @@ impl FlowlistApp {
                 ));
             }
             if !is_settings {
-                for index in 0..field_count {
-                    body = body.child(self.render_modal_field(index, cx));
+                if is_perspective {
+                    body = body.child(self.render_modal_field(0, cx));
+                    body = body.child(self.render_modal_field(1, cx));
+                    body = body.child(
+                        div()
+                            .flex()
+                            .items_start()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(self.render_modal_field(2, cx)),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(self.render_modal_field(3, cx)),
+                            ),
+                    );
+                } else {
+                    for index in 0..field_count {
+                        body = body.child(self.render_modal_field(index, cx));
+                    }
                 }
             }
             if is_new_project {
@@ -1198,21 +1291,43 @@ impl FlowlistApp {
             }
         }
 
+        let body = div()
+            .relative()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .w_full()
+            .child(body)
+            .child(self.modal_scrollbar(theme, cx));
         // The settings sheet carries the theme grid, the accent picker and the
         // window chrome row. Size it to the window so a tall display shows
         // everything at once while a short one falls back to scrolling.
-        let viewport_height = f32::from(window.viewport_size().height);
+        let viewport = window.viewport_size();
+        let viewport_width = f32::from(viewport.width);
+        let viewport_height = f32::from(viewport.height);
         let card_max_height = if is_settings {
-            (viewport_height - 140.0).clamp(320.0, 940.0)
+            (viewport_height - 120.0).clamp(480.0, 1040.0)
         } else {
             640.0
         };
+        let settings_max_width = (viewport_width - 40.0).max(640.0);
+        let settings_max_height = (viewport_height - 80.0).max(420.0);
+        let (settings_width, settings_height) = self
+            .settings_size
+            .map(|(width, height)| {
+                (
+                    width.clamp(640.0, settings_max_width),
+                    height.clamp(420.0, settings_max_height),
+                )
+            })
+            .unwrap_or((width, card_max_height.min(settings_max_height)));
+        let card_width = if is_settings { settings_width } else { width };
         let mut card = div()
             .flex()
             .flex_col()
             .gap_3()
-            .w(px(width))
-            .max_h(px(card_max_height))
+            .w(px(card_width))
             .p_4()
             .rounded_xl()
             .border_1()
@@ -1222,6 +1337,52 @@ impl FlowlistApp {
             .overflow_hidden()
             .child(header)
             .child(body);
+        // Settings keeps one size across sections. Otherwise the sheet grows
+        // and shrinks as you switch panes, which is disorienting.
+        card = if is_settings {
+            card.relative()
+                .h(px(settings_height))
+                .on_drag_move::<DragSettingsResize>(cx.listener(
+                    |this, event: &gpui::DragMoveEvent<DragSettingsResize>, window, cx| {
+                        let viewport = window.viewport_size();
+                        let center_x = f32::from(viewport.width) / 2.0;
+                        let center_y = f32::from(viewport.height) / 2.0;
+                        let max_width = (f32::from(viewport.width) - 40.0).max(640.0);
+                        let max_height = (f32::from(viewport.height) - 80.0).max(420.0);
+                        let width = 2.0 * (f32::from(event.event.position.x) - center_x);
+                        let height = 2.0 * (f32::from(event.event.position.y) - center_y);
+                        this.settings_size = Some((
+                            width.clamp(640.0, max_width),
+                            height.clamp(420.0, max_height),
+                        ));
+                        cx.notify();
+                    },
+                ))
+                .on_drag_move::<DragSettingsScroll>(cx.listener(
+                    |this, event: &gpui::DragMoveEvent<DragSettingsScroll>, _, cx| {
+                        let Some(drag_offset) = this.scroll_drag_grab.get() else {
+                            return;
+                        };
+                        let bounds = this.modal_scroll.bounds();
+                        let viewport = f32::from(bounds.size.height);
+                        let max_offset = f32::from(this.modal_scroll.max_offset().height);
+                        if viewport <= 0.0 || max_offset <= 0.0 {
+                            return;
+                        }
+                        let content = viewport + max_offset;
+                        let thumb_height = (viewport * viewport / content)
+                            .clamp(SETTINGS_SCROLL_MIN_THUMB, viewport);
+                        let travel = (viewport - thumb_height).max(1.0);
+                        let pointer = f32::from(event.event.position.y - bounds.origin.y);
+                        let thumb_top = (pointer - drag_offset).clamp(0.0, travel);
+                        let scroll = (thumb_top / travel) * max_offset;
+                        this.modal_scroll.set_offset(point(px(0.), px(-scroll)));
+                        cx.notify();
+                    },
+                ))
+        } else {
+            card.max_h(px(card_max_height))
+        };
 
         if !is_help {
             card = card.child(
@@ -1265,6 +1426,10 @@ impl FlowlistApp {
             );
         }
 
+        if is_settings {
+            card = card.child(self.settings_resize_grip(theme, cx));
+        }
+
         div()
             .absolute()
             .top_0()
@@ -1283,12 +1448,151 @@ impl FlowlistApp {
                     .flex()
                     .flex_col()
                     .max_h(px(if is_settings {
-                        card_max_height + 60.0
+                        settings_max_height + 60.0
                     } else {
                         720.0
                     }))
                     .child(card),
             ))
+            .into_any_element()
+    }
+
+    fn settings_resize_grip(&self, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+        let dot = |bottom: f32, right: f32| {
+            div()
+                .absolute()
+                .bottom(px(bottom))
+                .right(px(right))
+                .size(px(2.5))
+                .rounded_full()
+                .bg(theme.text_faint)
+        };
+        let boxes = self.settings_toggle_boxes.clone();
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        "settings-resize".to_string(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .child(
+                div()
+                    .relative()
+                    .size(px(10.))
+                    .child(dot(0., 0.))
+                    .child(dot(0., 5.))
+                    .child(dot(5., 0.)),
+            )
+            .id("settings-resize")
+            .absolute()
+            .bottom(px(2.))
+            .right(px(2.))
+            .size(px(16.))
+            .rounded_sm()
+            .cursor(CursorStyle::ResizeUpLeftDownRight)
+            .hover(|style| style.bg(theme.hover))
+            .flow_tip(self, cx, theme, "Drag to resize Settings")
+            .on_drag(DragSettingsResize, settings_resize_ghost)
+            .into_any_element()
+    }
+
+    /// A Zed-style thin scrollbar: a six-point rounded thumb with four points
+    /// of padding, a quiet track that only tints on hover, and exact tracking
+    /// while dragging. It appears only when the body overflows.
+    fn modal_scrollbar(&self, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+        const THUMB_WIDTH: f32 = 6.0;
+        const PADDING: f32 = 4.0;
+        const TRACK_WIDTH: f32 = THUMB_WIDTH + 2.0 * PADDING;
+
+        let handle = &self.modal_scroll;
+        let bounds = handle.bounds();
+        let viewport = f32::from(bounds.size.height);
+        let max_offset = f32::from(handle.max_offset().height);
+        if viewport <= 0.0 || max_offset <= 1.0 {
+            return div().into_any_element();
+        }
+        let scrolled = (-f32::from(handle.offset().y)).clamp(0.0, max_offset);
+        let content = viewport + max_offset;
+        let thumb_height =
+            (viewport * viewport / content).clamp(SETTINGS_SCROLL_MIN_THUMB, viewport);
+        let travel = (viewport - thumb_height).max(1.0);
+        let thumb_top = (scrolled / max_offset) * travel;
+        let thumb_top_window = f32::from(bounds.origin.y) + thumb_top;
+
+        let boxes = self.settings_toggle_boxes.clone();
+        let grab = self.scroll_drag_grab.clone();
+        let thumb = div()
+            .id("modal-scroll-thumb")
+            .absolute()
+            .top(px(thumb_top))
+            .right(px(PADDING))
+            .w(px(THUMB_WIDTH))
+            .h(px(thumb_height))
+            .rounded_full()
+            .bg(theme.border)
+            .hover(|style| style.bg(theme.text_faint))
+            .on_drag(DragSettingsScroll, move |payload, position, window, cx| {
+                let pointer = f32::from(position.y);
+                let drag_offset = (pointer - thumb_top_window).clamp(0.0, thumb_height);
+                grab.set(Some(drag_offset));
+                settings_scroll_ghost(payload, position, window, cx)
+            });
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        "settings-scrollbar".to_string(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .id("modal-scroll-track")
+            .absolute()
+            .top_0()
+            .right_0()
+            .h_full()
+            .w(px(TRACK_WIDTH))
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    let pointer = f32::from(event.position.y);
+                    // A click on the thumb belongs to the drag handler; a
+                    // click on the rest of the track jumps the thumb there.
+                    if pointer >= thumb_top_window
+                        && pointer <= thumb_top_window + thumb_height
+                    {
+                        return;
+                    }
+                    let bounds = this.modal_scroll.bounds();
+                    let viewport = f32::from(bounds.size.height);
+                    let max_offset = f32::from(this.modal_scroll.max_offset().height);
+                    if viewport <= 0.0 || max_offset <= 0.0 {
+                        return;
+                    }
+                    let content = viewport + max_offset;
+                    let thumb_height = (viewport * viewport / content)
+                        .clamp(SETTINGS_SCROLL_MIN_THUMB, viewport);
+                    let travel = (viewport - thumb_height).max(1.0);
+                    let pointer = f32::from(event.position.y - bounds.origin.y);
+                    let thumb_top = (pointer - thumb_height / 2.0).clamp(0.0, travel);
+                    let scroll = (thumb_top / travel) * max_offset;
+                    this.modal_scroll.set_offset(point(px(0.), px(-scroll)));
+                    cx.notify();
+                }),
+            )
+            .child(thumb)
             .into_any_element()
     }
 
@@ -1452,17 +1756,31 @@ impl FlowlistApp {
         };
         let form = form.clone();
         let db = self.store.db();
-        let project_label = form
-            .project
-            .as_ref()
-            .map(|id| db.project_path(id))
-            .unwrap_or_else(|| "Any".to_string());
-        let tag_label = form
-            .tag
-            .as_ref()
-            .and_then(|id| db.tags.get(id))
-            .map(|tag| tag.name.clone())
-            .unwrap_or_else(|| "Any".to_string());
+        let project_label = match form.projects.len() {
+            0 => "Any".to_string(),
+            1 => db.project_path(form.projects.first().expect("length checked")),
+            count => format!("{count} projects"),
+        };
+        let tag_label = match form.tags.len() {
+            0 => "Any".to_string(),
+            1 => form
+                .tags
+                .first()
+                .and_then(|id| db.tags.get(id))
+                .map(|tag| format!("#{}", tag.name))
+                .unwrap_or_else(|| "Any".to_string()),
+            count => format!("{count} tags"),
+        };
+        let due_label = match form.dues.len() {
+            0 => "Any".to_string(),
+            1 => form.dues.first().expect("length checked").label().to_string(),
+            count => format!("{count} date filters"),
+        };
+        let defer_label = match form.defers.len() {
+            0 => "Any".to_string(),
+            1 => form.defers.first().expect("length checked").label().to_string(),
+            count => format!("{count} defer filters"),
+        };
         let extra = form.extra_condition_count();
         // A live count turns the sheet into a preview: every change shows how
         // many tasks the saved view would list.
@@ -1517,6 +1835,32 @@ impl FlowlistApp {
                     })),
             );
 
+        let priority_toggles = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_1()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("Priority"),
+            )
+            .children(Priority::ALL.iter().map(|priority| {
+                let active = form.priorities.contains(priority);
+                div()
+                    .id(gpui::ElementId::Name(
+                        format!("modal-priority-{}", priority.slug()).into(),
+                    ))
+                    .child(widgets::toggle_chip(theme, priority.label(), active))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.toggle_priority(*priority);
+                        }
+                        cx.notify();
+                    }))
+            }));
+
         let project_tag_row = div()
             .flex()
             .items_start()
@@ -1524,7 +1868,7 @@ impl FlowlistApp {
             .child(div().flex_1().min_w_0().child(self.perspective_select(
                 ViewField::Project,
                 project_label,
-                form.project.is_some(),
+                !form.projects.is_empty(),
                 cx,
             )))
             .child(
@@ -1537,10 +1881,10 @@ impl FlowlistApp {
                     .child(self.perspective_select(
                         ViewField::Tag,
                         tag_label,
-                        form.tag.is_some(),
+                        !form.tags.is_empty(),
                         cx,
                     ))
-                    .when(form.tag.is_some(), |this| {
+                    .when(!form.tags.is_empty(), |this| {
                         this.child(
                             div()
                                 .id("modal-tag-children")
@@ -1569,14 +1913,14 @@ impl FlowlistApp {
             )))
             .child(div().flex_1().min_w_0().child(self.perspective_select(
                 ViewField::Due,
-                form.due.label().to_string(),
-                form.due.window().is_some(),
+                due_label,
+                !form.dues.is_empty(),
                 cx,
             )))
             .child(div().flex_1().min_w_0().child(self.perspective_select(
                 ViewField::Defer,
-                form.defer.label().to_string(),
-                form.defer.window().is_some(),
+                defer_label,
+                !form.defers.is_empty(),
                 cx,
             )));
 
@@ -1662,6 +2006,7 @@ impl FlowlistApp {
             .gap_2()
             .child(heading("FILTERS"))
             .child(toggles)
+            .child(priority_toggles)
             .child(project_tag_row)
             .child(windows_row)
             .child(widgets::divider(theme))
@@ -1795,7 +2140,9 @@ impl FlowlistApp {
                 super::perspective::DueChoice::Any,
                 super::perspective::DueChoice::Overdue,
                 super::perspective::DueChoice::Today,
+                super::perspective::DueChoice::Tomorrow,
                 super::perspective::DueChoice::Next7Days,
+                super::perspective::DueChoice::Next30Days,
                 super::perspective::DueChoice::NoDate,
             ]
             .into_iter()
@@ -1804,7 +2151,9 @@ impl FlowlistApp {
             ViewField::Defer => [
                 super::perspective::DeferChoice::Any,
                 super::perspective::DeferChoice::Today,
+                super::perspective::DeferChoice::Tomorrow,
                 super::perspective::DeferChoice::Next7Days,
+                super::perspective::DeferChoice::Next30Days,
                 super::perspective::DeferChoice::NoDate,
             ]
             .into_iter()
@@ -1828,6 +2177,7 @@ impl FlowlistApp {
                 SortBy::Due,
                 SortBy::Defer,
                 SortBy::Name,
+                SortBy::Priority,
                 SortBy::Flagged,
                 SortBy::Estimate,
                 SortBy::Created,
@@ -1868,11 +2218,19 @@ impl FlowlistApp {
 
     fn view_choice_selected(&self, form: &PerspectiveForm, choice: &ViewChoice) -> bool {
         match choice {
-            ViewChoice::Project(id) => &form.project == id,
-            ViewChoice::Tag(id) => &form.tag == id,
+            ViewChoice::Project(None) => form.projects.is_empty(),
+            ViewChoice::Project(Some(id)) => form.projects.contains(id),
+            ViewChoice::Tag(None) => form.tags.is_empty(),
+            ViewChoice::Tag(Some(id)) => form.tags.contains(id),
             ViewChoice::Status(status) => form.status == *status,
-            ViewChoice::Due(choice) => form.due == *choice,
-            ViewChoice::Defer(choice) => form.defer == *choice,
+            ViewChoice::Due(choice) => {
+                (*choice == DueChoice::Any && form.dues.is_empty())
+                    || form.dues.contains(choice)
+            }
+            ViewChoice::Defer(choice) => {
+                (*choice == DeferChoice::Any && form.defers.is_empty())
+                    || form.defers.contains(choice)
+            }
             ViewChoice::Group(group) => form.group == *group,
             ViewChoice::Sort(sort) => form.sort == *sort,
         }
@@ -1899,18 +2257,27 @@ impl FlowlistApp {
     }
 
     pub(super) fn choose_view_choice(&mut self, choice: ViewChoice, cx: &mut Context<Self>) {
+        let multi = matches!(
+            choice,
+            ViewChoice::Project(_)
+                | ViewChoice::Tag(_)
+                | ViewChoice::Due(_)
+                | ViewChoice::Defer(_)
+        );
         if let Some(Modal::Perspective { form }) = &mut self.modal {
             match choice {
-                ViewChoice::Project(id) => form.set_project(id),
-                ViewChoice::Tag(id) => form.set_tag(id),
+                ViewChoice::Project(id) => form.toggle_project(id),
+                ViewChoice::Tag(id) => form.toggle_tag(id),
                 ViewChoice::Status(status) => form.status = status,
-                ViewChoice::Due(choice) => form.due = choice,
-                ViewChoice::Defer(choice) => form.defer = choice,
+                ViewChoice::Due(choice) => form.toggle_due(choice),
+                ViewChoice::Defer(choice) => form.toggle_defer(choice),
                 ViewChoice::Group(group) => form.group = group,
                 ViewChoice::Sort(sort) => form.sort = sort,
             }
         }
-        self.view_menu = None;
+        if !multi {
+            self.view_menu = None;
+        }
         cx.notify();
     }
 
@@ -1978,8 +2345,12 @@ impl FlowlistApp {
                                     .whitespace_nowrap()
                                     .child(label),
                             )
-                            .when(selected, |this| {
-                                this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+                            .child(if field.is_multi() {
+                                view_checkbox(theme, selected).into_any_element()
+                            } else if selected {
+                                icons::icon(Icon::Check, 11.0, theme.accent).into_any_element()
+                            } else {
+                                div().w(px(11.)).into_any_element()
                             })
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.choose_view_choice(captured.clone(), cx);
@@ -2288,6 +2659,7 @@ impl FlowlistApp {
                             *section = item;
                         }
                         this.modal_focus = item.fields().first().copied().unwrap_or(0);
+                        this.settings_toggle_boxes.borrow_mut().clear();
                         cx.notify();
                     })),
             )
@@ -3608,149 +3980,439 @@ impl FlowlistApp {
     }
 
     fn render_sidebar_settings(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some(Modal::Settings { sidebar, .. }) = &self.modal else {
+        if !matches!(self.modal, Some(Modal::Settings { .. })) {
             return div().into_any_element();
-        };
-        let sidebar = sidebar.clone();
-        let toggle = |key: &'static str,
-                      text: &'static str,
-                      active: bool,
-                      flag: SidebarFlag,
-                      cx: &mut Context<Self>| {
-            self.sidebar_toggle(key, text, active, flag, cx)
-                .into_any_element()
-        };
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(self.settings_card(
-                "Sections",
-                Some("A hidden section disappears from the rail. Its rows still exist in search."),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .w_full()
-                    .child(toggle(
-                        "sidebar-show-perspectives",
-                        "Perspectives",
-                        sidebar.show_perspectives,
-                        SidebarFlag::ShowPerspectives,
+        }
+        let db = self.store.db();
+        let builtin_items: Vec<(String, String, Vec<String>, Vec<String>)> =
+            BuiltinPerspective::ALL
+                .iter()
+                .map(|perspective| {
+                    (
+                        format!("builtin:{}", perspective.slug()),
+                        perspective.label().to_string(),
+                        Vec::new(),
+                        Vec::new(),
+                    )
+                })
+                .collect();
+        let priority_items: Vec<(String, String, Vec<String>, Vec<String>)> = Priority::ALL
+            .iter()
+            .map(|priority| {
+                (
+                    format!("priority:{}", priority.slug()),
+                    priority.label().to_string(),
+                    Vec::new(),
+                    Vec::new(),
+                )
+            })
+            .collect();
+        let library_items: Vec<(String, String, Vec<String>, Vec<String>)> = db
+            .flatten_containers()
+            .into_iter()
+            .filter_map(|row| match row.container {
+                ContainerId::Folder(id) => {
+                    let related = db
+                        .folder_containers(&id)
+                        .into_iter()
+                        .map(|child| match child {
+                            ContainerId::Folder(id) => format!("folder:{id}"),
+                            ContainerId::Project(id) => format!("project:{id}"),
+                        })
+                        .collect();
+                    let ancestors = db
+                        .folder_ancestors(&id)
+                        .into_iter()
+                        .map(|folder| format!("folder:{folder}"))
+                        .collect();
+                    Some((
+                        format!("folder:{id}"),
+                        db.folder_path(&id),
+                        related,
+                        ancestors,
+                    ))
+                }
+                ContainerId::Project(id) => {
+                    let project = db.projects.get(&id)?;
+                    if !project.status.is_open() {
+                        return None;
+                    }
+                    let mut ancestors = Vec::new();
+                    if let Some(folder) = &project.folder {
+                        ancestors.push(format!("folder:{folder}"));
+                        ancestors.extend(
+                            db.folder_ancestors(folder)
+                                .into_iter()
+                                .map(|folder| format!("folder:{folder}")),
+                        );
+                    }
+                    Some((
+                        format!("project:{id}"),
+                        db.project_path(&id),
+                        Vec::new(),
+                        ancestors,
+                    ))
+                }
+            })
+            .collect();
+        let mut saved_items: Vec<(String, String, Vec<String>, Vec<String>)> = db
+            .perspectives
+            .values()
+            .map(|perspective| {
+                (
+                    format!("custom:{}", perspective.id),
+                    perspective.name.clone(),
+                    Vec::new(),
+                    Vec::new(),
+                )
+            })
+            .collect();
+        saved_items.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+        let mut tag_items: Vec<(String, String, Vec<String>, Vec<String>)> = db
+            .tags
+            .keys()
+            .map(|id| {
+                let related = db
+                    .tag_descendants(id)
+                    .into_iter()
+                    .map(|tag| format!("tag:{tag}"))
+                    .collect();
+                let ancestors = db
+                    .tag_ancestors(id)
+                    .into_iter()
+                    .map(|tag| format!("tag:{tag}"))
+                    .collect();
+                (format!("tag:{id}"), db.tag_path(id), related, ancestors)
+            })
+            .collect();
+        tag_items.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+        let theme = self.theme;
+        self.settings_card(
+            "Sidebar",
+            Some(
+                "Open one heading at a time. Tick Hide to take a row out of the rail, and \
+                 Hide count to quiet its badge. Inbox, Today and Trash always stay.",
+            ),
+            div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .w_full()
+                        .flex()
+                        .items_end()
+                        .gap_2()
+                        .pb_1()
+                        .child(
+                            div()
+                                .flex_1()
+                                .pl(px(20.))
+                                .text_xs()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(theme.text_faint)
+                                .child("ITEM"),
+                        )
+                        .child(
+                            div()
+                                .w(px(54.))
+                                .text_center()
+                                .text_xs()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(theme.text_faint)
+                                .child("HIDE"),
+                        )
+                        .child(
+                            div()
+                                .w(px(78.))
+                                .text_center()
+                                .text_xs()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(theme.text_faint)
+                                .child("HIDE COUNT"),
+                        ),
+                )
+                .child(self.sidebar_matrix_group(
+                    SidebarGroup::Perspectives,
+                    "PERSPECTIVES",
+                    builtin_items,
+                    cx,
+                ))
+                .child(self.sidebar_matrix_group(
+                    SidebarGroup::Priorities,
+                    "PRIORITIES",
+                    priority_items,
+                    cx,
+                ))
+                .when(!library_items.is_empty(), |this| {
+                    this.child(self.sidebar_matrix_group(
+                        SidebarGroup::Library,
+                        "LIBRARY",
+                        library_items,
                         cx,
                     ))
-                    .child(toggle(
-                        "sidebar-show-priorities",
-                        "Priorities",
-                        sidebar.show_priorities,
-                        SidebarFlag::ShowPriorities,
+                })
+                .when(!saved_items.is_empty(), |this| {
+                    this.child(self.sidebar_matrix_group(
+                        SidebarGroup::Saved,
+                        "SAVED",
+                        saved_items,
                         cx,
                     ))
-                    .child(toggle(
-                        "sidebar-show-library",
-                        "Library",
-                        sidebar.show_library,
-                        SidebarFlag::ShowLibrary,
+                })
+                .when(!tag_items.is_empty(), |this| {
+                    this.child(self.sidebar_matrix_group(
+                        SidebarGroup::Tags,
+                        "TAGS",
+                        tag_items,
                         cx,
                     ))
-                    .child(toggle(
-                        "sidebar-show-saved",
-                        "Saved",
-                        sidebar.show_saved,
-                        SidebarFlag::ShowSaved,
-                        cx,
-                    ))
-                    .child(toggle(
-                        "sidebar-show-tags",
-                        "Tags",
-                        sidebar.show_tags,
-                        SidebarFlag::ShowTags,
-                        cx,
-                    )),
-            ))
-            .child(self.settings_card(
-                "Counts",
-                Some("Counts are quiet by default: only the Library shows a number."),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .w_full()
-                    .child(toggle(
-                        "sidebar-counts-perspectives",
-                        "Perspectives",
-                        sidebar.counts_perspectives,
-                        SidebarFlag::CountsPerspectives,
-                        cx,
-                    ))
-                    .child(toggle(
-                        "sidebar-counts-priorities",
-                        "Priorities",
-                        sidebar.counts_priorities,
-                        SidebarFlag::CountsPriorities,
-                        cx,
-                    ))
-                    .child(toggle(
-                        "sidebar-counts-library",
-                        "Library",
-                        sidebar.counts_library,
-                        SidebarFlag::CountsLibrary,
-                        cx,
-                    ))
-                    .child(toggle(
-                        "sidebar-counts-tags",
-                        "Tags",
-                        sidebar.counts_tags,
-                        SidebarFlag::CountsTags,
-                        cx,
-                    )),
-            ))
-            .into_any_element()
+                }),
+        )
+        .into_any_element()
     }
 
-    fn sidebar_toggle(
+    fn sidebar_matrix_group(
         &self,
-        key: &'static str,
-        label: &'static str,
-        active: bool,
-        flag: SidebarFlag,
+        group: SidebarGroup,
+        title: &'static str,
+        items: Vec<(String, String, Vec<String>, Vec<String>)>,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
         let theme = self.theme;
+        let Some(Modal::Settings {
+            sidebar,
+            sidebar_group,
+            ..
+        }) = &self.modal
+        else {
+            return div().into_any_element();
+        };
+        let open = *sidebar_group == Some(group);
         let boxes = self.settings_toggle_boxes.clone();
-        let box_key = key.to_string();
-        div()
-            .id(key)
+        let probe_key = format!("sidebar-group-{}", group.slug());
+        let row = div()
+            .id(gpui::ElementId::Name(
+                format!("sidebar-heading-{}", group.slug()).into(),
+            ))
             .w_full()
             .flex()
             .items_center()
-            .justify_between()
             .gap_2()
+            .pt_2()
+            .pb_1()
             .cursor_pointer()
-            .child(div().text_sm().child(label))
+            .hover(|style| style.opacity(0.85))
+            .child(icons::icon(
+                if open {
+                    Icon::ChevronDown
+                } else {
+                    Icon::ChevronRight
+                },
+                12.0,
+                theme.text_faint,
+            ))
             .child(
                 div()
-                    .on_children_prepainted(move |bounds, _, _| {
-                        if let Some(bounds) = bounds.first() {
-                            boxes.borrow_mut().insert(
-                                box_key.clone(),
-                                [
-                                    f32::from(bounds.origin.x),
-                                    f32::from(bounds.origin.y),
-                                    f32::from(bounds.size.width),
-                                    f32::from(bounds.size.height),
-                                ],
-                            );
-                        }
-                    })
-                    .child(widgets::switch(theme, active)),
+                    .flex_1()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(theme.text_faint)
+                    .child(title),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
-                if let Some(Modal::Settings { sidebar, .. }) = &mut this.modal {
-                    flag.toggle(sidebar);
+                if let Some(Modal::Settings { sidebar_group, .. }) = &mut this.modal {
+                    *sidebar_group = if *sidebar_group == Some(group) {
+                        None
+                    } else {
+                        Some(group)
+                    };
                 }
                 cx.notify();
-            }))
+            }));
+        let mut container = div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        probe_key.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .child(row);
+        if open {
+            for (key, label, related, ancestors) in items {
+                let parent_hidden =
+                    ancestors.iter().any(|ancestor| sidebar.is_hidden(ancestor));
+                let visible = !sidebar.is_hidden(&key) && !parent_hidden;
+                let enabled = SidebarOptions::can_hide(&key) && !parent_hidden;
+                container = container.child(self.sidebar_matrix_row(
+                    key,
+                    label,
+                    enabled,
+                    visible,
+                    parent_hidden,
+                    related,
+                    cx,
+                ));
+            }
+        }
+        container.into_any_element()
+    }
+
+    fn sidebar_matrix_row(
+        &self,
+        key: String,
+        label: String,
+        enabled: bool,
+        visible: bool,
+        dimmed: bool,
+        related: Vec<String>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let Some(Modal::Settings { sidebar, .. }) = &self.modal else {
+            return div().into_any_element();
+        };
+        let count_hidden = sidebar.is_count_hidden(&key);
+        let hide_key = key.clone();
+        let count_key = key.clone();
+        let hide_box = format!("sidebar-item-{key}");
+        let count_box = format!("sidebar-count-{key}");
+        let hide_related = related;
+        // Protected rows have no Hide box at all. A row dimmed by a hidden
+        // parent keeps a disabled box, because it becomes usable as soon as
+        // the parent comes back.
+        let hide = if enabled {
+            self.sidebar_matrix_box(hide_box, !visible, true)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if let Some(Modal::Settings { sidebar, .. }) = &mut this.modal {
+                        if !sidebar.is_hidden(&hide_key) {
+                            sidebar.hidden.insert(hide_key.clone());
+                            for child in &hide_related {
+                                sidebar.hidden.insert(child.clone());
+                            }
+                        } else {
+                            sidebar.hidden.remove(&hide_key);
+                            for child in &hide_related {
+                                sidebar.hidden.remove(child);
+                            }
+                        }
+                    }
+                    cx.notify();
+                }))
+                .into_any_element()
+        } else if !SidebarOptions::can_hide(&key) {
+            div()
+                .text_xs()
+                .text_color(theme.text_faint)
+                .child("—")
+                .into_any_element()
+        } else {
+            self.sidebar_matrix_box(hide_box, !visible, false)
+                .into_any_element()
+        };
+        let count_enabled = visible;
+        let count = self
+            .sidebar_matrix_box(count_box, count_hidden, count_enabled)
+            .when(count_enabled, |this| {
+                this.on_click(cx.listener(move |this, _, _, cx| {
+                    if let Some(Modal::Settings { sidebar, .. }) = &mut this.modal {
+                        sidebar.counts_configured = true;
+                        if !sidebar.counts_hidden.remove(&count_key) {
+                            sidebar.counts_hidden.insert(count_key.clone());
+                        }
+                    }
+                    cx.notify();
+                }))
+            })
+            .into_any_element();
+        let label_color = if dimmed || !visible {
+            theme.text_faint
+        } else {
+            theme.text
+        };
+        div()
+            .id(gpui::ElementId::Name(
+                format!("sidebar-row-{key}").into(),
+            ))
+            .w_full()
+            .flex()
+            .items_center()
+            .gap_2()
+            .py_0p5()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .pl(px(20.))
+                    .line_clamp(1)
+                    .text_ellipsis()
+                    .text_sm()
+                    .text_color(label_color)
+                    .when(!visible, |this| this.line_through())
+                    .child(label),
+            )
+            .child(div().w(px(54.)).flex().justify_center().child(hide))
+            .child(div().w(px(78.)).flex().justify_center().child(count))
+            .into_any_element()
+    }
+
+    fn sidebar_matrix_box(
+        &self,
+        key: String,
+        checked: bool,
+        enabled: bool,
+    ) -> gpui::Stateful<gpui::Div> {
+        let theme = self.theme;
+        let boxes = self.settings_toggle_boxes.clone();
+        let key_for_id = key.clone();
+        let color = if enabled {
+            theme.accent
+        } else {
+            theme.text_faint
+        };
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        key.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .p_0p5()
+            .child(
+                div()
+                    .size(px(15.))
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(if checked {
+                        color
+                    } else if enabled {
+                        theme.border
+                    } else {
+                        theme.border_soft
+                    })
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .when(checked, |this| this.child(icons::icon(Icon::Check, 10.0, color))),
+            )
+            .id(gpui::ElementId::Name(key_for_id.into()))
     }
 
     /// Record where a theme control painted so a GUI probe can click it.

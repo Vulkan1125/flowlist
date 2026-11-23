@@ -669,6 +669,25 @@ impl Db {
         }
     }
 
+    /// Every folder and project inside `folder`, depth-first, so Settings can
+    /// hide a whole subtree with one click.
+    pub fn folder_containers(&self, folder: &FolderId) -> Vec<ContainerId> {
+        let mut out = Vec::new();
+        self.collect_containers(folder, &mut out);
+        out
+    }
+
+    fn collect_containers(&self, folder: &FolderId, out: &mut Vec<ContainerId>) {
+        if let Some(folder) = self.folders.get(folder) {
+            for child in &folder.child_order {
+                out.push(child.clone());
+                if let ContainerId::Folder(id) = child {
+                    self.collect_containers(id, out);
+                }
+            }
+        }
+    }
+
     pub fn folder_descendants(&self, folder: &FolderId) -> Vec<FolderId> {
         let mut out = Vec::new();
         if let Some(folder) = self.folders.get(folder) {
@@ -748,6 +767,17 @@ impl Db {
                 out.push(child.clone());
                 out.extend(self.tag_descendants(child));
             }
+        }
+        out
+    }
+
+    /// The folders above `folder`, nearest first.
+    pub fn folder_ancestors(&self, folder: &FolderId) -> Vec<FolderId> {
+        let mut out = Vec::new();
+        let mut current = self.folders.get(folder).and_then(|folder| folder.parent.clone());
+        while let Some(id) = current {
+            out.push(id.clone());
+            current = self.folders.get(&id).and_then(|folder| folder.parent.clone());
         }
         out
     }

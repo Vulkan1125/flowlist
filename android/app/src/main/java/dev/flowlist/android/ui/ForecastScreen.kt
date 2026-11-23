@@ -23,7 +23,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +48,7 @@ import java.util.Locale
 @Composable
 fun ForecastScreen(
     view: String,
+    sort: String,
     onViewChange: (String) -> Unit,
     snapshot: Snapshot?,
     weekStartsMonday: Boolean,
@@ -90,35 +90,8 @@ fun ForecastScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 20.dp, end = 8.dp, top = 0.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())),
-                style = MaterialTheme.typography.titleMedium,
-                color = colors.ink,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = {
-                val today = LocalDate.now()
-                monthKey = YearMonth.from(today).toString()
-                selectedKey = today.toString()
-            }) {
-                Text("Today", color = colors.accent)
-            }
-            IconButton(onClick = { shiftMonth(-1) }, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Rounded.ChevronLeft, "Previous month", tint = colors.faint, modifier = Modifier.size(20.dp))
-            }
-            IconButton(onClick = { shiftMonth(1) }, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Rounded.ChevronRight, "Next month", tint = colors.faint, modifier = Modifier.size(20.dp))
-            }
-        }
-
-        Row(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             ModePill("Month", monthMode) { onViewChange("month") }
             ModePill("Agenda", !monthMode) { onViewChange("agenda") }
@@ -130,6 +103,7 @@ fun ForecastScreen(
                 swipeActions = swipeActions,
                 children = children,
                 groups = snapshot?.db?.forecast().orEmpty(),
+                sort = sort,
                 pending = pending,
                 onToggle = onToggle,
                 onClick = onClick,
@@ -138,52 +112,106 @@ fun ForecastScreen(
             return@Column
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-        WeekdayHeader(weekStartsMonday)
-        MonthGrid(
-            month = month,
-            weekStartsMonday = weekStartsMonday,
-            selected = selected,
-            counts = byDate.mapValues { it.value.size },
-            onSelect = { selectedKey = it.toString() },
-        )
-
-        val dayTasks = byDate[selected].orEmpty().mapNotNull { allViews[it] }
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(start = 20.dp, end = 8.dp, top = 10.dp),
         ) {
             Text(
-                text = selected.format(
-                    DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()),
-                ),
-                style = MaterialTheme.typography.titleSmall,
+                text = month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
                 color = colors.ink,
-                modifier = Modifier.weight(1f),
             )
-            if (dayTasks.isNotEmpty()) {
-                Text(
-                    text = "${dayTasks.size}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = colors.faint,
-                )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            val today = LocalDate.now()
+                            monthKey = YearMonth.from(today).toString()
+                            selectedKey = today.toString()
+                        }
+                        .padding(vertical = 10.dp),
+                ) {
+                    Text(
+                        text = "Today",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.accent,
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(onClick = { shiftMonth(-1) }, modifier = Modifier.size(46.dp)) {
+                    Icon(Icons.Rounded.ChevronLeft, "Previous month", tint = colors.faint, modifier = Modifier.size(26.dp))
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                IconButton(onClick = { shiftMonth(1) }, modifier = Modifier.size(46.dp)) {
+                    Icon(Icons.Rounded.ChevronRight, "Next month", tint = colors.faint, modifier = Modifier.size(26.dp))
+                }
             }
         }
 
-        if (dayTasks.isEmpty()) {
-            Text(
-                text = "Nothing due on this day.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.faint,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 100.dp),
-            ) {
+        val dayTasks = sortTasks(
+            byDate[selected].orEmpty().mapNotNull { allViews[it] },
+            sort,
+        )
+        // The month grid and the selected day's tasks share one scroll.
+        // Scrolling the calendar up gives the task list the rest of the pane.
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = 8.dp,
+                bottom = 100.dp,
+            ),
+        ) {
+            item(key = "month-weekdays") { WeekdayHeader(weekStartsMonday) }
+            item(key = "month-grid") {
+                MonthGrid(
+                    month = month,
+                    weekStartsMonday = weekStartsMonday,
+                    selected = selected,
+                    counts = byDate.mapValues { it.value.size },
+                    onSelect = { selectedKey = it.toString() },
+                )
+            }
+            item(key = "month-day-heading") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = selected.format(
+                            DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()),
+                        ),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = colors.ink,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (dayTasks.isNotEmpty()) {
+                        Text(
+                            text = "${dayTasks.size}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.faint,
+                        )
+                    }
+                }
+            }
+            if (dayTasks.isEmpty()) {
+                item(key = "month-day-empty") {
+                    Text(
+                        text = "Nothing due on this day.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.faint,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+                    )
+                }
+            } else {
                 items(dayTasks, key = { it.id }) { task ->
                     TaskTreeItem(
                         task = task,
@@ -209,7 +237,7 @@ private fun ModePill(label: String, selected: Boolean, onClick: () -> Unit) {
             .clip(RoundedCornerShape(9.dp))
             .background(if (selected) colors.field else colors.background)
             .clickable(onClick = onClick)
-            .padding(horizontal = 13.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp),
     ) {
         Text(
             text = label,
@@ -269,7 +297,7 @@ private fun MonthGrid(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(46.dp)
+                                .height(50.dp)
                                 .padding(2.dp)
                                 .clip(RoundedCornerShape(9.dp))
                                 .background(
@@ -303,7 +331,7 @@ private fun MonthGrid(
                             }
                         }
                     } else {
-                        Spacer(modifier = Modifier.weight(1f).height(46.dp).padding(2.dp))
+                        Spacer(modifier = Modifier.weight(1f).height(50.dp).padding(2.dp))
                     }
                 }
             }

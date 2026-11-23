@@ -1,6 +1,8 @@
 //! Library-wide preferences. Kept inside the data file so CLI, MCP and GUI
 //! share defaults.
 
+use std::collections::BTreeSet;
+
 use chrono::NaiveTime;
 use serde::{Deserialize, Serialize};
 
@@ -41,9 +43,10 @@ pub struct Settings {
 }
 
 /// Sidebar presentation, kept in the library so every client agrees on what
-/// the rail shows. Sections default to visible; counts default quiet except
-/// for the project counts inside the library, where they carry the most
-/// useful information.
+/// the rail shows. The per-item `hidden` set drives visibility now. The old
+/// `show_*` section switches remain only so libraries written by older
+/// versions still deserialize; the count switches seed the first per-item
+/// count matrix before anyone edits it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SidebarOptions {
     #[serde(default = "default_true")]
@@ -64,6 +67,59 @@ pub struct SidebarOptions {
     pub counts_library: bool,
     #[serde(default)]
     pub counts_tags: bool,
+    /// Individual rail rows hidden from the sidebar, keyed as
+    /// `builtin:<slug>`, `priority:<slug>`, `folder:<id>`, `project:<id>`,
+    /// `custom:<id>` or `tag:<id>`. Inbox, Today and Trash are never hidden.
+    #[serde(default)]
+    pub hidden: BTreeSet<String>,
+    /// Individual rows whose count badge is hidden. The same keys as `hidden`.
+    #[serde(default)]
+    pub counts_hidden: BTreeSet<String>,
+    /// False keeps the old section-level count flags in charge until someone
+    /// edits a count toggle; the first edit materialises the current defaults
+    /// into `counts_hidden`.
+    #[serde(default)]
+    pub counts_configured: bool,
+}
+
+impl SidebarOptions {
+    /// Inbox, Today and Trash anchor the rail and stay reachable.
+    pub fn can_hide(key: &str) -> bool {
+        !matches!(key, "builtin:inbox" | "builtin:today" | "builtin:trash")
+    }
+
+    pub fn is_hidden(&self, key: &str) -> bool {
+        self.hidden.contains(key)
+    }
+
+    /// Whether a row's count badge is suppressed. Before the first per-item
+    /// edit the old section flags decide, which keeps an upgrade quiet.
+    pub fn is_count_hidden(&self, key: &str) -> bool {
+        if self.counts_configured {
+            self.counts_hidden.contains(key)
+        } else if key.starts_with("builtin:") {
+            !(self.counts_perspectives || key == "builtin:today" || key == "builtin:review")
+        } else if key.starts_with("priority:") {
+            !self.counts_priorities
+        } else if key.starts_with("folder:") || key.starts_with("project:") {
+            !self.counts_library
+        } else if key.starts_with("tag:") {
+            !self.counts_tags
+        } else {
+            false
+        }
+    }
+
+    /// Toggle one row. Protected rows are ignored, so a stale key from a
+    /// future version cannot remove a required view.
+    pub fn toggle_hidden(&mut self, key: &str) {
+        if !Self::can_hide(key) {
+            return;
+        }
+        if !self.hidden.remove(key) {
+            self.hidden.insert(key.to_string());
+        }
+    }
 }
 
 impl Default for SidebarOptions {
@@ -78,6 +134,9 @@ impl Default for SidebarOptions {
             counts_priorities: false,
             counts_library: true,
             counts_tags: false,
+            hidden: BTreeSet::new(),
+            counts_hidden: BTreeSet::new(),
+            counts_configured: false,
         }
     }
 }
@@ -139,5 +198,60 @@ impl Settings {
             5 => Weekday::Sat,
             _ => Weekday::Sun,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SidebarOptions;
+
+    #[test]
+    fn inbox_today_and_trash_cannot_be_hidden() {
+        let mut sidebar = SidebarOptions::default();
+        sidebar.toggle_hidden("builtin:inbox");
+        sidebar.toggle_hidden("builtin:today");
+        sidebar.toggle_hidden("builtin:trash");
+        assert!(sidebar.hidden.is_empty());
+
+        sidebar.toggle_hidden("builtin:flagged");
+        assert!(sidebar.is_hidden("builtin:flagged"));
+        sidebar.toggle_hidden("builtin:flagged");
+        assert!(!sidebar.is_hidden("builtin:flagged"));
+    }
+
+    #[test]
+    fn legacy_count_flags_seed_the_first_count_matrix() {
+        let sidebar = SidebarOptions::default();
+        assert!(sidebar.is_count_hidden("builtin:inbox"));
+        assert!(!sidebar.is_count_hidden("builtin:today"));
+        assert!(!sidebar.is_count_hidden("builtin:review"));
+        assert!(!sidebar.is_count_hidden("custom:any"));
+        assert!(sidebar.is_count_hidden("priority:high"));
+        assert!(!sidebar.is_count_hidden("project:any"));
+        assert!(sidebar.is_count_hidden("tag:any"));
+    }
+
+    #[test]
+    fn explicit_count_choices_ignore_the_old_flags() {
+        let mut sidebar = SidebarOptions {
+            counts_configured: true,
+            ..SidebarOptions::default()
+        };
+        sidebar.counts_hidden.insert("tag:home".to_string());
+        assert!(sidebar.is_count_hidden("tag:home"));
+        assert!(!sidebar.is_count_hidden("tag:work"));
+        assert!(!sidebar.is_count_hidden("builtin:inbox"));
+    }
+
+    #[test]
+    fn hidden_rows_round_trip_through_json() {
+        let mut sidebar = SidebarOptions::default();
+        sidebar.toggle_hidden("project:abc");
+        sidebar.toggle_hidden("tag:home");
+        let json = serde_json::to_string(&sidebar).expect("serialize");
+        let back: SidebarOptions = serde_json::from_str(&json).expect("deserialize");
+        assert!(back.is_hidden("project:abc"));
+        assert!(back.is_hidden("tag:home"));
+        assert!(!back.is_hidden("project:other"));
     }
 }

@@ -20,7 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 enum class Family(val slug: String, val label: String, val hint: String) {
-    Todoist("todoist", "Todoist", "Red on white"),
+    Tomato("tomato", "Tomato", "Red on white"),
     Plain("plain", "Plain", "White / ink"),
     Paper("paper", "Paper", "Warm neutral"),
     Mist("mist", "Mist", "Cool neutral"),
@@ -35,7 +35,11 @@ enum class Family(val slug: String, val label: String, val hint: String) {
 
     companion object {
         fun fromSlug(slug: String?): Family =
-            entries.firstOrNull { it.slug == slug } ?: Todoist
+            if (slug == "todoist") {
+                Tomato
+            } else {
+                entries.firstOrNull { it.slug == slug } ?: Tomato
+            }
     }
 }
 
@@ -68,7 +72,11 @@ enum class AccentPreset(
 }
 
 data class ThemeSettings(
-    val family: Family = Family.Todoist,
+    /// The family used when the app is light, and the separate family used
+    /// when it is dark. Keeping both lets a light Paper app switch to Nord at
+    /// night without changing the light palette.
+    val family: Family = Family.Tomato,
+    val darkFamily: Family = Family.Tomato,
     val mode: AppearanceMode = AppearanceMode.System,
     val accentMode: AccentMode = AccentMode.Theme,
     val customAccent: AccentPreset = AccentPreset.Red,
@@ -104,7 +112,7 @@ private data class Palette(
 )
 
 private val palettes: Map<Family, Pair<Palette, Palette>> = mapOf(
-    Family.Todoist to (
+    Family.Tomato to (
         Palette(0xFFFFFFFF, 0xFFF5F5F5, 0xFFFFFFFF, 0xFF202020, 0xFF808080, 0xFFEDEDED, 0xFFDC4C3E, 0xFFDC4C3E, 0xFFEB8909, 0xFF058527) to
             Palette(0xFF1F1F1F, 0xFF2B2B2B, 0xFF262626, 0xFFEEEEEE, 0xFF9E9E9E, 0xFF363636, 0xFFE8564A, 0xFFFF7066, 0xFFFF9A14, 0xFF4CC38A)
         ),
@@ -157,7 +165,7 @@ private val palettes: Map<Family, Pair<Palette, Palette>> = mapOf(
 data class ThemePreview(val background: Color, val ink: Color, val accent: Color)
 
 fun themePreview(family: Family, dark: Boolean): ThemePreview {
-    val pair = palettes[family] ?: palettes.getValue(Family.Todoist)
+    val pair = palettes[family] ?: palettes.getValue(Family.Tomato)
     val palette = if (dark) pair.second else pair.first
     return ThemePreview(
         background = Color(palette.background),
@@ -198,7 +206,8 @@ private val typography = Typography(
 )
 
 fun themeColors(settings: ThemeSettings, dark: Boolean): FlowColors {
-    val pair = palettes[settings.family] ?: palettes.getValue(Family.Todoist)
+    val family = if (dark) settings.darkFamily else settings.family
+    val pair = palettes[family] ?: palettes.getValue(Family.Tomato)
     val palette = if (dark) pair.second else pair.first
     val accent = when (settings.accentMode) {
         AccentMode.Theme -> Color(palette.accent)

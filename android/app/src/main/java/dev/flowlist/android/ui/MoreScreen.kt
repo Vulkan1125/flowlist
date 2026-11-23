@@ -69,6 +69,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.flowlist.android.data.Db
 import dev.flowlist.android.data.GeoDto
 import dev.flowlist.android.data.ProjectDto
@@ -77,6 +78,8 @@ import dev.flowlist.android.data.TaskView
 import dev.flowlist.android.data.archivedProjects
 import dev.flowlist.android.data.attachmentTasks
 import dev.flowlist.android.data.changedTasks
+import dev.flowlist.android.data.geotaggedTaskCount
+import dev.flowlist.android.data.taggedTaskCount
 import dev.flowlist.android.data.completedTasks
 import dev.flowlist.android.data.flaggedTasks
 import dev.flowlist.android.data.priorityGroups
@@ -84,6 +87,7 @@ import dev.flowlist.android.data.reviewProjects
 import dev.flowlist.android.data.tasksForTag
 import dev.flowlist.android.data.tagUsageCount
 import dev.flowlist.android.data.tagIsBlocked
+import dev.flowlist.android.ui.sortTasks
 import dev.flowlist.android.data.tagStatusLabel
 import dev.flowlist.android.data.trashedTasks
 
@@ -110,8 +114,8 @@ fun MoreScreen(db: Db?, onOpen: (MoreView) -> Unit) {
             MoreView.Completed to db.completedTasks().size,
             MoreView.Archive to db.archivedProjects().size,
             MoreView.Trash to db.trashedTasks().size,
-            MoreView.Tags to db.tags.size,
-            MoreView.Nearby to db.tags.values.count { it.location != null },
+            MoreView.Tags to db.taggedTaskCount(),
+            MoreView.Nearby to db.geotaggedTaskCount(),
             MoreView.Priorities to db.priorityGroups().sumOf { it.second.size },
             MoreView.Changed to db.changedTasks().size,
             MoreView.Attachments to db.attachmentTasks().size,
@@ -174,6 +178,7 @@ fun MoreScreen(db: Db?, onOpen: (MoreView) -> Unit) {
 fun MoreDestination(
     view: MoreView,
     db: Db,
+    sort: String,
     pending: Set<String>,
     onTask: (TaskView) -> Unit,
     onToggle: (TaskView) -> Unit,
@@ -218,7 +223,7 @@ fun MoreDestination(
             }
         }
         when {
-            tag != null -> TaskList(db.tasksForTag(tag!!.id), pending, onToggle, onTask)
+            tag != null -> TaskList(sortTasks(db.tasksForTag(tag!!.id), sort), sort, pending, onToggle, onTask)
             view == MoreView.Review -> LazyColumn {
                 if (db.reviewProjects().isEmpty()) {
                     item(key = "review-empty") {
@@ -245,8 +250,8 @@ fun MoreDestination(
                     Hairline(Modifier.padding(horizontal = 20.dp))
                 }
             }
-            view == MoreView.Flagged -> TaskList(db.flaggedTasks(), pending, onToggle, onTask)
-            view == MoreView.Completed -> TaskList(db.completedTasks(), pending, onToggle, onTask)
+            view == MoreView.Flagged -> TaskList(sortTasks(db.flaggedTasks(), sort), sort, pending, onToggle, onTask)
+            view == MoreView.Completed -> TaskList(sortTasks(db.completedTasks(), sort), sort, pending, onToggle, onTask)
             view == MoreView.Archive -> LazyColumn {
                 if (db.archivedProjects().isEmpty()) {
                     item(key = "archive-empty") {
@@ -272,12 +277,17 @@ fun MoreDestination(
                 }
             }
             view == MoreView.Trash -> LazyColumn {
-                if (db.trashedTasks().isEmpty()) {
+                val trashTasks = sortTasks(db.trashedTasks(), sort)
+                if (trashTasks.isEmpty()) {
                     item(key = "trash-empty") {
                         EmptyLine("Trash is empty.")
                     }
                 }
-                items(db.trashedTasks(), key = { it.id }) { task ->
+                taskSections(trashTasks, sort).forEach { section ->
+                    section.label?.let { label ->
+                        item(key = "trash-section-$label") { SectionLabel(label) }
+                    }
+                items(section.tasks, key = { it.id }) { task ->
                     val selection = LocalTaskSelection.current
                     val selected = selection?.ids?.contains(task.id) == true
                     Row(
@@ -334,6 +344,7 @@ fun MoreDestination(
                         }
                     }
                     Hairline(Modifier.padding(horizontal = 20.dp))
+                }
                 }
             }
             view == MoreView.Nearby -> NearbyList(db, onOpenTag)
@@ -446,14 +457,21 @@ fun MoreDestination(
                 }
             }
             view == MoreView.Priorities -> LazyColumn {
-                db.priorityGroups().forEach { (label, tasks) ->
+                db.priorityGroups().forEach { (label, rawTasks) ->
+                    val tasks = sortTasks(rawTasks, sort)
                     item(key = "prio-$label") {
                         Text(
                             text = label.uppercase(),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.8.sp,
                             color = colors.faint,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(
+                                start = 20.dp,
+                                end = 20.dp,
+                                top = 18.dp,
+                                bottom = 6.dp,
+                            ),
                         )
                     }
                     items(tasks, key = { it.id }) { task ->
@@ -466,14 +484,19 @@ fun MoreDestination(
                     }
                 }
             }
-            view == MoreView.Changed -> TaskList(db.changedTasks(), pending, onToggle, onTask)
+            view == MoreView.Changed -> TaskList(sortTasks(db.changedTasks(), sort), sort, pending, onToggle, onTask)
             view == MoreView.Attachments -> LazyColumn {
-                if (db.attachmentTasks().isEmpty()) {
+                val attachments = sortTasks(db.attachmentTasks(), sort)
+                if (attachments.isEmpty()) {
                     item(key = "attachments-empty") {
                         EmptyLine("No attachments yet.")
                     }
                 }
-                items(db.attachmentTasks(), key = { it.id }) { task ->
+                taskSections(attachments, sort).forEach { section ->
+                    section.label?.let { label ->
+                        item(key = "attach-section-$label") { AttachmentSectionLabel(label) }
+                    }
+                items(section.tasks, key = { it.id }) { task ->
                     Column(
                         modifier = Modifier.clickable { onTask(task) }
                             .padding(horizontal = 20.dp, vertical = 10.dp),
@@ -486,6 +509,7 @@ fun MoreDestination(
                         )
                     }
                     Hairline(Modifier.padding(start = 20.dp))
+                }
                 }
             }
         }
@@ -518,21 +542,60 @@ private fun EmptyLine(text: String) {
 }
 
 @Composable
+private fun AttachmentSectionLabel(label: String) {
+    val colors = flow
+    val pill = label == "No priority" || label.startsWith("No ")
+    if (pill) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 6.dp),
+        ) {
+            val pillBackground = if (colors.dark) Color.White else colors.field
+            val pillText = if (colors.dark) Color(0xFF707070) else colors.ink
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(pillBackground)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.8.sp,
+                    color = pillText,
+                )
+            }
+        }
+        return
+    }
+    val color = when (label) {
+        "High priority" -> colors.danger
+        "Medium priority" -> colors.warning
+        "Low priority" -> LowPriorityBlue
+        else -> colors.accent
+    }
+    Text(
+        text = label.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.8.sp,
+        color = color,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 6.dp),
+    )
+}
+
+@Composable
 private fun TaskList(
     tasks: List<TaskView>,
+    sort: String,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
     onTask: (TaskView) -> Unit,
 ) {
+    val sections = taskSections(tasks, sort)
     LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
-        items(tasks, key = { it.id }) { task ->
-            TaskRow(
-                task = task.copy(pending = task.id in pending),
-                onToggle = { onToggle(task) },
-                onClick = { onTask(task) },
-            )
-            Hairline(Modifier.padding(start = 58.dp))
-        }
         if (tasks.isEmpty()) {
             item(key = "empty") {
                 Text(
@@ -541,6 +604,19 @@ private fun TaskList(
                     color = flow.faint,
                     modifier = Modifier.padding(20.dp),
                 )
+            }
+        }
+        sections.forEach { section ->
+            section.label?.let { label ->
+                item(key = "section-$label") { SectionLabel(label) }
+            }
+            items(section.tasks, key = { it.id }) { task ->
+                TaskRow(
+                    task = task.copy(pending = task.id in pending),
+                    onToggle = { onToggle(task) },
+                    onClick = { onTask(task) },
+                )
+                Hairline(Modifier.padding(start = 58.dp))
             }
         }
     }

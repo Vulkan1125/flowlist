@@ -528,6 +528,11 @@ pub struct FlowlistApp {
     accent_on_open: Option<(Option<u32>, Option<u32>)>,
     modal_focus: usize,
     modal_scroll: ScrollHandle,
+    /// Last size chosen by dragging the Settings sheet's corner. `None` uses
+    /// the width and height that fit the current window.
+    settings_size: Option<(f32, f32)>,
+    /// Where the pointer grabbed the Settings scrollbar thumb, in points.
+    scroll_drag_grab: Rc<Cell<Option<f32>>>,
     toast: Option<String>,
     /// Last measured content size, persisted so the next launch reopens at it.
     window_size: Option<(f32, f32)>,
@@ -760,6 +765,8 @@ impl FlowlistApp {
             accent_on_open: None,
             modal_focus: 0,
             modal_scroll: ScrollHandle::new(),
+            settings_size: None,
+            scroll_drag_grab: Rc::new(Cell::new(None)),
             toast,
             window_size,
             window_dirty: false,
@@ -1368,6 +1375,13 @@ impl FlowlistApp {
         }
         let ids = self.selected.clone();
         self.execute(Command::CompleteTasks { ids, completed });
+        if completed {
+            self.selected.clear();
+            self.anchor = None;
+            self.editing = None;
+            self.field_error = None;
+            self.focus = FocusArea::Content;
+        }
         self.save_session();
         cx.notify();
     }
@@ -1383,6 +1397,14 @@ impl FlowlistApp {
             ids: vec![id],
             completed,
         });
+        if completed {
+            self.selected.clear();
+            self.anchor = None;
+            self.editing = None;
+            self.field_error = None;
+            self.focus = FocusArea::Content;
+        }
+        self.save_session();
         cx.notify();
     }
 
@@ -3259,6 +3281,7 @@ impl FlowlistApp {
         self.view_menu = None;
         self.view_menu_cursor = 0;
         self.view_boxes.borrow_mut().clear();
+        self.settings_toggle_boxes.borrow_mut().clear();
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
         self.sort_menu_open = false;
         self.group_menu_open = false;
@@ -3866,6 +3889,7 @@ impl FlowlistApp {
                 {
                     *current = section;
                     self.modal_focus = section.fields().first().copied().unwrap_or(0);
+                    self.settings_toggle_boxes.borrow_mut().clear();
                     cx.notify();
                     return;
                 }
@@ -5453,6 +5477,7 @@ fn sort_slug(sort: SortBy) -> &'static str {
         SortBy::Due => "due",
         SortBy::Defer => "defer",
         SortBy::Name => "name",
+        SortBy::Priority => "priority",
         SortBy::Flagged => "flagged",
         SortBy::Estimate => "estimate",
         SortBy::Created => "created",
@@ -5466,6 +5491,7 @@ fn sort_from_slug(value: &str) -> Option<SortBy> {
         "due" => Some(SortBy::Due),
         "defer" => Some(SortBy::Defer),
         "name" => Some(SortBy::Name),
+        "priority" => Some(SortBy::Priority),
         "flagged" => Some(SortBy::Flagged),
         "estimate" => Some(SortBy::Estimate),
         "created" => Some(SortBy::Created),
@@ -5481,6 +5507,7 @@ fn sort_label(sort: Option<SortBy>) -> &'static str {
         Some(SortBy::Due) => "Due",
         Some(SortBy::Defer) => "Defer",
         Some(SortBy::Name) => "Name",
+        Some(SortBy::Priority) => "Priority",
         Some(SortBy::Flagged) => "Flagged",
         Some(SortBy::Estimate) => "Estimate",
         Some(SortBy::Created) => "Created",
@@ -5829,15 +5856,17 @@ impl FlowlistApp {
         state["view_form"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::Perspective { form }) => Some(serde_json::json!({
                 "name": form.name.text(),
+                "text": form.text.text(),
                 "inbox_only": form.inbox_only,
                 "flagged_only": form.flagged_only,
                 "show_completed": form.show_completed,
                 "tag_children": form.tag_children,
                 "status": form.status_label(),
-                "due": form.due.label(),
-                "defer": form.defer.label(),
-                "project": form.project.as_ref().map(|id| id.to_string()),
-                "tag": form.tag.as_ref().map(|id| id.to_string()),
+                "due": form.dues.iter().map(|choice| choice.label()).collect::<Vec<_>>(),
+                "defer": form.defers.iter().map(|choice| choice.label()).collect::<Vec<_>>(),
+                "projects": form.projects.iter().map(|id| id.to_string()).collect::<Vec<_>>(),
+                "tags": form.tags.iter().map(|id| id.to_string()).collect::<Vec<_>>(),
+                "priorities": form.priorities.iter().map(|priority| priority.label()).collect::<Vec<_>>(),
                 "group": form.group_label(),
                 "sort": form.sort_label(),
                 "extra": form.extra_condition_count(),
@@ -5895,6 +5924,15 @@ impl FlowlistApp {
         });
         state["modal_sidebar"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::Settings { sidebar, .. }) => Some(sidebar),
+            _ => None,
+        });
+        state["settings_size"] = serde_json::json!(self.settings_size);
+        state["settings_scroll"] =
+            serde_json::json!(f32::from(-self.modal_scroll.offset().y));
+        state["settings_sidebar_group"] = serde_json::json!(match &self.modal {
+            Some(modals::Modal::Settings { sidebar_group, .. }) => {
+                (*sidebar_group).map(|group| group.slug())
+            }
             _ => None,
         });
         state["sidebar_rows"] = serde_json::json!(self.sidebar_row_boxes.borrow().clone());

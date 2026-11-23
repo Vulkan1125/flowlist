@@ -36,7 +36,7 @@ projects and tags behave identically.
 Settings has four ways to change the look:
 
 - **Appearance** — System, Light or Dark.
-- **Theme** — the same twelve families as the Mac: Todoist (red on white), Plain, Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula, Tokyo Night, Vesper, Graphite and Midnight. The Todoist family is the default; the others use the Mac palettes.
+- **Theme** — twelve families: Tomato (red on white), Plain, Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula, Tokyo Night, Vesper, Graphite and Midnight. Pick a light theme and a dark theme separately; Tomato is the default for both. The light choice is used whenever the app is light and the dark choice whenever it is dark, so the two palettes stay independent of each other.
 - **Accent** — the theme's own accent, a **Wallpaper** colour from Android's Material You palette (Android 12 and later), or a custom tone chosen from eleven presets. Each preset has a light and a dark version, so there is no colour picker to fiddle with.
 - **App icon** — six launcher colours: red, blue, green, orange, purple and graphite. Changing one replaces the home-screen icon in place.
 
@@ -64,6 +64,9 @@ A defer date after the due date is rejected before saving, with the message unde
   `due:friday`, `defer:tomorrow`, `est:45m`, `repeat:every week` and `!`.
 - **Task detail** shows notes, dates, tags and subtasks, with complete,
   reopen and move to Trash.
+- Lists that support bulk actions have a checklist button at the top right.
+  Tap it to enter select mode; it becomes a close button, and tapping it again
+  leaves select mode.
 
 ## Security
 
@@ -146,7 +149,11 @@ again removes the offline copy.
 the same attachment list as files. The dialog also takes an optional **Name**;
 leave it empty to show the address as before. Existing links have a rename
 action. Links do not show the offline download button; only file attachments
-can be saved on the phone.
+can be saved on the phone. Attachments alone uses the coloured headings: High is
+red, Medium amber and Low blue; No priority is a filled badge. Date headings use
+the theme accent, and a missing date is a filled badge such as **No due date**.
+In dark mode those badges invert to a white fill with grey text. Other views keep
+their quiet grey headings. Groups leave clear space between each other.
 
 Uploads go over `POST /api/v1/files` and downloads over `GET /api/v1/files`.
 Both require the paired token. Files are capped at 40 MB, and the Mac only
@@ -197,10 +204,14 @@ open project or toggle its tags.
 
 ## Forecast
 
-Forecast opens on a **month grid**. Each day shows how many tasks are due, with
-previous/next month and **Today** controls. Tapping a day lists its tasks below
-the grid. **Agenda** switches back to the rolling two-week list, and the choice is
-remembered across app restarts.
+Forecast opens on a **month grid**. The Month/Agenda selector uses roomy pills
+with clear space between them. Each day shows how many tasks are due. In month
+mode the month name is a heading with a larger **Today** button aligned under its
+left edge and well-spaced previous/next month controls underneath it. Tapping a
+day lists its tasks below the grid. The grid and the selected day's tasks share
+one scroll, so scrolling the calendar up gives the task list the rest of the
+screen. **Agenda** switches back to the rolling two-week list and hides the month
+heading and its controls; the choice is remembered across app restarts.
 
 ## Saved perspectives
 
@@ -210,19 +221,24 @@ perspective. Long-press a perspective in the drawer and drag it up or down to
 change the order; the new order is remembered. **Priorities** uses a level
 icon, so it is not confused with **Flagged**.
 
-The drawer has a **Saved** section. **New perspective** builds a view from any
-combination of text, project, tag, priority and due window, each chosen from a
-labelled dropdown with a scrollable menu. It then chooses grouping (project,
-due date, tag, folder), sorting (due, name, priority, flagged, estimate) and
-whether completed tasks appear. Saved perspectives use
-the Mac's `save_perspective` command, so they appear there too; the row menu
-edits or deletes them.
+The drawer has a **Saved** section. **New perspective** opens as a card below
+the status bar and matches the Mac editor:
+text, Inbox only, Flagged only, Status, Projects, Tags with child tags,
+Priorities, Due and Defer windows, an estimate range, grouping, sorting and
+whether completed tasks appear. Grouping covers project, folder, tag, due,
+defer, flagged and estimate; sorting covers manual, due, defer, name, priority,
+flagged, estimate, created and completed. Saved perspectives use the Mac's
+`save_perspective` command, so they appear there too; the row menu edits or
+deletes them.
 
 ## Perspectives and the drawer
 
 The bottom bar holds four perspectives and **Settings** on the far right.
 Settings → Appearance → **Bottom bar** assigns each of the four slots; picking
-a perspective that already lives in another slot swaps the two.
+a perspective that already lives in another slot swaps the two. Every row in
+the drawer shows its task count when the count is non-zero. Tags and Nearby
+count tasks rather than tags, and zero counts stay hidden. A saved perspective
+with nothing matching shows a bare tick instead.
 
 Review, Completed, Archive, Trash, Tags, Priorities, Changed and Attachments
 open as full pages, not modal sheets. Back returns to the previous perspective.

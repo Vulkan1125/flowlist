@@ -252,7 +252,7 @@ private fun summary(
     state: AppState,
     context: Context,
 ): String = when (section) {
-    SettingsSection.Appearance -> "${theme.family.label} · ${theme.mode.name.lowercase()}"
+    SettingsSection.Appearance -> "${theme.family.label} / ${theme.darkFamily.label} · ${theme.mode.name.lowercase()}"
     SettingsSection.Tasks -> "Opens ${preferences.startTab.replaceFirstChar { it.uppercase() }} · week starts ${if (preferences.weekStartsMonday) "Monday" else "Sunday"}"
     SettingsSection.Library -> "Review ${library.defaultReviewDays}d · trash ${if (library.trashRetentionDays == 0) "forever" else "${library.trashRetentionDays}d"}"
     SettingsSection.Notifications -> buildString {
@@ -302,10 +302,20 @@ private fun AppearanceSettings(
             onThemeChange(theme.copy(amoled = it))
         }
         Spacer(modifier = Modifier.height(14.dp))
+        SmallLabel("Light theme")
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(Family.entries, key = { it.slug }) { family ->
-                ThemeCard(family, theme.family == family, colors.dark) {
+            items(Family.entries, key = { "light-${it.slug}" }) { family ->
+                ThemeCard(family, theme.family == family, false) {
                     onThemeChange(theme.copy(family = family))
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(14.dp))
+        SmallLabel("Dark theme")
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(Family.entries, key = { "dark-${it.slug}" }) { family ->
+                ThemeCard(family, theme.darkFamily == family, true) {
+                    onThemeChange(theme.copy(darkFamily = family))
                 }
             }
         }

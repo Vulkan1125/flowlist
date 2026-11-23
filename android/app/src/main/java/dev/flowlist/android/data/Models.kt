@@ -205,6 +205,7 @@ data class TaskView(
     val estimateMin: Int?,
     val attachments: List<String> = emptyList(),
     val completedAt: String? = null,
+    val createdAt: String = "",
     val modifiedAt: String = "",
     val trashed: Boolean = false,
     /// The first unavailable tag (own or inherited) blocking this task.
@@ -245,6 +246,7 @@ fun Db.taskViews(
                 estimateMin = task.estimateMin,
                 attachments = task.attachments,
                 completedAt = task.completedAt,
+                createdAt = task.createdAt,
                 modifiedAt = task.modifiedAt,
                 trashed = task.trashedAt != null,
                 blockedByTag = tagBlocking(task)?.name,
@@ -365,6 +367,7 @@ private fun TaskDto.toView(db: Db) = TaskView(
     estimateMin = estimateMin,
     attachments = attachments,
     completedAt = completedAt,
+    createdAt = createdAt,
     modifiedAt = modifiedAt,
     trashed = trashedAt != null,
     blockedByTag = db.tagBlocking(this)?.name,
@@ -478,7 +481,7 @@ fun Db.changedTasks(days: Long = settings.changedDays.toLong()): List<TaskView> 
 }
 
 fun Db.attachmentTasks(): List<TaskView> =
-    taskViews(includeCompleted = true).filter { it.attachments.isNotEmpty() }
+    taskViews().filter { it.attachments.isNotEmpty() }
 
 private fun Db.tagFamily(tagId: String): Set<String> {
     val ids = mutableSetOf(tagId)
@@ -490,6 +493,17 @@ private fun Db.tagFamily(tagId: String): Set<String> {
         }
     }
     return ids
+}
+
+/// Distinct active tasks carrying at least one tag. The Tags destination is a
+/// list of tag rows, but its drawer badge counts the work behind them.
+fun Db.taggedTaskCount(): Int =
+    tasks.values.count { it.isActive && it.tags.isNotEmpty() }
+
+/// Distinct active tasks carrying a tag that has a place attached.
+fun Db.geotaggedTaskCount(): Int {
+    val located = tags.values.filter { it.location != null }.map { it.id }.toSet()
+    return tasks.values.count { it.isActive && it.tags.any { id -> id in located } }
 }
 
 fun Db.tasksForTag(tagId: String): List<TaskView> {
@@ -526,11 +540,18 @@ fun canPreviewAttachment(path: String): Boolean {
 
 /// The site's own favicon. Fetching it from the host avoids a third-party
 /// favicon service; Coil shows the chain icon when it is missing.
-fun faviconUrl(value: String): String? {
+fun faviconUrls(value: String): List<String> {
     val url = attachmentUrl(value)
-    val host = runCatching { java.net.URI(url).host }.getOrNull() ?: return null
-    val scheme = if (url.startsWith("http://")) "http" else "https"
-    return "$scheme://$host/favicon.ico"
+    val host = runCatching { java.net.URI(url).host }.getOrNull() ?: return emptyList()
+    val schemes = if (url.startsWith("http://")) listOf("http", "https") else listOf("https", "http")
+    return schemes.flatMap { scheme ->
+        listOf(
+            "$scheme://$host/favicon.ico",
+            "$scheme://$host/favicon.png",
+            "$scheme://$host/apple-touch-icon.png",
+            "$scheme://$host/apple-touch-icon-precomposed.png",
+        )
+    }
 }
 
 fun linkWithName(url: String, name: String): String {

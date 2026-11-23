@@ -105,6 +105,7 @@ pub enum SortBy {
     Due,
     Defer,
     Name,
+    Priority,
     Flagged,
     Estimate,
     Created,

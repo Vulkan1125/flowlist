@@ -2641,6 +2641,7 @@ fn parse_sort(value: &str) -> Result<SortBy> {
         "due" => Ok(SortBy::Due),
         "defer" => Ok(SortBy::Defer),
         "name" | "title" => Ok(SortBy::Name),
+        "priority" => Ok(SortBy::Priority),
         "flagged" | "flag" => Ok(SortBy::Flagged),
         "estimate" => Ok(SortBy::Estimate),
         "created" => Ok(SortBy::Created),

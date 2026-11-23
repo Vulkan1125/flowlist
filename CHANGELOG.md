@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.9.45 — 2026-11-23
+
+- **Mac sidebar and Settings rebuilt.** Saved perspectives show a count or a
+  bare tick for an empty view. Settings → Sidebar is a collapsible matrix of
+  every perspective, priority, folder, project, saved view and tag: Hide and
+  Hide count sit side by side, hidden rows are struck through, counts grey out
+  with the row, and Inbox/Today/Trash have no Hide box at all. The Settings
+  sheet is resizable and uses a Zed-style scrollbar that tracks and jumps
+  correctly.
+- **Android drawer counts.** Every row shows its task count; Tags and Nearby
+  count tasks rather than tags, zero counts stay hidden, and an empty saved
+  perspective shows a bare tick.
+- **Perspective editor parity.** Mac and Android now offer the same filters:
+  text, Inbox only, Flagged only, status, projects, tags with child tags,
+  priorities, due and defer windows, and an estimate range. Grouping covers
+  project, folder, tag, due, defer, flagged and estimate; sorting adds priority.
+  Multi-select menus use checkboxes, and estimate min/max sit side by side.
+- **Android themes.** Light and dark families are chosen independently. The old
+  Todoist family is now Tomato and existing saves migrate automatically.
+- **Android lists and Forecast.** Attachment headings use priority colours and
+  the theme accent only there, with filled badges for No priority and missing
+  dates that invert in dark mode. Forecast keeps Today and the arrows under the
+  month name only in Month mode, uses larger touch targets, and scrolls the
+  calendar with the day’s tasks. Select mode toggles off on a second press.
+- **Smaller fixes.** Completing a Mac task clears the inspector; Android
+  favicons retry common paths and decode PNG-in-ICO files; due/priority section
+  headings and attachment spacing are tidier.
+
 ## 0.9.44 — 2026-11-23
 
 - **Geotag reminders use their own Android notification channel.** “Geotag

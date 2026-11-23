@@ -10,21 +10,29 @@ import dev.flowlist.android.ui.ThemeSettings
 class ThemeStore(context: Context) {
     private val prefs = context.getSharedPreferences("flowlist.theme", Context.MODE_PRIVATE)
 
-    fun load(): ThemeSettings = ThemeSettings(
-        family = Family.fromSlug(prefs.getString("family", null)),
-        mode = AppearanceMode.entries.firstOrNull {
-            it.name == prefs.getString("mode", null)
-        } ?: AppearanceMode.System,
-        accentMode = AccentMode.entries.firstOrNull {
-            it.name == prefs.getString("accent_mode", null)
-        } ?: AccentMode.Theme,
-        customAccent = AccentPreset.fromKey(prefs.getString("accent", null)),
-        amoled = prefs.getBoolean("amoled", false),
-    )
+    fun load(): ThemeSettings {
+        val light = Family.fromSlug(prefs.getString("family", null))
+        val dark = prefs.getString("dark_family", null)
+            ?.let(Family::fromSlug)
+            ?: light
+        return ThemeSettings(
+            family = light,
+            darkFamily = dark,
+            mode = AppearanceMode.entries.firstOrNull {
+                it.name == prefs.getString("mode", null)
+            } ?: AppearanceMode.System,
+            accentMode = AccentMode.entries.firstOrNull {
+                it.name == prefs.getString("accent_mode", null)
+            } ?: AccentMode.Theme,
+            customAccent = AccentPreset.fromKey(prefs.getString("accent", null)),
+            amoled = prefs.getBoolean("amoled", false),
+        )
+    }
 
     fun save(settings: ThemeSettings) {
         prefs.edit()
             .putString("family", settings.family.slug)
+            .putString("dark_family", settings.darkFamily.slug)
             .putString("mode", settings.mode.name)
             .putString("accent_mode", settings.accentMode.name)
             .putString("accent", settings.customAccent.key)

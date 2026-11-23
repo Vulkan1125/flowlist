@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.clickable
@@ -87,6 +88,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
@@ -100,8 +103,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.SubcomposeAsyncImage
-import dev.flowlist.android.data.faviconUrl
+import dev.flowlist.android.data.FaviconLoader
 import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -345,29 +347,7 @@ fun TaskEditSheet(
                 ) {
                     val isLink = path.startsWith("http://") || path.startsWith("https://")
                     if (isLink) {
-                        SubcomposeAsyncImage(
-                            model = faviconUrl(path),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(17.dp)
-                                .clip(RoundedCornerShape(4.dp)),
-                            loading = {
-                                Icon(
-                                    imageVector = Icons.Rounded.Link,
-                                    contentDescription = null,
-                                    tint = colors.faint,
-                                    modifier = Modifier.size(17.dp),
-                                )
-                            },
-                            error = {
-                                Icon(
-                                    imageVector = Icons.Rounded.Link,
-                                    contentDescription = null,
-                                    tint = colors.faint,
-                                    modifier = Modifier.size(17.dp),
-                                )
-                            },
-                        )
+                        SiteFavicon(path, colors.faint)
                     } else {
                         Icon(
                             imageVector = Icons.Outlined.AttachFile,
@@ -1572,3 +1552,29 @@ private fun borderlessColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = flow.ink,
     unfocusedTextColor = flow.ink,
 )
+
+
+@Composable
+private fun SiteFavicon(path: String, tint: Color) {
+    var bitmap by remember(path) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    LaunchedEffect(path) {
+        bitmap = FaviconLoader.load(path)?.asImageBitmap()
+    }
+    val image = bitmap
+    if (image != null) {
+        Image(
+            bitmap = image,
+            contentDescription = null,
+            modifier = Modifier
+                .size(17.dp)
+                .clip(RoundedCornerShape(4.dp)),
+        )
+    } else {
+        Icon(
+            imageVector = Icons.Rounded.Link,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(17.dp),
+        )
+    }
+}

@@ -6,7 +6,9 @@ use gpui::{
 };
 
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId};
-use flowlist_core::model::{BuiltinPerspective, Priority, ProjectStatus};
+use flowlist_core::model::{BuiltinPerspective, Priority, ProjectStatus, SidebarOptions};
+use flowlist_core::query;
+use flowlist_core::time::now;
 
 use super::drag::{DragFolder, DragProject, DragTask};
 use super::icons::{self, Icon};
@@ -207,26 +209,32 @@ impl FlowlistApp {
         let db = self.store.db();
         let options = &db.settings.sidebar;
         let mut out = Vec::new();
-        if options.show_perspectives {
-            for perspective in BuiltinPerspective::ALL {
-                out.push(SidebarTarget::Builtin(perspective));
+        for perspective in BuiltinPerspective::ALL {
+            let target = SidebarTarget::Builtin(perspective);
+            if !SidebarOptions::can_hide(&target.key()) || !options.is_hidden(&target.key()) {
+                out.push(target);
             }
         }
-        if options.show_priorities && self.is_open("section:priorities", true) {
+        if self.is_open("section:priorities", true) {
             for priority in Priority::ALL {
-                out.push(SidebarTarget::Priority(priority));
+                let target = SidebarTarget::Priority(priority);
+                if !options.is_hidden(&target.key()) {
+                    out.push(target);
+                }
             }
         }
-        if options.show_saved && !db.perspectives.is_empty() && self.is_open("section:saved", true)
-        {
+        if self.is_open("section:saved", true) {
             for perspective in db.perspectives.values() {
-                out.push(SidebarTarget::Custom(perspective.id.clone()));
+                let target = SidebarTarget::Custom(perspective.id.clone());
+                if !options.is_hidden(&target.key()) {
+                    out.push(target);
+                }
             }
         }
-        if options.show_library && self.is_open("section:library", true) {
+        if self.is_open("section:library", true) {
             self.container_targets(None, &mut out);
         }
-        if options.show_tags && self.is_open("section:tags", true) {
+        if self.is_open("section:tags", true) {
             self.tag_targets(None, &mut out);
         }
         out
@@ -234,23 +242,32 @@ impl FlowlistApp {
 
     fn container_targets(&self, parent: Option<FolderId>, out: &mut Vec<SidebarTarget>) {
         let db = self.store.db();
+        let sidebar = &db.settings.sidebar;
         for container in db.container_children(parent) {
             match container {
                 ContainerId::Folder(id) => {
+                    let target = SidebarTarget::Folder(id.clone());
+                    if sidebar.is_hidden(&target.key()) {
+                        continue;
+                    }
                     let open = self.is_open(&format!("folder:{id}"), false);
                     let child_parent = id.clone();
-                    out.push(SidebarTarget::Folder(id.clone()));
+                    out.push(target);
                     if open {
                         self.container_targets(Some(child_parent), out);
                     }
                 }
                 ContainerId::Project(id) => {
+                    let target = SidebarTarget::Project(id.clone());
+                    if sidebar.is_hidden(&target.key()) {
+                        continue;
+                    }
                     if db
                         .projects
                         .get(&id)
                         .is_some_and(|project| project.status.is_open())
                     {
-                        out.push(SidebarTarget::Project(id.clone()));
+                        out.push(target);
                     }
                 }
             }
@@ -259,11 +276,16 @@ impl FlowlistApp {
 
     fn tag_targets(&self, parent: Option<TagId>, out: &mut Vec<SidebarTarget>) {
         let db = self.store.db();
+        let sidebar = &db.settings.sidebar;
         let tags = db.tags_sorted_by_usage(parent.as_ref());
         for tag in tags {
+            let target = SidebarTarget::Tag(tag.clone());
+            if sidebar.is_hidden(&target.key()) {
+                continue;
+            }
             let open = self.is_open(&format!("tag:{tag}"), true);
             let child_parent = tag.clone();
-            out.push(SidebarTarget::Tag(tag));
+            out.push(target);
             if open && !db.tag_children(&child_parent).is_empty() {
                 self.tag_targets(Some(child_parent), out);
             }
@@ -271,13 +293,19 @@ impl FlowlistApp {
     }
 
     pub(super) fn target_for_view(&self, view: &View) -> Option<SidebarTarget> {
-        match view {
-            View::Builtin(perspective) => Some(SidebarTarget::Builtin(*perspective)),
-            View::Project(id) => Some(SidebarTarget::Project(id.clone())),
-            View::Folder(id) => Some(SidebarTarget::Folder(id.clone())),
-            View::Tag(id) => Some(SidebarTarget::Tag(id.clone())),
-            View::Custom(id) => Some(SidebarTarget::Custom(id.clone())),
-            View::Priority(priority) => Some(SidebarTarget::Priority(*priority)),
+        let target = match view {
+            View::Builtin(perspective) => SidebarTarget::Builtin(*perspective),
+            View::Project(id) => SidebarTarget::Project(id.clone()),
+            View::Folder(id) => SidebarTarget::Folder(id.clone()),
+            View::Tag(id) => SidebarTarget::Tag(id.clone()),
+            View::Custom(id) => SidebarTarget::Custom(id.clone()),
+            View::Priority(priority) => SidebarTarget::Priority(*priority),
+        };
+        let key = target.key();
+        if SidebarOptions::can_hide(&key) && self.store.db().settings.sidebar.is_hidden(&key) {
+            None
+        } else {
+            Some(target)
         }
     }
 
@@ -895,19 +923,24 @@ impl FlowlistApp {
                 this.set_drag_target(None, cx);
             }));
 
-        if options.show_perspectives {
-            // Perspectives are the rail's backbone: they stay put and only
-            // their rows can be hidden from Settings.
-            rail = rail.child(widgets::section_label(theme, "PERSPECTIVES"));
-            for perspective in BuiltinPerspective::ALL {
+        // Perspectives are the rail's backbone: Inbox, Today and Trash cannot
+        // be hidden, and the rest come from the per-item Settings matrix.
+        rail = rail.child(widgets::section_label(theme, "PERSPECTIVES"));
+        for perspective in BuiltinPerspective::ALL {
+            let target = SidebarTarget::Builtin(perspective);
+            if !SidebarOptions::can_hide(&target.key()) || !options.is_hidden(&target.key()) {
                 rail = rail.child(self.perspective_row(perspective, cx));
             }
         }
 
-        if options.show_priorities {
+        let visible: Vec<Priority> = Priority::ALL
+            .into_iter()
+            .filter(|priority| !options.is_hidden(&SidebarTarget::Priority(*priority).key()))
+            .collect();
+        if !visible.is_empty() {
             rail = rail.child(self.sidebar_section("priorities", "PRIORITIES", cx));
             if self.is_open("section:priorities", true) {
-                for priority in Priority::ALL {
+                for priority in visible {
                     rail = rail.child(self.priority_row(priority, cx));
                 }
             }
@@ -951,12 +984,15 @@ impl FlowlistApp {
             .db()
             .perspectives
             .values()
+            .filter(|perspective| {
+                !options.is_hidden(&format!("custom:{}", perspective.id))
+            })
             .map(|perspective| PerspectiveRow {
                 id: perspective.id.clone(),
                 name: perspective.name.clone(),
             })
             .collect();
-        if options.show_saved && !custom.is_empty() {
+        if !custom.is_empty() {
             lower = lower.child(self.sidebar_section("saved", "SAVED", cx));
             if self.is_open("section:saved", true) {
                 for row in custom {
@@ -966,7 +1002,22 @@ impl FlowlistApp {
         }
 
         // Dropping a project on the heading takes it out of its folder.
-        if options.show_library {
+        let library_rows = self.store.db().flatten_containers();
+        let library_empty = library_rows.is_empty();
+        let library_visible = {
+            let db = self.store.db();
+            let sidebar = &db.settings.sidebar;
+            library_rows.iter().any(|row| match &row.container {
+                ContainerId::Folder(id) => !sidebar.is_hidden(&format!("folder:{id}")),
+                ContainerId::Project(id) => {
+                    db.projects
+                        .get(id)
+                        .is_some_and(|project| project.status.is_open())
+                        && !sidebar.is_hidden(&format!("project:{id}"))
+                }
+            })
+        };
+        if library_visible || library_empty {
             let library_active = self.sidebar_drag_target.as_deref() == Some("library");
             let library_boxes = self.sidebar_row_boxes.clone();
             lower = lower.child(
@@ -1016,14 +1067,26 @@ impl FlowlistApp {
             }
         }
 
-        if options.show_tags {
+        let visible_tags = {
+            let db = self.store.db();
+            let sidebar = &db.settings.sidebar;
+            db.tags
+                .keys()
+                .any(|id| !sidebar.is_hidden(&format!("tag:{id}")))
+        };
+        if visible_tags {
             lower = lower.child(self.sidebar_section("tags", "TAGS", cx));
             if self.is_open("section:tags", true) {
                 let (empty, has_general, has_geotags) = {
                     let db = self.store.db();
-                    let roots = db.tags_sorted_by_usage(None);
+                    let sidebar = &db.settings.sidebar;
+                    let roots: Vec<TagId> = db
+                        .tags_sorted_by_usage(None)
+                        .into_iter()
+                        .filter(|id| !sidebar.is_hidden(&format!("tag:{id}")))
+                        .collect();
                     (
-                        db.tags.is_empty(),
+                        roots.is_empty(),
                         roots.iter().any(|id| {
                             db.tags.get(id).is_some_and(|tag| tag.location.is_none())
                         }),
@@ -1042,12 +1105,20 @@ impl FlowlistApp {
                             .child("No tags yet — add one with #tag in quick entry."),
                     );
                 } else {
+                    // Only label the split when both kinds exist. A library
+                    // with only ordinary tags should read as a plain tag list,
+                    // and likewise for a library with only geotags.
+                    let show_group_labels = has_general && has_geotags;
                     if has_general {
-                        lower = lower.child(tag_group_label("GENERAL", theme));
+                        if show_group_labels {
+                            lower = lower.child(tag_group_label("GENERAL", theme));
+                        }
                         lower = lower.children(self.tag_rows_filtered(None, Some(false), cx));
                     }
                     if has_geotags {
-                        lower = lower.child(tag_group_label("GEOTAGS", theme));
+                        if show_group_labels {
+                            lower = lower.child(tag_group_label("GEOTAGS", theme));
+                        }
                         lower = lower.children(self.tag_rows_filtered(None, Some(true), cx));
                     }
                 }
@@ -1205,10 +1276,8 @@ impl FlowlistApp {
         let theme = self.theme;
         let active = self.view == View::Builtin(perspective);
         let count = self.perspective_count(perspective);
-        // Today is the daily landing view, so its number stays visible even
-        // when the quieter default hides the other perspective counts.
-        let show_count = self.store.db().settings.sidebar.counts_perspectives
-            || perspective == BuiltinPerspective::Today;
+        let key = SidebarTarget::Builtin(perspective).key();
+        let show_count = !self.store.db().settings.sidebar.is_count_hidden(&key);
         let icon_color = if active { theme.accent } else { theme.text_dim };
         let cursor = self.sidebar_cursor_is(&SidebarTarget::Builtin(perspective));
         let row = div()
@@ -1235,11 +1304,7 @@ impl FlowlistApp {
             )
             .child(div().flex_1().min_w_0().child(perspective.label()))
             .when(show_count && count > 0, |this| {
-                this.child(self.count_box(
-                    format!("builtin:{}", perspective.slug()),
-                    count,
-                    widgets::count(theme, count),
-                ))
+                this.child(self.count_box(key.clone(), count, widgets::count(theme, count)))
             })
             .on_mouse_down(
                 MouseButton::Right,
@@ -1263,7 +1328,8 @@ impl FlowlistApp {
             .values()
             .filter(|task| !task.completed && !task.is_trashed() && task.priority == Some(priority))
             .count();
-        let show_count = self.store.db().settings.sidebar.counts_priorities;
+        let key = SidebarTarget::Priority(priority).key();
+        let show_count = !self.store.db().settings.sidebar.is_count_hidden(&key);
         let color = priority_color(theme, priority);
         let icon_color = if active { theme.accent } else { color };
         let cursor = self.sidebar_cursor_is(&SidebarTarget::Priority(priority));
@@ -1291,11 +1357,7 @@ impl FlowlistApp {
             )
             .child(div().flex_1().min_w_0().child(priority.label()))
             .when(show_count && count > 0, |this| {
-                this.child(self.count_box(
-                    format!("priority:{}", priority.slug()),
-                    count,
-                    widgets::count(theme, count),
-                ))
+                this.child(self.count_box(key.clone(), count, widgets::count(theme, count)))
             })
             .on_mouse_down(
                 MouseButton::Right,
@@ -1317,6 +1379,25 @@ impl FlowlistApp {
         let theme = self.theme;
         let active = self.view == View::Custom(row.id.clone());
         let icon_color = if active { theme.accent } else { theme.text_dim };
+        let count: usize = self
+            .store
+            .db()
+            .perspectives
+            .get(&row.id)
+            .map(|perspective| {
+                query::custom(self.store.db(), perspective, now())
+                    .iter()
+                    .map(|group| group.rows.len())
+                    .sum()
+            })
+            .unwrap_or(0);
+        let count_key = format!("custom:{}", row.id);
+        let show_count = !self
+            .store
+            .db()
+            .settings
+            .sidebar
+            .is_count_hidden(&count_key);
         let id = row.id.clone();
         let target_id = row.id.clone();
         let cursor = self.sidebar_cursor_is(&SidebarTarget::Custom(target_id.clone()));
@@ -1345,6 +1426,14 @@ impl FlowlistApp {
                     .child(icons::icon(Icon::Perspective, 14.0, icon_color)),
             )
             .child(self.row_name(row.name))
+            .when(show_count && count > 0, |this| {
+                this.child(self.count_box(
+                    count_key,
+                    count,
+                    widgets::count(theme, count),
+                ))
+            })
+            .when(show_count && count == 0, |this| this.child(widgets::done_badge(theme)))
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
@@ -1384,13 +1473,16 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let db = self.store.db();
-        let show_counts = db.settings.sidebar.counts_library;
+        let sidebar = &db.settings.sidebar;
         let children = db.container_children(parent.clone()).to_vec();
         let mut rows = Vec::new();
         for container in children {
             match container {
                 ContainerId::Folder(id) => {
                     let key = format!("folder:{id}");
+                    if sidebar.is_hidden(&key) {
+                        continue;
+                    }
                     // Folders start folded on every launch; opening one is a
                     // deliberate act and the in-session tree remembers it.
                     let open = self.is_open(&key, false);
@@ -1402,6 +1494,7 @@ impl FlowlistApp {
                         .map(|folder| folder.name.clone())
                         .unwrap_or_default();
                     let count = db.folder_active_project_count(&id);
+                    let show_count = !sidebar.is_count_hidden(&key);
                     let view_id = id.clone();
                     let target_id = id.clone();
                     let toggle_key = key.clone();
@@ -1497,7 +1590,7 @@ impl FlowlistApp {
                             ),
                         )
                         .child(self.row_name(name))
-                        .when(show_counts && count > 0, |this| {
+                        .when(show_count && count > 0, |this| {
                             this.child(self.count_box(
                                 format!("folder:{id}"),
                                 count,
@@ -1570,11 +1663,14 @@ impl FlowlistApp {
                     let Some(project) = db.projects.get(&id) else {
                         continue;
                     };
-                    if !project.status.is_open() {
+                    if !project.status.is_open()
+                        || sidebar.is_hidden(&format!("project:{id}"))
+                    {
                         continue;
                     }
                     let (done, total) = db.project_progress(&id);
                     let open = db.project_open_count(&id);
+                    let show_count = !sidebar.is_count_hidden(&format!("project:{id}"));
                     let view_id = id.clone();
                     let target_id = id.clone();
                     let drop_id = id.clone();
@@ -1636,7 +1732,9 @@ impl FlowlistApp {
                         ))
                         .child(self.row_name(project.name.clone()))
                         .when(
-                            show_counts || project_badge(open, total) == ProjectBadge::Done,
+                            show_count
+                                && (open > 0
+                                    || project_badge(open, total) == ProjectBadge::Done),
                             |this| {
                                 this.child({
                                     let tip = match project_badge(open, total) {
@@ -1689,9 +1787,6 @@ impl FlowlistApp {
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sidebar_activate(SidebarTarget::Project(view_id.clone()), cx)
                         }));
-                    if project.flagged_for_review() {
-                        row = row.child(div().size(px(5.)).rounded_full().bg(self.theme.warning));
-                    }
                     let anchor_boxes = self.sidebar_row_boxes.clone();
                     let anchor_key = format!("project:{id}");
                     rows.push(
@@ -1716,6 +1811,11 @@ impl FlowlistApp {
             }
         }
         if rows.is_empty() {
+            // Every child was hidden from Settings: an "Empty" line would
+            // claim the folder lost its work. Only a really empty tree says so.
+            if !db.container_children(parent.clone()).is_empty() {
+                return rows;
+            }
             let key = match &parent {
                 Some(folder) => format!("empty:{folder}"),
                 None => "empty:root".to_string(),
@@ -1747,7 +1847,7 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let db = self.store.db();
-        let show_counts = db.settings.sidebar.counts_tags;
+        let sidebar = &db.settings.sidebar;
         let tags = db
             .tags_sorted_by_usage(parent.as_ref())
             .into_iter()
@@ -1765,9 +1865,13 @@ impl FlowlistApp {
                 continue;
             };
             let key = format!("tag:{tag}");
+            if sidebar.is_hidden(&key) {
+                continue;
+            }
             let open = self.is_open(&key, true);
             let children = !db.tag_children(&tag).is_empty();
             let usage = db.tag_usage_count(&tag, true);
+            let show_count = !sidebar.is_count_hidden(&key);
             let name = entity.name.clone();
             let located = entity.location.is_some();
             let status = entity.status;
@@ -1857,7 +1961,7 @@ impl FlowlistApp {
                         )
                     },
                 )
-                .when(show_counts && usage > 0, |this| {
+                .when(show_count && usage > 0, |this| {
                     this.child(self.count_box(
                         format!("tag:{tag}"),
                         usage,
@@ -1892,9 +1996,18 @@ impl FlowlistApp {
     }
 }
 
+/// Inbox, Today and Trash are never hidden, not even with the section toggle.
+fn anchors_rail(perspective: BuiltinPerspective) -> bool {
+    matches!(
+        perspective,
+        BuiltinPerspective::Inbox | BuiltinPerspective::Today | BuiltinPerspective::Trash
+    )
+}
+
 fn tag_group_label(label: &'static str, theme: super::theme::Theme) -> gpui::Div {
     div()
-        .px_3()
+        .pl(px(26.))
+        .pr_3()
         .pt_2()
         .pb_1()
         .text_xs()
@@ -1924,7 +2037,17 @@ pub(super) fn priority_color(theme: super::theme::Theme, priority: Priority) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::{ProjectBadge, project_badge};
+    use super::{ProjectBadge, anchors_rail, project_badge};
+    use flowlist_core::model::BuiltinPerspective;
+
+    #[test]
+    fn the_three_anchors_never_leave_the_rail() {
+        assert!(anchors_rail(BuiltinPerspective::Inbox));
+        assert!(anchors_rail(BuiltinPerspective::Today));
+        assert!(anchors_rail(BuiltinPerspective::Trash));
+        assert!(!anchors_rail(BuiltinPerspective::Flagged));
+        assert!(!anchors_rail(BuiltinPerspective::Archive));
+    }
 
     #[test]
     fn a_new_project_keeps_its_zero() {

@@ -29,7 +29,11 @@ ticked_task=$("$bin" --data-dir "$lib" add 'Finished work' --project 'Ticked off
 "$bin" --data-dir "$lib" done "$ticked_task" >/dev/null
 "$bin" --data-dir "$lib" add 'Inbox note' >/dev/null
 "$bin" --data-dir "$lib" add 'Due today' due:today >/dev/null
-echo "folder=$folder project=$project ticked=$ticked tag=$tag busy_tag=$busy_tag"
+# A saved perspective with work and one that matches nothing exercise the
+# count badge and the bare tick that replaces it when the list is empty.
+filled=$("$bin" --data-dir "$lib" perspective add 'Handoff work' --filter "{\"type\":\"condition\",\"condition\":{\"type\":\"project\",\"id\":\"$project\"}}" --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+empty=$("$bin" --data-dir "$lib" perspective add 'Nothing here' --filter '{"type":"condition","condition":{"type":"text","value":"nothing-matches-this"}}' --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+echo "folder=$folder project=$project ticked=$ticked tag=$tag busy_tag=$busy_tag filled=$filled empty=$empty"
 
 launch() {
   rm -f "$state"
@@ -169,6 +173,13 @@ PY
   set -- $(cat "$tmp/pt"); RX=$1; RY=$2
   "$helpers/flowctl" mouse $((WX + RX)) $((WY + RY)); sleep 0.6
 }
+open_sidebar_group() {
+  click_map settings_toggle_rows "sidebar-group-$1"
+  # The rows inside the accordion prepaint on the next frame. A scroll makes
+  # that frame happen immediately so the following click can find them.
+  "$helpers/flowctl" scroll $((WX + 600)) $((WY + 600)) 1
+  sleep 0.4
+}
 wait_value() {
   for _ in $(seq 1 60); do
     [ "$(value "$1")" = "$2" ] && return 0
@@ -298,40 +309,99 @@ click_map history_rows "history-forward"
 wait_value view inbox
 echo "6. The title-bar arrows walk back to Archive and forward again"
 
-# Settings: hide Tags, save, and confirm the rail drops the section.
+# Settings: hide one built-in row, save, and confirm the rail drops just it.
 "$helpers/flowctl" key 43 cmd
 wait_value modal "Settings"
 click_map settings_toggle_rows "settings-section-sidebar"
-wait_setting show_tags true
-click_map settings_toggle_rows "sidebar-show-tags"
-wait_modal_setting show_tags false
+wait_value settings_section sidebar
+open_sidebar_group perspectives
+click_map settings_toggle_rows "sidebar-item-builtin:flagged"
 "$helpers/flowctl" key 36
 wait_value modal ""
-wait_setting show_tags false
-wait_lacks sidebar_visible "tag:${tag}"
-echo "7. Settings hides the Tags section"
+wait_lacks sidebar_visible "builtin:flagged"
+echo "7. Settings hides the Flagged row"
 
 # The preference lives in the library, so a relaunch keeps it hidden.
 kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
 launch
 wait_value view inbox
-wait_setting show_tags false
-wait_lacks sidebar_visible "tag:${tag}"
+wait_lacks sidebar_visible "builtin:flagged"
 echo "8. The sidebar choice survives a relaunch"
 
-# Put it back, and turn a quiet count on while the sheet is open.
+# Put the row back, and turn a quiet count on while the sheet is open.
 "$helpers/flowctl" key 43 cmd
 wait_value modal "Settings"
 click_map settings_toggle_rows "settings-section-sidebar"
 wait_value settings_section sidebar
-click_map settings_toggle_rows "sidebar-show-tags"
-click_map settings_toggle_rows "sidebar-counts-perspectives"
+open_sidebar_group perspectives
+click_map settings_toggle_rows "sidebar-item-builtin:flagged"
+click_map settings_toggle_rows "sidebar-count-builtin:inbox"
 "$helpers/flowctl" key 36
 wait_value modal ""
-wait_setting show_tags true
-wait_setting counts_perspectives true
-wait_has sidebar_visible "tag:${tag}"
+wait_has sidebar_visible "builtin:flagged"
 wait_map sidebar_counts "builtin:inbox"
-echo "9. Sections and counts can be turned back on"
+wait_count "builtin:inbox" 3
+echo "9. A hidden row and a hidden count can both be turned back on"
+
+# Saved perspectives report their count, while an empty one shows a bare tick
+# with no count box behind it.
+wait_map sidebar_counts "custom:${filled}"
+wait_count "custom:${filled}" 1
+wait_no_map sidebar_counts "custom:${empty}"
+echo "10. Empty saved perspectives keep a bare tick; filled ones show a count"
+
+# The three anchors have no Hide box at all and stay reachable.
+"$helpers/flowctl" key 43 cmd
+wait_value modal "Settings"
+click_map settings_toggle_rows "settings-section-sidebar"
+wait_value settings_section sidebar
+open_sidebar_group perspectives
+wait_has sidebar_visible "builtin:inbox"
+wait_has sidebar_visible "builtin:today"
+wait_has sidebar_visible "builtin:trash"
+"$helpers/flowctl" key 36
+wait_value modal ""
+echo "11. Inbox, Today and Trash stay, with no Hide box"
+
+# A count can be hidden while its row stays in place.
+"$helpers/flowctl" key 43 cmd
+wait_value modal "Settings"
+click_map settings_toggle_rows "settings-section-sidebar"
+wait_value settings_section sidebar
+open_sidebar_group perspectives
+click_map settings_toggle_rows "sidebar-count-builtin:inbox"
+"$helpers/flowctl" key 36
+wait_value modal ""
+# Count boxes accumulate in the live state map, so relaunch to see the rail
+# the setting actually produces.
+kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
+launch
+wait_value view inbox
+wait_no_map sidebar_counts "builtin:inbox"
+wait_has sidebar_visible "builtin:inbox"
+echo "12. A count can be hidden while its row stays"
+
+# The matrix is an accordion: opening Priorities reveals just its rows.
+"$helpers/flowctl" key 43 cmd
+wait_value modal "Settings"
+click_map settings_toggle_rows "settings-section-sidebar"
+wait_value settings_section sidebar
+open_sidebar_group priorities
+click_map settings_toggle_rows "sidebar-item-priority:high"
+"$helpers/flowctl" key 36
+wait_value modal ""
+wait_lacks sidebar_visible "priority:high"
+echo "13. Opening the Priorities heading reveals its rows"
+
+"$helpers/flowctl" key 43 cmd
+wait_value modal "Settings"
+click_map settings_toggle_rows "settings-section-sidebar"
+wait_value settings_section sidebar
+open_sidebar_group priorities
+click_map settings_toggle_rows "sidebar-item-priority:high"
+"$helpers/flowctl" key 36
+wait_value modal ""
+wait_has sidebar_visible "priority:high"
+echo "14. The priority row comes back"
 
 echo "ALL SIDEBAR CHECKS PASSED"

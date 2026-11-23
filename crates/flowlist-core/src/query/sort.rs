@@ -4,7 +4,7 @@
 use std::cmp::Ordering;
 
 use crate::db::Db;
-use crate::model::SortBy;
+use crate::model::{Priority, SortBy};
 use crate::query::TaskRow;
 
 pub fn sort_rows(db: &Db, rows: &mut [TaskRow], sort: SortBy) {
@@ -40,6 +40,20 @@ pub fn sort_rows(db: &Db, rows: &mut [TaskRow], sort: SortBy) {
                 .map(|task| task.title.to_lowercase())
                 .unwrap_or_default();
             left.cmp(&right)
+        }),
+        SortBy::Priority => rows.sort_by(|a, b| {
+            let rank = |id: &crate::ids::TaskId| {
+                db.tasks
+                    .get(id)
+                    .and_then(|task| task.priority)
+                    .map(|priority| match priority {
+                        Priority::High => 0u8,
+                        Priority::Medium => 1,
+                        Priority::Low => 2,
+                    })
+                    .unwrap_or(3)
+            };
+            rank(&a.id).cmp(&rank(&b.id))
         }),
         SortBy::Flagged => rows.sort_by(|a, b| {
             let left = db.tasks.get(&a.id).is_some_and(|task| task.flagged);

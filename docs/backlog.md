@@ -178,6 +178,72 @@ below; this list is the current map.
       project editor and painted on Browse rows.
 - [x] **Android tag status** — Available, Blocked and On Hold are editable in
       the tag sheet, inherit to child tags, and mark affected tasks as blocked.
+- [x] **Perspective estimate filter and header sort** — Mac and Android
+      perspective editors accept minimum and maximum estimate minutes. Every
+      Android task perspective also has a header sort menu covering Manual,
+      Due, Defer, Name, Priority, Flagged, Estimate, Created and Completed.
+      Date sorts show Today/Yesterday/date section headings.
+- [x] **Android attachment and favicon parity** — Attachments only lists open
+      tasks. Date sorts show section headings. Link favicons try the common
+      paths with a browser user agent and decode PNG entries inside ICO files,
+      which Android's BitmapFactory cannot read directly.
+- [x] **Android multi-select perspectives** — Projects, tags, priorities and
+      due windows can each be OR-ed as multi-select sets.
+- [x] **Priority section headings** — sorting by priority groups Android task
+      lists under High/Medium/Low/No priority headings.
+- [x] **Mac completion clears the inspector** — completing a task clears the
+      selection and closes the field editor.
+- [x] **Mac multi-select perspective filters** — projects, tags, due and defer
+      values toggle with checkboxes, and estimate min/max sit side by side.
+- [x] **Checkbox multi-select on Android** — perspective multi-select menus use
+      checkboxes rather than single check marks.
+- [x] **Independent light and dark themes on Android** — Appearance shows a
+      light-theme row and a dark-theme row, each with its own family. Tomato is
+      the new name for the former Todoist palette, and old saves that still say
+      `todoist` load as Tomato.
+- [x] **Counts on every Android drawer row** — built-in perspectives and saved
+      views show their task count when it is non-zero; zero counts stay hidden.
+      Tags and Nearby count tasks, not the tags themselves, and an empty saved
+      view falls back to a bare tick.
+- [x] **Mac saved perspective badges** — the rail shows a saved view's open
+      count, or a background-free tick when nothing matches.
+- [x] **Mac sidebar matrix** — Settings → Sidebar is a collapsible table of
+      every perspective, priority, folder, project, saved view and tag, with
+      side-by-side Hide and Hide count boxes and item names indented under each
+      heading. Every heading starts collapsed; opening one closes the rest. A
+      tick means hidden, hiding a row greys out its count box, and the hidden
+      name is struck through. Inbox, Today and Trash have no Hide box at all.
+      Count choices materialise the old quiet defaults on the first visit, so
+      upgrading does not flood the rail with numbers.
+- [x] **Resizable Settings sheet** — the sheet opens at a fixed size, can be
+      resized from a bottom-right grip, and shows a Zed-style thin scrollbar
+      when the body no longer fits. The thumb tracks the pointer exactly, the
+      track jumps to a click, and the corner grip uses the correct diagonal
+      resize cursor.
+- [x] **Attachment headings** — only Attachments uses the coloured headings:
+      date headings in the theme accent and priorities in red/amber/blue. No
+      priority or a missing date is a filled badge, which inverts to white with
+      grey text in dark mode. Other views keep quiet grey headings, and groups
+      leave a clear gap between sections.
+- [x] **Forecast month controls** — the month heading and its Today/arrow
+      controls appear only in Month mode, underneath the heading. Today aligns
+      with the month name, and the arrows have larger, separated touch targets.
+      Agenda hides them.
+- [x] **Select-mode toggle** — the checklist button enters select mode and
+      becomes a close button; pressing it again leaves select mode.
+- [x] **Forecast pill spacing** — the Month/Agenda pills have roomier padding
+      and a wider selected pill, with more space between the selector and the
+      month name. Selected day cells are slightly taller so the date pill has
+      breathing room.
+- [x] **Scrollable Forecast month** — the month grid, weekday header and the
+      selected day's tasks share one scroll, so the calendar can move up and
+      leave the task list the rest of the screen.
+- [x] **Perspective sheet inset** — the New perspective card itself starts
+      below the Android status bar, not just its contents.
+- [x] **Perspective editor parity** — Mac and Android now offer the same
+      filters (text, Inbox only, Flagged only, status, projects, tags with
+      child tags, priorities, due/defer windows and estimate), the same
+      grouping options, and the same sort list including priority.
 - [x] **Android history disclosure** — Undo and Redo fold under a History
       heading and stay collapsed by default.
 - [x] **Mac wrapping title editor** — the inspector title edits in a wrapping
@@ -198,7 +264,10 @@ below; this list is the current map.
       separate Android notification channel, with a link from the app’s
       Notifications section to Android notification settings.
 - [x] **Mac tag groups** — the sidebar TAGS section splits into General and
-      Geotags.
+      Geotags, with the group labels indented under the section heading. The
+      review-reminder dot is gone from project rows, the Review count stays
+      visible like Today, and the General/Geotags headings appear only when
+      both kinds of tags exist.
 - [x] **Android search and Nearby** — search covers projects, folders, tags and
       perspectives with a view/library scope; Nearby lists tags within the
       library radius, sorted by distance. Search results also support bulk

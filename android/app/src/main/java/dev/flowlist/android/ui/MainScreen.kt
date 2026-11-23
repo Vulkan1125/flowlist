@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -57,6 +58,7 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Redo
+import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.Undo
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.rounded.Add
@@ -124,11 +126,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.AppState
+import dev.flowlist.android.data.Db
+import dev.flowlist.android.data.archivedProjects
+import dev.flowlist.android.data.reviewProjects
 import dev.flowlist.android.data.TagDto
 import dev.flowlist.android.data.attachmentTasks
 import dev.flowlist.android.data.changedTasks
 import dev.flowlist.android.data.completedTasks
 import dev.flowlist.android.data.flaggedTasks
+import dev.flowlist.android.data.geotaggedTaskCount
+import dev.flowlist.android.data.taggedTaskCount
 import dev.flowlist.android.data.priorityGroups
 import dev.flowlist.android.data.FolderDto
 import dev.flowlist.android.data.PerspectiveDto
@@ -217,6 +224,28 @@ fun orderedPerspectives(order: List<String>): List<Perspective> {
     }
     Perspective.entries.forEach { item -> if (item !in result) result.add(item) }
     return result
+}
+
+/// The number shown beside a drawer row. It mirrors the list each destination
+/// opens, so a count never promises more than the screen delivers.
+fun drawerCount(db: Db?, perspective: Perspective): Int {
+    db ?: return 0
+    return when (perspective) {
+        Perspective.Inbox -> db.inbox().size
+        Perspective.Today -> db.today().size
+        Perspective.Forecast -> db.forecast().values.sumOf { it.size }
+        Perspective.Flagged -> db.flaggedTasks().size
+        Perspective.Library -> db.projects.values.count { it.status == "active" }
+        Perspective.Review -> db.reviewProjects().size
+        Perspective.Completed -> db.completedTasks().size
+        Perspective.Archive -> db.archivedProjects().size
+        Perspective.Trash -> db.trashedTasks().size
+        Perspective.Tags -> db.taggedTaskCount()
+        Perspective.Nearby -> db.geotaggedTaskCount()
+        Perspective.Priorities -> db.priorityGroups().sumOf { it.second.size }
+        Perspective.Changed -> db.changedTasks().size
+        Perspective.Attachments -> db.attachmentTasks().size
+    }
 }
 
 /// Move one drawer row and keep every other row (including bottom-bar picks)
@@ -772,6 +801,15 @@ fun MainScreen(
                 activeMore == MoreView.Priorities ||
                 (activeMore == null &&
                     (tab == Tab.Inbox || tab == Tab.Today || tab == Tab.Forecast))
+            val sortable = activeSaved == null && when {
+                activeMore != null -> activeMore == MoreView.Flagged ||
+                    activeMore == MoreView.Completed ||
+                    activeMore == MoreView.Trash ||
+                    activeMore == MoreView.Changed ||
+                    activeMore == MoreView.Priorities ||
+                    activeMore == MoreView.Attachments
+                else -> tab == Tab.Inbox || tab == Tab.Today || tab == Tab.Forecast
+            }
             Header(
                 title = activeSaved?.name ?: activeMore?.label ?: tab.label,
                 subtitle = when {
@@ -780,10 +818,22 @@ fun MainScreen(
                 },
                 onMenu = { scope.launch { drawer.open() } },
                 onSearch = { search = true },
+                sort = preferences.sortBy,
+                onSort = if (sortable) {
+                    { option -> onPreferencesChange(preferences.copy(sortBy = option)) }
+                } else {
+                    null
+                },
+                selecting = selecting,
                 onSelect = if (canSelect) {
                     {
-                        selectedIds = emptySet()
-                        selecting = true
+                        if (selecting) {
+                            selecting = false
+                            selectedIds = emptySet()
+                        } else {
+                            selectedIds = emptySet()
+                            selecting = true
+                        }
                     }
                 } else {
                     null
@@ -808,6 +858,7 @@ fun MainScreen(
                     MoreDestination(
                         view = activeMore,
                         db = db,
+                        sort = preferences.sortBy,
                         pending = state.pending,
                         onTask = { task -> detail = task },
                         onToggle = { task -> complete(task, !task.completed) },
@@ -837,7 +888,7 @@ fun MainScreen(
                 Tab.Inbox -> InboxList(
                     swipeActions = preferences.swipeActions,
                     children = children,
-                    tasks = snapshot?.db?.inbox().orEmpty(),
+                    tasks = sortTasks(snapshot?.db?.inbox().orEmpty(), preferences.sortBy),
                     pending = state.pending,
                     onToggle = { task -> complete(task, !task.completed) },
                     onClick = { detail = it },
@@ -846,7 +897,7 @@ fun MainScreen(
                 Tab.Today -> TodayList(
                     swipeActions = preferences.swipeActions,
                     children = children,
-                    tasks = snapshot?.db?.today().orEmpty(),
+                    tasks = sortTasks(snapshot?.db?.today().orEmpty(), preferences.sortBy),
                     pending = state.pending,
                     onToggle = { task -> complete(task, !task.completed) },
                     onClick = { detail = it },
@@ -854,6 +905,7 @@ fun MainScreen(
                 )
                 Tab.Forecast -> ForecastScreen(
                     view = preferences.forecastView,
+                    sort = preferences.sortBy,
                     onViewChange = { onPreferencesChange(preferences.copy(forecastView = it)) },
                     snapshot = snapshot,
                     weekStartsMonday = preferences.weekStartsMonday,
@@ -1194,6 +1246,7 @@ fun MainScreen(
                         checklistDone = task.checklist.count { it.completed },
                         checklistTotal = task.checklist.size,
                         estimateMin = task.estimateMin,
+                        createdAt = task.createdAt,
                         blockedByTag = db?.tagBlocking(task)?.name,
                     )
                 }
@@ -1648,6 +1701,16 @@ private fun LibraryDrawer(
     onDeletePerspective: (PerspectiveDto) -> Unit,
 ) {
     val colors = flow
+    val db = state.snapshot?.db
+    // Counts follow the library, not the sync revision: local edits replace
+    // the Db before the server acknowledges them. The identity key keeps the
+    // structural comparison of a large library off the recomposition path.
+    val builtinCounts = remember(IdentityKey(db)) {
+        Perspective.entries.associateWith { drawerCount(db, it) }
+    }
+    val savedCounts = remember(IdentityKey(db)) {
+        db?.perspectives?.values?.associate { it.id to countPerspectiveTasks(db, it) }.orEmpty()
+    }
     val remaining = order.filterNot { it in bottom }
     var draggingKey by remember { mutableStateOf<String?>(null) }
     var dragFrom by remember { mutableIntStateOf(-1) }
@@ -1717,6 +1780,7 @@ private fun LibraryDrawer(
                     icon = item.icon,
                     selected = selected,
                     dragging = dragging,
+                    count = builtinCounts[item] ?: 0,
                     onClick = { onPerspective(item) },
                     modifier = Modifier
                         .onSizeChanged { size ->
@@ -1889,7 +1953,24 @@ private fun LibraryDrawer(
                         color = colors.ink,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
+                    val count = savedCounts[item.id] ?: 0
+                    if (count > 0) {
+                        Text(
+                            text = "$count",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.faint,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = null,
+                            tint = colors.faint,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
                 }
                 Box {
                     IconButton(onClick = { menu = true }, modifier = Modifier.size(30.dp)) {
@@ -2058,6 +2139,7 @@ private fun DrawerRow(
     icon: ImageVector,
     selected: Boolean,
     dragging: Boolean = false,
+    count: Int = 0,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -2096,7 +2178,15 @@ private fun DrawerRow(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
             color = if (selected) colors.accent else colors.ink,
+            modifier = Modifier.weight(1f),
         )
+        if (count > 0) {
+            Text(
+                text = "$count",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.faint,
+            )
+        }
     }
 }
 
@@ -2107,9 +2197,13 @@ private fun Header(
     subtitle: String,
     onMenu: () -> Unit,
     onSearch: () -> Unit,
+    sort: String,
+    onSort: ((String) -> Unit)?,
+    selecting: Boolean = false,
     onSelect: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
+    var sortMenu by remember { mutableStateOf(false) }
     val colors = flow
     Column(
         modifier = modifier
@@ -2149,13 +2243,83 @@ private fun Header(
                     color = colors.faint,
                 )
             }
+            if (onSort != null) {
+                Spacer(modifier = Modifier.width(2.dp))
+                Box {
+                    IconButton(
+                        onClick = { sortMenu = true },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.SwapVert,
+                            contentDescription = "Sort tasks",
+                            tint = if (sort == "manual") colors.faint else colors.accent,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = sortMenu,
+                        onDismissRequest = { sortMenu = false },
+                        modifier = Modifier.width(232.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = colors.raised,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 12.dp,
+                        border = BorderStroke(1.dp, colors.hairline),
+                    ) {
+                        Text(
+                            text = "SORT BY",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.faint,
+                            modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
+                        )
+                        HorizontalDivider(
+                            color = colors.hairline,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        )
+                        sortOptions.forEach { option ->
+                            val selected = option == sort
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = sortOptionLabel(option),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (selected) colors.accent else colors.ink,
+                                    )
+                                },
+                                leadingIcon = {
+                                    if (selected) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            tint = colors.accent,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    } else {
+                                        Spacer(modifier = Modifier.size(18.dp))
+                                    }
+                                },
+                                onClick = {
+                                    sortMenu = false
+                                    onSort(option)
+                                },
+                                modifier = Modifier.background(
+                                    if (selected) colors.field else Color.Transparent,
+                                ),
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                }
+            }
             if (onSelect != null) {
                 Spacer(modifier = Modifier.width(4.dp))
                 IconButton(onClick = onSelect, modifier = Modifier.size(32.dp)) {
                     Icon(
-                        imageVector = Icons.Rounded.Checklist,
-                        contentDescription = "Select tasks",
-                        tint = colors.faint,
+                        imageVector = if (selecting) Icons.Rounded.Close else Icons.Rounded.Checklist,
+                        contentDescription = if (selecting) "Exit select mode" else "Select tasks",
+                        tint = if (selecting) colors.accent else colors.faint,
                         modifier = Modifier.size(20.dp),
                     )
                 }
@@ -2175,6 +2339,13 @@ private fun Header(
             color = if (subtitle.isBlank()) Color.Transparent else colors.faint,
         )
     }
+}
+
+private class IdentityKey<T>(val value: T) {
+    override fun equals(other: Any?): Boolean =
+        other is IdentityKey<*> && other.value === value
+
+    override fun hashCode(): Int = System.identityHashCode(value)
 }
 
 private fun taskCount(count: Int): String = if (count == 1) "1 task" else "$count tasks"
@@ -2350,6 +2521,7 @@ fun ForecastList(
     swipeActions: Boolean,
     children: Map<String, List<TaskView>>,
     groups: Map<LocalDate, List<TaskView>>,
+    sort: String,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
     onClick: (TaskView) -> Unit,
@@ -2370,7 +2542,8 @@ fun ForecastList(
                 }
             }
         }
-        groups.forEach { (date, tasks) ->
+        groups.forEach { (date, rawTasks) ->
+            val tasks = sortTasks(rawTasks, sort)
             item(key = "day-$date") { ForecastHeader(date, tasks.size) }
             items(tasks, key = { it.id }) { task ->
                 TaskTreeItem(

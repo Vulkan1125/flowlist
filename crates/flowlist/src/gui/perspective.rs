@@ -5,21 +5,25 @@
 //! not understand intact, and rebuilds the tree on save. That way editing a
 //! CLI-authored perspective never silently drops a condition.
 
+use std::collections::BTreeSet;
+
 use flowlist_core::ids::{PerspectiveId, ProjectId, TagId};
 use flowlist_core::model::{
-    Condition, DueWindow, FilterNode, GroupBy, Perspective, SortBy, TaskStatus,
+    Condition, DueWindow, FilterNode, GroupBy, Perspective, Priority, SortBy, TaskStatus,
 };
 
 use super::text::TextBuffer;
 
 /// Due windows offered by the editor. The CLI and MCP server can still write
 /// the date-based variants; they survive editing untouched.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DueChoice {
     Any,
     Overdue,
     Today,
+    Tomorrow,
     Next7Days,
+    Next30Days,
     NoDate,
 }
 
@@ -29,7 +33,9 @@ impl DueChoice {
             DueChoice::Any => "Any",
             DueChoice::Overdue => "Overdue",
             DueChoice::Today => "Today",
+            DueChoice::Tomorrow => "Tomorrow",
             DueChoice::Next7Days => "Next 7 days",
+            DueChoice::Next30Days => "Next 30 days",
             DueChoice::NoDate => "No date",
         }
     }
@@ -39,7 +45,9 @@ impl DueChoice {
             DueChoice::Any => None,
             DueChoice::Overdue => Some(DueWindow::Overdue),
             DueChoice::Today => Some(DueWindow::Today),
+            DueChoice::Tomorrow => Some(DueWindow::Tomorrow),
             DueChoice::Next7Days => Some(DueWindow::Next7Days),
+            DueChoice::Next30Days => Some(DueWindow::Next30Days),
             DueChoice::NoDate => Some(DueWindow::NoDate),
         }
     }
@@ -48,7 +56,9 @@ impl DueChoice {
         match window {
             DueWindow::Overdue => Some(DueChoice::Overdue),
             DueWindow::Today => Some(DueChoice::Today),
+            DueWindow::Tomorrow => Some(DueChoice::Tomorrow),
             DueWindow::Next7Days => Some(DueChoice::Next7Days),
+            DueWindow::Next30Days => Some(DueChoice::Next30Days),
             DueWindow::NoDate => Some(DueChoice::NoDate),
             _ => None,
         }
@@ -56,11 +66,13 @@ impl DueChoice {
 }
 
 /// Deferred tasks are never overdue, so the editor leaves that window out.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DeferChoice {
     Any,
     Today,
+    Tomorrow,
     Next7Days,
+    Next30Days,
     NoDate,
 }
 
@@ -69,7 +81,9 @@ impl DeferChoice {
         match self {
             DeferChoice::Any => "Any",
             DeferChoice::Today => "Today",
+            DeferChoice::Tomorrow => "Tomorrow",
             DeferChoice::Next7Days => "Next 7 days",
+            DeferChoice::Next30Days => "Next 30 days",
             DeferChoice::NoDate => "No date",
         }
     }
@@ -78,7 +92,9 @@ impl DeferChoice {
         match self {
             DeferChoice::Any => None,
             DeferChoice::Today => Some(DueWindow::Today),
+            DeferChoice::Tomorrow => Some(DueWindow::Tomorrow),
             DeferChoice::Next7Days => Some(DueWindow::Next7Days),
+            DeferChoice::Next30Days => Some(DueWindow::Next30Days),
             DeferChoice::NoDate => Some(DueWindow::NoDate),
         }
     }
@@ -86,7 +102,9 @@ impl DeferChoice {
     fn from_window(window: DueWindow) -> Option<Self> {
         match window {
             DueWindow::Today => Some(DeferChoice::Today),
+            DueWindow::Tomorrow => Some(DeferChoice::Tomorrow),
             DueWindow::Next7Days => Some(DeferChoice::Next7Days),
+            DueWindow::Next30Days => Some(DeferChoice::Next30Days),
             DueWindow::NoDate => Some(DeferChoice::NoDate),
             _ => None,
         }
@@ -121,14 +139,22 @@ impl ViewField {
 
     pub fn label(self) -> &'static str {
         match self {
-            ViewField::Project => "Project",
-            ViewField::Tag => "Tag",
+            ViewField::Project => "Projects",
+            ViewField::Tag => "Tags",
             ViewField::Status => "Status",
-            ViewField::Due => "Due",
-            ViewField::Defer => "Defer",
+            ViewField::Due => "Due dates",
+            ViewField::Defer => "Defer dates",
             ViewField::Group => "Group by",
             ViewField::Sort => "Sort by",
         }
+    }
+
+    /// Fields whose menu stays open while several values are toggled.
+    pub fn is_multi(self) -> bool {
+        matches!(
+            self,
+            ViewField::Project | ViewField::Tag | ViewField::Due | ViewField::Defer
+        )
     }
 }
 
@@ -157,14 +183,18 @@ impl ViewChoice {
                 DueChoice::Any => "any",
                 DueChoice::Overdue => "overdue",
                 DueChoice::Today => "today",
+                DueChoice::Tomorrow => "tomorrow",
                 DueChoice::Next7Days => "next7",
+                DueChoice::Next30Days => "next30",
                 DueChoice::NoDate => "none",
             }
             .to_string(),
             ViewChoice::Defer(choice) => match choice {
                 DeferChoice::Any => "any",
                 DeferChoice::Today => "today",
+                DeferChoice::Tomorrow => "tomorrow",
                 DeferChoice::Next7Days => "next7",
+                DeferChoice::Next30Days => "next30",
                 DeferChoice::NoDate => "none",
             }
             .to_string(),
@@ -184,6 +214,7 @@ impl ViewChoice {
                 SortBy::Due => "due",
                 SortBy::Defer => "defer",
                 SortBy::Name => "name",
+                SortBy::Priority => "priority",
                 SortBy::Flagged => "flagged",
                 SortBy::Estimate => "estimate",
                 SortBy::Created => "created",
@@ -233,6 +264,7 @@ fn sort_label(sort: SortBy) -> &'static str {
         SortBy::Due => "Due",
         SortBy::Defer => "Defer",
         SortBy::Name => "Name",
+        SortBy::Priority => "Priority",
         SortBy::Flagged => "Flagged",
         SortBy::Estimate => "Estimate",
         SortBy::Created => "Created",
@@ -245,6 +277,7 @@ fn sort_label(sort: SortBy) -> &'static str {
 pub struct PerspectiveForm {
     pub id: Option<PerspectiveId>,
     pub name: TextBuffer,
+    pub text: TextBuffer,
     pub position: u32,
     pub group: GroupBy,
     pub sort: SortBy,
@@ -252,11 +285,14 @@ pub struct PerspectiveForm {
     pub flagged_only: bool,
     pub inbox_only: bool,
     pub status: TaskStatus,
-    pub due: DueChoice,
-    pub defer: DeferChoice,
-    pub project: Option<ProjectId>,
-    pub tag: Option<TagId>,
+    pub dues: BTreeSet<DueChoice>,
+    pub defers: BTreeSet<DeferChoice>,
+    pub projects: BTreeSet<ProjectId>,
+    pub tags: BTreeSet<TagId>,
+    pub priorities: BTreeSet<Priority>,
     pub tag_children: bool,
+    pub estimate_min: TextBuffer,
+    pub estimate_max: TextBuffer,
     /// Conditions the editor has no widget for. They are written back as-is.
     pub extra: Vec<Condition>,
     /// Non-condition roots (nested `any`/`not` trees) kept intact.
@@ -268,6 +304,7 @@ impl Default for PerspectiveForm {
         Self {
             id: None,
             name: TextBuffer::empty(),
+            text: TextBuffer::empty(),
             position: 0,
             group: GroupBy::Project,
             sort: SortBy::Due,
@@ -275,11 +312,14 @@ impl Default for PerspectiveForm {
             flagged_only: false,
             inbox_only: false,
             status: TaskStatus::Any,
-            due: DueChoice::Any,
-            defer: DeferChoice::Any,
-            project: None,
-            tag: None,
+            dues: BTreeSet::new(),
+            defers: BTreeSet::new(),
+            projects: BTreeSet::new(),
+            tags: BTreeSet::new(),
+            priorities: BTreeSet::new(),
             tag_children: true,
+            estimate_min: TextBuffer::empty(),
+            estimate_max: TextBuffer::empty(),
             extra: Vec::new(),
             extra_roots: Vec::new(),
         }
@@ -313,12 +353,14 @@ impl PerspectiveForm {
             return;
         };
         for node in nodes {
-            let FilterNode::Condition(condition) = node else {
-                self.extra_roots.push(node.clone());
-                continue;
-            };
-            if !self.absorb(condition) {
-                self.extra.push(condition.clone());
+            match node {
+                FilterNode::Condition(condition) => {
+                    if !self.absorb(condition) {
+                        self.extra.push(condition.clone());
+                    }
+                }
+                FilterNode::Any(nodes) if self.absorb_multi(nodes) => {}
+                _ => self.extra_roots.push(node.clone()),
             }
         }
     }
@@ -331,22 +373,84 @@ impl PerspectiveForm {
             Condition::InInbox => self.inbox_only = true,
             Condition::Status { value } => self.status = *value,
             Condition::Due { window } => match DueChoice::from_window(*window) {
-                Some(choice) => self.due = choice,
+                Some(choice) => {
+                    self.dues.insert(choice);
+                }
                 None => return false,
             },
             Condition::Deferred { window } => match DeferChoice::from_window(*window) {
-                Some(choice) => self.defer = choice,
+                Some(choice) => {
+                    self.defers.insert(choice);
+                }
                 None => return false,
             },
-            Condition::Project { id } => self.project = Some(id.clone()),
+            Condition::Project { id } => {
+                self.projects.insert(id.clone());
+            }
+            Condition::Priority { value } => {
+                self.priorities.insert(*value);
+            }
+            Condition::Text { value } => {
+                self.text.set(value.clone());
+            }
             Condition::Tag {
                 id,
                 include_children,
             } => {
-                self.tag = Some(id.clone());
+                self.tags.insert(id.clone());
                 self.tag_children = *include_children;
             }
+            Condition::Estimate {
+                min_minutes,
+                max_minutes,
+            } => {
+                self.estimate_min.set(
+                    min_minutes
+                        .map(|minutes| minutes.to_string())
+                        .unwrap_or_default(),
+                );
+                self.estimate_max.set(
+                    max_minutes
+                        .map(|minutes| minutes.to_string())
+                        .unwrap_or_default(),
+                );
+            }
             _ => return false,
+        }
+        true
+    }
+
+    /// Absorb an `any` group made only of the multi-select condition kinds
+    /// the editor understands. Mixed or unknown groups stay verbatim.
+    fn absorb_multi(&mut self, nodes: &[FilterNode]) -> bool {
+        fn kind(condition: &Condition) -> Option<u8> {
+            match condition {
+                Condition::Project { .. } => Some(0),
+                Condition::Tag { .. } => Some(1),
+                Condition::Due { .. } => Some(2),
+                Condition::Deferred { .. } => Some(3),
+                Condition::Priority { .. } => Some(4),
+                _ => None,
+            }
+        }
+        let conditions: Vec<&Condition> = nodes
+            .iter()
+            .filter_map(|node| match node {
+                FilterNode::Condition(condition) => Some(condition),
+                _ => None,
+            })
+            .collect();
+        if conditions.len() != nodes.len() || conditions.len() < 2 {
+            return false;
+        }
+        let Some(first) = kind(conditions[0]) else {
+            return false;
+        };
+        if !conditions.iter().all(|condition| kind(condition) == Some(first)) {
+            return false;
+        }
+        for condition in conditions {
+            let _ = self.absorb(condition);
         }
         true
     }
@@ -363,22 +467,69 @@ impl PerspectiveForm {
         if self.status != TaskStatus::Any {
             conditions.push(Condition::Status { value: self.status });
         }
-        if let Some(window) = self.due.window() {
-            conditions.push(Condition::Due { window });
+        let mut grouped: Vec<FilterNode> = Vec::new();
+        let mut group = |conditions: Vec<Condition>| {
+            let mut nodes: Vec<FilterNode> = conditions
+                .into_iter()
+                .map(FilterNode::Condition)
+                .collect();
+            match nodes.len() {
+                0 => {}
+                1 => grouped.push(nodes.remove(0)),
+                _ => grouped.push(FilterNode::Any(nodes)),
+            }
+        };
+        group(
+            self.dues
+                .iter()
+                .map(|choice| Condition::Due {
+                    window: choice.window().expect("stored choices always have a window"),
+                })
+                .collect(),
+        );
+        group(
+            self.defers
+                .iter()
+                .map(|choice| Condition::Deferred {
+                    window: choice.window().expect("stored choices always have a window"),
+                })
+                .collect(),
+        );
+        group(
+            self.projects
+                .iter()
+                .map(|id| Condition::Project { id: id.clone() })
+                .collect(),
+        );
+        group(
+            self.tags
+                .iter()
+                .map(|id| Condition::Tag {
+                    id: id.clone(),
+                    include_children: self.tag_children,
+                })
+                .collect(),
+        );
+        group(
+            self.priorities
+                .iter()
+                .map(|priority| Condition::Priority { value: *priority })
+                .collect(),
+        );
+        let text = self.text.text().trim().to_string();
+        if !text.is_empty() {
+            conditions.push(Condition::Text { value: text });
         }
-        if let Some(window) = self.defer.window() {
-            conditions.push(Condition::Deferred { window });
-        }
-        if let Some(id) = &self.project {
-            conditions.push(Condition::Project { id: id.clone() });
-        }
-        if let Some(id) = &self.tag {
-            conditions.push(Condition::Tag {
-                id: id.clone(),
-                include_children: self.tag_children,
+        let estimate_min = self.estimate_min.text().trim().parse::<u32>().ok();
+        let estimate_max = self.estimate_max.text().trim().parse::<u32>().ok();
+        if estimate_min.is_some() || estimate_max.is_some() {
+            conditions.push(Condition::Estimate {
+                min_minutes: estimate_min,
+                max_minutes: estimate_max,
             });
         }
         nodes.extend(conditions.into_iter().map(FilterNode::Condition));
+        nodes.extend(grouped);
         FilterNode::all(nodes)
     }
 
@@ -399,25 +550,61 @@ impl PerspectiveForm {
     // ------------------------------------------------------------ controls
 
     /// Picking a project means "not the inbox"; the same applies to tags.
-    pub fn set_project(&mut self, id: Option<ProjectId>) {
-        self.project = id;
-        if self.project.is_some() {
+    pub fn toggle_project(&mut self, id: Option<ProjectId>) {
+        match id {
+            None => self.projects.clear(),
+            Some(id) => {
+                if !self.projects.remove(&id) {
+                    self.projects.insert(id);
+                }
+            }
+        }
+        if !self.projects.is_empty() {
             self.inbox_only = false;
         }
     }
 
-    pub fn set_tag(&mut self, id: Option<TagId>) {
-        self.tag = id;
-        if self.tag.is_some() {
+    pub fn toggle_tag(&mut self, id: Option<TagId>) {
+        match id {
+            None => self.tags.clear(),
+            Some(id) => {
+                if !self.tags.remove(&id) {
+                    self.tags.insert(id);
+                }
+            }
+        }
+        if !self.tags.is_empty() {
             self.inbox_only = false;
+        }
+    }
+
+    pub fn toggle_due(&mut self, choice: DueChoice) {
+        if choice == DueChoice::Any {
+            self.dues.clear();
+        } else if !self.dues.remove(&choice) {
+            self.dues.insert(choice);
+        }
+    }
+
+    pub fn toggle_defer(&mut self, choice: DeferChoice) {
+        if choice == DeferChoice::Any {
+            self.defers.clear();
+        } else if !self.defers.remove(&choice) {
+            self.defers.insert(choice);
         }
     }
 
     pub fn toggle_inbox(&mut self) {
         self.inbox_only = !self.inbox_only;
         if self.inbox_only {
-            self.project = None;
-            self.tag = None;
+            self.projects.clear();
+            self.tags.clear();
+        }
+    }
+
+    pub fn toggle_priority(&mut self, priority: Priority) {
+        if !self.priorities.remove(&priority) {
+            self.priorities.insert(priority);
         }
     }
 
@@ -440,10 +627,14 @@ impl PerspectiveForm {
             || self.flagged_only
             || self.show_completed
             || self.status != TaskStatus::Any
-            || self.due.window().is_some()
-            || self.defer.window().is_some()
-            || self.project.is_some()
-            || self.tag.is_some()
+            || !self.dues.is_empty()
+            || !self.defers.is_empty()
+            || !self.projects.is_empty()
+            || !self.tags.is_empty()
+            || !self.priorities.is_empty()
+            || !self.text.text().trim().is_empty()
+            || !self.estimate_min.text().trim().is_empty()
+            || !self.estimate_max.text().trim().is_empty()
             || !self.extra.is_empty()
             || !self.extra_roots.is_empty()
     }
@@ -461,11 +652,15 @@ impl PerspectiveForm {
         self.flagged_only = false;
         self.show_completed = false;
         self.status = TaskStatus::Any;
-        self.due = DueChoice::Any;
-        self.defer = DeferChoice::Any;
-        self.project = None;
-        self.tag = None;
+        self.dues.clear();
+        self.defers.clear();
+        self.projects.clear();
+        self.tags.clear();
+        self.priorities.clear();
         self.tag_children = true;
+        self.text.clear();
+        self.estimate_min.clear();
+        self.estimate_max.clear();
         self.extra.clear();
         self.extra_roots.clear();
     }
@@ -494,10 +689,12 @@ mod tests {
         form.name = TextBuffer::new("Focus");
         form.flagged_only = true;
         form.status = TaskStatus::Available;
-        form.due = DueChoice::Today;
+        form.dues.insert(DueChoice::Today);
+        form.text.set("focus");
+        form.toggle_priority(Priority::High);
         form.tag_children = false;
         let tag = TagId::new();
-        form.set_tag(Some(tag.clone()));
+        form.toggle_tag(Some(tag.clone()));
 
         let perspective = form.to_perspective();
         assert_eq!(perspective.name, "Focus");
@@ -513,6 +710,12 @@ mod tests {
             id: tag,
             include_children: false,
         }));
+        assert!(conditions.contains(&Condition::Text {
+            value: "focus".to_string()
+        }));
+        assert!(conditions.contains(&Condition::Priority {
+            value: Priority::High
+        }));
     }
 
     #[test]
@@ -527,12 +730,16 @@ mod tests {
                 min_minutes: Some(30),
                 max_minutes: None,
             },
+            Condition::HasRepeat { value: true },
         ]);
 
         let form = PerspectiveForm::edit(&original);
         assert!(form.flagged_only);
+        assert_eq!(form.text.text(), "deep");
+        assert_eq!(form.estimate_min.text(), "30");
+        assert!(form.estimate_max.text().is_empty());
         // Unknown conditions are preserved.
-        assert_eq!(form.extra.len(), 2);
+        assert_eq!(form.extra.len(), 1);
 
         let saved = form.to_perspective();
         assert_eq!(saved.id, original.id);
@@ -546,6 +753,7 @@ mod tests {
             min_minutes: Some(30),
             max_minutes: None
         }));
+        assert!(conditions.contains(&Condition::HasRepeat { value: true }));
     }
 
     #[test]
@@ -563,10 +771,11 @@ mod tests {
                 min_minutes: Some(30),
                 max_minutes: None,
             },
+            Condition::HasRepeat { value: true },
         ]);
         let mut form = PerspectiveForm::edit(&original);
         assert!(form.has_filters());
-        assert_eq!(form.extra_condition_count(), 2);
+        assert_eq!(form.extra_condition_count(), 1);
 
         form.clear_filters();
         assert!(!form.has_filters());
@@ -579,24 +788,55 @@ mod tests {
     }
 
     #[test]
+    fn estimate_max_becomes_a_filter() {
+        let mut form = PerspectiveForm::new();
+        form.estimate_max.set("15");
+        let conditions = condition_set(&form.to_perspective().filter);
+        assert!(conditions.contains(&Condition::Estimate {
+            min_minutes: None,
+            max_minutes: Some(15),
+        }));
+    }
+
+    #[test]
+    fn multi_select_groups_round_trip() {
+        let mut form = PerspectiveForm::new();
+        let first = ProjectId::new();
+        let second = ProjectId::new();
+        form.toggle_project(Some(first.clone()));
+        form.toggle_project(Some(second.clone()));
+        form.toggle_due(DueChoice::Today);
+        form.toggle_due(DueChoice::Next7Days);
+
+        let saved = form.to_perspective();
+        let edited = PerspectiveForm::edit(&saved);
+        assert_eq!(
+            edited.projects,
+            BTreeSet::from([first, second])
+        );
+        assert!(edited.dues.contains(&DueChoice::Today));
+        assert!(edited.dues.contains(&DueChoice::Next7Days));
+    }
+
+    #[test]
     fn has_filters_ignores_layout_only_forms() {
         let mut form = PerspectiveForm::new();
         assert!(!form.has_filters());
         form.group = GroupBy::Tag;
         form.sort = SortBy::Name;
         assert!(!form.has_filters());
-        form.defer = DeferChoice::Today;
+        form.defers.insert(DeferChoice::Today);
         assert!(form.has_filters());
     }
 
     #[test]
     fn choosing_inbox_clears_project_and_tag() {
         let mut form = PerspectiveForm::new();
-        form.set_project(Some(ProjectId::new()));
+        form.toggle_project(Some(ProjectId::new()));
         form.toggle_inbox();
         assert!(form.inbox_only);
-        assert!(form.project.is_none());
-        form.set_tag(Some(TagId::new()));
+        assert!(form.projects.is_empty());
+        form.toggle_tag(Some(TagId::new()));
         assert!(!form.inbox_only);
     }
 
