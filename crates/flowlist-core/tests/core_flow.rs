@@ -7,7 +7,9 @@ use flowlist_core::command::{
 };
 use flowlist_core::db::{ContainerPosition, Position};
 use flowlist_core::ids::{FolderId, ProjectId, TagId, TaskId};
-use flowlist_core::model::{Priority, ProjectStatus, RepeatMode, RepeatRule, TagStatus, Task};
+use flowlist_core::model::{
+    FilterNode, GroupBy, Priority, ProjectStatus, RepeatMode, RepeatRule, SortBy, TagStatus, Task,
+};
 use flowlist_core::paths::DataPaths;
 use flowlist_core::store::Store;
 use flowlist_core::time::Stamp;
@@ -2398,4 +2400,23 @@ fn converting_one_off_steps_back_to_subtasks() {
             .collect::<Vec<_>>(),
         vec!["First", "Second"]
     );
+}
+
+#[test]
+fn projectless_tasks_group_under_no_project() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    add_task(&mut store, "Loose task");
+
+    let groups = flowlist_core::query::run(
+        store.db(),
+        &FilterNode::All(Vec::new()),
+        SortBy::Manual,
+        GroupBy::Project,
+        false,
+        Utc::now(),
+    );
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].key, "inbox");
+    assert_eq!(groups[0].title, "No project");
 }

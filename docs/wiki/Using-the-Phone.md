@@ -86,7 +86,7 @@ Inbox, Today, Forecast and Browse show a small hand-drawn illustration when they
 
 ## Home screen and reminders
 
-- **Widget**: add Flowlist from the Android widget picker to see today's and Inbox counts. Tap it to open the app.
+- **Widget**: add Flowlist from the Android widget picker to see today's and Inbox counts. Tap it to open the app. A widget set to **Follow app** updates its colours immediately when the app theme changes.
 - **Due reminders**: Settings → Due reminders schedules a quiet summary when tasks are due today or overdue. Android 13 and later asks for notification permission the first time; nothing is sent off the device.
 
 ## Settings

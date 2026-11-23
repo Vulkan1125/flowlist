@@ -1025,7 +1025,7 @@ private fun groupLabel(db: Db?, task: TaskView, group: String): String {
     val defer = task.defer?.local()?.toLocalDate()
     val today = LocalDate.now()
     return when (group) {
-        "project" -> task.projectName ?: "Inbox"
+        "project" -> task.projectName ?: "No project"
         "tag" -> task.tags.firstOrNull()?.let { "#$it" } ?: "No tag"
         "folder" -> task.projectId
             ?.let { db?.projects?.get(it)?.folder }

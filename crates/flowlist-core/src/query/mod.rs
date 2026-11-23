@@ -592,7 +592,7 @@ impl<'a> GroupContext<'a> {
                         .unwrap_or(i64::MAX);
                     (format!("project:{id}"), db.project_path(&id), position)
                 }
-                None => ("inbox".to_string(), "Inbox".to_string(), -1),
+                None => ("inbox".to_string(), "No project".to_string(), -1),
             },
             GroupBy::Folder => {
                 let folder = row

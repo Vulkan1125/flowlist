@@ -61,7 +61,8 @@ Every capture is undoable with `⌘Z`, even after the panel has closed.
   accent check. The title starts just after the circle with a little breathing
   room. The subtask chevron sits immediately beside the title, and the flag
   follows one circle width later; without a chevron the flag keeps the same
-  one-circle gap from the title.
+  one-circle gap from the title. That gap is part of the chevron's click
+  target, so the small chevron is easier to hit.
 - Subtasks start collapsed. The chevron on a parent opens and closes them; `za` toggles, `zo`
   opens and `zc` closes.
 - Flag with `!` or `⌘D`; the flag sits left of the title and shows on hover in
@@ -179,6 +180,8 @@ titles itself **Search** and ranks the closest matches first.
   Defer windows, an estimate range, grouping and sorting, and completed tasks.
   Both platforms offer project/folder/tag/due/defer/flagged/estimate grouping
   and manual/due/defer/name/priority/flagged/estimate/created/completed sorting.
+  Project grouping puts tasks with no project under **No project** instead of an
+  Inbox heading.
 - Right-click a sidebar row for Open, Rename, Delete, New child, project status
   and tag location. Rename is also `⌘R`.
 - Drag tasks between projects, tags and parents; drag projects into folders.

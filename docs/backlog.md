@@ -230,6 +230,15 @@ below; this list is the current map.
 - [x] **Mac priority signals** — high and medium task circles use the same
       vivid red/yellow pair across every Mac theme, and priority rings are 2 px
       instead of 1 px so the colour reads more clearly.
+- [x] **Chevron hit target** — the one-circle gap between a task's subtask
+      chevron and its flag is part of the expand/collapse target, so the small
+      chevron is easier to hit.
+- [x] **No-project heading** — grouping a saved perspective by project calls
+      projectless tasks "No project" instead of pretending they belong to an
+      Inbox group.
+- [x] **Android widget theme refresh** — changing the app theme now updates
+      every placed widget immediately; it no longer waits for the widget
+      options sheet to be opened and saved.
 - [x] **Mac and Android step modes** — Parallel and Sequential list only
       child tasks; One-off lists only checklist steps. Sequential dims every
       child after the first incomplete one and refuses to tick it. Switching

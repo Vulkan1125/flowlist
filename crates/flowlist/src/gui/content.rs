@@ -1980,9 +1980,9 @@ impl FlowlistApp {
         let flag = div()
             .id(super::sid(format!("flag:{}", flag_id)))
             .w(px(12.))
-            // One circle width (16 px) from the chevron; without a chevron the
-            // same gap keeps the flag from hugging the title.
-            .ml_2()
+            // With a chevron, its hit area carries the one-circle gap. Without
+            // one, keep the same gap before the flag.
+            .when(!has_children, |this| this.ml_2())
             .text_color(flag_color)
             .opacity(if flagged { 1.0 } else { 0.0 })
             .cursor_pointer()
@@ -2024,6 +2024,9 @@ impl FlowlistApp {
                         .flex()
                         .items_center()
                         .gap_1()
+                        // The gap before the flag is part of the toggle target,
+                        // so a small chevron is not a pixel hunt.
+                        .pr(px(16.))
                         .text_color(theme.text_faint)
                         .flow_tip(
                             self,
