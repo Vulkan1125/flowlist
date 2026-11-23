@@ -432,6 +432,9 @@ pub fn checkbox(
         .size(px(16.))
         .rounded_full()
         .border_1()
+        // A priority ring gets a second point of weight so the red/yellow/blue
+        // signal reads clearly without making every neutral circle heavy.
+        .when(priority.is_some(), |this| this.border_2())
         // The idle ring needs to be visible on a pure white reading surface,
         // where a plain hairline disappears. Hovering pulls it to the accent.
         .border_color(if completed { accent } else { idle_ring })

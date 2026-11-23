@@ -55,8 +55,10 @@ Every capture is undoable with `⌘Z`, even after the panel has closed.
 - `Tab` / `⇧Tab` nest and unnest the selection. `⌥↑` / `⌥↓` move it among its
   siblings.
 - `Tab` indents the selected task under the task above; `⇧Tab` outdents it.
-- A task circle takes its priority colour: red for high, yellow for medium and
-  blue for low. Completed tasks keep the filled accent check.
+- A task circle takes a vivid priority colour: red for high, yellow for medium
+  and blue for low. Priority rings are a little thicker than neutral circles so
+  the signal reads clearly on every theme. Completed tasks keep the filled
+  accent check.
 - Subtasks start collapsed. The chevron on a parent opens and closes them; `za` toggles, `zo`
   opens and `zc` closes.
 - Flag with `!` or `⌘D`; the flag sits left of the title and shows on hover in

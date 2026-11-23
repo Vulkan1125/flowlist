@@ -366,11 +366,29 @@ pub fn low_priority_color(theme: Theme) -> Hsla {
     }
 }
 
+/// High-priority red. Kept separate from the theme's danger colour so the
+/// ring stays vivid on every family instead of inheriting a muted brick red.
+fn high_priority_color(theme: Theme) -> Hsla {
+    match theme.appearance {
+        Appearance::Light => rgb(0xDC4C3E).into(),
+        Appearance::Dark => rgb(0xFF7066).into(),
+    }
+}
+
+/// Medium-priority yellow. The palette warnings drift into brown in light
+/// mode, so rings and priority icons use one clear gold/yellow pair.
+fn medium_priority_color(theme: Theme) -> Hsla {
+    match theme.appearance {
+        Appearance::Light => rgb(0xC69214).into(),
+        Appearance::Dark => rgb(0xFACC15).into(),
+    }
+}
+
 /// The colour a priority uses for task rings, sidebar icons and chips.
 pub fn priority_color(theme: Theme, priority: Priority) -> Hsla {
     match priority {
-        Priority::High => theme.danger,
-        Priority::Medium => theme.warning,
+        Priority::High => high_priority_color(theme),
+        Priority::Medium => medium_priority_color(theme),
         Priority::Low => low_priority_color(theme),
     }
 }
@@ -1034,6 +1052,16 @@ mod tests {
                 assert_ne!(theme.glass_top, theme.glass_bottom);
             }
         }
+    }
+
+    #[test]
+    fn priority_signals_are_vivid_across_families() {
+        let light = Theme::new(ThemeKind::Paper, Appearance::Light);
+        assert_eq!(priority_color(light, Priority::High), rgb(0xDC4C3E).into());
+        assert_eq!(priority_color(light, Priority::Medium), rgb(0xC69214).into());
+        let dark = Theme::new(ThemeKind::Paper, Appearance::Dark);
+        assert_eq!(priority_color(dark, Priority::High), rgb(0xFF7066).into());
+        assert_eq!(priority_color(dark, Priority::Medium), rgb(0xFACC15).into());
     }
 
     /// Legibility is part of the theme contract, not a tuning suggestion.
