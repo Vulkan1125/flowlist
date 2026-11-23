@@ -194,8 +194,9 @@ below; this list is the current map.
       the widget picker shows a real preview.
 - [x] **Widget day/night colours** — RemoteViews carries both palettes, so
       device theme changes apply without waking the app.
-- [x] **Geotag settings category** — Android Settings has a dedicated Geotags
-      section for arrival reminders and permissions.
+- [x] **Geotag notification channel** — geotag arrival reminders have a
+      separate Android notification channel, with a link from the app’s
+      Notifications section to Android notification settings.
 - [x] **Mac tag groups** — the sidebar TAGS section splits into General and
       Geotags.
 - [x] **Android search and Nearby** — search covers projects, folders, tags and

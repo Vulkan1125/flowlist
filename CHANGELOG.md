@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.44 — 2026-11-23
+
+- **Geotag reminders use their own Android notification channel.** “Geotag
+  reminders” now appears separately from “Due tasks” in Android Settings →
+  Apps → Flowlist → Notifications, so its sound and behaviour can be changed
+  there.
+- **No separate app Settings page.** Geotag reminders stay in the app’s
+  Notifications section, with a direct link to the Android channel settings.
+
 ## 0.9.43 — 2026-11-23
 
 - **Widget theme follows the device instantly.** Glance now carries day and

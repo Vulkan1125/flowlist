@@ -37,7 +37,7 @@ object NearbyReminders {
             .edit()
             .putBoolean(ENABLED, enabled)
             .apply()
-        if (!enabled) {
+        if (enabled) ensureChannel(context) else {
             runCatching { client(context).removeGeofences(pendingIntent(context)) }
         }
     }
@@ -51,17 +51,19 @@ object NearbyReminders {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
             CHANNEL,
-            "Nearby reminders",
+            "Geotag reminders",
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
-            description = "A reminder when you arrive near a geotagged place."
+            description = "A reminder when you arrive near a geotagged place. Sound and behaviour can be changed in Android notification settings."
         }
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     /** Rebuilds the geofence set from the cached library. Safe to call often. */
     fun sync(context: Context, db: Db) {
-        if (!enabled(context) || !canPost(context)) return
+        if (!enabled(context)) return
+        ensureChannel(context)
+        if (!canPost(context)) return
         if (!DeviceLocation.hasForeground(context) || !DeviceLocation.hasBackground(context)) return
         val client = client(context)
         val pending = pendingIntent(context)

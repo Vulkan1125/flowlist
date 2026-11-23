@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -99,7 +100,6 @@ enum class SettingsSection(val label: String, val icon: ImageVector) {
     Tasks("Tasks", Icons.Outlined.Tune),
     Library("Library", Icons.Rounded.Checklist),
     Notifications("Notifications", Icons.Rounded.Notifications),
-    Geotags("Geotags", Icons.Rounded.Place),
     Connection("Connection", Icons.Rounded.PhoneAndroid),
     About("About", Icons.Outlined.Info),
 }
@@ -186,8 +186,7 @@ fun SettingsScreen(
                             onRemoveAllSaved = onRemoveAllSaved,
                         )
                     }
-                    SettingsSection.Notifications -> NotificationSettings()
-                    SettingsSection.Geotags -> GeotagSettings(preferences, onPreferencesChange)
+                    SettingsSection.Notifications -> NotificationSettings(preferences, onPreferencesChange)
                     SettingsSection.Connection -> ConnectionSettings(state, onSync, onSignOut)
                     SettingsSection.About -> AboutSettings(state)
                 }
@@ -256,8 +255,11 @@ private fun summary(
     SettingsSection.Appearance -> "${theme.family.label} · ${theme.mode.name.lowercase()}"
     SettingsSection.Tasks -> "Opens ${preferences.startTab.replaceFirstChar { it.uppercase() }} · week starts ${if (preferences.weekStartsMonday) "Monday" else "Sunday"}"
     SettingsSection.Library -> "Review ${library.defaultReviewDays}d · trash ${if (library.trashRetentionDays == 0) "forever" else "${library.trashRetentionDays}d"}"
-    SettingsSection.Notifications -> if (DueNotifications.enabled(context)) "On" else "Off"
-    SettingsSection.Geotags -> if (preferences.nearbyReminders) "Arrival reminders on" else "Off"
+    SettingsSection.Notifications -> buildString {
+        append(if (DueNotifications.enabled(context)) "Due on" else "Due off")
+        append(" · ")
+        append(if (preferences.nearbyReminders) "geotags on" else "geotags off")
+    }
     SettingsSection.Connection -> if (state.online) "Connected" else "Offline"
     SettingsSection.About -> "Version ${dev.flowlist.android.BuildConfig.VERSION_NAME}"
 }
@@ -501,6 +503,24 @@ private fun GeotagSettings(
             TextButton(onClick = { NearbyReminders.sendTest(context) }) {
                 Text("Send a test reminder", color = colors.accent)
             }
+            TextButton(onClick = {
+                NearbyReminders.ensureChannel(context)
+                val channel = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    putExtra(Settings.EXTRA_CHANNEL_ID, NearbyReminders.CHANNEL)
+                }
+                runCatching { context.startActivity(channel) }.onFailure {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            },
+                        )
+                    }
+                }
+            }) {
+                Text("Android notification settings", color = colors.accent)
+            }
         }
     }
 }
@@ -631,7 +651,10 @@ private fun LibrarySettings(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NotificationSettings() {
+private fun NotificationSettings(
+    preferences: AppPreferences,
+    onPreferencesChange: (AppPreferences) -> Unit,
+) {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(DueNotifications.enabled(context)) }
     var denied by remember { mutableStateOf(false) }
@@ -681,6 +704,8 @@ private fun NotificationSettings() {
             color = flow.faint,
         )
     }
+    Spacer(modifier = Modifier.height(14.dp))
+    GeotagSettings(preferences, onPreferencesChange)
 }
 
 @Composable
