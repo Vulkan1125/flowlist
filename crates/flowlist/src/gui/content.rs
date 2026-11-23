@@ -128,7 +128,7 @@ impl FlowlistApp {
             }
         }
         for ids in days.values_mut() {
-            ids.sort_by_key(|id| {
+            ids.sort_by_cached_key(|id| {
                 let task = &db.tasks[id];
                 (task.due.map(|stamp| stamp.at), task.title.to_lowercase())
             });

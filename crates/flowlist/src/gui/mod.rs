@@ -5727,7 +5727,7 @@ impl FlowlistApp {
         let project_badges = {
             let db = self.store.db();
             let mut projects: Vec<_> = db.projects.values().collect();
-            projects.sort_by_key(|project| project.name.to_lowercase());
+            projects.sort_by_cached_key(|project| project.name.to_lowercase());
             projects
                 .iter()
                 .map(|project| {

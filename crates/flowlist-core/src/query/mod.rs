@@ -343,7 +343,7 @@ pub fn today(db: &Db, include_overdue: bool, at: DateTime<Utc>) -> Vec<Group> {
     }
 
     overdue.sort_by_key(|id| db.tasks[id].due.map(|stamp| stamp.at));
-    due_today.sort_by_key(|id| {
+    due_today.sort_by_cached_key(|id| {
         (
             db.tasks[id].due.map(|stamp| stamp.at),
             db.tasks[id].title.to_lowercase(),
@@ -413,7 +413,7 @@ pub fn tasks_on_date(db: &Db, date: chrono::NaiveDate, _at: DateTime<Utc>) -> Ve
                 || task.defer.is_some_and(|stamp| stamp.local_date() == date)
         })
         .collect();
-    ids.sort_by_key(|id| {
+    ids.sort_by_cached_key(|id| {
         let task = &db.tasks[id];
         (task.due.map(|stamp| stamp.at), task.title.to_lowercase())
     });

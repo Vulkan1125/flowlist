@@ -2122,7 +2122,7 @@ impl FlowlistApp {
         match field {
             ViewField::Project => {
                 let mut projects: Vec<_> = db.projects.values().collect();
-                projects.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+                projects.sort_by_cached_key(|project| project.name.to_lowercase());
                 let mut choices = vec![ViewChoice::Project(None)];
                 choices.extend(
                     projects
@@ -2133,7 +2133,7 @@ impl FlowlistApp {
             }
             ViewField::Tag => {
                 let mut tags: Vec<_> = db.tags.values().collect();
-                tags.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+                tags.sort_by_cached_key(|tag| tag.name.to_lowercase());
                 let mut choices = vec![ViewChoice::Tag(None)];
                 choices.extend(
                     tags.into_iter()
@@ -4082,7 +4082,7 @@ impl FlowlistApp {
                 )
             })
             .collect();
-        saved_items.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+        saved_items.sort_by_cached_key(|item| item.1.to_lowercase());
         let mut tag_items: Vec<(String, String, Vec<String>, Vec<String>)> = db
             .tags
             .keys()
@@ -4100,7 +4100,7 @@ impl FlowlistApp {
                 (format!("tag:{id}"), db.tag_path(id), related, ancestors)
             })
             .collect();
-        tag_items.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+        tag_items.sort_by_cached_key(|item| item.1.to_lowercase());
         let theme = self.theme;
         self.settings_card(
             "Sidebar",

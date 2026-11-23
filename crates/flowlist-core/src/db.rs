@@ -861,11 +861,12 @@ impl Db {
             Some(tag) => self.tag_children(tag).to_vec(),
             None => self.tag_roots().to_vec(),
         };
-        tags.sort_by(|a, b| {
-            self.tag_usage_count(b, true)
-                .cmp(&self.tag_usage_count(a, true))
-                .then_with(|| self.tag_name_key(a).cmp(&self.tag_name_key(b)))
-                .then_with(|| a.cmp(b))
+        tags.sort_by_cached_key(|tag| {
+            (
+                std::cmp::Reverse(self.tag_usage_count(tag, true)),
+                self.tag_name_key(tag),
+                tag.clone(),
+            )
         });
         tags
     }
@@ -1103,7 +1104,7 @@ impl Db {
             .filter(|task| !task.is_trashed() && task.tags.iter().any(|t| tags.contains(t)))
             .map(|task| task.id.clone())
             .collect();
-        out.sort_by_key(|id| {
+        out.sort_by_cached_key(|id| {
             let task = &self.tasks[id];
             (
                 task.completed,

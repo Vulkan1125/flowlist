@@ -40,6 +40,9 @@ The 10,000-task library has 500 projects in 20 folders and 4 tags.
 Reading (`list`, `forecast`, `flagged`, `stats`) scales roughly linearly.
 Import is dominated by parsing and validation, and grows more slowly because
 the seed spends proportionally more time on container creation at small sizes.
+Sorting now caches its case-folded keys once per row and reuses tag usage counts
+across the sidebar order, so the 10,000-task `list` check measures around 155 ms
+in the same setup.
 
 ### Desktop app
 

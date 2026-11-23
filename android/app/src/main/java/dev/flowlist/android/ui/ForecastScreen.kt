@@ -91,6 +91,8 @@ fun ForecastScreen(
     var expanded by rememberSaveable { mutableStateOf(false) }
     val selected = LocalDate.parse(selectedKey)
     val month = YearMonth.from(selected)
+    val monthFormatter = remember { DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()) }
+    val dayFormatter = remember { DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()) }
 
     val byDate = remember(snapshot) {
         snapshot?.db?.tasks?.values
@@ -105,6 +107,16 @@ fun ForecastScreen(
     }
     val allViews = remember(snapshot) {
         snapshot?.db?.taskViews().orEmpty().associateBy { it.id }
+    }
+    // The counts map and the day's sorted tasks feed the calendar and the list
+    // on every frame; derive them once per snapshot/day instead of per
+    // recomposition.
+    val counts = remember(byDate) { byDate.mapValues { (_, ids) -> ids.size } }
+    val dayTasks = remember(byDate, allViews, selected, sort) {
+        sortTasks(
+            byDate[selected].orEmpty().mapNotNull { allViews[it] },
+            sort,
+        )
     }
 
     fun shiftMonth(step: Long) {
@@ -148,7 +160,7 @@ fun ForecastScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())),
+                    text = month.format(monthFormatter),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.ink,
@@ -198,10 +210,6 @@ fun ForecastScreen(
             }
         }
 
-        val dayTasks = sortTasks(
-            byDate[selected].orEmpty().mapNotNull { allViews[it] },
-            sort,
-        )
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
@@ -216,7 +224,7 @@ fun ForecastScreen(
                     selected = selected,
                     month = month,
                     weekStartsMonday = weekStartsMonday,
-                    counts = byDate.mapValues { it.value.size },
+                    counts = counts,
                     onSelect = { selectedKey = it.toString() },
                     onWeekChange = { selectedKey = it.toString() },
                     onExpandedChange = {
@@ -235,9 +243,7 @@ fun ForecastScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = selected.format(
-                            DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()),
-                        ),
+                        text = selected.format(dayFormatter),
                         style = MaterialTheme.typography.titleSmall,
                         color = colors.ink,
                         modifier = Modifier.weight(1f),
@@ -482,6 +488,7 @@ private fun RowScope.WeekDayCell(
     onClick: () -> Unit,
 ) {
     val colors = flow
+    val labelFormatter = remember { DateTimeFormatter.ofPattern("EEEEE", Locale.getDefault()) }
     Column(
         modifier = Modifier
             .weight(1f)
@@ -500,7 +507,7 @@ private fun RowScope.WeekDayCell(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = date.format(DateTimeFormatter.ofPattern("EEEEE", Locale.getDefault()))
+            text = date.format(labelFormatter)
                 .uppercase(Locale.getDefault()),
             style = MaterialTheme.typography.labelSmall,
             color = colors.faint,
