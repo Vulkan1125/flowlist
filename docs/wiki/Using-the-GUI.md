@@ -189,12 +189,13 @@ titles itself **Search** and ranks the closest matches first.
   **Available** keeps only tasks you can start now; **Priority** filters by
   priority. The choices are remembered per view.
 - The **Calendar** chip in Forecast hides and restores the calendar, and
-  remembers whether it was the week strip or the full month. The chevron beside
-  the month name folds the full month to the current-week strip; the strip's
-  chevron opens the full month again. The week strip remembers the week it was
-  on, moves one Monday-first week at a time (forward only) with the arrows or
-  horizontal scroll, and keeps the selected weekday. The full month is
-  unchanged, including its bottom resize grip.
+  remembers whether it was the week strip or the full month. Hiding also clears
+  any picked day, so the list always returns to the full agenda. The chevron
+  beside the month name folds the full month to the current-week strip; the
+  strip's chevron opens the full month again. The week strip remembers the week
+  it was on, moves one Monday-first week at a time (forward only) with the
+  arrows or horizontal scroll, and keeps the selected weekday. The full month
+  is unchanged, including its bottom resize grip.
 
 ## Undo
 

@@ -175,9 +175,15 @@ impl FlowlistApp {
 
     /// Show or hide the Forecast calendar. The mode (week strip or full month)
     /// and the week are remembered, so reopening restores the last position
-    /// instead of resetting to the strip.
+    /// instead of resetting to the strip. Hiding always drops a day filter so
+    /// the list returns to the full agenda.
     pub(super) fn toggle_forecast_calendar(&mut self) {
         self.forecast_calendar_open = !self.forecast_calendar_open;
+        if !self.forecast_calendar_open {
+            self.forecast_date = None;
+            self.selected.clear();
+            self.anchor = None;
+        }
         self.save_session();
     }
 

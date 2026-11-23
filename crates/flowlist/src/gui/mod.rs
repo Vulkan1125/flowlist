@@ -1003,7 +1003,9 @@ impl FlowlistApp {
             // ranked list. The rest still need ids here so j/k, x and undo
             // work on them.
             View::Builtin(BuiltinPerspective::Review | BuiltinPerspective::Archive) => Vec::new(),
-            View::Builtin(BuiltinPerspective::Forecast) if self.forecast_date.is_some() => {
+            View::Builtin(BuiltinPerspective::Forecast)
+                if self.forecast_calendar_open && self.forecast_date.is_some() =>
+            {
                 let date = self.forecast_date.expect("guard checked");
                 let ids = query::tasks_on_date(db, date, at);
                 let title = query::forecast::day_label(date, local_date(at));

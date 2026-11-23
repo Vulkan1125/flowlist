@@ -184,8 +184,8 @@ click_box forecast_strip_expand
 wait_value forecast_calendar_expanded True
 echo "  modes: chip remembers full and week, both chevrons switch, a day works"
 
-# 3. Click 20 November: the list keeps that day's two tasks, and a second
-#    click clears the filter.
+# 3. Click 20 November: the list keeps that day's two tasks; hiding the
+#    calendar clears the filter and restores the full agenda.
 cell=$(python3 - "$state" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
@@ -201,11 +201,20 @@ sleep 0.9
 wait_value forecast_day 2026-11-20
 titles=$(python3 -c 'import json,sys; print(",".join(sorted(r["title"] for r in json.load(open(sys.argv[1]))["content_rows"])))' "$state")
 expect "day filter" "$titles" "Call Ana,Write brief"
-set -- $cell
-"$helpers/flowctl" mouse $((WX + $1)) $((WY + $2))
-sleep 0.9
+
+# Hiding the calendar always leaves the full agenda, even with a day picked.
+click_box forecast_toggle_anchor
+wait_value forecast_calendar_open False
 wait_value forecast_day ""
-expect "day cleared" "$(value forecast_day)" ""
+python3 - "$state" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+titles = {row["title"] for row in d["content_rows"]}
+assert {"Book flight", "Later thing"} <= titles, titles
+PY
+click_box forecast_toggle_anchor
+wait_value forecast_calendar_open True
+echo "  hide: the picked day clears and the full agenda returns"
 
 # 4. Drag the grip down 120px. The height follows, and the session keeps it
 #    after the debounced write.

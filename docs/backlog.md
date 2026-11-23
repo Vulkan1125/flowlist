@@ -232,11 +232,12 @@ below; this list is the current map.
       instead of 1 px so the colour reads more clearly.
 - [x] **Mac Forecast week strip** — the Calendar chip hides and restores the
       calendar, remembering whether it was the week strip or the full month.
-      The current-week strip remembers its week, moves one Monday-first week at
-      a time (forward only), and switches to the unchanged full month from the
-      month chevron; the full month's chevron folds back to the strip. Taller
-      day cells keep the number and count clear of the edges, and the full
-      month keeps its resize grip.
+      Hiding clears any picked day, so the list always returns to the full
+      agenda. The current-week strip remembers its week, moves one Monday-first
+      week at a time (forward only), and switches to the unchanged full month
+      from the month chevron; the full month's chevron folds back to the strip.
+      Taller day cells keep the number and count clear of the edges, and the
+      full month keeps its resize grip.
 - [x] **Todoist-style Forecast calendar** — the month view opens on a
       forward-only week strip starting with the current week, with breathing
       room below the month name and its chevron. The bottom pill drags to

@@ -171,7 +171,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       list to that day; click again or press `\` to clear, with `[`/`]` day
       steps and `{`/`}` month steps. A chip in the content header hides and
       restores the calendar, remembering whether it was the week strip or the
-      full month. A chevron beside the month name folds the full month to a
+      full month; hiding clears any picked day so the list returns to the full
+      agenda. A chevron beside the month name folds the full month to a
       Monday-first current-week strip (forward-only paging, day counts, a
       selected day), and the strip's chevron opens the full month again.
       Dragging the full grid's bottom grip (or `-` / `=`) changes its height;

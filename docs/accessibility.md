@@ -67,7 +67,8 @@ the selected day is highlighted and an "All dates" button clears it. The
 calendar always shows one full-width month, so the cells never shrink into
 empty slabs on a large window. A Calendar chip in the content header hides and
 restores the calendar (`forecast-calendar-toggle`); it remembers the last mode,
-so reopening returns to the same week or month. A chevron beside the month name
+so reopening returns to the same week or month. Hiding also clears the picked
+day and restores the full agenda. A chevron beside the month name
 folds the full grid to the current-week strip (`forecast-calendar-collapse`),
 and the strip's chevron opens the full month again (`forecast-week-expand`).
 Visibility, mode and week are saved with the session. Keyboard routes: `[` /
