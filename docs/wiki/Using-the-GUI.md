@@ -60,7 +60,8 @@ Every capture is undoable with `⌘Z`, even after the panel has closed.
   the signal reads clearly on every theme. Completed tasks keep the filled
   accent check. The title starts just after the circle with a little breathing
   room. The subtask chevron sits immediately beside the title, and the flag
-  follows the chevron.
+  follows one circle width later; without a chevron the flag keeps the same
+  one-circle gap from the title.
 - Subtasks start collapsed. The chevron on a parent opens and closes them; `za` toggles, `zo`
   opens and `zc` closes.
 - Flag with `!` or `⌘D`; the flag sits left of the title and shows on hover in
