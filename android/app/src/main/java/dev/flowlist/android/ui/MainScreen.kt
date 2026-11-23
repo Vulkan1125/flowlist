@@ -811,6 +811,15 @@ fun MainScreen(
                     activeMore == MoreView.Attachments
                 else -> tab == Tab.Inbox || tab == Tab.Today || tab == Tab.Forecast
             }
+            val sortKey = activeSaved?.id ?: activeMore?.name?.lowercase() ?: when (tab) {
+                Tab.Inbox -> "inbox"
+                Tab.Today -> "today"
+                Tab.Forecast -> "forecast"
+                Tab.Browse -> "browse"
+                Tab.Settings -> "settings"
+            }
+            val currentSort = preferences.sortFor(sortKey)
+            val headerSort = activeSaved?.sort ?: currentSort
             Header(
                 title = activeSaved?.name ?: activeMore?.label ?: tab.label,
                 subtitle = when {
@@ -819,9 +828,9 @@ fun MainScreen(
                 },
                 onMenu = { scope.launch { drawer.open() } },
                 onSearch = { search = true },
-                sort = preferences.sortBy,
+                sort = headerSort,
                 onSort = if (sortable) {
-                    { option -> onPreferencesChange(preferences.copy(sortBy = option)) }
+                    { option -> onPreferencesChange(preferences.withSort(sortKey, option)) }
                 } else {
                     null
                 },
@@ -859,7 +868,7 @@ fun MainScreen(
                     MoreDestination(
                         view = activeMore,
                         db = db,
-                        sort = preferences.sortBy,
+                        sort = currentSort,
                         pending = state.pending,
                         onTask = { task -> detail = task },
                         onToggle = { task -> complete(task, !task.completed) },
@@ -889,7 +898,7 @@ fun MainScreen(
                 Tab.Inbox -> InboxList(
                     swipeActions = preferences.swipeActions,
                     children = children,
-                    tasks = sortTasks(snapshot?.db?.inbox().orEmpty(), preferences.sortBy),
+                    tasks = sortTasks(snapshot?.db?.inbox().orEmpty(), currentSort),
                     pending = state.pending,
                     onToggle = { task -> complete(task, !task.completed) },
                     onClick = { detail = it },
@@ -898,7 +907,7 @@ fun MainScreen(
                 Tab.Today -> TodayList(
                     swipeActions = preferences.swipeActions,
                     children = children,
-                    tasks = sortTasks(snapshot?.db?.today().orEmpty(), preferences.sortBy),
+                    tasks = sortTasks(snapshot?.db?.today().orEmpty(), currentSort),
                     pending = state.pending,
                     onToggle = { task -> complete(task, !task.completed) },
                     onClick = { detail = it },
@@ -906,7 +915,7 @@ fun MainScreen(
                 )
                 Tab.Forecast -> ForecastScreen(
                     view = preferences.forecastView,
-                    sort = preferences.sortBy,
+                    sort = currentSort,
                     onViewChange = { onPreferencesChange(preferences.copy(forecastView = it)) },
                     snapshot = snapshot,
                     weekStartsMonday = preferences.weekStartsMonday,

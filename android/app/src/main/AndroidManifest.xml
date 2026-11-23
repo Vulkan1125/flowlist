@@ -142,6 +142,7 @@
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleTop"
+            android:taskAffinity="dev.flowlist.android.quickadd"
             android:theme="@style/Theme.Flowlist.Floating" />
 
         <receiver

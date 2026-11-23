@@ -18,36 +18,58 @@ data class AppPreferences(
     val forecastView: String = "month",
     val keepCompletedSubtasks: Boolean = false,
     val nearbyReminders: Boolean = true,
-    /// Global sort used by the task lists: manual, due, defer, name, priority,
-    /// flagged, estimate, created or completed_at.
+    /// Legacy global sort used as the default until a view has its own choice:
+    /// manual, due, defer, name, priority, flagged, estimate, created or
+    /// completed_at.
     val sortBy: String = "manual",
+    /// Per-view sort, keyed by tab or MoreView name. Each view keeps its own.
+    val viewSorts: Map<String, String> = emptyMap(),
     /// Drawer order, by perspective key. Empty means the built-in order.
     val perspectiveOrder: List<String> = emptyList(),
-)
+) {
+    fun sortFor(view: String): String = viewSorts[view] ?: sortBy
+
+    fun withSort(view: String, value: String): AppPreferences =
+        copy(viewSorts = viewSorts + (view to value))
+}
 
 class PreferencesStore(context: Context) {
     private val prefs = context.getSharedPreferences("flowlist.prefs", Context.MODE_PRIVATE)
 
-    fun load(): AppPreferences = AppPreferences(
-        weekStartsMonday = prefs.getBoolean("week_monday", true),
-        defaultTimeMinutes = prefs.getInt("default_time", 9 * 60),
-        haptics = prefs.getBoolean("haptics", true),
-        swipeActions = prefs.getBoolean("swipe_actions", true),
-        startTab = prefs.getString("start_tab", "inbox") ?: "inbox",
-        bottomBar = (prefs.getString("bottom_bar", null) ?: "inbox|today|forecast|browse")
+    fun load(): AppPreferences {
+        val viewSorts = (prefs.getString("view_sorts", null) ?: "")
             .split('|')
-            .filter { it.isNotBlank() }
-            .take(4)
-            .ifEmpty { listOf("inbox", "today", "forecast", "browse") },
-        saveAllAttachments = prefs.getBoolean("save_all_attachments", false),
-        forecastView = prefs.getString("forecast_view", "month") ?: "month",
-        keepCompletedSubtasks = prefs.getBoolean("keep_completed_subtasks", false),
-        nearbyReminders = prefs.getBoolean("nearby_reminders", true),
-        sortBy = prefs.getString("sort_by", "manual") ?: "manual",
-        perspectiveOrder = (prefs.getString("perspective_order", null) ?: "")
-            .split('|')
-            .filter { it.isNotBlank() },
-    )
+            .mapNotNull { part ->
+                val split = part.indexOf('=')
+                if (split <= 0) {
+                    null
+                } else {
+                    part.substring(0, split) to part.substring(split + 1)
+                }
+            }
+            .toMap()
+        return AppPreferences(
+            weekStartsMonday = prefs.getBoolean("week_monday", true),
+            defaultTimeMinutes = prefs.getInt("default_time", 9 * 60),
+            haptics = prefs.getBoolean("haptics", true),
+            swipeActions = prefs.getBoolean("swipe_actions", true),
+            startTab = prefs.getString("start_tab", "inbox") ?: "inbox",
+            bottomBar = (prefs.getString("bottom_bar", null) ?: "inbox|today|forecast|browse")
+                .split('|')
+                .filter { it.isNotBlank() }
+                .take(4)
+                .ifEmpty { listOf("inbox", "today", "forecast", "browse") },
+            saveAllAttachments = prefs.getBoolean("save_all_attachments", false),
+            forecastView = prefs.getString("forecast_view", "month") ?: "month",
+            keepCompletedSubtasks = prefs.getBoolean("keep_completed_subtasks", false),
+            nearbyReminders = prefs.getBoolean("nearby_reminders", true),
+            sortBy = prefs.getString("sort_by", "manual") ?: "manual",
+            viewSorts = viewSorts,
+            perspectiveOrder = (prefs.getString("perspective_order", null) ?: "")
+                .split('|')
+                .filter { it.isNotBlank() },
+        )
+    }
 
     fun save(value: AppPreferences) {
         prefs.edit()
@@ -60,8 +82,12 @@ class PreferencesStore(context: Context) {
             .putBoolean("save_all_attachments", value.saveAllAttachments)
             .putString("forecast_view", value.forecastView)
             .putBoolean("keep_completed_subtasks", value.keepCompletedSubtasks)
-        .putBoolean("nearby_reminders", value.nearbyReminders)
+            .putBoolean("nearby_reminders", value.nearbyReminders)
             .putString("sort_by", value.sortBy)
+            .putString(
+                "view_sorts",
+                value.viewSorts.entries.joinToString("|") { "${it.key}=${it.value}" },
+            )
             .putString("perspective_order", value.perspectiveOrder.joinToString("|"))
             .apply()
     }

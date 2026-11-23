@@ -86,7 +86,7 @@ Inbox, Today, Forecast and Browse show a small hand-drawn illustration when they
 
 ## Home screen and reminders
 
-- **Widget**: add Flowlist from the Android widget picker to see today's and Inbox counts. Tap it to open the app. A widget set to **Follow app** updates its colours immediately when the app theme changes.
+- **Widget**: add Flowlist from the Android widget picker to see today's and Inbox counts. Tap it to open the app. The **+** button opens the floating capture card in its own task, so it does not pull the app forward when Flowlist is in the background. A widget set to **Follow app** updates its colours immediately when the app theme changes.
 - **Due reminders**: Settings → Due reminders schedules a quiet summary when tasks are due today or overdue. Android 13 and later asks for notification permission the first time; nothing is sent off the device.
 
 ## Settings
@@ -232,7 +232,8 @@ whether completed tasks appear. Grouping covers project, folder, tag, due,
 defer, flagged and estimate; sorting covers manual, due, defer, name, priority,
 flagged, estimate, created and completed. Saved perspectives use the Mac's
 `save_perspective` command, so they appear there too; the row menu edits or
-deletes them.
+deletes them. Each list’s sort is remembered for that view, so changing Inbox
+does not reorder Today, Forecast or the other destinations.
 
 ## Perspectives and the drawer
 

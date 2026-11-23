@@ -1,5 +1,6 @@
 package dev.flowlist.android
 
+import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.Db
 import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.TagDto
@@ -27,6 +28,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DataTest {
+    @Test
+    fun each_view_keeps_its_own_sort() {
+        val initial = AppPreferences(sortBy = "due")
+        assertEquals("due", initial.sortFor("inbox"))
+        val changed = initial.withSort("inbox", "name")
+        assertEquals("name", changed.sortFor("inbox"))
+        assertEquals("due", changed.sortFor("today"))
+        assertEquals("manual", changed.withSort("today", "manual").sortFor("today"))
+    }
+
     @Test
     fun addresses_get_a_scheme_and_must_have_a_port() {
         assertEquals("http://192.168.1.33:7777", normalizeBase("192.168.1.33:7777"))

@@ -230,6 +230,11 @@ below; this list is the current map.
 - [x] **Mac priority signals** — high and medium task circles use the same
       vivid red/yellow pair across every Mac theme, and priority rings are 2 px
       instead of 1 px so the colour reads more clearly.
+- [x] **Android sort per view** — Inbox, Today, Forecast and every sortable
+      destination keep their own sort instead of sharing one global order.
+- [x] **Widget quick add stays floating** — the widget’s + button opens its
+      capture card in its own task, so a background app is not dragged to the
+      foreground underneath it.
 - [x] **Chevron hit target** — the one-circle gap between a task's subtask
       chevron and its flag is part of the expand/collapse target, so the small
       chevron is easier to hit.
