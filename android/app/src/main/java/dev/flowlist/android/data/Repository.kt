@@ -476,8 +476,10 @@ class Repository(context: Context) {
             put("flagged", edit.flagged)
             put("estimate_min", estimateJson)
             put("repeat", edit.repeat ?: JsonNull)
-            put("sequential", edit.sequential)
-            put("steps_one_off", edit.stepsOneOff)
+            if (task.stepsOneOff == edit.stepsOneOff) {
+                put("sequential", edit.sequential)
+                put("steps_one_off", edit.stepsOneOff)
+            }
         }
         enqueue(
             PendingOp(
@@ -486,6 +488,15 @@ class Repository(context: Context) {
                 label = edit.title,
             ),
         )
+        if (task.stepsOneOff != edit.stepsOneOff) {
+            enqueue(
+                PendingOp(
+                    id = "op_${UUID.randomUUID()}",
+                    command = setTaskStepModeCommand(task.id, edit.sequential, edit.stepsOneOff),
+                    label = if (edit.stepsOneOff) "Convert to one-off steps" else "Restore subtasks",
+                ),
+            )
+        }
         if (edit.priorityAll && task.repeat != null) {
             enqueue(
                 PendingOp(

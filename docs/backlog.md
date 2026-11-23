@@ -230,6 +230,12 @@ below; this list is the current map.
 - [x] **Mac priority signals** — high and medium task circles use the same
       vivid red/yellow pair across every Mac theme, and priority rings are 2 px
       instead of 1 px so the colour reads more clearly.
+- [x] **Mac and Android step modes** — Parallel and Sequential list only
+      child tasks; One-off lists only checklist steps. Sequential dims every
+      child after the first incomplete one and refuses to tick it. Switching
+      to one-off warns before converting children into steps and dropping their
+      task-only details; switching back restores the steps as subtasks. Every
+      Mac child row keeps Separate and a Close (×) delete control.
 - [x] **Mac task-row icon cluster** — the order is circle, title, subtask
       chevron, flag. The title starts just after the circle, the chevron sits
       immediately beside the title, and the flag sits one circle width after

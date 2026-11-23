@@ -1713,11 +1713,19 @@ impl FlowlistApp {
                     .collect()
             })
             .unwrap_or_default();
-        // Both lists are always visible. The mode only changes the rules and
-        // what the add field creates.
-        let done = children.iter().filter(|child| child.2).count()
-            + checklist.iter().filter(|item| item.2).count();
-        let total = children.len() + checklist.len();
+        // Parallel and Sequential show child tasks; One-off shows the checklist
+        // steps. The inactive list is kept in the data but does not appear here.
+        let (done, total) = if one_off {
+            (
+                checklist.iter().filter(|item| item.2).count(),
+                checklist.len(),
+            )
+        } else {
+            (
+                children.iter().filter(|child| child.2).count(),
+                children.len(),
+            )
+        };
 
         let mut section = div().flex().flex_col().gap_1().child(
             div()
@@ -1837,7 +1845,15 @@ impl FlowlistApp {
         // Give the mode chips room to breathe above the subtask list.
         section = section.child(div().h(px(6.)));
 
-        for (child_id, title, completed, priority) in children {
+        if !one_off {
+            for (child_id, title, completed, priority) in children {
+            let blocked_by = if completed {
+                None
+            } else {
+                flowlist_core::query::availability::sequence_blocker(db, &child_id)
+                    .and_then(|id| db.tasks.get(&id))
+                    .map(|task| task.title.clone())
+            };
             let select_id = child_id.clone();
             let toggle_id = child_id.clone();
             let separate_id = child_id.clone();
@@ -1848,6 +1864,20 @@ impl FlowlistApp {
             let drop_target = child_id.clone();
             let box_id = format!("subtask:{child_id}");
             let boxes = self.inspector_boxes.clone();
+            let separate_boxes = self.inspector_boxes.clone();
+            let separate_key = format!("separate:{child_id}");
+            let delete_boxes = self.inspector_boxes.clone();
+            let delete_key = format!("delete:{child_id}");
+            let grip_boxes = self.inspector_boxes.clone();
+            let grip_key = format!("grip:{child_id}");
+            let blocked = blocked_by.clone();
+            let toggle_tip = if let Some(blocker) = &blocked_by {
+                format!("Finish “{blocker}” first — this is a sequential list")
+            } else if completed {
+                "Mark subtask incomplete".to_string()
+            } else {
+                "Mark subtask complete".to_string()
+            };
             let row = div()
                 .on_children_prepainted(move |bounds, _, _| {
                     if let Some(bounds) = bounds.first() {
@@ -1874,16 +1904,8 @@ impl FlowlistApp {
                     div()
                         .id(super::sid(format!("subtask-toggle:{child_id}")))
                         .flex_shrink_0()
-                        .flow_tip(
-                            self,
-                            cx,
-                            theme,
-                            if completed {
-                                "Mark subtask incomplete"
-                            } else {
-                                "Mark subtask complete"
-                            },
-                        )
+                        .when(blocked_by.is_some(), |this| this.opacity(0.45))
+                        .flow_tip(self, cx, theme, toggle_tip)
                         .child(widgets::checkbox(
                             theme,
                             completed,
@@ -1894,6 +1916,13 @@ impl FlowlistApp {
                         ))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
+                            if let Some(blocker) = blocked.clone() {
+                                this.toast = Some(format!(
+                                    "Finish “{blocker}” first — this is a sequential list"
+                                ));
+                                cx.notify();
+                                return;
+                            }
                             this.toggle_complete(toggle_id.clone(), cx);
                         })),
                 )
@@ -1921,7 +1950,21 @@ impl FlowlistApp {
                 .when(!one_off, |this| {
                     this.child(
                         div()
+                            .on_children_prepainted(move |bounds, _, _| {
+                                if let Some(bounds) = bounds.first() {
+                                    separate_boxes.borrow_mut().insert(
+                                        separate_key.clone(),
+                                        [
+                                            f32::from(bounds.origin.x),
+                                            f32::from(bounds.origin.y),
+                                            f32::from(bounds.size.width),
+                                            f32::from(bounds.size.height),
+                                        ],
+                                    );
+                                }
+                            })
                             .id(super::sid(format!("separate-subtask:{child_id}")))
+                            .flex_shrink_0()
                             .text_xs()
                             .text_color(theme.text_faint)
                             .cursor_pointer()
@@ -1941,7 +1984,21 @@ impl FlowlistApp {
                 })
                 .child(
                     div()
+                        .on_children_prepainted(move |bounds, _, _| {
+                            if let Some(bounds) = bounds.first() {
+                                delete_boxes.borrow_mut().insert(
+                                    delete_key.clone(),
+                                    [
+                                        f32::from(bounds.origin.x),
+                                        f32::from(bounds.origin.y),
+                                        f32::from(bounds.size.width),
+                                        f32::from(bounds.size.height),
+                                    ],
+                                );
+                            }
+                        })
                         .id(super::sid(format!("delete-subtask:{child_id}")))
+                        .flex_shrink_0()
                         .ml(px(10.))
                         .w(px(18.))
                         .text_center()
@@ -1950,7 +2007,7 @@ impl FlowlistApp {
                         .cursor_pointer()
                         .hover(|style| style.text_color(theme.danger))
                         .flow_tip(self, cx, theme, "Move subtask to Trash")
-                        .child(icons::icon(Icon::Trash, 12.0, theme.text_faint))
+                        .child(icons::icon(Icon::Close, 12.0, theme.text_faint))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
                             this.trash_subtask(trash_id.clone(), cx);
@@ -1958,7 +2015,21 @@ impl FlowlistApp {
                 )
                 .child(
                     div()
+                        .on_children_prepainted(move |bounds, _, _| {
+                            if let Some(bounds) = bounds.first() {
+                                grip_boxes.borrow_mut().insert(
+                                    grip_key.clone(),
+                                    [
+                                        f32::from(bounds.origin.x),
+                                        f32::from(bounds.origin.y),
+                                        f32::from(bounds.size.width),
+                                        f32::from(bounds.size.height),
+                                    ],
+                                );
+                            }
+                        })
                         .id(super::sid(format!("subtask-grip:{child_id}")))
+                        .flex_shrink_0()
                         .w(px(22.))
                         .h(px(22.))
                         .flex()
@@ -1985,18 +2056,11 @@ impl FlowlistApp {
                     )
                 }));
             section = section.child(row);
+            }
         }
 
-        if total == 0 {
-            section = section.child(
-                div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child("No subtasks yet."),
-            );
-        }
-
-        for (item_id, title, completed) in &checklist {
+        if one_off {
+            for (item_id, title, completed) in &checklist {
                 let toggle_task = parent.clone();
                 let toggle_item = item_id.clone();
                 let edit_task = parent.clone();
@@ -2130,6 +2194,20 @@ impl FlowlistApp {
                         )),
                 );
             }
+        }
+
+        if total == 0 {
+            section = section.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(if one_off {
+                        "No one-off steps yet."
+                    } else {
+                        "No subtasks yet."
+                    }),
+            );
+        }
 
         // And separate the last subtask from the add field.
         section = section.child(div().h(px(6.)));

@@ -98,7 +98,12 @@ leaving the list.
 - **One step type per task.** Choose **Parallel**, **Sequential** or
   **One-off**. Parallel and Sequential show child tasks; One-off shows
   checklist-style steps that tick, drag and delete in place and never appear as
-  tasks.
+  tasks. In Sequential, only the first incomplete child can be ticked; later
+  rows are dimmed and name the task that must finish first.
+- **Converting to one-off asks first.** Each child becomes a checklist step.
+  Task-only details such as notes, dates, tags and priority are removed; the
+  title and completion state stay. Switching back restores each step as a
+  subtask.
 - **Drag a subtask out of its parent** by dropping it on the lower third of a
   root-level task in the middle pane (or in a gap between root tasks). The row
   tints to show the target, and the task becomes a top-level task beside it.

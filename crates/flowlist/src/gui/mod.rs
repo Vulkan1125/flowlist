@@ -1450,17 +1450,44 @@ impl FlowlistApp {
     }
 
     fn set_task_step_mode(&mut self, id: TaskId, mode: TaskStepMode, cx: &mut Context<Self>) {
+        let db = self.store.db();
+        let Some(task) = db.tasks.get(&id) else {
+            return;
+        };
+        let current = if task.steps_one_off {
+            TaskStepMode::OneOff
+        } else if task.sequential {
+            TaskStepMode::Sequential
+        } else {
+            TaskStepMode::Parallel
+        };
+        if current == mode {
+            return;
+        }
+        let children = task
+            .child_order
+            .iter()
+            .filter(|child| {
+                db.tasks
+                    .get(child)
+                    .is_some_and(|task| !task.is_trashed())
+            })
+            .count();
+        // Converting to one-off steps is destructive: each child becomes a
+        // checklist row with only its title and completion left. Ask first.
+        if mode == TaskStepMode::OneOff && children > 0 {
+            let modal = modals::Modal::hide_subtasks(self, id);
+            self.open_modal(modal, cx);
+            return;
+        }
         self.apply_task_step_mode(id, mode, cx);
     }
 
     fn apply_task_step_mode(&mut self, id: TaskId, mode: TaskStepMode, cx: &mut Context<Self>) {
-        self.execute(Command::UpdateTask {
+        self.execute(Command::SetTaskStepMode {
             id,
-            patch: TaskPatch {
-                sequential: Some(mode == TaskStepMode::Sequential),
-                steps_one_off: Some(mode == TaskStepMode::OneOff),
-                ..TaskPatch::default()
-            },
+            sequential: mode == TaskStepMode::Sequential,
+            steps_one_off: mode == TaskStepMode::OneOff,
         });
         cx.notify();
     }
@@ -3503,13 +3530,10 @@ impl FlowlistApp {
                 });
             }
             modals::Modal::HideSubtasks { id, .. } => {
-                self.execute(Command::UpdateTask {
+                self.execute(Command::SetTaskStepMode {
                     id: id.clone(),
-                    patch: TaskPatch {
-                        sequential: Some(false),
-                        steps_one_off: Some(true),
-                        ..TaskPatch::default()
-                    },
+                    sequential: false,
+                    steps_one_off: true,
                 });
             }
             modals::Modal::PriorityScope {
@@ -5923,6 +5947,35 @@ impl FlowlistApp {
         };
         state["checklist_text"] = serde_json::json!(self.checklist_buffer.text());
         state["subtask_add"] = serde_json::json!(anchor(self.checklist_add_anchor.get()));
+        state["task_steps"] = serde_json::json!(self.selected_one().and_then(|id| {
+            let db = self.store.db();
+            let task = db.tasks.get(&id)?;
+            Some(serde_json::json!({
+                "sequential": task.sequential,
+                "one_off": task.steps_one_off,
+                "checklist": task
+                    .checklist
+                    .iter()
+                    .map(|item| serde_json::json!({
+                        "title": item.title,
+                        "completed": item.completed,
+                    }))
+                    .collect::<Vec<_>>(),
+                "children": task
+                    .child_order
+                    .iter()
+                    .filter_map(|child_id| db.tasks.get(child_id))
+                    .map(|child| serde_json::json!({
+                        "id": child.id,
+                        "title": child.title,
+                        "completed": child.completed,
+                        "blocked_by": flowlist_core::query::availability::sequence_blocker(db, &child.id)
+                            .and_then(|id| db.tasks.get(&id))
+                            .map(|task| task.title.clone()),
+                    }))
+                    .collect::<Vec<_>>(),
+            }))
+        }));
         state["field_editor"] = serde_json::json!(anchor(self.field_editor_anchor.get()));
         state["hide_overdue"] = serde_json::json!(self.hide_overdue);
         state["hide_overdue_anchor"] = serde_json::json!(anchor(self.hide_overdue_anchor.get()));

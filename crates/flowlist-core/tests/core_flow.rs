@@ -2304,6 +2304,57 @@ fn sequential_children_must_be_completed_in_order() {
 }
 
 #[test]
+fn setting_step_mode_converts_in_one_command() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let parent = add_task(&mut store, "Parent");
+    for title in ["First", "Second", "Third"] {
+        let mut child = NewTask::new(title);
+        child.parent = Some(parent.clone());
+        store.execute(Command::CreateTask(child)).unwrap();
+    }
+
+    store
+        .execute(Command::SetTaskStepMode {
+            id: parent.clone(),
+            sequential: false,
+            steps_one_off: true,
+        })
+        .unwrap();
+    let task = &store.db().tasks[&parent];
+    assert!(task.steps_one_off);
+    assert!(!task.sequential);
+    assert!(task.child_order.is_empty());
+    assert_eq!(
+        task.checklist
+            .iter()
+            .map(|item| item.title.as_str())
+            .collect::<Vec<_>>(),
+        vec!["First", "Second", "Third"]
+    );
+
+    store
+        .execute(Command::SetTaskStepMode {
+            id: parent.clone(),
+            sequential: true,
+            steps_one_off: false,
+        })
+        .unwrap();
+    let task = &store.db().tasks[&parent];
+    assert!(!task.steps_one_off);
+    assert!(task.sequential);
+    assert!(task.checklist.is_empty());
+    assert_eq!(
+        task.child_order
+            .iter()
+            .map(|id| store.db().tasks[id].title.as_str())
+            .collect::<Vec<_>>(),
+        vec!["First", "Second", "Third"]
+    );
+}
+
+#[test]
 fn converting_one_off_steps_back_to_subtasks() {
     let (_dir, paths) = setup();
     let mut store = Store::open(paths).unwrap();

@@ -126,9 +126,12 @@ the other rows move aside and the list settles into the new order on release.
 
 **Parallel**, **Sequential** and **One-off** are the three step modes; only one
 is active. The drag grip for both subtasks and one-off steps is at the far right
-of the row. Parallel and Sequential show child tasks. One-off shows
+of the row. Parallel and Sequential show child tasks; in Sequential only the
+first incomplete child can be ticked and later rows are dimmed. One-off shows
 checklist-style steps that tick, drag and delete in place and never appear as
-tasks.
+tasks. Switching to One-off with child tasks asks first: each child becomes a
+step, and notes, dates, tags and priority are removed. Switching back restores
+the steps as subtasks.
 
 The project picker is as wide as its row. Its last item is **Create new
 project**, and the tag row ends with a **+** chip for a new tag; both select the

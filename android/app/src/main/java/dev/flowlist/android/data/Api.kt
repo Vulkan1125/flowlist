@@ -614,6 +614,21 @@ fun convertSubtasksCommand(taskId: String): JsonObject = buildJsonObject {
     )
 }
 
+fun setTaskStepModeCommand(
+    taskId: String,
+    sequential: Boolean,
+    stepsOneOff: Boolean,
+): JsonObject = buildJsonObject {
+    put(
+        "set_task_step_mode",
+        buildJsonObject {
+            put("id", taskId)
+            put("sequential", sequential)
+            put("steps_one_off", stepsOneOff)
+        },
+    )
+}
+
 fun savePerspectiveCommand(
     id: String,
     name: String,

@@ -558,7 +558,7 @@ impl Modal {
             Modal::DeleteProject { .. } => "Delete project",
             Modal::DeleteFolder { .. } => "Delete folder",
             Modal::DeleteTask { .. } => "Delete repeating task",
-            Modal::HideSubtasks { .. } => "Switch to one-off?",
+            Modal::HideSubtasks { .. } => "Convert to one-off steps?",
             Modal::PriorityScope { .. } => "Repeating task priority",
             Modal::RemoveAttachment { .. } => "Remove attachment",
             Modal::Uninstall { .. } => "Uninstall Flowlist",
@@ -595,7 +595,7 @@ impl Modal {
                 "This task repeats. Trash this occurrence, or the whole series; Undo restores everything."
             }
             Modal::HideSubtasks { .. } => {
-                "Existing subtasks stay as tasks but are hidden while One-off is selected."
+                "Each subtask becomes a checklist step. Task-only details such as notes, dates, tags and priority are removed; the title and completion state are kept."
             }
             Modal::PriorityScope { .. } => {
                 "This task repeats. Apply the new priority to this occurrence, or to every occurrence in the series."
@@ -642,7 +642,7 @@ impl Modal {
             Modal::DeleteProject { .. } => "Delete",
             Modal::DeleteFolder { .. } => "Delete",
             Modal::DeleteTask { .. } => "Delete",
-            Modal::HideSubtasks { .. } => "Switch",
+            Modal::HideSubtasks { .. } => "Convert",
             Modal::PriorityScope { .. } => "Apply",
             Modal::RemoveAttachment { .. } => "Remove",
             Modal::Uninstall { .. } => "Uninstall",
@@ -1173,10 +1173,10 @@ impl FlowlistApp {
                                 .text_xs()
                                 .text_color(theme.text_faint)
                                 .child(if *count == 1 {
-                                    "1 subtask will be hidden. It stays a task and comes back when you switch to Parallel or Sequential.".to_string()
+                                    "1 subtask becomes a one-off step. Notes, dates, tags and priority are removed; the title and completion state stay.".to_string()
                                 } else {
                                     format!(
-                                        "{count} subtasks will be hidden. They stay tasks and come back when you switch to Parallel or Sequential."
+                                        "{count} subtasks become one-off steps. Notes, dates, tags and priority are removed; titles and completion states stay."
                                     )
                                 }),
                         ),

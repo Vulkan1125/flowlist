@@ -302,6 +302,15 @@ pub enum Command {
     ConvertOneOffToSubtasks {
         id: TaskId,
     },
+    /// Switch a task between parallel, sequential and one-off steps. Switching
+    /// to one-off converts child tasks into checklist steps; switching back
+    /// restores those steps as child tasks. One command keeps the change and
+    /// its conversion in a single undo step.
+    SetTaskStepMode {
+        id: TaskId,
+        sequential: bool,
+        steps_one_off: bool,
+    },
     /// Turn a task (and its subtasks) into a project in the same folder.
     ConvertTaskToProject {
         id: TaskId,
@@ -478,6 +487,13 @@ impl Command {
             }
             Command::ConvertOneOffToSubtasks { .. } => {
                 "Restore one-off steps as subtasks".to_string()
+            }
+            Command::SetTaskStepMode { steps_one_off, .. } => {
+                if *steps_one_off {
+                    "Switch to one-off steps".to_string()
+                } else {
+                    "Switch to subtasks".to_string()
+                }
             }
             Command::ConvertTaskToProject { .. } => "Convert task to project".to_string(),
             Command::PurgeExpiredTrash { .. } => "Empty expired trash".to_string(),
@@ -905,75 +921,62 @@ impl Command {
                 db.touch();
             }
             Command::ConvertOneOffToSubtasks { id } => {
-                let parent = db.task(&id)?.clone();
-                let items = parent.checklist.clone();
-                let mut created = 0;
-                for item in items {
-                    let mut child = Task::new(item.title);
-                    child.parent = Some(id.clone());
-                    child.project = parent.project.clone();
-                    child.completed = item.completed;
-                    child.completed_at = item.completed.then_some(at);
-                    child.modified_at = at;
-                    let child_id = child.id.clone();
-                    db.tasks.insert(child_id.clone(), child);
-                    db.insert_task_at(
-                        OrderKey::Parent(id.clone()),
-                        child_id.clone(),
-                        Position::End,
-                    );
-                    outcome.created.push(child_id.to_string());
-                    created += 1;
-                }
-                let task = db.task_mut(&id)?;
-                task.checklist.clear();
-                task.steps_one_off = false;
-                task.modified_at = at;
+                let created = convert_one_off_to_subtasks(db, &id, at)?;
+                outcome
+                    .created
+                    .extend(created.iter().map(|id| id.to_string()));
                 db.touch();
                 outcome.affected.push(id.to_string());
-                outcome.message = Some(if created == 0 {
+                outcome.message = Some(if created.is_empty() {
                     "Switched to subtasks".to_string()
                 } else {
-                    format!("Restored {} as subtasks", task_count(created))
+                    format!("Restored {} as subtasks", task_count(created.len()))
+                });
+            }
+            Command::SetTaskStepMode {
+                id,
+                sequential,
+                steps_one_off,
+            } => {
+                let current_one_off = db.task(&id)?.steps_one_off;
+                let mut converted = 0usize;
+                if steps_one_off && !current_one_off {
+                    converted = convert_subtasks_to_one_off(db, &id, at)?;
+                } else if !steps_one_off && current_one_off {
+                    let created = convert_one_off_to_subtasks(db, &id, at)?;
+                    converted = created.len();
+                    outcome
+                        .created
+                        .extend(created.iter().map(|id| id.to_string()));
+                }
+                {
+                    let task = db.task_mut(&id)?;
+                    task.sequential = sequential && !steps_one_off;
+                    task.steps_one_off = steps_one_off;
+                    task.modified_at = at;
+                }
+                db.touch();
+                outcome.affected.push(id.to_string());
+                outcome.message = Some(match (steps_one_off, converted) {
+                    (true, 0) => "Switched to one-off steps".to_string(),
+                    (true, count) => {
+                        format!("Converted {} to one-off steps", task_count(count))
+                    }
+                    (false, 0) if sequential => "Switched to sequential".to_string(),
+                    (false, 0) => "Switched to parallel".to_string(),
+                    (false, count) => {
+                        format!("Restored {} as subtasks", task_count(count))
+                    }
                 });
             }
             Command::ConvertSubtasksToOneOff { id } => {
-                db.task(&id)?;
-                let descendants = db.task_subtree(&id);
-                let items: Vec<(String, bool)> = descendants
-                    .iter()
-                    .skip(1)
-                    .filter_map(|child_id| {
-                        db.tasks
-                            .get(child_id)
-                            .filter(|task| !task.is_trashed())
-                            .map(|task| (task.title.clone(), task.completed))
-                    })
-                    .collect();
-                {
-                    let task = db.task_mut(&id)?;
-                    for (title, completed) in &items {
-                        let mut item = ChecklistItem::new(title.clone());
-                        item.completed = *completed;
-                        task.checklist.push(item);
-                    }
-                    task.steps_one_off = true;
-                    task.sequential = false;
-                    task.modified_at = at;
-                }
-                let children: Vec<TaskId> = descendants.into_iter().skip(1).collect();
-                if !children.is_empty() {
-                    purge_tasks(db, &children);
-                }
+                let count = convert_subtasks_to_one_off(db, &id, at)?;
                 db.touch();
                 outcome.affected.push(id.to_string());
-                outcome.message = Some(if items.is_empty() {
+                outcome.message = Some(if count == 0 {
                     "Switched to one-off steps".to_string()
                 } else {
-                    format!(
-                        "Converted {} to one-off steps",
-                        task_count(items.len())
-                    )
+                    format!("Converted {} to one-off steps", task_count(count))
                 });
             }
             Command::ConvertTaskToProject { id, folder } => {
@@ -2195,6 +2198,76 @@ fn merge_db(db: &mut Db, imported: Db) -> MergeStats {
     }
     db.touch();
     stats
+}
+
+/// Replace a task's child tasks with one-off checklist steps. Returns the
+/// number of steps created. Nested children are flattened, so task-only
+/// details such as notes, dates, tags and priority are dropped.
+fn convert_subtasks_to_one_off(
+    db: &mut Db,
+    id: &TaskId,
+    at: DateTime<Utc>,
+) -> Result<usize> {
+    db.task(id)?;
+    let descendants = db.task_subtree(id);
+    let items: Vec<(String, bool)> = descendants
+        .iter()
+        .skip(1)
+        .filter_map(|child_id| {
+            db.tasks
+                .get(child_id)
+                .filter(|task| !task.is_trashed())
+                .map(|task| (task.title.clone(), task.completed))
+        })
+        .collect();
+    {
+        let task = db.task_mut(id)?;
+        for (title, completed) in &items {
+            let mut item = ChecklistItem::new(title.clone());
+            item.completed = *completed;
+            task.checklist.push(item);
+        }
+        task.steps_one_off = true;
+        task.sequential = false;
+        task.modified_at = at;
+    }
+    let children: Vec<TaskId> = descendants.into_iter().skip(1).collect();
+    if !children.is_empty() {
+        purge_tasks(db, &children);
+    }
+    Ok(items.len())
+}
+
+/// Turn a task's one-off checklist steps back into child tasks. Returns the
+/// ids of the created subtasks.
+fn convert_one_off_to_subtasks(
+    db: &mut Db,
+    id: &TaskId,
+    at: DateTime<Utc>,
+) -> Result<Vec<TaskId>> {
+    let parent = db.task(id)?.clone();
+    let mut created = Vec::new();
+    for item in parent.checklist.clone() {
+        let mut child = Task::new(item.title);
+        child.parent = Some(id.clone());
+        child.project = parent.project.clone();
+        child.completed = item.completed;
+        child.completed_at = item.completed.then_some(at);
+        child.modified_at = at;
+        let child_id = child.id.clone();
+        db.tasks.insert(child_id.clone(), child);
+        db.insert_task_at(
+            OrderKey::Parent(id.clone()),
+            child_id.clone(),
+            Position::End,
+        );
+        created.push(child_id);
+    }
+    let task = db.task_mut(id)?;
+    task.checklist.clear();
+    task.steps_one_off = false;
+    task.modified_at = at;
+    Ok(created)
 }
 
 /// Remove tasks and their subtrees from every map and order list.

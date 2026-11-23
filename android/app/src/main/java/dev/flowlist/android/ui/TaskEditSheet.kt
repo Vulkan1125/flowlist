@@ -50,7 +50,6 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Link
@@ -88,6 +87,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.focus.FocusRequester
@@ -181,6 +181,7 @@ fun TaskEditSheet(
             },
         )
     }
+    var confirmOneOff by remember(task.id) { mutableStateOf(false) }
     var estimate by remember(task.id) {
         mutableStateOf(task.estimateMin?.toString().orEmpty())
     }
@@ -585,9 +586,16 @@ fun TaskEditSheet(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            val activeDone = orderedSubtasks.count { it.completed } +
+            val activeDone = if (stepMode == StepMode.OneOff) {
                 task.checklist.count { it.completed }
-            val activeTotal = orderedSubtasks.size + task.checklist.size
+            } else {
+                orderedSubtasks.count { it.completed }
+            }
+            val activeTotal = if (stepMode == StepMode.OneOff) {
+                task.checklist.size
+            } else {
+                orderedSubtasks.size
+            }
             Label(
                 if (activeTotal == 0) {
                     "Subtasks"
@@ -603,12 +611,23 @@ fun TaskEditSheet(
                     stepMode = StepMode.Sequential
                 }
                 PriorityPill("One-off", stepMode == StepMode.OneOff, colors.accent) {
-                    stepMode = StepMode.OneOff
+                    if (stepMode != StepMode.OneOff && orderedSubtasks.isNotEmpty()) {
+                        confirmOneOff = true
+                    } else {
+                        stepMode = StepMode.OneOff
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
-            orderedSubtasks.forEachIndexed { index, child ->
+            if (stepMode != StepMode.OneOff) {
+                var firstIncomplete: String? = null
+                orderedSubtasks.forEachIndexed { index, child ->
                 key(child.id) {
+                    val blockedBy = if (stepMode == StepMode.Sequential && !child.completed) {
+                        firstIncomplete
+                    } else {
+                        null
+                    }
                     val dragging = subtaskDragId == child.id
                     val settlingThis = dragging && subtaskSettling
                     val shift = when {
@@ -653,13 +672,14 @@ fun TaskEditSheet(
                         CheckCircle(
                             checked = child.completed,
                             onClick = { onToggleSubtask(child, !child.completed) },
+                            modifier = if (blockedBy != null) Modifier.alpha(0.45f) else Modifier,
                             priority = child.priority,
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = child.title,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (child.completed) colors.faint else colors.ink,
+                            color = if (child.completed || blockedBy != null) colors.faint else colors.ink,
                             textDecoration = if (child.completed) {
                                 androidx.compose.ui.text.style.TextDecoration.LineThrough
                             } else {
@@ -688,7 +708,7 @@ fun TaskEditSheet(
                             modifier = Modifier.size(32.dp),
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.DeleteOutline,
+                                imageVector = Icons.Rounded.Close,
                                 contentDescription = "Delete subtask",
                                 tint = colors.faint,
                                 modifier = Modifier.size(17.dp),
@@ -798,8 +818,17 @@ fun TaskEditSheet(
                             )
                         }
                     }
+                    if (
+                        stepMode == StepMode.Sequential &&
+                        !child.completed &&
+                        firstIncomplete == null
+                    ) {
+                        firstIncomplete = child.title
+                    }
                 }
             }
+            }
+            if (stepMode == StepMode.OneOff) {
             task.checklist.forEachIndexed { index, item ->
                     val oneOffDragging = oneOffDragId == item.id
                     val rowHeightPx = if (oneOffRowHeight > 0f) {
@@ -891,6 +920,7 @@ fun TaskEditSheet(
                         }
                     }
                 }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
             if (addingSubtask) {
@@ -1150,6 +1180,36 @@ fun TaskEditSheet(
             },
             dismissButton = {
                 TextButton(onClick = { confirmSeries = false }) { Text("Cancel") }
+            },
+            containerColor = colors.background,
+        )
+    }
+
+    if (confirmOneOff) {
+        AlertDialog(
+            onDismissRequest = { confirmOneOff = false },
+            title = { Text("Convert to one-off steps?") },
+            text = {
+                Text(
+                    if (orderedSubtasks.size == 1) {
+                        "1 subtask becomes a checklist step. Notes, dates, tags and priority are removed; the title and completion state stay."
+                    } else {
+                        "${orderedSubtasks.size} subtasks become checklist steps. Notes, dates, tags and priority are removed; titles and completion states stay."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmOneOff = false
+                        stepMode = StepMode.OneOff
+                    },
+                ) {
+                    Text("Convert", color = colors.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmOneOff = false }) { Text("Cancel") }
             },
             containerColor = colors.background,
         )
