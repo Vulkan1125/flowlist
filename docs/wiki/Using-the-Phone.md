@@ -36,7 +36,7 @@ projects and tags behave identically.
 Settings has four ways to change the look:
 
 - **Appearance** — System, Light or Dark.
-- **Theme** — twelve families: Tomato (red on white), Plain, Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula, Tokyo Night, Vesper, Graphite and Midnight. Pick a light theme and a dark theme separately; Tomato is the default for both. The light choice is used whenever the app is light and the dark choice whenever it is dark, so the two palettes stay independent of each other. Outside Tomato, medium-priority yellow uses one clear gold/yellow pair so it never reads as brown or as red.
+- **Theme** — twelve families: Tomato (red on white), Plain, Paper, Mist, Catppuccin, Nord, Gruvbox, Dracula, Tokyo Night, Vesper, Graphite and Midnight. Pick a light theme and a dark theme separately; Tomato is the default for both. The light choice is used whenever the app is light and the dark choice whenever it is dark, so the two palettes stay independent of each other. Outside Tomato, medium-priority yellow uses one clear gold/yellow pair so it never reads as brown or as red, and high-priority red uses one vivid red pair so it never looks muted.
 - **Accent** — the theme's own accent, a **Wallpaper** colour from Android's Material You palette (Android 12 and later), or a custom tone chosen from eleven presets. Each preset has a light and a dark version, so there is no colour picker to fiddle with.
 - **App icon** — six launcher colours: red, blue, green, orange, purple and graphite. Changing one replaces the home-screen icon in place.
 

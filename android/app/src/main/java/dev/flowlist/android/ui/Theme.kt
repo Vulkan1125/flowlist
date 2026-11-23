@@ -225,6 +225,11 @@ fun themeColors(settings: ThemeSettings, dark: Boolean): FlowColors {
     } else {
         Color(if (dark) 0xFFFACC15 else 0xFFC69214)
     }
+    val danger = if (family == Family.Tomato) {
+        Color(palette.danger)
+    } else {
+        Color(if (dark) 0xFFFF7066 else 0xFFDC4C3E)
+    }
     return FlowColors(
         dark = dark,
         background = if (amoled) Color.Black else Color(palette.background),
@@ -235,7 +240,7 @@ fun themeColors(settings: ThemeSettings, dark: Boolean): FlowColors {
         hairline = if (amoled) Color(0xFF222222) else Color(palette.hairline),
         success = Color(palette.success),
         warning = warning,
-        danger = Color(palette.danger),
+        danger = danger,
         accent = accent,
         onAccent = onAccent,
     )

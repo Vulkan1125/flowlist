@@ -154,6 +154,14 @@ class DataTest {
     }
 
     @Test
+    fun non_tomato_danger_stays_vivid_red() {
+        val light = themeColors(ThemeSettings(family = Family.Gruvbox), dark = false)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFDC4C3E), light.danger)
+        val dark = themeColors(ThemeSettings(darkFamily = Family.Gruvbox), dark = true)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFFF7066), dark.danger)
+    }
+
+    @Test
     fun non_tomato_warnings_stay_clearly_yellow() {
         val light = themeColors(ThemeSettings(family = Family.Plain), dark = false)
         assertEquals(androidx.compose.ui.graphics.Color(0xFFC69214), light.warning)

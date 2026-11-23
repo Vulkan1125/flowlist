@@ -224,6 +224,9 @@ below; this list is the current map.
       Gruvbox, Dracula, Tokyo Night, Vesper, Graphite and Midnight use a clear
       gold (#C69214) in light mode and bright yellow (#FACC15) in dark mode for
       warnings and medium priority. Tomato keeps its orange.
+- [x] **Non-Tomato danger red** — the same families use a vivid red (#DC4C3E
+      light, #FF7066 dark) for high priority and destructive actions instead of
+      their muted per-family reds.
 - [x] **Mac window lifecycle** — ⌘Q is bound to Quit (and appears in a small
       Flowlist app menu), double-clicking the drag handle zooms the window, and
       closing the red button then clicking the Dock icon rebuilds the window
