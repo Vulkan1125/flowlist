@@ -2420,3 +2420,14 @@ fn projectless_tasks_group_under_no_project() {
     assert_eq!(groups[0].key, "inbox");
     assert_eq!(groups[0].title, "No project");
 }
+
+#[test]
+fn every_project_icon_round_trips_by_slug() {
+    use flowlist_core::model::ProjectIcon;
+    let mut slugs = std::collections::BTreeSet::new();
+    for icon in ProjectIcon::ALL {
+        assert_eq!(ProjectIcon::from_slug(icon.slug()), Some(icon));
+        assert!(slugs.insert(icon.slug()), "duplicate icon slug");
+    }
+    assert_eq!(ProjectIcon::ALL.len(), 54);
+}

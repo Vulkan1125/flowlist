@@ -64,10 +64,48 @@ pub enum Icon {
     Archive,
     Skull,
     Smartphone,
+    Hash,
+    Plane,
+    Apple,
+    Basketball,
+    Volleyball,
+    Cake,
+    BookOpen,
+    Shovel,
+    Disc,
+    Square,
+    ChartLine,
+    ListChecks,
+    Terminal,
+    PieChart,
+    FileText,
+    Dog,
+    DollarSign,
+    Mail,
+    Smile,
+    Gift,
+    Headset,
+    FlaskConical,
+    Laptop,
+    Lightbulb,
+    Mic,
+    Paintbrush,
+    User,
+    Users,
+    Pill,
+    Pin,
+    Pizza,
+    Puzzle,
+    GraduationCap,
+    Sofa,
+    Sparkles,
+    Stethoscope,
+    Telescope,
+    Video,
 }
 
 impl Icon {
-    pub const ALL: [Icon; 53] = [
+    pub const ALL: [Icon; 91] = [
         Icon::Inbox,
         Icon::Projects,
         Icon::Forecast,
@@ -121,6 +159,44 @@ impl Icon {
         Icon::Archive,
         Icon::Skull,
         Icon::Smartphone,
+        Icon::Hash,
+        Icon::Plane,
+        Icon::Apple,
+        Icon::Basketball,
+        Icon::Volleyball,
+        Icon::Cake,
+        Icon::BookOpen,
+        Icon::Shovel,
+        Icon::Disc,
+        Icon::Square,
+        Icon::ChartLine,
+        Icon::ListChecks,
+        Icon::Terminal,
+        Icon::PieChart,
+        Icon::FileText,
+        Icon::Dog,
+        Icon::DollarSign,
+        Icon::Mail,
+        Icon::Smile,
+        Icon::Gift,
+        Icon::Headset,
+        Icon::FlaskConical,
+        Icon::Laptop,
+        Icon::Lightbulb,
+        Icon::Mic,
+        Icon::Paintbrush,
+        Icon::User,
+        Icon::Users,
+        Icon::Pill,
+        Icon::Pin,
+        Icon::Pizza,
+        Icon::Puzzle,
+        Icon::GraduationCap,
+        Icon::Sofa,
+        Icon::Sparkles,
+        Icon::Stethoscope,
+        Icon::Telescope,
+        Icon::Video,
     ];
 
     pub fn path(self) -> &'static str {
@@ -178,6 +254,44 @@ impl Icon {
             Icon::Archive => "icons/archive.svg",
             Icon::Skull => "icons/skull.svg",
             Icon::Smartphone => "icons/smartphone.svg",
+            Icon::Hash => "icons/hash.svg",
+            Icon::Plane => "icons/plane.svg",
+            Icon::Apple => "icons/apple.svg",
+            Icon::Basketball => "icons/basketball.svg",
+            Icon::Volleyball => "icons/beach-ball.svg",
+            Icon::Cake => "icons/cake.svg",
+            Icon::BookOpen => "icons/book-open.svg",
+            Icon::Shovel => "icons/garden.svg",
+            Icon::Disc => "icons/record.svg",
+            Icon::Square => "icons/square.svg",
+            Icon::ChartLine => "icons/growth.svg",
+            Icon::ListChecks => "icons/checklist.svg",
+            Icon::Terminal => "icons/terminal.svg",
+            Icon::PieChart => "icons/analytics.svg",
+            Icon::FileText => "icons/document.svg",
+            Icon::Dog => "icons/dog.svg",
+            Icon::DollarSign => "icons/money.svg",
+            Icon::Mail => "icons/mail.svg",
+            Icon::Smile => "icons/smile.svg",
+            Icon::Gift => "icons/gift.svg",
+            Icon::Headset => "icons/support.svg",
+            Icon::FlaskConical => "icons/flask.svg",
+            Icon::Laptop => "icons/laptop.svg",
+            Icon::Lightbulb => "icons/lightbulb.svg",
+            Icon::Mic => "icons/podcast.svg",
+            Icon::Paintbrush => "icons/paintbrush.svg",
+            Icon::User => "icons/person.svg",
+            Icon::Users => "icons/team.svg",
+            Icon::Pill => "icons/health.svg",
+            Icon::Pin => "icons/pin.svg",
+            Icon::Pizza => "icons/pizza.svg",
+            Icon::Puzzle => "icons/puzzle.svg",
+            Icon::GraduationCap => "icons/study.svg",
+            Icon::Sofa => "icons/sofa.svg",
+            Icon::Sparkles => "icons/sparkles.svg",
+            Icon::Stethoscope => "icons/stethoscope.svg",
+            Icon::Telescope => "icons/telescope.svg",
+            Icon::Video => "icons/video.svg",
         }
     }
 
@@ -316,6 +430,120 @@ impl Icon {
             Icon::Smartphone => {
                 r#"<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>"#
             }
+            Icon::Hash => {
+                r#"<line x1="4" x2="20" y1="9" y2="9" /> <line x1="4" x2="20" y1="15" y2="15" /> <line x1="10" x2="8" y1="3" y2="21" /> <line x1="16" x2="14" y1="3" y2="21" />"#
+            }
+            Icon::Plane => {
+                r#"<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />"#
+            }
+            Icon::Apple => {
+                r#"<path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z" /> <path d="M10 2c1 .5 2 2 2 5" />"#
+            }
+            Icon::Basketball => {
+                r#"<circle cx="12" cy="12" r="10" /> <path d="M19.13 5.09C15.22 9.14 10 10.44 2.25 10.94" /> <path d="M21.75 12.84c-6.62-1.41-12.14 1-16.38 6.32" /> <path d="M8.56 2.75c4.37 6 6 9.42 8 17.72" />"#
+            }
+            Icon::Volleyball => {
+                r#"<path d="M11.1 7.1a16.55 16.55 0 0 1 10.9 4" /> <path d="M12 12a12.6 12.6 0 0 1-8.7 5" /> <path d="M16.8 13.6a16.55 16.55 0 0 1-9 7.5" /> <path d="M20.7 17a12.8 12.8 0 0 0-8.7-5 13.3 13.3 0 0 1 0-10" /> <path d="M6.3 3.8a16.55 16.55 0 0 0 1.9 11.5" /> <circle cx="12" cy="12" r="10" />"#
+            }
+            Icon::Cake => {
+                r#"<path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8" /> <path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1" /> <path d="M2 21h20" /> <path d="M7 8v3" /> <path d="M12 8v3" /> <path d="M17 8v3" /> <path d="M7 4h.01" /> <path d="M12 4h.01" /> <path d="M17 4h.01" />"#
+            }
+            Icon::BookOpen => {
+                r#"<path d="M12 7v14" /> <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />"#
+            }
+            Icon::Shovel => {
+                r#"<path d="M2 22v-5l5-5 5 5-5 5z" /> <path d="M9.5 14.5 16 8" /> <path d="m17 2 5 5-.5.5a3.53 3.53 0 0 1-5 0s0 0 0 0a3.53 3.53 0 0 1 0-5L17 2" />"#
+            }
+            Icon::Disc => {
+                r#"<circle cx="12" cy="12" r="10" /> <circle cx="12" cy="12" r="2" />"#
+            }
+            Icon::Square => {
+                r#"<rect width="18" height="18" x="3" y="3" rx="2" />"#
+            }
+            Icon::ChartLine => {
+                r#"<path d="M3 3v16a2 2 0 0 0 2 2h16" /> <path d="m19 9-5 5-4-4-3 3" />"#
+            }
+            Icon::ListChecks => {
+                r#"<path d="m3 17 2 2 4-4" /> <path d="m3 7 2 2 4-4" /> <path d="M13 6h8" /> <path d="M13 12h8" /> <path d="M13 18h8" />"#
+            }
+            Icon::Terminal => {
+                r#"<path d="m7 11 2-2-2-2" /> <path d="M11 13h4" /> <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />"#
+            }
+            Icon::PieChart => {
+                r#"<path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z" /> <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />"#
+            }
+            Icon::FileText => {
+                r#"<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /> <path d="M14 2v4a2 2 0 0 0 2 2h4" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" />"#
+            }
+            Icon::Dog => {
+                r#"<path d="M11.25 16.25h1.5L12 17z" /> <path d="M16 14v.5" /> <path d="M4.42 11.247A13.152 13.152 0 0 0 4 14.556C4 18.728 7.582 21 12 21s8-2.272 8-6.444a11.702 11.702 0 0 0-.493-3.309" /> <path d="M8 14v.5" /> <path d="M8.5 8.5c-.384 1.05-1.083 2.028-2.344 2.5-1.931.722-3.576-.297-3.656-1-.113-.994 1.177-6.53 4-7 1.923-.321 3.651.845 3.651 2.235A7.497 7.497 0 0 1 14 5.277c0-1.39 1.844-2.598 3.767-2.277 2.823.47 4.113 6.006 4 7-.08.703-1.725 1.722-3.656 1-1.261-.472-1.855-1.45-2.239-2.5" />"#
+            }
+            Icon::DollarSign => {
+                r#"<line x1="12" x2="12" y1="2" y2="22" /> <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />"#
+            }
+            Icon::Mail => {
+                r#"<rect width="20" height="16" x="2" y="4" rx="2" /> <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />"#
+            }
+            Icon::Smile => {
+                r#"<circle cx="12" cy="12" r="10" /> <path d="M8 14s1.5 2 4 2 4-2 4-2" /> <line x1="9" x2="9.01" y1="9" y2="9" /> <line x1="15" x2="15.01" y1="9" y2="9" />"#
+            }
+            Icon::Gift => {
+                r#"<rect x="3" y="8" width="18" height="4" rx="1" /> <path d="M12 8v13" /> <path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" /> <path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5" />"#
+            }
+            Icon::Headset => {
+                r#"<path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z" /> <path d="M21 16v2a4 4 0 0 1-4 4h-5" />"#
+            }
+            Icon::FlaskConical => {
+                r#"<path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2" /> <path d="M6.453 15h11.094" /> <path d="M8.5 2h7" />"#
+            }
+            Icon::Laptop => {
+                r#"<path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16" />"#
+            }
+            Icon::Lightbulb => {
+                r#"<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" /> <path d="M9 18h6" /> <path d="M10 22h4" />"#
+            }
+            Icon::Mic => {
+                r#"<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /> <path d="M19 10v2a7 7 0 0 1-14 0v-2" /> <line x1="12" x2="12" y1="19" y2="22" />"#
+            }
+            Icon::Paintbrush => {
+                r#"<path d="m14.622 17.897-10.68-2.913" /> <path d="M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z" /> <path d="M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15" />"#
+            }
+            Icon::User => {
+                r#"<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /> <circle cx="12" cy="7" r="4" />"#
+            }
+            Icon::Users => {
+                r#"<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /> <circle cx="9" cy="7" r="4" /> <path d="M22 21v-2a4 4 0 0 0-3-3.87" /> <path d="M16 3.13a4 4 0 0 1 0 7.75" />"#
+            }
+            Icon::Pill => {
+                r#"<path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" /> <path d="m8.5 8.5 7 7" />"#
+            }
+            Icon::Pin => {
+                r#"<path d="M12 17v5" /> <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />"#
+            }
+            Icon::Pizza => {
+                r#"<path d="m12 14-1 1" /> <path d="m13.75 18.25-1.25 1.42" /> <path d="M17.775 5.654a15.68 15.68 0 0 0-12.121 12.12" /> <path d="M18.8 9.3a1 1 0 0 0 2.1 7.7" /> <path d="M21.964 20.732a1 1 0 0 1-1.232 1.232l-18-5a1 1 0 0 1-.695-1.232A19.68 19.68 0 0 1 15.732 2.037a1 1 0 0 1 1.232.695z" />"#
+            }
+            Icon::Puzzle => {
+                r#"<path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z" />"#
+            }
+            Icon::GraduationCap => {
+                r#"<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" /> <path d="M22 10v6" /> <path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5" />"#
+            }
+            Icon::Sofa => {
+                r#"<path d="M20 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v3" /> <path d="M2 16a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v1.5a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5V11a2 2 0 0 0-4 0z" /> <path d="M4 18v2" /> <path d="M20 18v2" /> <path d="M12 4v9" />"#
+            }
+            Icon::Sparkles => {
+                r#"<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" /> <path d="M20 3v4" /> <path d="M22 5h-4" /> <path d="M4 17v2" /> <path d="M5 18H3" />"#
+            }
+            Icon::Stethoscope => {
+                r#"<path d="M11 2v2" /> <path d="M5 2v2" /> <path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1" /> <path d="M8 15a6 6 0 0 0 12 0v-3" /> <circle cx="20" cy="10" r="2" />"#
+            }
+            Icon::Telescope => {
+                r#"<path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44" /> <path d="m13.56 11.747 4.332-.924" /> <path d="m16 21-3.105-6.21" /> <path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z" /> <path d="m6.158 8.633 1.114 4.456" /> <path d="m8 21 3.105-6.21" /> <circle cx="12" cy="13" r="2" />"#
+            }
+            Icon::Video => {
+                r#"<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" /> <rect x="2" y="6" width="14" height="12" rx="2" />"#
+            }
         }
     }
 }
@@ -361,7 +589,7 @@ mod tests {
 
     #[test]
     fn icon_set_is_complete_and_unique() {
-        assert_eq!(Icon::ALL.len(), 53);
+        assert_eq!(Icon::ALL.len(), 91);
         let mut paths: Vec<&str> = Icon::ALL.iter().map(|icon| icon.path()).collect();
         paths.sort_unstable();
         paths.dedup();

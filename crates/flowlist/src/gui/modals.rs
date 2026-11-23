@@ -2526,7 +2526,7 @@ impl FlowlistApp {
                     ),
             )
             .when(icon_open, |this| {
-                let mut icons = div().flex().items_center().gap_1();
+                let mut icons = div().flex().flex_wrap().items_center().gap_1();
                 for candidate in ProjectIcon::ALL {
                     let active = icon == candidate;
                     icons = icons.child(

@@ -239,6 +239,10 @@ below; this list is the current map.
 - [x] **Widget quick add stays floating** — the widget’s + button opens its
       capture card in its own task, so a background app is not dragged to the
       foreground underneath it.
+- [x] **Expanded project icons** — the Mac and Android pickers share 54
+      project icons: the original ten plus the Reddit/Todoist-style set
+      (travel, sport, food, study, health, home life, media, people, tools and
+      nature).
 - [x] **Chevron hit target** — the one-circle gap between a task's subtask
       chevron and its flag is part of the expand/collapse target, so the small
       chevron is easier to hit.

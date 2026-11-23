@@ -190,6 +190,13 @@ private fun FlowlistApp(
                         runCatching {
                             WidgetUpdater.refresh(context.applicationContext)
                         }
+                        // Some launchers defer the first widget pass while the
+                        // app is still in front. A second pass after the theme
+                        // has settled makes the change stick.
+                        delay(800)
+                        runCatching {
+                            WidgetUpdater.refresh(context.applicationContext)
+                        }
                     }
                 },
                 initialTab = openTab,
@@ -236,6 +243,14 @@ private fun FlowlistApp(
         if (state.paired) {
             scope.launch { repository.sync() }
             state.snapshot?.let { NearbyReminders.sync(context, it.db) }
+        }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        if (state.paired) {
+            scope.launch {
+                runCatching { WidgetUpdater.refresh(context.applicationContext) }
+            }
         }
     }
 }

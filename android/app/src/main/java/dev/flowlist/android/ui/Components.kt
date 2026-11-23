@@ -22,18 +22,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.outlined.Assignment
-import androidx.compose.material.icons.outlined.Code
-import androidx.compose.material.icons.outlined.Favorite
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.LocalCafe
-import androidx.compose.material.icons.outlined.MenuBook
-import androidx.compose.material.icons.outlined.RocketLaunch
-import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.outlined.Work
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -727,8 +718,51 @@ val projectIconChoices = listOf(
     "code" to "Code",
     "rocket" to "Rocket",
     "coffee" to "Coffee",
+    "hash" to "Hash",
+    "plane" to "Plane",
+    "apple" to "Apple",
+    "basketball" to "Basketball",
+    "beach_ball" to "Beach ball",
+    "cake" to "Cake",
+    "book_open" to "Open book",
+    "garden" to "Garden",
+    "record" to "Record",
+    "square" to "Square",
+    "growth" to "Growth",
+    "checklist" to "Checklist",
+    "terminal" to "Terminal",
+    "analytics" to "Analytics",
+    "document" to "Document",
+    "dog" to "Dog",
+    "money" to "Money",
+    "mail" to "Mail",
+    "smile" to "Smile",
+    "flag" to "Flag",
+    "gift" to "Gift",
+    "support" to "Support",
+    "flask" to "Science",
+    "laptop" to "Laptop",
+    "phone" to "Phone",
+    "lightbulb" to "Idea",
+    "podcast" to "Podcast",
+    "moon" to "Moon",
+    "paintbrush" to "Design",
+    "palette" to "Palette",
+    "person" to "Person",
+    "team" to "Team",
+    "pill" to "Health",
+    "pin" to "Pin",
+    "pizza" to "Pizza",
+    "puzzle" to "Puzzle",
+    "study" to "Study",
+    "sofa" to "Home life",
+    "sparkles" to "Sparkles",
+    "stethoscope" to "Doctor",
+    "sun" to "Sun",
+    "telescope" to "Telescope",
+    "video" to "Video",
+    "clock" to "Clock",
 )
-
 fun projectIcon(slug: String): ImageVector = when (slug) {
     "folder" -> Icons.Outlined.Folder
     "star" -> Icons.Outlined.Star
@@ -739,5 +773,49 @@ fun projectIcon(slug: String): ImageVector = when (slug) {
     "code" -> Icons.Outlined.Code
     "rocket" -> Icons.Outlined.RocketLaunch
     "coffee" -> Icons.Outlined.LocalCafe
+    "hash" -> Icons.Outlined.Numbers
+    "plane" -> Icons.Outlined.Flight
+    "apple" -> Icons.Outlined.Eco
+    "basketball" -> Icons.Outlined.SportsBasketball
+    "beach_ball" -> Icons.Outlined.SportsVolleyball
+    "cake" -> Icons.Outlined.Cake
+    "book_open" -> Icons.Outlined.AutoStories
+    "garden" -> Icons.Outlined.Yard
+    "record" -> Icons.Outlined.Album
+    "square" -> Icons.Outlined.CropSquare
+    "growth" -> Icons.Outlined.TrendingUp
+    "checklist" -> Icons.Outlined.Checklist
+    "terminal" -> Icons.Outlined.Terminal
+    "analytics" -> Icons.Outlined.PieChart
+    "document" -> Icons.Outlined.Description
+    "dog" -> Icons.Outlined.Pets
+    "money" -> Icons.Outlined.AttachMoney
+    "mail" -> Icons.Outlined.MailOutline
+    "smile" -> Icons.Outlined.Mood
+    "flag" -> Icons.Outlined.Flag
+    "gift" -> Icons.Outlined.CardGiftcard
+    "support" -> Icons.Outlined.HeadsetMic
+    "flask" -> Icons.Outlined.Science
+    "laptop" -> Icons.Outlined.Laptop
+    "phone" -> Icons.Outlined.Smartphone
+    "lightbulb" -> Icons.Outlined.Lightbulb
+    "podcast" -> Icons.Outlined.Mic
+    "moon" -> Icons.Outlined.DarkMode
+    "paintbrush" -> Icons.Outlined.Brush
+    "palette" -> Icons.Outlined.Palette
+    "person" -> Icons.Outlined.Person
+    "team" -> Icons.Outlined.People
+    "pill" -> Icons.Outlined.Medication
+    "pin" -> Icons.Outlined.PushPin
+    "pizza" -> Icons.Outlined.LocalPizza
+    "puzzle" -> Icons.Outlined.Extension
+    "study" -> Icons.Outlined.School
+    "sofa" -> Icons.Outlined.Weekend
+    "sparkles" -> Icons.Outlined.AutoAwesome
+    "stethoscope" -> Icons.Outlined.MonitorHeart
+    "sun" -> Icons.Outlined.LightMode
+    "telescope" -> Icons.Outlined.TravelExplore
+    "video" -> Icons.Outlined.Videocam
+    "clock" -> Icons.Outlined.AccessTime
     else -> Icons.Outlined.Assignment
 }

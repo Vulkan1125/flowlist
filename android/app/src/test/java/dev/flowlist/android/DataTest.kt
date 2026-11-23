@@ -17,6 +17,7 @@ import dev.flowlist.android.ui.Perspective
 import dev.flowlist.android.ui.drawerCount
 import dev.flowlist.android.ui.ThemeSettings
 import dev.flowlist.android.ui.themeColors
+import dev.flowlist.android.ui.projectIconChoices
 import dev.flowlist.android.ui.PerspectiveDraft
 import dev.flowlist.android.ui.draftFrom
 import dev.flowlist.android.ui.toFilter
@@ -43,6 +44,15 @@ class DataTest {
         assertEquals("restore_right", AppPreferences().trashSwipe)
         assertEquals("restore_left", AppPreferences().copy(trashSwipe = "restore_left").trashSwipe)
         assertEquals("off", AppPreferences().copy(trashSwipe = "off").trashSwipe)
+    }
+
+    @Test
+    fun project_icon_picker_matches_the_mac_set() {
+        assertEquals(54, projectIconChoices.size)
+        assertEquals(54, projectIconChoices.map { it.first }.toSet().size)
+        assertTrue(projectIconChoices.any { it.first == "basketball" })
+        assertTrue(projectIconChoices.any { it.first == "stethoscope" })
+        assertTrue(projectIconChoices.any { it.first == "telescope" })
     }
 
     @Test
