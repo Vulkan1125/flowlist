@@ -35,7 +35,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -54,7 +53,6 @@ import dev.flowlist.android.data.TaskView
 import dev.flowlist.android.data.forecast
 import dev.flowlist.android.data.isActive
 import dev.flowlist.android.data.taskViews
-import java.time.DayOfWeek
 import kotlin.math.abs
 import java.time.LocalDate
 import java.time.YearMonth
@@ -77,7 +75,8 @@ fun ForecastScreen(
 ) {
     val colors = flow
     val monthMode = view != "agenda"
-    var selectedKey by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    val today = LocalDate.now()
+    var selectedKey by rememberSaveable { mutableStateOf(today.toString()) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     val selected = LocalDate.parse(selectedKey)
     val month = YearMonth.from(selected)
@@ -99,7 +98,6 @@ fun ForecastScreen(
 
     fun shiftMonth(step: Long) {
         val next = YearMonth.from(selected).plusMonths(step)
-        val today = LocalDate.now()
         selectedKey = if (YearMonth.from(today) == next) today.toString() else next.atDay(1).toString()
     }
 
@@ -143,8 +141,8 @@ fun ForecastScreen(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.ink,
-                    modifier = Modifier.weight(1f),
                 )
+                Spacer(modifier = Modifier.width(6.dp))
                 Icon(
                     imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                     contentDescription = if (expanded) "Show week" else "Show full month",
@@ -152,45 +150,53 @@ fun ForecastScreen(
                     modifier = Modifier.size(22.dp),
                 )
             }
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            selectedKey = LocalDate.now().toString()
-                        }
-                        .padding(vertical = 10.dp),
+            if (expanded) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = "Today",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = colors.accent,
-                    )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = { shiftMonth(-1) }, modifier = Modifier.size(46.dp)) {
-                    Icon(Icons.Rounded.ChevronLeft, "Previous month", tint = colors.faint, modifier = Modifier.size(26.dp))
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-                IconButton(onClick = { shiftMonth(1) }, modifier = Modifier.size(46.dp)) {
-                    Icon(Icons.Rounded.ChevronRight, "Next month", tint = colors.faint, modifier = Modifier.size(26.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                selectedKey = today.toString()
+                            }
+                            .padding(vertical = 10.dp),
+                    ) {
+                        Text(
+                            text = "Today",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = colors.accent,
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    IconButton(onClick = { shiftMonth(-1) }, modifier = Modifier.size(46.dp)) {
+                        Icon(Icons.Rounded.ChevronLeft, "Previous month", tint = colors.faint, modifier = Modifier.size(26.dp))
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    IconButton(onClick = { shiftMonth(1) }, modifier = Modifier.size(46.dp)) {
+                        Icon(Icons.Rounded.ChevronRight, "Next month", tint = colors.faint, modifier = Modifier.size(26.dp))
+                    }
                 }
             }
         }
 
         ForecastCalendar(
             expanded = expanded,
+            today = today,
             selected = selected,
             month = month,
             weekStartsMonday = weekStartsMonday,
             counts = byDate.mapValues { it.value.size },
             onSelect = { selectedKey = it.toString() },
             onWeekChange = { selectedKey = it.toString() },
-            onExpandedChange = { expanded = it },
+            onExpandedChange = {
+                expanded = it
+                if (!it && selected < today) {
+                    selectedKey = today.toString()
+                }
+            },
         )
 
         val dayTasks = sortTasks(
@@ -258,6 +264,7 @@ fun ForecastScreen(
 @Composable
 private fun ForecastCalendar(
     expanded: Boolean,
+    today: LocalDate,
     selected: LocalDate,
     month: YearMonth,
     weekStartsMonday: Boolean,
@@ -304,6 +311,26 @@ private fun ForecastCalendar(
                 }
             },
     ) {
+        if (expanded) {
+            Column {
+                WeekdayHeader(weekStartsMonday)
+                MonthGrid(
+                    month = month,
+                    weekStartsMonday = weekStartsMonday,
+                    selected = selected,
+                    counts = counts,
+                    onSelect = onSelect,
+                )
+            }
+        } else {
+            WeekStrip(
+                today = today,
+                selected = selected,
+                counts = counts,
+                onSelect = onSelect,
+                onWeekChange = onWeekChange,
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -319,55 +346,29 @@ private fun ForecastCalendar(
                     .background(colors.hairline),
             )
         }
-        if (expanded) {
-            Column {
-                WeekdayHeader(weekStartsMonday)
-                MonthGrid(
-                    month = month,
-                    weekStartsMonday = weekStartsMonday,
-                    selected = selected,
-                    counts = counts,
-                    onSelect = onSelect,
-                )
-            }
-        } else {
-            key(weekStartsMonday) {
-                WeekStrip(
-                    selected = selected,
-                    weekStartsMonday = weekStartsMonday,
-                    counts = counts,
-                    onSelect = onSelect,
-                    onWeekChange = onWeekChange,
-                )
-            }
-        }
     }
 }
 
 @Composable
 private fun WeekStrip(
+    today: LocalDate,
     selected: LocalDate,
-    weekStartsMonday: Boolean,
     counts: Map<LocalDate, Int>,
     onSelect: (LocalDate) -> Unit,
     onWeekChange: (LocalDate) -> Unit,
 ) {
-    val anchor = if (weekStartsMonday) WEEK_ANCHOR_MONDAY else WEEK_ANCHOR_SUNDAY
     val pagerState = rememberPagerState(
-        initialPage = weekPage(selected, weekStartsMonday),
-        pageCount = { WEEK_PAGE_COUNT },
+        initialPage = stripPage(selected, today),
+        pageCount = { STRIP_PAGE_COUNT },
     )
     LaunchedEffect(pagerState.settledPage) {
-        val start = anchor.plusWeeks(pagerState.settledPage.toLong())
-        val first = if (weekStartsMonday) DayOfWeek.MONDAY else DayOfWeek.SUNDAY
-        val offset = ((selected.dayOfWeek.value - first.value + 7) % 7).toLong()
-        val date = start.plusDays(offset)
-        if (date != selected) {
-            onWeekChange(date)
+        val start = today.plusDays(pagerState.settledPage.toLong() * 7)
+        if (selected < start || selected > start.plusDays(6)) {
+            onWeekChange(start)
         }
     }
     LaunchedEffect(selected) {
-        val page = weekPage(selected, weekStartsMonday)
+        val page = stripPage(selected, today)
         if (page != pagerState.currentPage) {
             pagerState.animateScrollToPage(page)
         }
@@ -379,14 +380,14 @@ private fun WeekStrip(
             .height(60.dp),
         beyondViewportPageCount = 1,
     ) { page ->
-        val start = anchor.plusWeeks(page.toLong())
+        val start = today.plusDays(page.toLong() * 7)
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
             repeat(7) { index ->
                 val date = start.plusDays(index.toLong())
                 WeekDayCell(
                     date = date,
                     selected = date == selected,
-                    today = date == LocalDate.now(),
+                    today = date == today,
                     count = counts[date] ?: 0,
                     onClick = { onSelect(date) },
                 )
@@ -446,19 +447,12 @@ private fun RowScope.WeekDayCell(
     }
 }
 
-private const val WEEK_PAGE_COUNT = 10_000
-private val WEEK_ANCHOR_MONDAY = LocalDate.of(2000, 1, 3)
-private val WEEK_ANCHOR_SUNDAY = LocalDate.of(2000, 1, 2)
+private const val STRIP_PAGE_COUNT = 5_000
 
-private fun startOfWeek(date: LocalDate, weekStartsMonday: Boolean): LocalDate {
-    val first = if (weekStartsMonday) DayOfWeek.MONDAY else DayOfWeek.SUNDAY
-    return date.minusDays(((date.dayOfWeek.value - first.value + 7) % 7).toLong())
-}
-
-private fun weekPage(date: LocalDate, weekStartsMonday: Boolean): Int {
-    val anchor = if (weekStartsMonday) WEEK_ANCHOR_MONDAY else WEEK_ANCHOR_SUNDAY
-    val weeks = (startOfWeek(date, weekStartsMonday).toEpochDay() - anchor.toEpochDay()) / 7
-    return weeks.coerceIn(0, (WEEK_PAGE_COUNT - 1).toLong()).toInt()
+private fun stripPage(date: LocalDate, today: LocalDate): Int {
+    if (date <= today) return 0
+    val days = date.toEpochDay() - today.toEpochDay()
+    return (days / 7).coerceIn(0, (STRIP_PAGE_COUNT - 1).toLong()).toInt()
 }
 
 @Composable
