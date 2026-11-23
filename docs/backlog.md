@@ -230,6 +230,10 @@ below; this list is the current map.
 - [x] **Mac priority signals** — high and medium task circles use the same
       vivid red/yellow pair across every Mac theme, and priority rings are 2 px
       instead of 1 px so the colour reads more clearly.
+- [x] **Todoist-style Forecast calendar** — the month view opens on a
+      horizontally swipeable week strip under the month name. Dragging down (or
+      the handle/title) expands the full month grid, and dragging up folds it
+      back. It keeps the week that was visible when opening the grid.
 - [x] **Trash swipe actions** — trash rows use right-swipe to restore and
       left-swipe to delete instead of two buttons. Settings → Tasks → Trash
       swipes can swap the sides or turn swipes off, which restores the

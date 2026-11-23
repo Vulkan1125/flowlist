@@ -207,14 +207,16 @@ open project or toggle its tags.
 
 ## Forecast
 
-Forecast opens on a **month grid**. The Month/Agenda selector uses roomy pills
-with clear space between them. Each day shows how many tasks are due. In month
-mode the month name is a heading with a larger **Today** button aligned under its
-left edge and well-spaced previous/next month controls underneath it. Tapping a
-day lists its tasks below the grid. The grid and the selected day's tasks share
-one scroll, so scrolling the calendar up gives the task list the rest of the
-screen. **Agenda** switches back to the rolling two-week list and hides the month
-heading and its controls; the choice is remembered across app restarts.
+Forecast opens on a **Todoist-style week strip**. The Month/Agenda selector uses
+roomy pills with clear space between them. Under the month name, a single row of
+seven dates shows how many tasks are due each day. Swipe it left or right to move
+a week at a time; the month heading follows the selected week. Drag the strip (or
+the small handle above it) down to open the full month grid, and drag up to fold
+it back to the week. The month title and its chevron also toggle the grid. The
+grid opens on the week that was visible, not back at today. Tapping a day lists
+its tasks below the calendar. **Agenda** switches back to the rolling two-week
+list and hides the month heading and its controls; the choice is remembered
+across app restarts.
 
 ## Saved perspectives
 
