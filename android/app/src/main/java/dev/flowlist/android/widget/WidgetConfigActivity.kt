@@ -51,7 +51,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.lifecycleScope
 import dev.flowlist.android.data.ThemeStore
 import dev.flowlist.android.ui.FlowlistTheme
@@ -85,7 +84,7 @@ class WidgetConfigActivity : ComponentActivity() {
                     onSave = { options ->
                         store.save(appWidgetId, options)
                         lifecycleScope.launch {
-                            FlowlistWidget().updateAll(applicationContext)
+                            WidgetUpdater.refresh(applicationContext)
                             setResult(
                                 Activity.RESULT_OK,
                                 Intent().putExtra(

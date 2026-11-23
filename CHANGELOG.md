@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.43 — 2026-11-23
+
+- **Widget theme follows the device instantly.** Glance now carries day and
+  night colour pairs in the RemoteViews, so Android can switch the widget
+  without waking Flowlist. Verified with the app force-stopped.
+- **Widget icon and preview.** The header uses the selected launcher icon
+  colour, and the widget picker shows a real Today preview.
+- **Geotags settings.** Android Settings has a separate **Geotags** category
+  for arrival reminders, permissions and the test reminder.
+- **Mac tag groups.** The sidebar TAGS section is split into **General** and
+  **Geotags**, preserving each tag tree.
+- **Dropped from the roadmap:** custom geotag notification sounds.
+
 ## 0.9.42 — 2026-11-23
 
 - **Widget follows the app theme.** “Follow app” now uses the app’s light/dark

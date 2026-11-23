@@ -1019,8 +1019,20 @@ impl FlowlistApp {
         if options.show_tags {
             lower = lower.child(self.sidebar_section("tags", "TAGS", cx));
             if self.is_open("section:tags", true) {
-                lower = lower.children(self.tag_rows(None, cx));
-                if self.store.db().tags.is_empty() {
+                let (empty, has_general, has_geotags) = {
+                    let db = self.store.db();
+                    let roots = db.tags_sorted_by_usage(None);
+                    (
+                        db.tags.is_empty(),
+                        roots.iter().any(|id| {
+                            db.tags.get(id).is_some_and(|tag| tag.location.is_none())
+                        }),
+                        roots.iter().any(|id| {
+                            db.tags.get(id).is_some_and(|tag| tag.location.is_some())
+                        }),
+                    )
+                };
+                if empty {
                     lower = lower.child(
                         div()
                             .px_3()
@@ -1029,6 +1041,15 @@ impl FlowlistApp {
                             .text_color(theme.text_faint)
                             .child("No tags yet — add one with #tag in quick entry."),
                     );
+                } else {
+                    if has_general {
+                        lower = lower.child(tag_group_label("GENERAL", theme));
+                        lower = lower.children(self.tag_rows_filtered(None, Some(false), cx));
+                    }
+                    if has_geotags {
+                        lower = lower.child(tag_group_label("GEOTAGS", theme));
+                        lower = lower.children(self.tag_rows_filtered(None, Some(true), cx));
+                    }
                 }
             }
         }
@@ -1719,10 +1740,25 @@ impl FlowlistApp {
         rows
     }
 
-    fn tag_rows(&self, parent: Option<TagId>, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    fn tag_rows_filtered(
+        &self,
+        parent: Option<TagId>,
+        geotag_filter: Option<bool>,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
         let db = self.store.db();
         let show_counts = db.settings.sidebar.counts_tags;
-        let tags = db.tags_sorted_by_usage(parent.as_ref());
+        let tags = db
+            .tags_sorted_by_usage(parent.as_ref())
+            .into_iter()
+            .filter(|id| {
+                geotag_filter.map_or(true, |want| {
+                    db.tags
+                        .get(id)
+                        .is_some_and(|tag| tag.location.is_some() == want)
+                })
+            })
+            .collect::<Vec<_>>();
         let mut rows = Vec::new();
         for tag in tags {
             let Some(entity) = db.tags.get(&tag) else {
@@ -1849,11 +1885,22 @@ impl FlowlistApp {
             }
             rows.push(self.row_box(key, row).into_any_element());
             if open && children {
-                rows.extend(self.tag_rows(Some(tag), cx));
+                rows.extend(self.tag_rows_filtered(Some(tag), None, cx));
             }
         }
         rows
     }
+}
+
+fn tag_group_label(label: &'static str, theme: super::theme::Theme) -> gpui::Div {
+    div()
+        .px_3()
+        .pt_2()
+        .pb_1()
+        .text_xs()
+        .font_weight(gpui::FontWeight::SEMIBOLD)
+        .text_color(theme.text_faint)
+        .child(label)
 }
 
 struct PerspectiveRow {

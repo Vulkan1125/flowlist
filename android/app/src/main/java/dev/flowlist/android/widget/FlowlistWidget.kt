@@ -51,6 +51,7 @@ import dev.flowlist.android.data.ThemeStore
 import dev.flowlist.android.data.label
 import dev.flowlist.android.data.widgetTasks
 import dev.flowlist.android.ui.AppearanceMode
+import dev.flowlist.android.ui.FlowColors
 import dev.flowlist.android.ui.themeColors
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -75,16 +76,31 @@ class FlowlistWidget : GlanceAppWidget() {
         val systemDark =
             (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
                 Configuration.UI_MODE_NIGHT_YES
+        val appDark = when (themeSettings.mode) {
+            AppearanceMode.System -> systemDark
+            AppearanceMode.Light -> false
+            AppearanceMode.Dark -> true
+        }
         val dark = when (options.theme) {
             "light" -> false
             "dark" -> true
-            else -> when (themeSettings.mode) {
-                AppearanceMode.System -> systemDark
-                AppearanceMode.Light -> false
-                AppearanceMode.Dark -> true
-            }
+            else -> appDark
         }
-        val colors = themeColors(themeSettings, dark)
+        val fixedLight = options.theme == "light" ||
+            (options.theme == "app" && themeSettings.mode == AppearanceMode.Light)
+        val fixedDark = options.theme == "dark" ||
+            (options.theme == "app" && themeSettings.mode == AppearanceMode.Dark)
+        val dayColors = if (fixedDark) {
+            themeColors(themeSettings, true)
+        } else {
+            themeColors(themeSettings, false)
+        }
+        val nightColors = if (fixedLight) {
+            themeColors(themeSettings, false)
+        } else {
+            themeColors(themeSettings, true)
+        }
+        val colors = WidgetColors(dayColors, nightColors, options)
         val scale = when (options.textSize) {
             "compact" -> 0.9f
             "large" -> 1.25f
@@ -97,13 +113,6 @@ class FlowlistWidget : GlanceAppWidget() {
             "xlarge" -> 1.3f
             else -> 1f
         }
-        val alpha = (options.opacity / 100f).coerceIn(0.3f, 1f)
-        val blur = options.blur / 100f
-        val tintAmount = ((if (options.frosted) 0.35f else 0f) + blur * 0.55f)
-            .coerceIn(0f, 0.85f)
-        val base = blend(colors.raised, colors.field, tintAmount)
-        val effectiveAlpha = (alpha + blur * 0.25f).coerceIn(0.3f, 0.96f)
-        val tinted = base.copy(alpha = effectiveAlpha)
         val openApp = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -114,7 +123,7 @@ class FlowlistWidget : GlanceAppWidget() {
             Column(
                 modifier = GlanceModifier
                     .fillMaxSize()
-                    .background(ColorProvider(tinted))
+                    .background(colors.background)
                     .cornerRadius(20.dp)
                     .padding(14.dp),
                 verticalAlignment = Alignment.Top,
@@ -135,7 +144,7 @@ class FlowlistWidget : GlanceAppWidget() {
                     Text(
                         text = options.title,
                         style = TextStyle(
-                            color = ColorProvider(colors.ink),
+                            color = colors.ink,
                             fontSize = (18f * headerScale).sp,
                             fontWeight = FontWeight.Bold,
                         ),
@@ -146,14 +155,14 @@ class FlowlistWidget : GlanceAppWidget() {
                         Box(
                             modifier = GlanceModifier
                                 .cornerRadius(8.dp)
-                                .background(ColorProvider(colors.accent.copy(alpha = 0.16f)))
+                                .background(colors.accentSoft)
                                 .padding(horizontal = 6.dp, vertical = 2.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 text = "$openCount",
                                 style = TextStyle(
-                                    color = ColorProvider(colors.accent),
+                                    color = colors.accent,
                                     fontSize = (11f * headerScale).sp,
                                     fontWeight = FontWeight.Bold,
                                 ),
@@ -166,14 +175,14 @@ class FlowlistWidget : GlanceAppWidget() {
                             modifier = GlanceModifier
                                 .size((30f * headerScale).dp)
                                 .cornerRadius((15f * headerScale).dp)
-                                .background(ColorProvider(colors.accent))
+                                .background(colors.accent)
                                 .clickable(actionStartActivity(quickAdd)),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 text = "+",
                                 style = TextStyle(
-                                    color = ColorProvider(colors.onAccent),
+                                    color = colors.onAccent,
                                     fontSize = (20f * headerScale).sp,
                                     fontWeight = FontWeight.Bold,
                                 ),
@@ -186,7 +195,7 @@ class FlowlistWidget : GlanceAppWidget() {
                     modifier = GlanceModifier
                         .fillMaxWidth()
                         .height(1.dp)
-                        .background(ColorProvider(colors.hairline)),
+                        .background(colors.hairline),
                 )
                 if (tasks.isEmpty()) {
                     Column(
@@ -215,7 +224,7 @@ class FlowlistWidget : GlanceAppWidget() {
                             Text(
                                 text = "Tap + to capture",
                                 style = TextStyle(
-                                    color = ColorProvider(colors.faint),
+                                    color = colors.faint,
                                     fontSize = (13f * scale).sp,
                                 ),
                             )
@@ -234,9 +243,7 @@ class FlowlistWidget : GlanceAppWidget() {
                                     Text(
                                         text = label,
                                         style = TextStyle(
-                                            color = ColorProvider(
-                                                if (label == "Overdue") colors.danger else colors.faint,
-                                            ),
+                                            color = if (label == "Overdue") colors.danger else colors.faint,
                                             fontSize = (11f * scale).sp,
                                             fontWeight = FontWeight.Bold,
                                         ),
@@ -265,8 +272,8 @@ class FlowlistWidget : GlanceAppWidget() {
                                         },
                                         text = "",
                                         colors = CheckboxDefaults.colors(
-                                            checkedColor = ColorProvider(colors.accent),
-                                            uncheckedColor = ColorProvider(colors.faint),
+                                            checkedColor = colors.accent,
+                                            uncheckedColor = colors.faint,
                                         ),
                                     )
                                     Column(
@@ -277,9 +284,7 @@ class FlowlistWidget : GlanceAppWidget() {
                                         Text(
                                             text = task.title,
                                             style = TextStyle(
-                                                color = ColorProvider(
-                                                    if (task.completed) colors.faint else colors.ink,
-                                                ),
+                                                color = if (task.completed) colors.faint else colors.ink,
                                                 fontSize = (14f * scale).sp,
                                                 textDecoration = if (task.completed) {
                                                     TextDecoration.LineThrough
@@ -298,9 +303,7 @@ class FlowlistWidget : GlanceAppWidget() {
                                             Text(
                                                 text = due,
                                                 style = TextStyle(
-                                                    color = ColorProvider(
-                                                        if (overdue) colors.danger else colors.faint,
-                                                    ),
+                                                    color = if (overdue) colors.danger else colors.faint,
                                                     fontSize = (11f * scale).sp,
                                                 ),
                                                 maxLines = 1,
@@ -318,7 +321,7 @@ class FlowlistWidget : GlanceAppWidget() {
                                             Text(
                                                 text = project,
                                                 style = TextStyle(
-                                                    color = ColorProvider(colors.faint),
+                                                    color = colors.faint,
                                                     fontSize = (10f * scale).sp,
                                                 ),
                                                 maxLines = 1,
@@ -333,6 +336,36 @@ class FlowlistWidget : GlanceAppWidget() {
             }
         }
     }
+}
+
+private class WidgetColors(
+    private val day: FlowColors,
+    private val night: FlowColors,
+    private val options: WidgetOptions,
+) {
+    private fun provider(selector: (FlowColors) -> Color): ColorProvider =
+        androidx.glance.color.ColorProvider(selector(day), selector(night))
+
+    val ink: ColorProvider get() = provider { it.ink }
+    val faint: ColorProvider get() = provider { it.faint }
+    val accent: ColorProvider get() = provider { it.accent }
+    val onAccent: ColorProvider get() = provider { it.onAccent }
+    val danger: ColorProvider get() = provider { it.danger }
+    val hairline: ColorProvider get() = provider { it.hairline }
+    val accentSoft: ColorProvider get() = provider { it.accent.copy(alpha = 0.16f) }
+
+    val background: ColorProvider
+        get() {
+            val alpha = (options.opacity / 100f).coerceIn(0.3f, 1f)
+            val blur = options.blur / 100f
+            fun shade(c: FlowColors): Color {
+                val tint = ((if (options.frosted) 0.35f else 0f) + blur * 0.55f)
+                    .coerceIn(0f, 0.85f)
+                val effective = (alpha + blur * 0.25f).coerceIn(0.3f, 0.96f)
+                return blend(c.raised, c.field, tint).copy(alpha = effective)
+            }
+            return androidx.glance.color.ColorProvider(shade(day), shade(night))
+        }
 }
 
 private data class WidgetSection(val label: String?, val tasks: List<TaskView>)

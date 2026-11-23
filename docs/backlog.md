@@ -192,6 +192,12 @@ below; this list is the current map.
 - [x] **Widget theme, icon and picker preview** — “Follow app” tracks the app’s
       light/dark choice, the header icon follows the launcher icon colour, and
       the widget picker shows a real preview.
+- [x] **Widget day/night colours** — RemoteViews carries both palettes, so
+      device theme changes apply without waking the app.
+- [x] **Geotag settings category** — Android Settings has a dedicated Geotags
+      section for arrival reminders and permissions.
+- [x] **Mac tag groups** — the sidebar TAGS section splits into General and
+      Geotags.
 - [x] **Android search and Nearby** — search covers projects, folders, tags and
       perspectives with a view/library scope; Nearby lists tags within the
       library radius, sorted by distance. Search results also support bulk
@@ -218,9 +224,8 @@ below; this list is the current map.
       settings. The row-level Tmrw reschedule action was removed after
       feedback. Android widgets cannot blur the wallpaper itself, so the
       frosted option is a translucent tint.
-- [ ] **Custom geotag notification sounds** — one arrival-reminder sound for
-      every geotag, distinct from other notifications, with a preview and a
-      system-default fallback.
+- [-] **Custom geotag notification sounds** — dropped. Geotag arrival
+      reminders now live in their own Android Settings category instead.
 - [x] **Inline subtasks** — outlines are expanded by default, so children sit
       under their parent without a first click. The disclosure previously
       disagreed with the render default, which made its first click a no-op;

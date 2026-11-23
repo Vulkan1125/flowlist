@@ -7,8 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
 import androidx.core.content.ContextCompat
-import androidx.glance.appwidget.updateAll
-import dev.flowlist.android.widget.FlowlistWidget
+import dev.flowlist.android.widget.WidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,7 +38,7 @@ class FlowlistApplication : Application() {
 
     private fun repaintWidgets() {
         CoroutineScope(Dispatchers.IO).launch {
-            runCatching { FlowlistWidget().updateAll(this@FlowlistApplication) }
+            runCatching { WidgetUpdater.refresh(this@FlowlistApplication) }
         }
     }
 }

@@ -42,13 +42,14 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Settings as SettingsIcon
 import androidx.compose.material3.AlertDialog
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
-import dev.flowlist.android.widget.FlowlistWidget
 import dev.flowlist.android.widget.FlowlistWidgetReceiver
+import dev.flowlist.android.widget.WidgetUpdater
 import androidx.glance.appwidget.updateAll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -98,6 +99,7 @@ enum class SettingsSection(val label: String, val icon: ImageVector) {
     Tasks("Tasks", Icons.Outlined.Tune),
     Library("Library", Icons.Rounded.Checklist),
     Notifications("Notifications", Icons.Rounded.Notifications),
+    Geotags("Geotags", Icons.Rounded.Place),
     Connection("Connection", Icons.Rounded.PhoneAndroid),
     About("About", Icons.Outlined.Info),
 }
@@ -185,6 +187,7 @@ fun SettingsScreen(
                         )
                     }
                     SettingsSection.Notifications -> NotificationSettings()
+                    SettingsSection.Geotags -> GeotagSettings(preferences, onPreferencesChange)
                     SettingsSection.Connection -> ConnectionSettings(state, onSync, onSignOut)
                     SettingsSection.About -> AboutSettings(state)
                 }
@@ -254,6 +257,7 @@ private fun summary(
     SettingsSection.Tasks -> "Opens ${preferences.startTab.replaceFirstChar { it.uppercase() }} · week starts ${if (preferences.weekStartsMonday) "Monday" else "Sunday"}"
     SettingsSection.Library -> "Review ${library.defaultReviewDays}d · trash ${if (library.trashRetentionDays == 0) "forever" else "${library.trashRetentionDays}d"}"
     SettingsSection.Notifications -> if (DueNotifications.enabled(context)) "On" else "Off"
+    SettingsSection.Geotags -> if (preferences.nearbyReminders) "Arrival reminders on" else "Off"
     SettingsSection.Connection -> if (state.online) "Connected" else "Offline"
     SettingsSection.About -> "Version ${dev.flowlist.android.BuildConfig.VERSION_NAME}"
 }
@@ -359,7 +363,7 @@ private fun AppearanceSettings(
                             AppIcons.apply(context, icon)
                             appIcon = icon
                             scope.launch {
-                                FlowlistWidget().updateAll(context.applicationContext)
+                                WidgetUpdater.refresh(context.applicationContext)
                             }
                         },
                     contentAlignment = Alignment.Center,
@@ -441,12 +445,10 @@ private fun TaskSettings(preferences: AppPreferences, onChange: (AppPreferences)
             Text("Add widget")
         }
     }
-    Spacer(modifier = Modifier.height(14.dp))
-    NearbySettings(preferences, onChange)
 }
 
 @Composable
-private fun NearbySettings(
+private fun GeotagSettings(
     preferences: AppPreferences,
     onChange: (AppPreferences) -> Unit,
 ) {
@@ -462,7 +464,7 @@ private fun NearbySettings(
             backgroundLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         }
     }
-    SettingsCard("Nearby reminders") {
+    SettingsCard("Arrival reminders") {
         ToggleRow(
             "Location reminders",
             "Remind me when I arrive near a geotagged tag",

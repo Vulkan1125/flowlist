@@ -34,6 +34,7 @@ import dev.flowlist.android.notify.NearbyReminders
 import dev.flowlist.android.ui.PairingScreen
 import dev.flowlist.android.ui.isDark
 import dev.flowlist.android.widget.FlowlistWidget
+import dev.flowlist.android.widget.WidgetUpdater
 import dev.flowlist.android.notify.DueNotifications
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.delay
@@ -186,8 +187,9 @@ private fun FlowlistApp(
                     themeStore.save(it)
                     theme = it
                     scope.launch {
-                        delay(250)
-                        FlowlistWidget().updateAll(context.applicationContext)
+                        runCatching {
+                            WidgetUpdater.refresh(context.applicationContext)
+                        }
                     }
                 },
                 initialTab = openTab,
@@ -228,10 +230,6 @@ private fun FlowlistApp(
             FlowlistWidget().updateAll(context.applicationContext)
             NearbyReminders.sync(context, state.snapshot!!.db)
         }
-    }
-
-    LaunchedEffect(theme) {
-        FlowlistWidget().updateAll(context.applicationContext)
     }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {

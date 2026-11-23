@@ -29,6 +29,6 @@ class ThemeStore(context: Context) {
             .putString("accent_mode", settings.accentMode.name)
             .putString("accent", settings.customAccent.key)
             .putBoolean("amoled", settings.amoled)
-            .apply()
+            .commit()
     }
 }

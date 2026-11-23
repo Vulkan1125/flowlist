@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
-import androidx.glance.appwidget.updateAll
 import dev.flowlist.android.data.Repository
 
 /// The task id carried by a widget row's check button.
@@ -18,7 +17,7 @@ class CompleteWidgetTaskAction : ActionCallback {
     ) {
         val id = parameters[WidgetTaskKey] ?: return
         runCatching { Repository(context.applicationContext).complete(id, true) }
-        FlowlistWidget().updateAll(context.applicationContext)
+        WidgetUpdater.refresh(context.applicationContext)
     }
 }
 
