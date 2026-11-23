@@ -2055,7 +2055,7 @@ impl FlowlistApp {
         let first_line = div()
             .flex()
             .items_center()
-            .gap_1()
+            .gap_2()
             .flex_grow()
             .flex_shrink()
             .min_w_0()
@@ -2086,6 +2086,9 @@ impl FlowlistApp {
                     })),
             )
             .child(title_line)
+            // Two to three circle widths keep the flag from crowding the
+            // title without pushing the title away from the completion circle.
+            .child(div().w(px(24.)))
             .child(flag)
             .when_some(disclosure, |this, disclosure| this.child(disclosure))
             .child(div().flex_grow());
