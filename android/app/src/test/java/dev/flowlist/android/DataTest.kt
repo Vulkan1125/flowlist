@@ -39,6 +39,13 @@ class DataTest {
     }
 
     @Test
+    fun trash_swipes_default_to_restore_right() {
+        assertEquals("restore_right", AppPreferences().trashSwipe)
+        assertEquals("restore_left", AppPreferences().copy(trashSwipe = "restore_left").trashSwipe)
+        assertEquals("off", AppPreferences().copy(trashSwipe = "off").trashSwipe)
+    }
+
+    @Test
     fun addresses_get_a_scheme_and_must_have_a_port() {
         assertEquals("http://192.168.1.33:7777", normalizeBase("192.168.1.33:7777"))
         assertEquals("http://mac:7777", normalizeBase("http://mac:7777/"))

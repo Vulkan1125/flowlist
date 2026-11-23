@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -53,13 +54,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -174,11 +179,178 @@ fun MoreScreen(db: Db?, onOpen: (MoreView) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TrashRow(
+    task: TaskView,
+    selected: Boolean,
+    swipe: String,
+    onSelect: () -> Unit,
+    onRestore: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val colors = flow
+    val selection = LocalTaskSelection.current
+    val restoreRight = swipe != "restore_left"
+    val swipeEnabled = selection == null && swipe != "off"
+    val currentRestoreRight by rememberUpdatedState(restoreRight)
+    val currentSwipeEnabled by rememberUpdatedState(swipeEnabled)
+    val currentRestore by rememberUpdatedState(onRestore)
+    val currentDelete by rememberUpdatedState(onDelete)
+    val state = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (!currentSwipeEnabled) {
+                false
+            } else {
+                when (value) {
+                    SwipeToDismissBoxValue.StartToEnd -> {
+                        if (currentRestoreRight) {
+                            currentRestore()
+                            true
+                        } else {
+                            currentDelete()
+                            false
+                        }
+                    }
+                    SwipeToDismissBoxValue.EndToStart -> {
+                        if (currentRestoreRight) {
+                            currentDelete()
+                            false
+                        } else {
+                            currentRestore()
+                            true
+                        }
+                    }
+                    SwipeToDismissBoxValue.Settled -> false
+                }
+            }
+        },
+    )
+    if (!swipeEnabled) {
+        TrashContent(
+            task = task,
+            selected = selected,
+            showActions = selection == null,
+            onSelect = onSelect,
+            onRestore = onRestore,
+            onDelete = onDelete,
+        )
+        return
+    }
+    SwipeToDismissBox(
+        state = state,
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            val start = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+            val restores = if (start) restoreRight else !restoreRight
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(if (restores) colors.success else colors.danger)
+                    .padding(horizontal = 24.dp),
+                contentAlignment = if (start) Alignment.CenterStart else Alignment.CenterEnd,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = if (restores) Icons.Rounded.Undo else Icons.Outlined.Delete,
+                        contentDescription = if (restores) "Restore" else "Delete",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = if (restores) "Restore" else "Delete",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White,
+                    )
+                }
+            }
+        },
+    ) {
+        TrashContent(
+            task = task,
+            selected = selected,
+            showActions = false,
+            onSelect = onSelect,
+            onRestore = onRestore,
+            onDelete = onDelete,
+        )
+    }
+}
+
+@Composable
+private fun TrashContent(
+    task: TaskView,
+    selected: Boolean,
+    showActions: Boolean,
+    onSelect: () -> Unit,
+    onRestore: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val colors = flow
+    val selection = LocalTaskSelection.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (selected) colors.accent.copy(alpha = 0.10f) else colors.background,
+            )
+            .clickable(enabled = selection != null, onClick = onSelect)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (selection != null) {
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .border(
+                        1.5.dp,
+                        if (selected) colors.accent else colors.hairline,
+                        CircleShape,
+                    )
+                    .background(if (selected) colors.accent else Color.Transparent),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (selected) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = "Selected",
+                        tint = colors.onAccent,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(task.title, style = MaterialTheme.typography.bodyMedium, color = colors.ink)
+            Text(
+                text = listOfNotNull(task.projectName, "In Trash").joinToString(" · "),
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.faint,
+            )
+        }
+        if (showActions) {
+            TextButton(onClick = onRestore) {
+                Text("Restore", color = colors.accent)
+            }
+            TextButton(onClick = onDelete) {
+                Text("Delete", color = colors.danger)
+            }
+        }
+    }
+}
+
 @Composable
 fun MoreDestination(
     view: MoreView,
     db: Db,
     sort: String,
+    trashSwipe: String,
     pending: Set<String>,
     onTask: (TaskView) -> Unit,
     onToggle: (TaskView) -> Unit,
@@ -289,60 +461,14 @@ fun MoreDestination(
                     }
                 items(section.tasks, key = { it.id }) { task ->
                     val selection = LocalTaskSelection.current
-                    val selected = selection?.ids?.contains(task.id) == true
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                if (selected) colors.accent.copy(alpha = 0.10f) else Color.Transparent,
-                            )
-                            .clickable(enabled = selection != null) {
-                                selection?.toggle(task.id)
-                            }
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (selection != null) {
-                            Box(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .clip(CircleShape)
-                                    .border(
-                                        1.5.dp,
-                                        if (selected) colors.accent else colors.hairline,
-                                        CircleShape,
-                                    )
-                                    .background(if (selected) colors.accent else Color.Transparent),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                if (selected) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Check,
-                                        contentDescription = "Selected",
-                                        tint = colors.onAccent,
-                                        modifier = Modifier.size(14.dp),
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(task.title, style = MaterialTheme.typography.bodyMedium, color = colors.ink)
-                            Text(
-                                text = listOfNotNull(task.projectName, "In Trash").joinToString(" · "),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = colors.faint,
-                            )
-                        }
-                        if (selection == null) {
-                            TextButton(onClick = { onRestore(task.id) }) {
-                                Text("Restore", color = colors.accent)
-                            }
-                            TextButton(onClick = { purgeTarget = task }) {
-                                Text("Delete", color = colors.danger)
-                            }
-                        }
-                    }
+                    TrashRow(
+                        task = task,
+                        selected = selection?.ids?.contains(task.id) == true,
+                        swipe = trashSwipe,
+                        onSelect = { selection?.toggle(task.id) },
+                        onRestore = { onRestore(task.id) },
+                        onDelete = { purgeTarget = task },
+                    )
                     Hairline(Modifier.padding(horizontal = 20.dp))
                 }
                 }

@@ -18,6 +18,9 @@ data class AppPreferences(
     val forecastView: String = "month",
     val keepCompletedSubtasks: Boolean = false,
     val nearbyReminders: Boolean = true,
+    /// Trash swipe layout: restore_right (left deletes, right restores),
+    /// restore_left, or off.
+    val trashSwipe: String = "restore_right",
     /// Legacy global sort used as the default until a view has its own choice:
     /// manual, due, defer, name, priority, flagged, estimate, created or
     /// completed_at.
@@ -63,6 +66,7 @@ class PreferencesStore(context: Context) {
             forecastView = prefs.getString("forecast_view", "month") ?: "month",
             keepCompletedSubtasks = prefs.getBoolean("keep_completed_subtasks", false),
             nearbyReminders = prefs.getBoolean("nearby_reminders", true),
+            trashSwipe = prefs.getString("trash_swipe", "restore_right") ?: "restore_right",
             sortBy = prefs.getString("sort_by", "manual") ?: "manual",
             viewSorts = viewSorts,
             perspectiveOrder = (prefs.getString("perspective_order", null) ?: "")
@@ -83,6 +87,7 @@ class PreferencesStore(context: Context) {
             .putString("forecast_view", value.forecastView)
             .putBoolean("keep_completed_subtasks", value.keepCompletedSubtasks)
             .putBoolean("nearby_reminders", value.nearbyReminders)
+            .putString("trash_swipe", value.trashSwipe)
             .putString("sort_by", value.sortBy)
             .putString(
                 "view_sorts",

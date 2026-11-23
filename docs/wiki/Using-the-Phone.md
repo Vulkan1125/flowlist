@@ -248,6 +248,11 @@ Review, Completed, Archive, Trash, Tags, Priorities, Changed and Attachments
 open as full pages, not modal sheets. Back returns to the previous perspective.
 Inside Tags, Back first returns to the tag list, then leaves Tags.
 
+In **Trash**, swipe right to restore a task and left to delete it permanently;
+the delete swipe still asks before purging. Settings → Tasks → **Trash swipes**
+can swap those sides or turn swipes off, which brings the Restore and Delete
+buttons back.
+
 The hamburger lists only the perspectives that are **not** on the bottom bar,
 under a **Perspectives** heading, with the connection status pinned at the
 bottom. Settings is never repeated there.

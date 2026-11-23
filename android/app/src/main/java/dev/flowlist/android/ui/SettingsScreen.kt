@@ -425,6 +425,32 @@ private fun TaskSettings(preferences: AppPreferences, onChange: (AppPreferences)
         ToggleRow("Swipe actions", "Right to complete, left to trash", preferences.swipeActions) {
             onChange(preferences.copy(swipeActions = it))
         }
+        Spacer(modifier = Modifier.height(10.dp))
+        SmallLabel("Trash swipes")
+        ChoiceRow {
+            Pill("Restore right", preferences.trashSwipe == "restore_right") {
+                onChange(preferences.copy(trashSwipe = "restore_right"))
+            }
+            Pill("Restore left", preferences.trashSwipe == "restore_left") {
+                onChange(preferences.copy(trashSwipe = "restore_left"))
+            }
+            Pill("Off", preferences.trashSwipe == "off") {
+                onChange(preferences.copy(trashSwipe = "off"))
+            }
+        }
+        Text(
+            text = when (preferences.trashSwipe) {
+                "restore_left" ->
+                    "Restore left: swipe left to restore, right to delete."
+                "off" ->
+                    "Swipe actions are off; Restore and Delete buttons stay visible."
+                else ->
+                    "Restore right: swipe right to restore, left to delete."
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = flow.faint,
+            modifier = Modifier.padding(top = 6.dp, bottom = 6.dp),
+        )
         ToggleRow(
             "Keep completed subtasks",
             "Leave finished subtasks under the parent, struck through",

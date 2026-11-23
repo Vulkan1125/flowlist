@@ -230,6 +230,10 @@ below; this list is the current map.
 - [x] **Mac priority signals** — high and medium task circles use the same
       vivid red/yellow pair across every Mac theme, and priority rings are 2 px
       instead of 1 px so the colour reads more clearly.
+- [x] **Trash swipe actions** — trash rows use right-swipe to restore and
+      left-swipe to delete instead of two buttons. Settings → Tasks → Trash
+      swipes can swap the sides or turn swipes off, which restores the
+      buttons. Permanent delete still asks first.
 - [x] **Android sort per view** — Inbox, Today, Forecast and every sortable
       destination keep their own sort instead of sharing one global order.
 - [x] **Widget quick add stays floating** — the widget’s + button opens its

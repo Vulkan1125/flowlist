@@ -869,6 +869,7 @@ fun MainScreen(
                         view = activeMore,
                         db = db,
                         sort = currentSort,
+                        trashSwipe = preferences.trashSwipe,
                         pending = state.pending,
                         onTask = { task -> detail = task },
                         onToggle = { task -> complete(task, !task.completed) },
