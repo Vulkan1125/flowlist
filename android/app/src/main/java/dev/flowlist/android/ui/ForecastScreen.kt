@@ -293,6 +293,7 @@ private fun ForecastCalendar(
     val colors = flow
     val density = LocalDensity.current
     var dragTotal by remember { mutableFloatStateOf(0f) }
+    var dragTriggered by remember { mutableStateOf(false) }
     val threshold = with(density) { 34.dp.toPx() }
     val progress by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
@@ -308,19 +309,20 @@ private fun ForecastCalendar(
 
     fun dragStarted() {
         dragTotal = 0f
+        dragTriggered = false
     }
 
     fun dragBy(amount: Float) {
         dragTotal += amount
+        if (!dragTriggered && abs(dragTotal) > threshold) {
+            dragTriggered = true
+            onExpandedChange(dragTotal > 0f)
+        }
     }
 
     fun dragEnded() {
-        if (dragTotal > threshold) {
-            onExpandedChange(true)
-        } else if (dragTotal < -threshold) {
-            onExpandedChange(false)
-        }
         dragTotal = 0f
+        dragTriggered = false
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
