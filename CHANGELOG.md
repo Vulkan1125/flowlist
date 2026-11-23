@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.40 — 2026-11-23
+
+- **Mac metadata cells sit together again.** Project, tags, estimate, due and
+  the other row details use the tighter spacing from before, while still
+  wrapping onto a second line when the row runs out of room.
+
 ## 0.9.39 — 2026-11-22
 
 - **Empty widget illustration.** An empty widget now shows a light/dark 2D

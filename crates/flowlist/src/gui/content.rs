@@ -1873,7 +1873,9 @@ impl FlowlistApp {
                     .flex()
                     .flex_wrap()
                     .items_center()
-                    .gap_2()
+                    // Keep the metadata cells touching as one run, while
+                    // still allowing the run to fall onto a second line.
+                    .gap_1()
                     .flex_shrink_0()
                     // Right-edge metadata reads in a fixed order: what is
                     // attached, where it lives, what it is tagged, how long it

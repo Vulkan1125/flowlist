@@ -187,6 +187,8 @@ below; this list is the current map.
       the plain empty-state text.
 - [x] **Translucent phone bottom bar** — a translucent surface and hairline
       divider replace the solid bar.
+- [x] **Tight Mac metadata cells** — row details keep their joined spacing and
+      wrap as a unit when space runs out.
 - [x] **Android search and Nearby** — search covers projects, folders, tags and
       perspectives with a view/library scope; Nearby lists tags within the
       library radius, sorted by distance. Search results also support bulk
