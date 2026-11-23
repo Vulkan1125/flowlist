@@ -1,5 +1,8 @@
 package dev.flowlist.android.ui
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -182,23 +185,6 @@ fun ForecastScreen(
             }
         }
 
-        ForecastCalendar(
-            expanded = expanded,
-            today = today,
-            selected = selected,
-            month = month,
-            weekStartsMonday = weekStartsMonday,
-            counts = byDate.mapValues { it.value.size },
-            onSelect = { selectedKey = it.toString() },
-            onWeekChange = { selectedKey = it.toString() },
-            onExpandedChange = {
-                expanded = it
-                if (!it && selected < today) {
-                    selectedKey = today.toString()
-                }
-            },
-        )
-
         val dayTasks = sortTasks(
             byDate[selected].orEmpty().mapNotNull { allViews[it] },
             sort,
@@ -210,6 +196,24 @@ fun ForecastScreen(
                 bottom = 100.dp,
             ),
         ) {
+            item(key = "month-calendar") {
+                ForecastCalendar(
+                    expanded = expanded,
+                    today = today,
+                    selected = selected,
+                    month = month,
+                    weekStartsMonday = weekStartsMonday,
+                    counts = byDate.mapValues { it.value.size },
+                    onSelect = { selectedKey = it.toString() },
+                    onWeekChange = { selectedKey = it.toString() },
+                    onExpandedChange = {
+                        expanded = it
+                        if (!it && selected < today) {
+                            selectedKey = today.toString()
+                        }
+                    },
+                )
+            }
             item(key = "month-day-heading") {
                 Row(
                     modifier = Modifier
@@ -274,10 +278,104 @@ private fun ForecastCalendar(
     onExpandedChange: (Boolean) -> Unit,
 ) {
     val colors = flow
-    val threshold = with(LocalDensity.current) { 44.dp.toPx() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .animateContentSize(animationSpec = tween(260)),
+    ) {
+        Crossfade(
+            targetState = expanded,
+            animationSpec = tween(180),
+            label = "forecast-calendar",
+        ) { open ->
+            if (open) {
+                Column {
+                    WeekdayHeader(weekStartsMonday)
+                    MonthGrid(
+                        month = month,
+                        weekStartsMonday = weekStartsMonday,
+                        selected = selected,
+                        counts = counts,
+                        onSelect = onSelect,
+                    )
+                }
+            } else {
+                Column {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    ExpandOnDrag(
+                        onExpand = { onExpandedChange(true) },
+                    ) {
+                        WeekStrip(
+                            today = today,
+                            selected = selected,
+                            counts = counts,
+                            onSelect = onSelect,
+                            onWeekChange = onWeekChange,
+                        )
+                    }
+                }
+            }
+        }
+        CalendarPill(
+            expanded = expanded,
+            onExpandedChange = onExpandedChange,
+        )
+    }
+}
+
+@Composable
+private fun ExpandOnDrag(
+    onExpand: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val threshold = with(LocalDensity.current) { 32.dp.toPx() }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var lastY = down.position.y
+                    var totalY = 0f
+                    var vertical = false
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        totalY += change.position.y - lastY
+                        lastY = change.position.y
+                        val totalX = change.position.x - down.position.x
+                        if (!vertical &&
+                            abs(totalY) > viewConfiguration.touchSlop &&
+                            abs(totalY) > abs(totalX)
+                        ) {
+                            vertical = true
+                        }
+                        if (vertical) {
+                            change.consume()
+                        }
+                        if (!change.pressed) break
+                    }
+                    if (vertical && totalY > threshold) {
+                        onExpand()
+                    }
+                }
+            },
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun CalendarPill(
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+) {
+    val colors = flow
+    val threshold = with(LocalDensity.current) { 24.dp.toPx() }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(30.dp)
             .pointerInput(expanded) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -307,45 +405,20 @@ private fun ForecastCalendar(
                         } else if (totalY < -threshold) {
                             onExpandedChange(false)
                         }
+                    } else {
+                        onExpandedChange(!expanded)
                     }
                 }
             },
+        contentAlignment = Alignment.Center,
     ) {
-        if (expanded) {
-            Column {
-                WeekdayHeader(weekStartsMonday)
-                MonthGrid(
-                    month = month,
-                    weekStartsMonday = weekStartsMonday,
-                    selected = selected,
-                    counts = counts,
-                    onSelect = onSelect,
-                )
-            }
-        } else {
-            WeekStrip(
-                today = today,
-                selected = selected,
-                counts = counts,
-                onSelect = onSelect,
-                onWeekChange = onWeekChange,
-            )
-        }
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(24.dp)
-                .clickable { onExpandedChange(!expanded) },
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(36.dp)
-                    .height(4.dp)
-                    .clip(CircleShape)
-                    .background(colors.hairline),
-            )
-        }
+                .width(36.dp)
+                .height(4.dp)
+                .clip(CircleShape)
+                .background(colors.hairline),
+        )
     }
 }
 
