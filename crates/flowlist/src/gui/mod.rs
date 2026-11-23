@@ -352,6 +352,7 @@ pub struct FlowlistApp {
     forecast_strip_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     forecast_strip_next_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     forecast_strip_expand_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    forecast_calendar_collapse_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// The box the Forecast calendar painted on the last frame, so a GUI
     /// probe can confirm the block spans the pane.
     forecast_calendar_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
@@ -696,6 +697,7 @@ impl FlowlistApp {
             forecast_strip_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             forecast_strip_next_anchor: Rc::new(Cell::new(None)),
             forecast_strip_expand_anchor: Rc::new(Cell::new(None)),
+            forecast_calendar_collapse_anchor: Rc::new(Cell::new(None)),
             forecast_calendar_anchor: Rc::new(Cell::new(None)),
             forecast_toggle_anchor: Rc::new(Cell::new(None)),
             forecast_grip_anchor: Rc::new(Cell::new(None)),
@@ -6005,6 +6007,7 @@ impl FlowlistApp {
         state["forecast_strip"] = serde_json::json!(self.forecast_strip_boxes.borrow().clone());
         state["forecast_strip_next"] = serde_json::json!(anchor(self.forecast_strip_next_anchor.get()));
         state["forecast_strip_expand"] = serde_json::json!(anchor(self.forecast_strip_expand_anchor.get()));
+        state["forecast_calendar_collapse"] = serde_json::json!(anchor(self.forecast_calendar_collapse_anchor.get()));
         state["forecast_days"] = serde_json::json!(self.forecast_day_boxes.borrow().clone());
         state["forecast_chips"] = serde_json::json!(self.forecast_chip_boxes.borrow().clone());
         state["forecast_day"] = serde_json::json!(self.forecast_date.map(|date| date.to_string()));

@@ -141,11 +141,15 @@ assert d["forecast_calendar_height"] is None, d["forecast_calendar_height"]
 print("  calendar: %d day cells, %d chips, natural height" % (len(d["forecast_days"]), len(d["forecast_chips"])))
 PY
 
-# 2. The Calendar chip cycles: full -> hidden -> week strip -> full.
+# 2. The Calendar chip only hides and restores the calendar; it remembers the
+#    last mode. The chevron beside the month name folds to the week strip, and
+#    the strip's chevron opens the full month again.
 click_box forecast_toggle_anchor
 wait_value forecast_calendar_open False
 click_box forecast_toggle_anchor
 wait_value forecast_calendar_open True
+wait_value forecast_calendar_expanded True
+click_box forecast_calendar_collapse
 wait_value forecast_calendar_expanded False
 for _ in $(seq 1 40); do
   count=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["forecast_strip"]))' "$state")
@@ -171,9 +175,14 @@ set -- $cell
 "$helpers/flowctl" mouse $((WX + $1)) $((WY + $2))
 sleep 0.9
 wait_value forecast_day 2026-11-25
+click_box forecast_toggle_anchor
+wait_value forecast_calendar_open False
+click_box forecast_toggle_anchor
+wait_value forecast_calendar_open True
+wait_value forecast_calendar_expanded False
 click_box forecast_strip_expand
 wait_value forecast_calendar_expanded True
-echo "  cycle: full hides, week strip appears, a day and chevron expand work"
+echo "  modes: chip remembers full and week, both chevrons switch, a day works"
 
 # 3. Click 20 November: the list keeps that day's two tasks, and a second
 #    click clears the filter.

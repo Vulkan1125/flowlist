@@ -65,10 +65,14 @@ previous month, Today and next month. They are labelled `‹`, `Today` and `›`
 with tooltips. Every date cell is clickable and has a tooltip naming the day;
 the selected day is highlighted and an "All dates" button clears it. The
 calendar always shows one full-width month, so the cells never shrink into
-empty slabs on a large window. A Calendar chip in the content header folds the
-whole grid away and back (`forecast-calendar-toggle`); the choice is saved with
-the session. Keyboard routes: `[` / `]` step the selected day, `{` / `}` step
-the month, and `\` clears the day filter.
+empty slabs on a large window. A Calendar chip in the content header hides and
+restores the calendar (`forecast-calendar-toggle`); it remembers the last mode,
+so reopening returns to the same week or month. A chevron beside the month name
+folds the full grid to the current-week strip (`forecast-calendar-collapse`),
+and the strip's chevron opens the full month again (`forecast-week-expand`).
+Visibility, mode and week are saved with the session. Keyboard routes: `[` /
+`]` step the selected day, `{` / `}` step the month, and `\` clears the day
+filter.
 
 The calendar's height is adjustable. Drag the grip under the grid with the
 mouse, or press `-` / `=` to shrink or grow it by a row. The height is clamped

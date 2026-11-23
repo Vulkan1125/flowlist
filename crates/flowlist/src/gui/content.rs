@@ -173,34 +173,19 @@ impl FlowlistApp {
         self.save_session();
     }
 
-    /// Show or hide the Forecast month grid. The choice is remembered, so a
-    /// calendar the user folded away stays folded.
+    /// Show or hide the Forecast calendar. The mode (week strip or full month)
+    /// and the week are remembered, so reopening restores the last position
+    /// instead of resetting to the strip.
     pub(super) fn toggle_forecast_calendar(&mut self) {
-        if !self.forecast_calendar_open {
-            // First press brings the compact week strip back, remembering the
-            // week it was last on.
-            self.forecast_calendar_open = true;
-            self.forecast_calendar_expanded = false;
-        } else if !self.forecast_calendar_expanded {
-            // Second press opens the full month grid.
-            self.forecast_calendar_expanded = true;
-        } else {
-            // Third press hides the calendar entirely.
-            self.forecast_calendar_open = false;
-            let today = local_date(now());
-            let base = week_start(today);
-            let anchor = match self.forecast_date {
-                Some(date) if date < today => {
-                    self.forecast_date = Some(today);
-                    self.forecast_month =
-                        NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
-                    today
-                }
-                Some(date) => date,
-                None => today,
-            };
-            self.forecast_week = week_start(anchor).max(base);
-        }
+        self.forecast_calendar_open = !self.forecast_calendar_open;
+        self.save_session();
+    }
+
+    /// Switch the open calendar between the compact week strip and the full
+    /// month grid, keeping the selected day and week.
+    pub(super) fn set_forecast_calendar_expanded(&mut self, expanded: bool) {
+        self.forecast_calendar_open = true;
+        self.forecast_calendar_expanded = expanded;
         self.save_session();
     }
 
@@ -295,6 +280,7 @@ impl FlowlistApp {
         let compact = pane_width < 620.0;
         let calendar_anchor = self.forecast_calendar_anchor.clone();
         let grip_anchor = self.forecast_grip_anchor.clone();
+        let collapse_anchor = self.forecast_calendar_collapse_anchor.clone();
 
         let mut controls = div().flex().flex_shrink_0().items_center().gap_1();
         if let Some(date) = self.forecast_date {
@@ -362,9 +348,40 @@ impl FlowlistApp {
             );
 
         let title = div()
-            .text_sm()
-            .font_weight(gpui::FontWeight::SEMIBOLD)
-            .child(first.format("%B %Y").to_string());
+            .flex()
+            .items_center()
+            .gap_1()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child(first.format("%B %Y").to_string()),
+            )
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            collapse_anchor.set(Some(*bounds));
+                        }
+                    })
+                    .id("forecast-calendar-collapse")
+                    .flow_tip(self, cx, theme, "Show the week strip")
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(20.))
+                            .rounded_md()
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover))
+                            .child(icons::icon(Icon::ChevronUp, 12.0, theme.text_faint)),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.set_forecast_calendar_expanded(false);
+                        cx.notify();
+                    })),
+            );
         let header = div()
             .flex()
             .items_center()
@@ -475,8 +492,7 @@ impl FlowlistApp {
                     .flow_tip(self, cx, theme, "Show the full month")
                     .child(div().flex().items_center().justify_center().size(px(20.)).rounded_md().cursor_pointer().hover(|style| style.bg(theme.hover)).child(icons::icon(Icon::ChevronDown, 12.0, theme.text_faint)))
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.forecast_calendar_expanded = true;
-                        this.save_session();
+                        this.set_forecast_calendar_expanded(true);
                         cx.notify();
                     })),
             )
@@ -527,7 +543,7 @@ impl FlowlistApp {
                     .id(super::sid(format!("forecast-week-date:{date}")))
                     .flex_1()
                     .min_w_0()
-                    .h(px(68.))
+                    .h(px(80.))
                     .flex()
                     .flex_col()
                     .items_center()

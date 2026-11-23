@@ -188,13 +188,13 @@ titles itself **Search** and ranks the closest matches first.
 - **Sort** and **Group** chips at the top of the list open a menu of orders.
   **Available** keeps only tasks you can start now; **Priority** filters by
   priority. The choices are remembered per view.
-- The **Calendar** chip in Forecast cycles the calendar: from hidden it
-  brings back the current-week strip, the next press opens the full month, and
-  the next hides it. The week strip remembers the week it was on. It moves one
-  Monday-first week at a time, forward only, with the arrows or horizontal
-  scroll. The chevron beside the month name opens the full month; there is no
-  extra bottom pill in the strip. The full month is unchanged, including its
-  resize grip.
+- The **Calendar** chip in Forecast hides and restores the calendar, and
+  remembers whether it was the week strip or the full month. The chevron beside
+  the month name folds the full month to the current-week strip; the strip's
+  chevron opens the full month again. The week strip remembers the week it was
+  on, moves one Monday-first week at a time (forward only) with the arrows or
+  horizontal scroll, and keeps the selected weekday. The full month is
+  unchanged, including its bottom resize grip.
 
 ## Undo
 
