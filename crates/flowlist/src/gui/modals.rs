@@ -1702,12 +1702,21 @@ impl FlowlistApp {
         let focused = self.modal_focus == index;
         let multiline = modal.multiline(index);
         let field = if multiline {
-            widgets::text_area(
+            widgets::text_area_with_cursor(
                 theme,
                 buffer,
                 "Paste JSON or TaskPaper here",
                 focused,
                 180.0,
+                cx.listener(move |this, hit: &widgets::TextHit, _, cx| {
+                    this.set_modal_cursor(
+                        index,
+                        hit.index,
+                        hit.extend,
+                        hit.click_count,
+                        cx,
+                    );
+                }),
             )
             .into_any_element()
         } else {
@@ -1717,7 +1726,13 @@ impl FlowlistApp {
                 "",
                 focused,
                 cx.listener(move |this, hit: &widgets::TextHit, _, cx| {
-                    this.set_modal_cursor(index, hit.index, hit.extend, cx);
+                    this.set_modal_cursor(
+                        index,
+                        hit.index,
+                        hit.extend,
+                        hit.click_count,
+                        cx,
+                    );
                 }),
             )
             .into_any_element()

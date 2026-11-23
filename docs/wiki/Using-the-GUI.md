@@ -92,6 +92,9 @@ leaving the list.
   **Separate** moves a child to the end of the project (or the Inbox). You can
   also press `Tab` to indent the selected task under the one above, or drag a
   task onto another task.
+- **Editing text** uses a real caret. Click to place it, double-click to select
+  a word, triple-click to select everything, or drag to select a run. The
+  add-subtask field and the sheet fields follow the same mouse rules.
 - **One step type per task.** Choose **Parallel**, **Sequential** or
   **One-off**. Parallel and Sequential show child tasks; One-off shows
   checklist-style steps that tick, drag and delete in place and never appear as

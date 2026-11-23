@@ -113,6 +113,8 @@ pub fn text_field_with_trailer(
 pub struct TextHit {
     pub index: usize,
     pub extend: bool,
+    /// 1 for a single click, 2 for a double-click, 3 for a triple-click.
+    pub click_count: usize,
 }
 
 /// The sheet's handler for a click or drag hit in a text field.
@@ -243,7 +245,8 @@ fn text_field_inner(
                     cursor(
                         &TextHit {
                             index,
-                            extend: false,
+                            extend: event.modifiers.shift,
+                            click_count: event.click_count,
                         },
                         window,
                         cx,
@@ -264,6 +267,7 @@ fn text_field_inner(
                         &TextHit {
                             index,
                             extend: true,
+                            click_count: 1,
                         },
                         window,
                         cx,
@@ -284,6 +288,28 @@ pub fn text_area(
     text_area_with_size(theme, buffer, placeholder, focused, height, 13.0, 18.0)
 }
 
+/// A multi-line field that also accepts mouse selection, with the default
+/// multi-line type. Used by the inspector notes.
+pub fn text_area_with_cursor(
+    theme: Theme,
+    buffer: &TextBuffer,
+    placeholder: &str,
+    focused: bool,
+    height: f32,
+    on_cursor: impl Fn(&TextHit, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    text_area_inner(
+        theme,
+        buffer,
+        placeholder,
+        focused,
+        height,
+        13.0,
+        18.0,
+        Some(Rc::new(on_cursor)),
+    )
+}
+
 /// A multi-line field with caller-chosen type, used by the inspector title so
 /// editing wraps exactly where the read-only title does instead of pushing the
 /// caret past a single-line field's edge.
@@ -296,50 +322,70 @@ pub fn text_area_with_size(
     font_size: f32,
     line_height: f32,
 ) -> impl IntoElement {
+    text_area_inner(
+        theme,
+        buffer,
+        placeholder,
+        focused,
+        height,
+        font_size,
+        line_height,
+        None,
+    )
+}
+
+/// The inspector title's wrapping editor with mouse selection.
+pub fn text_area_with_size_and_cursor(
+    theme: Theme,
+    buffer: &TextBuffer,
+    placeholder: &str,
+    focused: bool,
+    height: f32,
+    font_size: f32,
+    line_height: f32,
+    on_cursor: impl Fn(&TextHit, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    text_area_inner(
+        theme,
+        buffer,
+        placeholder,
+        focused,
+        height,
+        font_size,
+        line_height,
+        Some(Rc::new(on_cursor)),
+    )
+}
+
+fn text_area_inner(
+    theme: Theme,
+    buffer: &TextBuffer,
+    placeholder: &str,
+    focused: bool,
+    height: f32,
+    font_size: f32,
+    line_height: f32,
+    on_cursor: Option<CursorHandler>,
+) -> impl IntoElement {
     let (sel_start, sel_end) = buffer.selection();
     let cursor = buffer.cursor();
     let text = buffer.text().to_string();
-    let chars: Vec<char> = text.chars().collect();
     let has_selection = sel_start != sel_end;
 
-    // Build the visible string with a caret glyph at the cursor. StyledText
-    // lays the whole run out with normal wrapping, so long notes wrap inside
-    // the inspector instead of running past its edge.
-    let mut display = String::with_capacity(text.len() + 1);
-    let mut highlights: Vec<(std::ops::Range<usize>, HighlightStyle)> = Vec::new();
-    let mut selection: Option<(usize, usize)> = None;
-
-    let push_caret = |display: &mut String, highlights: &mut Vec<_>| {
-        let start = display.len();
-        display.push('▏');
-        highlights.push((
-            start..display.len(),
-            HighlightStyle {
-                color: Some(theme.accent),
-                ..Default::default()
-            },
-        ));
+    // The caret is painted as a thin overlay rather than inserted into the
+    // string. A careted glyph such as "▏" falls back to a wide font on macOS,
+    // which leaves a conspicuous blank cell to its right and pushes the text
+    // after it by a whole character.
+    let byte_at = |char_index: usize| {
+        text.char_indices()
+            .nth(char_index)
+            .map(|(byte, _)| byte)
+            .unwrap_or(text.len())
     };
-
-    for (index, ch) in chars.iter().enumerate() {
-        if focused && !has_selection && index == cursor {
-            push_caret(&mut display, &mut highlights);
-        }
-        let start = display.len();
-        display.push(*ch);
-        if has_selection && index >= sel_start && index < sel_end {
-            selection = Some(match selection {
-                Some((first, _)) => (first, display.len()),
-                None => (start, display.len()),
-            });
-        }
-    }
-    if focused && !has_selection && cursor >= chars.len() {
-        push_caret(&mut display, &mut highlights);
-    }
-    if let Some((start, end)) = selection {
+    let mut highlights: Vec<(std::ops::Range<usize>, HighlightStyle)> = Vec::new();
+    if has_selection {
         highlights.push((
-            start..end,
+            byte_at(sel_start)..byte_at(sel_end),
             HighlightStyle {
                 background_color: Some(theme.selection),
                 ..Default::default()
@@ -355,18 +401,36 @@ pub fn text_area_with_size(
         ..Default::default()
     };
 
-    let content = if buffer.is_empty() && !focused {
-        div()
-            .text_color(theme.text_faint)
-            .child(placeholder.to_string())
-            .into_any_element()
+    let (content, text_layout) = if buffer.is_empty() && !focused {
+        (
+            div()
+                .text_color(theme.text_faint)
+                .child(placeholder.to_string())
+                .into_any_element(),
+            None,
+        )
     } else {
-        StyledText::new(display)
-            .with_default_highlights(&text_style, highlights)
-            .into_any_element()
+        let styled = StyledText::new(text.clone())
+            .with_default_highlights(&text_style, highlights);
+        let layout = styled.layout().clone();
+        (styled.into_any_element(), Some(layout))
     };
 
-    div()
+    let hit_text = text.clone();
+    let hit_layout = text_layout.clone();
+    let hit = Rc::new(move |position: Point<Pixels>| -> Option<usize> {
+        let layout = hit_layout.as_ref()?;
+        let byte = layout
+            .index_for_position(position)
+            .unwrap_or_else(|index| index)
+            .min(hit_text.len());
+        Some(hit_text[..byte].chars().count())
+    });
+
+    let cursor_down = on_cursor.clone();
+    let cursor_move = on_cursor.clone();
+
+    let mut field = div()
         .min_h(px(height))
         .w_full()
         .min_w_0()
@@ -377,7 +441,77 @@ pub fn text_area_with_size(
         .bg(if focused { theme.raised } else { theme.field })
         .text_sm()
         .cursor(CursorStyle::IBeam)
-        .child(content)
+        .child(content);
+
+    if focused
+        && !has_selection
+        && let Some(layout) = text_layout.clone()
+    {
+        let caret_byte = byte_at(cursor);
+        let caret_color = theme.accent;
+        let caret_height = line_height;
+        field = field.child(
+            gpui::canvas(
+                |_, _, _| (),
+                move |_, _, window, _| {
+                    if let Some(position) = layout.position_for_index(caret_byte) {
+                        window.paint_quad(gpui::fill(
+                            gpui::Bounds::new(
+                                gpui::point(position.x - px(0.75), position.y),
+                                gpui::size(px(1.5), px(caret_height)),
+                            ),
+                            caret_color,
+                        ));
+                    }
+                },
+            )
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full(),
+        );
+    }
+
+    field = field.when_some(cursor_down, |this, cursor| {
+        let hit = hit.clone();
+        this.on_mouse_down(MouseButton::Left, move |event, window, cx| {
+            if let Some(index) = hit(event.position) {
+                cursor(
+                    &TextHit {
+                        index,
+                        extend: event.modifiers.shift,
+                        click_count: event.click_count,
+                    },
+                    window,
+                    cx,
+                );
+            }
+        })
+    });
+
+    // As with the single-line field, the pressed button decides whether a
+    // move extends the selection, so a mouse-up outside the field cannot
+    // leave a drag flag stuck on.
+    field = field.when_some(cursor_move, |this, cursor| {
+        let hit = hit.clone();
+        this.on_mouse_move(move |event, window, cx| {
+            if event.pressed_button == Some(MouseButton::Left)
+                && let Some(index) = hit(event.position)
+            {
+                cursor(
+                    &TextHit {
+                        index,
+                        extend: true,
+                        click_count: 1,
+                    },
+                    window,
+                    cx,
+                );
+            }
+        })
+    });
+
+    field
 }
 
 pub fn chip(_theme: Theme, text: impl Into<String>, color: gpui::Hsla) -> impl IntoElement {

@@ -1,6 +1,7 @@
 // Mouse and keyboard events for the GUI smoke test.
 //
 // Usage: flowctl mouse <x> <y>
+//        flowctl dblclick <x> <y>
 //        flowctl move <x> <y>
 //        flowctl drag <x1> <y1> <x2> <y2>
 //        flowctl down <x> <y> / dragto <x> <y> / up <x> <y>
@@ -31,6 +32,29 @@ func mouse(_ x: Double, _ y: Double) {
         event?.flags = []
         event?.post(tap: .cghidEventTap)
         usleep(useconds_t(delay))
+    }
+}
+
+func doubleClick(_ x: Double, _ y: Double) {
+    let point = CGPoint(x: x, y: y)
+    move(x, y)
+    usleep(40_000)
+    for click in 1...2 {
+        for (type, delay) in [
+            (CGEventType.leftMouseDown, 25_000),
+            (CGEventType.leftMouseUp, 25_000),
+        ] {
+            let event = CGEvent(
+                mouseEventSource: nil,
+                mouseType: type,
+                mouseCursorPosition: point,
+                mouseButton: .left
+            )
+            event?.flags = []
+            event?.setIntegerValueField(.mouseEventClickState, value: Int64(click))
+            event?.post(tap: .cghidEventTap)
+            usleep(useconds_t(delay))
+        }
     }
 }
 
@@ -184,6 +208,7 @@ let args = CommandLine.arguments
 guard args.count >= 2 else { exit(1) }
 switch args[1] {
 case "mouse": mouse(Double(args[2])!, Double(args[3])!)
+case "dblclick": doubleClick(Double(args[2])!, Double(args[3])!)
 case "drag":
     drag(
         Double(args[2])!,

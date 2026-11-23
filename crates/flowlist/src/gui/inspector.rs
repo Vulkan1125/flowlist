@@ -410,6 +410,25 @@ impl FlowlistApp {
             .child(chips)
     }
 
+    fn field_text_hit(&mut self, hit: &widgets::TextHit, cx: &mut Context<Self>) {
+        self.focus = super::FocusArea::Field;
+        apply_text_hit(&mut self.field, hit);
+        cx.notify();
+    }
+
+    fn tag_text_hit(&mut self, hit: &widgets::TextHit, cx: &mut Context<Self>) {
+        self.focus = super::FocusArea::TagInput;
+        self.suggestion_engaged = false;
+        apply_text_hit(&mut self.tag_buffer, hit);
+        cx.notify();
+    }
+
+    fn checklist_text_hit(&mut self, hit: &widgets::TextHit, cx: &mut Context<Self>) {
+        self.focus = super::FocusArea::Checklist;
+        apply_text_hit(&mut self.checklist_buffer, hit);
+        cx.notify();
+    }
+
     fn inspector_text_field(
         &self,
         label: &'static str,
@@ -439,7 +458,7 @@ impl FlowlistApp {
                     // The read-only title clamps to two lines; editing must
                     // wrap too, or a long title puts the caret outside the
                     // single-line field and it disappears.
-                    widgets::text_area_with_size(
+                    widgets::text_area_with_size_and_cursor(
                         theme,
                         &self.field,
                         placeholder,
@@ -447,10 +466,22 @@ impl FlowlistApp {
                         56.0,
                         14.0,
                         20.0,
+                        cx.listener(|this, hit: &widgets::TextHit, _, cx| {
+                            this.field_text_hit(hit, cx)
+                        }),
                     )
                     .into_any_element()
                 } else {
-                    widgets::text_field(theme, &self.field, placeholder, true).into_any_element()
+                    widgets::text_field_with_cursor(
+                        theme,
+                        &self.field,
+                        placeholder,
+                        true,
+                        cx.listener(|this, hit: &widgets::TextHit, _, cx| {
+                            this.field_text_hit(hit, cx)
+                        }),
+                    )
+                    .into_any_element()
                 };
                 div()
                     .on_children_prepainted(self.field_editor_probe())
@@ -535,11 +566,14 @@ impl FlowlistApp {
             .child(if editing {
                 div()
                     .id("field-editor")
-                    .child(widgets::text_field(
+                    .child(widgets::text_field_with_cursor(
                         theme,
                         &self.field,
                         field.placeholder(),
                         true,
+                        cx.listener(|this, hit: &widgets::TextHit, _, cx| {
+                            this.field_text_hit(hit, cx)
+                        }),
                     ))
                     .into_any_element()
             } else {
@@ -1158,12 +1192,13 @@ impl FlowlistApp {
             .gap_1()
             .child(div().text_xs().text_color(theme.text_faint).child("Notes"));
         if editing {
-            row = row.child(widgets::text_area(
+            row = row.child(widgets::text_area_with_cursor(
                 theme,
                 &self.field,
                 "Add notes",
                 true,
                 140.0,
+                cx.listener(|this, hit: &widgets::TextHit, _, cx| this.field_text_hit(hit, cx)),
             ));
         } else {
             row = row.child(
@@ -1303,16 +1338,18 @@ impl FlowlistApp {
                 .child(
                     div()
                         .id("tag-input")
-                        .child(widgets::text_field(
+                        .child(widgets::text_field_with_cursor(
                             theme,
                             &self.tag_buffer,
                             "Add tag…",
                             self.focus == super::FocusArea::TagInput,
+                            cx.listener(|this, hit: &widgets::TextHit, _, cx| {
+                                this.tag_text_hit(hit, cx)
+                            }),
                         ))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.focus = super::FocusArea::TagInput;
                             this.suggestion_index = 0;
-                            this.tag_buffer.end(false);
                             cx.notify();
                         })),
                 );
@@ -1338,11 +1375,14 @@ impl FlowlistApp {
         let field = if editing {
             div()
                 .id("project-editor")
-                .child(widgets::text_field(
+                .child(widgets::text_field_with_cursor(
                     theme,
                     &self.field,
                     "Project path",
                     true,
+                    cx.listener(|this, hit: &widgets::TextHit, _, cx| {
+                        this.field_text_hit(hit, cx)
+                    }),
                 ))
                 .into_any_element()
         } else {
@@ -2094,10 +2134,16 @@ impl FlowlistApp {
         // And separate the last subtask from the add field.
         section = section.child(div().h(px(6.)));
 
+        let add_anchor = self.checklist_add_anchor.clone();
         section.child(
             div()
+                .on_children_prepainted(move |bounds, _, _| {
+                    if let Some(bounds) = bounds.first() {
+                        add_anchor.set(Some(*bounds));
+                    }
+                })
                 .id("subtask-add")
-                .child(widgets::text_field(
+                .child(widgets::text_field_with_cursor(
                     theme,
                     &self.checklist_buffer,
                     if one_off {
@@ -2106,11 +2152,12 @@ impl FlowlistApp {
                         "Add a subtask…"
                     },
                     self.focus == super::FocusArea::Checklist,
+                    cx.listener(|this, hit: &widgets::TextHit, _, cx| {
+                        this.checklist_text_hit(hit, cx)
+                    }),
                 ))
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.focus = super::FocusArea::Checklist;
-                    this.checklist_editing = None;
-                    this.checklist_buffer.clear();
                     cx.notify();
                 })),
         )
@@ -2398,5 +2445,19 @@ impl FlowlistApp {
                     .text_color(theme.text_dim)
                     .child(value.to_string()),
             )
+    }
+}
+
+/// Turn a mouse hit into a caret move, an extended selection, or the word /
+/// whole-text selection a double- or triple-click asks for.
+fn apply_text_hit(buffer: &mut super::text::TextBuffer, hit: &widgets::TextHit) {
+    if hit.extend {
+        buffer.set_cursor(hit.index, true);
+    } else if hit.click_count >= 3 {
+        buffer.select_all();
+    } else if hit.click_count == 2 {
+        buffer.select_word_at(hit.index);
+    } else {
+        buffer.set_cursor(hit.index, false);
     }
 }

@@ -237,6 +237,11 @@ below; this list is the current map.
 - [x] **Inspector subtask spacing** — the Parallel/Sequential/One-off chips,
       the subtask or one-off rows, and the add field now have extra breathing
       room between them.
+- [x] **Inspector text editing** — Title, Notes, the add-subtask field and the
+      sheet fields accept mouse placement, double-click word selection,
+      triple-click select-all and drag selection. The caret is a thin overlay
+      instead of an inserted block glyph, so it no longer leaves a wide blank
+      cell to its right or shifts the text after it.
 - [x] **Mac window lifecycle** — ⌘Q is bound to Quit (and appears in a small
       Flowlist app menu), double-clicking the drag handle zooms the window, and
       closing the red button then clicking the Dock icon rebuilds the window

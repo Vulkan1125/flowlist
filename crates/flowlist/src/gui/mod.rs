@@ -428,6 +428,8 @@ pub struct FlowlistApp {
     /// The open inspector field editor, measured so a probe can confirm the
     /// title editor wraps instead of clipping its caret.
     field_editor_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The inspector's add-subtask field, measured so a probe can click it.
+    checklist_add_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// The Due and Defer field rows, measured so their calendar popover can
     /// paint under the right field.
     due_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
@@ -710,6 +712,7 @@ impl FlowlistApp {
             priority_anchor: Rc::new(Cell::new(None)),
             modal_field_anchor: Rc::new(Cell::new(None)),
             field_editor_anchor: Rc::new(Cell::new(None)),
+            checklist_add_anchor: Rc::new(Cell::new(None)),
             due_anchor: Rc::new(Cell::new(None)),
             defer_anchor: Rc::new(Cell::new(None)),
             date_picker: None,
@@ -5212,6 +5215,7 @@ impl FlowlistApp {
         index: usize,
         char_index: usize,
         extend: bool,
+        click_count: usize,
         cx: &mut Context<Self>,
     ) {
         self.modal_focus = index;
@@ -5219,7 +5223,15 @@ impl FlowlistApp {
         if let Some(modal) = self.modal.as_mut()
             && let Some(buffer) = modal.field_mut(index)
         {
-            buffer.set_cursor(char_index, extend);
+            if extend {
+                buffer.set_cursor(char_index, true);
+            } else if click_count >= 3 {
+                buffer.select_all();
+            } else if click_count == 2 {
+                buffer.select_word_at(char_index);
+            } else {
+                buffer.set_cursor(char_index, false);
+            }
         }
         cx.notify();
     }
@@ -5692,6 +5704,10 @@ impl FlowlistApp {
             })
         };
         let accent = theme::hsla_hex(self.theme.accent);
+        let field_selection = {
+            let (start, end) = self.field.selection();
+            [start, end]
+        };
         let mut state = serde_json::json!({
             "view": self.view.key(),
             "modal": self.modal.as_ref().map(|modal| modal.title()),
@@ -5897,6 +5913,16 @@ impl FlowlistApp {
             })),
             _ => None,
         });
+        state["field_cursor"] = serde_json::json!(self.field.cursor());
+        state["field_selection"] = serde_json::json!(field_selection);
+        state["field_text"] = serde_json::json!(self.field.text());
+        state["checklist_cursor"] = serde_json::json!(self.checklist_buffer.cursor());
+        state["checklist_selection"] = {
+            let (start, end) = self.checklist_buffer.selection();
+            serde_json::json!([start, end])
+        };
+        state["checklist_text"] = serde_json::json!(self.checklist_buffer.text());
+        state["subtask_add"] = serde_json::json!(anchor(self.checklist_add_anchor.get()));
         state["field_editor"] = serde_json::json!(anchor(self.field_editor_anchor.get()));
         state["hide_overdue"] = serde_json::json!(self.hide_overdue);
         state["hide_overdue_anchor"] = serde_json::json!(anchor(self.hide_overdue_anchor.get()));

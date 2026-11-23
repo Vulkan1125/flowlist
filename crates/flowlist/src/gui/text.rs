@@ -13,6 +13,25 @@ pub struct TextBuffer {
     anchor: usize,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WordKind {
+    Word,
+    Space,
+    Punct,
+}
+
+impl WordKind {
+    fn of(ch: char) -> Self {
+        if ch.is_alphanumeric() || ch == '_' || ch == '\'' {
+            Self::Word
+        } else if ch.is_whitespace() {
+            Self::Space
+        } else {
+            Self::Punct
+        }
+    }
+}
+
 impl TextBuffer {
     pub fn new(text: impl Into<String>) -> Self {
         let text = text.into();
@@ -170,6 +189,30 @@ impl TextBuffer {
         self.cursor = self.cursor_chars();
     }
 
+    /// Select the word under a character index, the way a double-click does.
+    /// A click on whitespace selects that run of whitespace; punctuation forms
+    /// its own run so double-clicking a comma does not take the next word.
+    pub fn select_word_at(&mut self, index: usize) {
+        let chars: Vec<char> = self.text.chars().collect();
+        if chars.is_empty() {
+            self.anchor = 0;
+            self.cursor = 0;
+            return;
+        }
+        let index = index.min(chars.len() - 1);
+        let kind = WordKind::of(chars[index]);
+        let mut start = index;
+        while start > 0 && WordKind::of(chars[start - 1]) == kind {
+            start -= 1;
+        }
+        let mut end = index + 1;
+        while end < chars.len() && WordKind::of(chars[end]) == kind {
+            end += 1;
+        }
+        self.anchor = start;
+        self.cursor = end;
+    }
+
     /// Put the caret at a character index, clamped to the text. `extend`
     /// keeps the old anchor, which turns a mouse drag into a selection.
     pub fn set_cursor(&mut self, index: usize, extend: bool) {
@@ -235,5 +278,27 @@ mod tests {
         buffer.set_cursor(99, false);
         assert_eq!(buffer.cursor(), 5);
         assert!(!buffer.has_selection());
+    }
+
+    #[test]
+    fn select_word_at_covers_words_and_punctuation() {
+        let mut buffer = TextBuffer::new("Buy milk, then rest");
+        buffer.select_word_at(1);
+        assert_eq!(buffer.selected_text(), "Buy");
+        buffer.select_word_at(5);
+        assert_eq!(buffer.selected_text(), "milk");
+        buffer.select_word_at(8);
+        assert_eq!(buffer.selected_text(), ",");
+        buffer.select_word_at(9);
+        assert_eq!(buffer.selected_text(), " ");
+        buffer.select_word_at(999);
+        assert_eq!(buffer.selected_text(), "rest");
+    }
+
+    #[test]
+    fn select_word_at_handles_empty_text() {
+        let mut buffer = TextBuffer::empty();
+        buffer.select_word_at(3);
+        assert_eq!(buffer.selection(), (0, 0));
     }
 }
