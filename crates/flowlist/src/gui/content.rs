@@ -1866,8 +1866,7 @@ impl FlowlistApp {
         let drop_root_id = id.clone();
         let row_depth = row.depth;
         let title_line = div()
-            .flex_grow()
-            .flex_shrink_0()
+            .flex_shrink()
             .min_w_0()
             .overflow_hidden()
             .whitespace_nowrap()
@@ -2086,9 +2085,10 @@ impl FlowlistApp {
                         this.toggle_complete(checkbox_id.clone(), cx);
                     })),
             )
+            .child(title_line)
             .child(flag)
             .when_some(disclosure, |this, disclosure| this.child(disclosure))
-            .child(title_line);
+            .child(div().flex_grow());
         let content = div()
             .flex_1()
             .min_w_0()

@@ -58,8 +58,8 @@ Every capture is undoable with `⌘Z`, even after the panel has closed.
 - A task circle takes a vivid priority colour: red for high, yellow for medium
   and blue for low. Priority rings are a little thicker than neutral circles so
   the signal reads clearly on every theme. Completed tasks keep the filled
-  accent check. The flag and subtask chevron sit together directly beside the
-  title, not between the circle and the name.
+  accent check. The title starts directly after the circle; the flag follows the
+  title, and the subtask chevron follows the flag.
 - Subtasks start collapsed. The chevron on a parent opens and closes them; `za` toggles, `zo`
   opens and `zc` closes.
 - Flag with `!` or `⌘D`; the flag sits left of the title and shows on hover in
