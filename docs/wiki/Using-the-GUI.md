@@ -195,8 +195,9 @@ titles itself **Search** and ranks the closest matches first.
   strip's chevron opens the full month again. The week strip remembers the week
   it was on, moves one Monday-first week at a time (forward only) with the
   arrows or horizontal scroll, and keeps the selected weekday; clicking the
-  selected day again clears the filter. The full month is unchanged, including
-  its bottom resize grip.
+  selected day again clears the filter. While a day is picked, the count under
+  the view title names it, as in “1 task for 23 Nov”. The full month is
+  unchanged, including its bottom resize grip.
 
 ## Undo
 

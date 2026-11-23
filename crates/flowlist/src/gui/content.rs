@@ -904,6 +904,15 @@ impl FlowlistApp {
             )
         });
         let is_archive = matches!(self.view, View::Builtin(BuiltinPerspective::Archive));
+        // A Forecast day filter names the day in the header count, so the
+        // header reads "1 task for 23 Nov" while a date is picked.
+        let forecast_day = if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast))
+            && self.forecast_calendar_open
+        {
+            self.forecast_date
+        } else {
+            None
+        };
         // The caller already ran the query for the list; reuse it instead of
         // running the whole view a second time just to count the rows.
         let count = if is_archive {
@@ -1253,19 +1262,7 @@ impl FlowlistApp {
                             )
                         },
                     )
-                    .child(if is_archive {
-                        if count == 0 {
-                            "No projects".to_string()
-                        } else {
-                            super::plural(count, "project", "projects")
-                        }
-                    } else if count == 0 {
-                        "No tasks".to_string()
-                    } else {
-                        super::plural(count, "task", "tasks")
-                        // The last action and its Undo live in the status bar;
-                        // repeating them under every view header was noise.
-                    }),
+                    .child(view_count_label(is_archive, count, forecast_day)),
             )
     }
 
@@ -2859,6 +2856,36 @@ fn forecast_pane_width(window_width: f32, show_inspector: bool) -> f32 {
     .max(0.0)
 }
 
+/// The count under a view title. A picked Forecast day names the day, so the
+/// label reads "1 task for 23 Nov"; with no day picked it stays "3 tasks".
+fn view_count_label(
+    is_archive: bool,
+    count: usize,
+    forecast_day: Option<NaiveDate>,
+) -> String {
+    if is_archive {
+        if count == 0 {
+            "No projects".to_string()
+        } else {
+            super::plural(count, "project", "projects")
+        }
+    } else if let Some(date) = forecast_day {
+        if count == 0 {
+            format!("No tasks for {}", date.format("%-d %b"))
+        } else {
+            format!(
+                "{} for {}",
+                super::plural(count, "task", "tasks"),
+                date.format("%-d %b")
+            )
+        }
+    } else if count == 0 {
+        "No tasks".to_string()
+    } else {
+        super::plural(count, "task", "tasks")
+    }
+}
+
 /// The first day of the month `delta` months after `month`. The Forecast month
 /// is always the first of a month, so this only needs to wrap the year.
 pub(super) fn add_months(month: NaiveDate, delta: i32) -> NaiveDate {
@@ -2881,7 +2908,7 @@ pub(super) fn week_start(date: NaiveDate) -> NaiveDate {
     date - Duration::days(date.weekday().num_days_from_monday() as i64)
 }
 
-/// The Monday-first grid for a month: the first visible date, how many days/// The Monday-first grid for a month: the first visible date, how many days
+/// The Monday-first grid for a month: the first visible date, how many days
 /// the month has, and how many week rows the grid needs.
 pub(super) fn month_grid(month: NaiveDate) -> (NaiveDate, i64, usize) {
     let first = NaiveDate::from_ymd_opt(month.year(), month.month(), 1).unwrap_or(month);
@@ -2988,5 +3015,16 @@ mod tests {
             add_months(november, 0),
             NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()
         );
+    }
+
+    #[test]
+    fn view_count_label_names_a_picked_forecast_day() {
+        let day = NaiveDate::from_ymd_opt(2026, 11, 23).unwrap();
+        assert_eq!(view_count_label(false, 1, Some(day)), "1 task for 23 Nov");
+        assert_eq!(view_count_label(false, 3, Some(day)), "3 tasks for 23 Nov");
+        assert_eq!(view_count_label(false, 0, Some(day)), "No tasks for 23 Nov");
+        assert_eq!(view_count_label(false, 3, None), "3 tasks");
+        assert_eq!(view_count_label(false, 0, None), "No tasks");
+        assert_eq!(view_count_label(true, 2, Some(day)), "2 projects");
     }
 }

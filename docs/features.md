@@ -172,7 +172,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       steps and `{`/`}` month steps. A chip in the content header hides and
       restores the calendar, remembering whether it was the week strip or the
       full month; hiding clears any picked day so the list returns to the full
-      agenda. A chevron beside the month name folds the full month to a
+      agenda. While a day is picked, the header count names it — “1 task for
+      23 Nov” — and returns to the plain “3 tasks” when cleared. A chevron
+      beside the month name folds the full month to a
       Monday-first current-week strip (forward-only paging, day counts, a
       selected day that clears on a second click), and the strip's chevron
       opens the full month again.
