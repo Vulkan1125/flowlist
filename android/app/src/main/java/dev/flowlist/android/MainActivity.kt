@@ -185,6 +185,10 @@ private fun FlowlistApp(
                 onThemeChange = {
                     themeStore.save(it)
                     theme = it
+                    scope.launch {
+                        delay(250)
+                        FlowlistWidget().updateAll(context.applicationContext)
+                    }
                 },
                 initialTab = openTab,
                 onTabConsumed = onTabConsumed,

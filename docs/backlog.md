@@ -189,6 +189,9 @@ below; this list is the current map.
       divider replace the solid bar.
 - [x] **Joined Mac task rows** — the per-row drag spacer is gone, so consecutive
       top-level rows touch; metadata keeps normal gaps and still wraps.
+- [x] **Widget theme, icon and picker preview** — “Follow app” tracks the app’s
+      light/dark choice, the header icon follows the launcher icon colour, and
+      the widget picker shows a real preview.
 - [x] **Android search and Nearby** — search covers projects, folders, tags and
       perspectives with a view/library scope; Nearby lists tags within the
       library radius, sorted by distance. Search results also support bulk

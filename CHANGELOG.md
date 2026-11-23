@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.42 — 2026-11-23
+
+- **Widget follows the app theme.** “Follow app” now uses the app’s light/dark
+  choice instead of only the system night mode, and the widget repaints when the
+  app process sees a configuration change.
+- **Widget icon matches the launcher icon.** The header uses the currently
+  selected app-icon colour and refreshes when the icon changes in Settings.
+- **Widget picker preview.** The picker now shows a real Today-widget preview
+  instead of the blank loading layout.
+
 ## 0.9.41 — 2026-11-23
 
 - **Task rows are joined again.** The thin drag zone that sat between every

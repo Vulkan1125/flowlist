@@ -45,10 +45,12 @@ import androidx.glance.unit.ColorProvider
 import dev.flowlist.android.MainActivity
 import dev.flowlist.android.R
 import dev.flowlist.android.data.FileStore
+import dev.flowlist.android.icon.AppIcons
 import dev.flowlist.android.data.TaskView
 import dev.flowlist.android.data.ThemeStore
 import dev.flowlist.android.data.label
 import dev.flowlist.android.data.widgetTasks
+import dev.flowlist.android.ui.AppearanceMode
 import dev.flowlist.android.ui.themeColors
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -76,7 +78,11 @@ class FlowlistWidget : GlanceAppWidget() {
         val dark = when (options.theme) {
             "light" -> false
             "dark" -> true
-            else -> systemDark
+            else -> when (themeSettings.mode) {
+                AppearanceMode.System -> systemDark
+                AppearanceMode.Light -> false
+                AppearanceMode.Dark -> true
+            }
         }
         val colors = themeColors(themeSettings, dark)
         val scale = when (options.textSize) {
@@ -118,7 +124,7 @@ class FlowlistWidget : GlanceAppWidget() {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Image(
-                        provider = ImageProvider(R.mipmap.ic_launcher_red),
+                        provider = ImageProvider(AppIcons.current(context).resId),
                         contentDescription = null,
                         modifier = GlanceModifier
                             .size((24f * headerScale).dp)

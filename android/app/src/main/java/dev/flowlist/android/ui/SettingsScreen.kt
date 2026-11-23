@@ -47,7 +47,9 @@ import androidx.compose.material.icons.rounded.Settings as SettingsIcon
 import androidx.compose.material3.AlertDialog
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import dev.flowlist.android.widget.FlowlistWidget
 import dev.flowlist.android.widget.FlowlistWidgetReceiver
+import androidx.glance.appwidget.updateAll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -268,6 +270,7 @@ private fun AppearanceSettings(
 ) {
     val colors = flow
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var appIcon by remember { mutableStateOf(AppIcons.current(context)) }
     BottomBarSettings(preferences, onPreferencesChange)
     Spacer(modifier = Modifier.height(14.dp))
@@ -355,6 +358,9 @@ private fun AppearanceSettings(
                         .clickable {
                             AppIcons.apply(context, icon)
                             appIcon = icon
+                            scope.launch {
+                                FlowlistWidget().updateAll(context.applicationContext)
+                            }
                         },
                     contentAlignment = Alignment.Center,
                 ) {

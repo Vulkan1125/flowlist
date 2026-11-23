@@ -3,6 +3,7 @@ package dev.flowlist.android.icon
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import dev.flowlist.android.R
 
 enum class AppIcon(
     val key: String,
@@ -16,6 +17,16 @@ enum class AppIcon(
     Orange("orange", "Orange", ".IconOrange", 0xFFE07A2F),
     Purple("purple", "Purple", ".IconPurple", 0xFF7B5CC7),
     Graphite("graphite", "Graphite", ".IconGraphite", 0xFF3E3E42);
+
+    val resId: Int
+        get() = when (this) {
+            Red -> R.mipmap.ic_launcher_red
+            Blue -> R.mipmap.ic_launcher_blue
+            Green -> R.mipmap.ic_launcher_green
+            Orange -> R.mipmap.ic_launcher_orange
+            Purple -> R.mipmap.ic_launcher_purple
+            Graphite -> R.mipmap.ic_launcher_graphite
+        }
 
     companion object {
         fun fromKey(key: String?): AppIcon = entries.firstOrNull { it.key == key } ?: Red
