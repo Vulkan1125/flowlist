@@ -220,6 +220,10 @@ below; this list is the current map.
       when the body no longer fits. The thumb tracks the pointer exactly, the
       track jumps to a click, and the corner grip uses the correct diagonal
       resize cursor.
+- [x] **Mac window lifecycle** — ⌘Q is bound to Quit (and appears in a small
+      Flowlist app menu), double-clicking the drag handle zooms the window, and
+      closing the red button then clicking the Dock icon rebuilds the window
+      instead of leaving a windowless app behind.
 - [x] **Attachment row selection** — the whole Attachments row selects,
       including its padding and empty space, and Attachments supports the same
       bulk select mode as the other task lists.

@@ -198,6 +198,9 @@ echo "  reset clears both tones"
 
 echo "7. Window controls hide the buttons; Escape restores, Save persists"
 open_settings
+# The window controls sit at the bottom of Appearance; scroll them into view.
+"$helpers/flowctl" scroll $((WX + 600)) $((WY + 600)) 5
+sleep 0.4
 wait_map settings_toggle_rows "settings-window-controls"
 wait_value traffic_lights "visible"
 click_map settings_toggle_rows "settings-window-controls"
@@ -206,6 +209,8 @@ wait_value traffic_lights "hidden"
 wait_value modal ""
 wait_value traffic_lights "visible"
 open_settings
+"$helpers/flowctl" scroll $((WX + 600)) $((WY + 600)) 5
+sleep 0.4
 click_map settings_toggle_rows "settings-window-controls"
 wait_value traffic_lights "hidden"
 "$helpers/flowctl" key 36

@@ -25,6 +25,12 @@ mod update;
 mod vim;
 mod widgets;
 
+mod actions {
+    gpui::actions!(flowlist, [Quit]);
+}
+
+use actions::Quit;
+
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -3840,6 +3846,13 @@ impl FlowlistApp {
         let stroke = &event.keystroke;
         let mods = stroke.modifiers;
 
+        // GPUI does not install an application menu, so macOS never gets a
+        // Quit item to bind ⌘Q to. Handle the standard chord here instead.
+        if mods.platform && !mods.shift && stroke.key == "q" {
+            cx.quit();
+            return;
+        }
+
         // The Carbon shortcut normally opens the floating panel before this
         // handler runs. Keeping the same chord here means the panel still opens
         // when global registration is unavailable.
@@ -3893,7 +3906,7 @@ impl FlowlistApp {
                     cx.notify();
                     return;
                 }
-                if stroke.key == "w" || stroke.key == "q" {
+                if stroke.key == "w" {
                     self.close_modal(cx);
                     return;
                 }
@@ -6067,9 +6080,16 @@ impl FlowlistApp {
                     .child(
                         div()
                             .cursor(CursorStyle::OpenHand)
-                            .on_mouse_down(MouseButton::Left, |_, window, _| {
-                                window.start_window_move()
-                            })
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                |event: &gpui::MouseDownEvent, window, _| {
+                                    if event.click_count >= 2 {
+                                        window.zoom_window();
+                                    } else {
+                                        window.start_window_move();
+                                    }
+                                },
+                            )
                             .child(
                                 div()
                                     .text_sm()
@@ -6752,55 +6772,29 @@ pub fn run(paths: DataPaths) -> Result<()> {
                 px(height.clamp(560.0, 2400.0)),
             )
         });
-    Application::new()
-        .with_assets(icons::Assets)
-        .run(move |cx: &mut App| {
-            let requested = restored.unwrap_or(size(px(1240.), px(800.)));
-            let bounds = Bounds::centered(None, requested, cx);
-            // Screenshot and layout probes need a window the system window
-            // manager leaves alone. Normal launches stay tiled; this is only
-            // set by `FLOWLIST_TEST_FLOAT`.
-            let test_float = std::env::var_os("FLOWLIST_TEST_FLOAT").is_some();
-            let kind = if test_float {
-                WindowKind::Floating
-            } else {
-                WindowKind::Normal
-            };
-            let window = match cx.open_window(
-                WindowOptions {
-                    titlebar: Some(gpui::TitlebarOptions {
-                        title: Some("Flowlist".into()),
-                        appears_transparent: true,
-                        traffic_light_position: Some(point(px(18.), px(17.))),
-                    }),
-                    window_background: WindowBackgroundAppearance::Blurred,
-                    window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    window_min_size: Some(size(px(880.), px(560.))),
-                    kind,
-                    ..Default::default()
-                },
-                |window, cx| {
-                    let store = match Store::open(paths.clone()) {
-                        Ok(store) => store,
-                        Err(error) => {
-                            eprintln!("could not open the Flowlist library: {error}");
-                            std::process::exit(1);
-                        }
-                    };
-                    let app = cx.new(|cx| FlowlistApp::new(store, cx));
-                    let handle = app.read(cx).focus_handle.clone();
-                    window.focus(&handle);
-                    if test_float {
-                        raise_for_capture(window);
-                        window.resize(requested);
-                        window.defer(cx, move |window, _| {
-                            raise_for_capture(window);
-                            window.resize(requested);
-                        });
-                    }
-                    app
-                },
-            ) {
+    let requested = restored.unwrap_or(size(px(1240.), px(800.)));
+    // Screenshot and layout probes need a window the system window manager
+    // leaves alone. Normal launches stay tiled; this is only set by
+    // `FLOWLIST_TEST_FLOAT`.
+    let test_float = std::env::var_os("FLOWLIST_TEST_FLOAT").is_some();
+    let app = Application::new().with_assets(icons::Assets);
+    // Closing the red button leaves the process alive with no window. Clicking
+    // the Dock icon asks macOS to reopen; build the window again instead of
+    // leaving a windowless app behind.
+    let reopen_paths = paths.clone();
+    app.on_reopen(move |cx| {
+        if let Err(error) = open_main_window(cx, reopen_paths.clone(), requested, test_float) {
+            eprintln!("could not reopen Flowlist: {error}");
+        }
+    });
+    app.run(move |cx: &mut App| {
+            cx.bind_keys([gpui::KeyBinding::new("cmd-q", Quit, None)]);
+            cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
+            cx.set_menus(vec![gpui::Menu {
+                name: "Flowlist".into(),
+                items: vec![gpui::MenuItem::action("Quit Flowlist", Quit)],
+            }]);
+            let window = match open_main_window(cx, paths.clone(), requested, test_float) {
                 Ok(window) => window,
                 Err(error) => {
                     eprintln!("could not open the Flowlist window: {error}");
@@ -6838,6 +6832,60 @@ pub fn run(paths: DataPaths) -> Result<()> {
             cx.activate(true);
         });
     Ok(())
+}
+
+/// Open the main window. Kept separate from `run` so the same setup runs when
+/// macOS reopens the app from the Dock after its last window was closed.
+fn open_main_window(
+    cx: &mut App,
+    paths: DataPaths,
+    requested: gpui::Size<gpui::Pixels>,
+    test_float: bool,
+) -> Result<gpui::WindowHandle<FlowlistApp>> {
+    let bounds = Bounds::centered(None, requested, cx);
+    let kind = if test_float {
+        WindowKind::Floating
+    } else {
+        WindowKind::Normal
+    };
+    let window_paths = paths.clone();
+    let window = cx.open_window(
+        WindowOptions {
+            titlebar: Some(gpui::TitlebarOptions {
+                title: Some("Flowlist".into()),
+                appears_transparent: true,
+                traffic_light_position: Some(point(px(18.), px(17.))),
+            }),
+            window_background: WindowBackgroundAppearance::Blurred,
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            window_min_size: Some(size(px(880.), px(560.))),
+            kind,
+            ..Default::default()
+        },
+        move |window, cx| {
+            let store = match Store::open(window_paths.clone()) {
+                Ok(store) => store,
+                Err(error) => {
+                    eprintln!("could not open the Flowlist library: {error}");
+                    std::process::exit(1);
+                }
+            };
+            let app = cx.new(|cx| FlowlistApp::new(store, cx));
+            let handle = app.read(cx).focus_handle.clone();
+            window.focus(&handle);
+            if test_float {
+                raise_for_capture(window);
+                window.resize(requested);
+                window.defer(cx, move |window, _| {
+                    raise_for_capture(window);
+                    window.resize(requested);
+                });
+            }
+            app
+        },
+    )?;
+    cx.activate(true);
+    Ok(window)
 }
 
 /// The middle pane's horizontal band: after the sidebar, stopping before the
