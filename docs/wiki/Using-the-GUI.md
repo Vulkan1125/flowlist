@@ -86,7 +86,9 @@ leaving the list.
   apply it to **This occurrence** or the **Whole series**. Future occurrences
   inherit the series priority.
 - **Subtasks** are an inline list: tick a child, click its title to open it,
-  drag the grip to reorder, or type in the field at the bottom to add one.
+  drag the grip to reorder, or type in the field at the bottom to add one. The
+  step-type chips, the subtask rows and the add field have clear space between
+  them.
   **Separate** moves a child to the end of the project (or the Inbox). You can
   also press `Tab` to indent the selected task under the one above, or drag a
   task onto another task.

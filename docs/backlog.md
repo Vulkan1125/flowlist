@@ -234,6 +234,9 @@ below; this list is the current map.
       chevron, flag. The title starts just after the circle, the chevron sits
       immediately beside the title, and the flag sits one circle width after
       the chevron (or after the title when there is no chevron).
+- [x] **Inspector subtask spacing** — the Parallel/Sequential/One-off chips,
+      the subtask or one-off rows, and the add field now have extra breathing
+      room between them.
 - [x] **Mac window lifecycle** — ⌘Q is bound to Quit (and appears in a small
       Flowlist app menu), double-clicking the drag handle zooms the window, and
       closing the red button then clicking the Dock icon rebuilds the window

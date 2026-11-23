@@ -1794,6 +1794,9 @@ impl FlowlistApp {
                 ),
         );
 
+        // Give the mode chips room to breathe above the subtask list.
+        section = section.child(div().h(px(6.)));
+
         for (child_id, title, completed, priority) in children {
             let select_id = child_id.clone();
             let toggle_id = child_id.clone();
@@ -2087,6 +2090,9 @@ impl FlowlistApp {
                         )),
                 );
             }
+
+        // And separate the last subtask from the add field.
+        section = section.child(div().h(px(6.)));
 
         section.child(
             div()
