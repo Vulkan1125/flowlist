@@ -340,6 +340,11 @@ below; this list is the current map.
       screen-sized reminder on Mac or an alarm-style full-screen-intent
       reminder on Android, with Complete, Snooze ten minutes, Open and Dismiss.
       Marks inherit down through parent tasks, projects and folders.
+- [x] **Settings and saved-view polish** — the Settings rail stays fixed while
+      a section scrolls, full-screen reminder times earlier than now are
+      refused, saved views can filter on full-screen reminder marks (including
+      inherited ones), empty saved views can hide from the rail until they
+      match again, and Appearance stores separate light and dark wallpapers.
 - [x] **Mac tag groups** — the sidebar TAGS section splits into General and
       Geotags, with the group labels indented under the section heading. The
       review-reminder dot is gone from project rows, the Review count stays

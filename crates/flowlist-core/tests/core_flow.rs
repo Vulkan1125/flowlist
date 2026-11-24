@@ -8,7 +8,8 @@ use flowlist_core::command::{
 use flowlist_core::db::{ContainerPosition, Position};
 use flowlist_core::ids::{FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    FilterNode, GroupBy, Priority, ProjectStatus, RepeatMode, RepeatRule, SortBy, TagStatus, Task,
+    Condition, FilterNode, GroupBy, Priority, ProjectStatus, RepeatMode, RepeatRule, SortBy,
+    TagStatus, Task,
 };
 use flowlist_core::paths::DataPaths;
 use flowlist_core::store::Store;
@@ -2488,6 +2489,57 @@ fn fullscreen_reminders_follow_task_project_and_folder_marks() {
         })
         .unwrap();
     assert!(store.db().wants_fullscreen_reminder(&task));
+}
+
+#[test]
+fn a_view_can_filter_on_fullscreen_reminder_inheritance() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let folder = store
+        .execute(Command::CreateFolder {
+            name: "Alerts".into(),
+            parent: None,
+            position: ContainerPosition::End,
+            fullscreen_reminder: true,
+        })
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .unwrap();
+    let folder = store.db().resolve_folder(&folder).unwrap();
+    let project = add_project_in(&mut store, "Ops", Some(&folder));
+    let mut marked = NewTask::new("Inherited alert");
+    marked.project = Some(project);
+    let marked = store
+        .execute(Command::CreateTask(marked))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .unwrap();
+    let marked = store.db().resolve_task(&marked).unwrap();
+    let plain = add_task(&mut store, "Quiet task");
+    let at = Utc::now();
+
+    let ids_for = |value: bool| {
+        let filter = FilterNode::condition(Condition::FullscreenReminder { value });
+        flowlist_core::query::run(
+            store.db(),
+            &filter,
+            SortBy::Manual,
+            GroupBy::None,
+            false,
+            at,
+        )
+        .into_iter()
+        .flat_map(|group| group.rows)
+        .map(|row| row.id)
+        .collect::<Vec<_>>()
+    };
+
+    assert_eq!(ids_for(true), vec![marked]);
+    assert_eq!(ids_for(false), vec![plain]);
 }
 
 #[test]

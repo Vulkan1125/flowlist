@@ -933,6 +933,10 @@ impl FlowlistApp {
                 let is_today = date == today;
                 let is_selected = selected == Some(date);
                 let is_cursor = cursor == date;
+                // A reminder cannot fire in the past. Earlier days are shown
+                // for context but cannot be chosen; today stays live so the
+                // clock step can still put it in the future.
+                let past_reminder = field == DateField::Reminder && date < today;
                 let mut cell = div()
                     .id(super::sid(format!("date-picker-day:{date}")))
                     .flex_1()
@@ -950,6 +954,14 @@ impl FlowlistApp {
                             .child(date.day().to_string()),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
+                        if this.date_picker == Some(DateField::Reminder)
+                            && date < local_date(now())
+                        {
+                            this.toast =
+                                Some("A reminder must be in the future".to_string());
+                            cx.notify();
+                            return;
+                        }
                         this.choose_date_picker_date(date, cx);
                     }));
                 if is_selected {
@@ -967,6 +979,12 @@ impl FlowlistApp {
                 }
                 if !in_month {
                     cell = cell.opacity(0.45);
+                }
+                if past_reminder {
+                    cell = cell
+                        .opacity(0.30)
+                        .cursor(CursorStyle::Arrow)
+                        .hover(|style| style.bg(theme.clear));
                 }
                 row = row.child(cell);
             }

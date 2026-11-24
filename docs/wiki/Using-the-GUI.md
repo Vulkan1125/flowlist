@@ -177,7 +177,8 @@ titles itself **Search** and ranks the closest matches first.
 - **New project / folder / tag / perspective**: `⇧⌘N`, `⌥⌘N`, `⌃⌘N`, `⇧⌘P`.
 - **Saved perspectives** share one editor with the phone: text, Inbox only,
   Flagged only, Status, Projects, Tags with child tags, Priorities, Due and
-  Defer windows, an estimate range, grouping and sorting, and completed tasks.
+  Defer windows, full-screen reminder marks (yes or no, including inherited
+  marks), an estimate range, grouping and sorting, and completed tasks.
   Both platforms offer project/folder/tag/due/defer/flagged/estimate grouping
   and manual/due/defer/name/priority/flagged/estimate/created/completed sorting.
   Project grouping puts tasks with no project under **No project** instead of an
@@ -210,12 +211,13 @@ The status bar names the last action and its Undo until the next one.
 Press `⌘,`. The sheet opens at a fixed size and can be resized from the grip in
 its bottom-right corner. When the content no longer fits, a thin Zed-style
 scrollbar appears along the right edge; drag its thumb or click the track to
-move. It has seven sections on the left (`⌘1`…`⌘7` jump between them):
+move. The section rail stays put while the chosen section scrolls. It has
+eight sections on the left (`⌘1`…`⌘8` jump between them):
 
 - **Appearance** — theme family, light/dark, Plain's accent presets and custom
-  colour picker, screen eyedropper, six Dock icon colours, and the window
-  controls.
-- **Sidebar** — a collapsible matrix of every rail item with **Hide** and **Hide count** boxes, indented under their heading. Every heading starts collapsed and opening one closes the rest. A ticked box hides the row and strikes its name through; hiding a row also greys out its count box, since a count on a hidden row makes no sense. Inbox, Today and Trash always stay and have no Hide box at all. Saved perspectives show their open count, or a bare tick when nothing matches.
+  colour picker, screen eyedropper, six Dock icon colours, separate light and
+  dark wallpapers with a shared opacity, and the window controls.
+- **Sidebar** — a collapsible matrix of every rail item with **Hide** and **Hide count** boxes, indented under their heading. Every heading starts collapsed and opening one closes the rest. A ticked box hides the row and strikes its name through; hiding a row also greys out its count box, since a count on a hidden row makes no sense. Inbox, Today and Trash always stay and have no Hide box at all. Saved perspectives show their open count, or a bare tick when nothing matches. **Hide empty custom views** drops a saved view from the rail while its filter matches nothing and brings it back as soon as a task does.
 - **Workflow** — Vim mode, macOS due reminders, and the review/changed/completed windows.
 - **Nearby** — the radius used by the Nearby view.
 - **Trash** — how many days deleted tasks stay restorable.
@@ -236,8 +238,9 @@ tasks remind at 09:00 local. Toggling it on asks macOS for permission, and
 in the inspector, or tick **Full-screen reminder** while capturing a task or
 creating a project or folder. A marked task, and every task inside a marked
 project or folder, opens a screen-sized reminder when it comes due while
-Flowlist is running. Complete, Snooze 10 minutes, Open task and Dismiss are on
-that screen; Dismiss and Esc leave the task alone.
+Flowlist is running. Complete, Snooze, Open task and Dismiss are on that
+screen; Dismiss and Esc leave the task alone. **S** cycles the snooze length,
+**Enter** snoozes with it and **⌘Enter** completes the task.
 
 The reminder sits on a theme-synced abstract backdrop by default. Pick another
 abstract style from its preview, follow the current theme, or choose a
@@ -248,10 +251,10 @@ screen directly.
 When a task is marked for full-screen reminders, its inspector shows **Match
 due date & time**. Leave it on to follow the due stamp, or turn it off and set
 a separate reminder date and time. The date field is greyed out while it
-follows the due stamp. **Snooze length** offers 15, 30 or 60 minutes; on the
-reminder itself, **S** cycles the length, **Enter** snoozes and **⌘Enter**
-completes the task. **Settings → Appearance → Background** sets a separate wallpaper
-behind the main window, also with an opacity choice.
+follows the due stamp, and a reminder cannot be saved in the past. **Snooze
+length** offers 15, 30 or 60 minutes. **Settings → Appearance → Background**
+sets separate light and dark wallpapers behind the main window, sharing one
+opacity choice.
 
 macOS needs an Apple Development or Developer ID signature before it can grant
 notification permission; the reminder window itself works while Flowlist is

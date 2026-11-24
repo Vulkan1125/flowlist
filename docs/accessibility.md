@@ -246,7 +246,7 @@ attached to every icon-only control:
 
 The help card (`?`) lists the same routes in one place, so a keyboard user does
 not need to discover a tooltip first. Settings sections are reachable with
-`⌘1`–`⌘7`, `⇥` visits only the fields in the section on screen, and Plain's
+`⌘1`–`⌘8`, `⇥` visits only the fields in the section on screen, and Plain's
 accent presets are the digits `1`–`9` while Appearance is open.
 
 ## Focus and selection visibility
@@ -265,7 +265,9 @@ accent presets are the digits `1`–`9` while Appearance is open.
   the close icon and the tooltip carry the meaning.
 - The reading surface stays opaque in all eleven theme families, in both light and
   dark mode. Translucency is limited to the sidebar, inspector, header and
-  status bar, so wallpaper contrast never reaches task text.
+  status bar, so wallpaper contrast never reaches task text. Light and dark
+  wallpapers are chosen separately, and each is held to the same contrast
+  floor as the rest of the chrome.
 - Chrome tint is checked at both gradient stops, and against the blur over a
   pure black (light) or white (dark) wallpaper. The wash is decorative; it can
   never lower text below the contrast floors.
@@ -303,6 +305,7 @@ Until then, Flowlist compensates with:
 A task, project or folder can be marked for full-screen reminders at creation,
 or from the task inspector. Only marked items (and tasks inside a marked
 project or folder) take over the screen. The reminder window is focusable:
-**Enter** completes the task, **S** snoozes it for ten minutes, **O** opens it
-in the main window, and **Esc** dismisses the reminder. Every action is also a
-labelled button. On Android the same actions are buttons on the alarm screen.
+**S** cycles the snooze length (15, 30 or 60 minutes), **Enter** snoozes with
+the shown length, **⌘Enter** completes the task, **O** opens it in the main
+window, and **Esc** dismisses the reminder. Every action is also a labelled
+button. On Android the same actions are buttons on the alarm screen.

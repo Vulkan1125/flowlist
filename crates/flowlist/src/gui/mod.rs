@@ -69,7 +69,7 @@ use drag::{DragFolder, DragProject, DragTask};
 use icons::Icon;
 
 pub use session::{Session, View};
-use theme::Theme;
+use theme::{Appearance, Theme};
 use widgets::TipExt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -512,6 +512,9 @@ pub struct FlowlistApp {
     /// Finished subtasks stay under their parent, struck through, even when
     /// the active view hides completed work.
     keep_completed_subtasks: bool,
+    /// Operate the sidebar like a to-do list: a saved view whose filter
+    /// matches nothing disappears until it has work again.
+    hide_empty_views: bool,
     vim_mode: bool,
     /// Send macOS notifications for upcoming due dates (this device only).
     due_notifications: bool,
@@ -534,8 +537,9 @@ pub struct FlowlistApp {
     reminder_use_wallpaper: bool,
     reminder_wallpaper_opacity: f32,
     reminder_snooze_minutes: u32,
-    /// Custom wallpaper behind the main window.
-    wallpaper: Option<PathBuf>,
+    /// Custom wallpaper behind the main window, one per appearance.
+    wallpaper_light: Option<PathBuf>,
+    wallpaper_dark: Option<PathBuf>,
     use_wallpaper: bool,
     wallpaper_opacity: f32,
     notification_permission: notifications::Permission,
@@ -668,6 +672,7 @@ impl FlowlistApp {
         let group = session.group.as_deref().and_then(group_from_slug);
         let show_completed = session.show_completed.unwrap_or(false);
         let keep_completed_subtasks = session.keep_completed_subtasks.unwrap_or(false);
+        let hide_empty_views = session.hide_empty_views.unwrap_or(false);
         let show_inspector = session.inspector.unwrap_or(true);
         let vim_mode = session.vim_mode.unwrap_or(true);
         let due_notifications = session.notifications.unwrap_or(false);
@@ -692,10 +697,22 @@ impl FlowlistApp {
             .fullscreen_snooze_minutes
             .unwrap_or(15)
             .clamp(1, 1440);
-        let wallpaper = session
+        let legacy_wallpaper = session
             .wallpaper
             .as_ref()
             .map(PathBuf::from)
+            .filter(|path| path.exists());
+        let wallpaper_light = session
+            .wallpaper_light
+            .as_ref()
+            .map(PathBuf::from)
+            .or_else(|| legacy_wallpaper.clone())
+            .filter(|path| path.exists());
+        let wallpaper_dark = session
+            .wallpaper_dark
+            .as_ref()
+            .map(PathBuf::from)
+            .or_else(|| legacy_wallpaper)
             .filter(|path| path.exists());
         let use_wallpaper = session.use_wallpaper.unwrap_or(false);
         let wallpaper_opacity = session.wallpaper_opacity.unwrap_or(0.35).clamp(0.05, 0.95);
@@ -836,6 +853,7 @@ impl FlowlistApp {
             show_inspector,
             show_completed,
             keep_completed_subtasks,
+            hide_empty_views,
             vim_mode,
             due_notifications,
             fullscreen_reminders,
@@ -849,7 +867,8 @@ impl FlowlistApp {
             reminder_use_wallpaper,
             reminder_wallpaper_opacity,
             reminder_snooze_minutes,
-            wallpaper,
+            wallpaper_light,
+            wallpaper_dark,
             use_wallpaper,
             wallpaper_opacity,
             notification_permission: notifications::Permission::Unknown,
@@ -1200,6 +1219,7 @@ impl FlowlistApp {
             group: self.group.map(|group| group_slug(group).to_string()),
             show_completed: Some(self.show_completed),
             keep_completed_subtasks: Some(self.keep_completed_subtasks),
+            hide_empty_views: Some(self.hide_empty_views),
             vim_mode: Some(self.vim_mode),
             notifications: Some(self.due_notifications),
             fullscreen_reminders: Some(self.fullscreen_reminders),
@@ -1212,8 +1232,13 @@ impl FlowlistApp {
             reminder_use_wallpaper: Some(self.reminder_use_wallpaper),
             reminder_wallpaper_opacity: Some(self.reminder_wallpaper_opacity),
             fullscreen_snooze_minutes: Some(self.reminder_snooze_minutes),
-            wallpaper: self
-                .wallpaper
+            wallpaper: None,
+            wallpaper_light: self
+                .wallpaper_light
+                .as_ref()
+                .map(|path| path.display().to_string()),
+            wallpaper_dark: self
+                .wallpaper_dark
                 .as_ref()
                 .map(|path| path.display().to_string()),
             use_wallpaper: Some(self.use_wallpaper),
@@ -2852,6 +2877,11 @@ impl FlowlistApp {
             DateField::Due if task.defer.is_some_and(|defer| defer.local_date() > date) => {
                 Some("The due date can't be before the defer date")
             }
+            DateField::Reminder => {
+                let stamp = picker_stamp(date, self.date_picker_time);
+                (notifications::reminder_at(stamp) <= now())
+                    .then_some("A reminder must be in the future")
+            }
             _ => None,
         }
     }
@@ -3027,6 +3057,14 @@ impl FlowlistApp {
                         }
                     }
                 };
+                if stamp
+                    .as_ref()
+                    .is_some_and(|stamp| notifications::reminder_at(*stamp) <= now())
+                {
+                    self.field_error = Some("A reminder must be in the future".to_string());
+                    cx.notify();
+                    return false;
+                }
                 patch.reminder_at = Some(stamp);
                 if stamp.is_some() {
                     patch.reminder_match_due = Some(false);
@@ -4123,10 +4161,12 @@ impl FlowlistApp {
                 reminder_use_wallpaper,
                 reminder_wallpaper_opacity,
                 fullscreen_snooze_minutes,
-                wallpaper,
+                wallpaper_light,
+                wallpaper_dark,
                 use_wallpaper,
                 wallpaper_opacity,
                 keep_completed_subtasks,
+                hide_empty_views,
                 follow_system,
                 theme,
                 appearance,
@@ -4182,10 +4222,12 @@ impl FlowlistApp {
                 self.reminder_use_wallpaper = *reminder_use_wallpaper;
                 self.reminder_wallpaper_opacity = *reminder_wallpaper_opacity;
                 self.reminder_snooze_minutes = (*fullscreen_snooze_minutes).clamp(1, 1440);
-                self.wallpaper = wallpaper.clone();
+                self.wallpaper_light = wallpaper_light.clone();
+                self.wallpaper_dark = wallpaper_dark.clone();
                 self.use_wallpaper = *use_wallpaper;
                 self.wallpaper_opacity = *wallpaper_opacity;
                 self.keep_completed_subtasks = *keep_completed_subtasks;
+                self.hide_empty_views = *hide_empty_views;
                 self.notification_requested = false;
                 if self.due_notifications && !notifications::permission().allowed() {
                     notifications::request_permission();
@@ -4293,10 +4335,11 @@ impl FlowlistApp {
                     "1" => Some(modals::SettingsSection::Appearance),
                     "2" => Some(modals::SettingsSection::Sidebar),
                     "3" => Some(modals::SettingsSection::Workflow),
-                    "4" => Some(modals::SettingsSection::Nearby),
-                    "5" => Some(modals::SettingsSection::Trash),
-                    "6" => Some(modals::SettingsSection::Mobile),
-                    "7" => Some(modals::SettingsSection::About),
+                    "4" => Some(modals::SettingsSection::Reminders),
+                    "5" => Some(modals::SettingsSection::Nearby),
+                    "6" => Some(modals::SettingsSection::Trash),
+                    "7" => Some(modals::SettingsSection::Mobile),
+                    "8" => Some(modals::SettingsSection::About),
                     _ => None,
                 };
                 if let (
@@ -6414,12 +6457,37 @@ impl FlowlistApp {
             Some(modals::Modal::NewProject { icon, .. }) => Some(icon.slug()),
             _ => None,
         });
+        state["wallpaper_light"] = serde_json::json!(
+            self.wallpaper_light
+                .as_ref()
+                .map(|path| path.display().to_string())
+        );
+        state["wallpaper_dark"] = serde_json::json!(
+            self.wallpaper_dark
+                .as_ref()
+                .map(|path| path.display().to_string())
+        );
+        state["use_wallpaper"] = serde_json::json!(self.use_wallpaper);
         state["modal_wallpaper"] = serde_json::json!(match &self.modal {
-            Some(modals::Modal::Settings { wallpaper, use_wallpaper, wallpaper_note, .. }) => Some(serde_json::json!({
-                "path": wallpaper.as_ref().map(|path| path.display().to_string()),
-                "use": use_wallpaper,
-                "note": wallpaper_note,
-            })),
+            Some(modals::Modal::Settings {
+                wallpaper_light,
+                wallpaper_dark,
+                use_wallpaper,
+                wallpaper_note,
+                ..
+            }) => {
+                let active = match self.theme.appearance() {
+                    Appearance::Light => wallpaper_light,
+                    Appearance::Dark => wallpaper_dark,
+                };
+                Some(serde_json::json!({
+                    "path": active.as_ref().map(|path| path.display().to_string()),
+                    "light": wallpaper_light.as_ref().map(|path| path.display().to_string()),
+                    "dark": wallpaper_dark.as_ref().map(|path| path.display().to_string()),
+                    "use": use_wallpaper,
+                    "note": wallpaper_note,
+                }))
+            }
             _ => None,
         });
         state["modal_reminder_wallpaper"] = serde_json::json!(match &self.modal {
@@ -7085,8 +7153,12 @@ impl Render for FlowlistApp {
                     cx.notify();
                 }),
             );
+        let wallpaper = match self.theme.appearance() {
+            Appearance::Light => self.wallpaper_light.clone(),
+            Appearance::Dark => self.wallpaper_dark.clone(),
+        };
         if self.use_wallpaper
-            && let Some(path) = self.wallpaper.clone()
+            && let Some(path) = wallpaper
         {
             root = root.child(
                 div()

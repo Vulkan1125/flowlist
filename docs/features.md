@@ -65,7 +65,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Nearby (location + radius)
 - [x] Trash (restore, delete forever, auto-empty)
 - [x] Priority rows and a global priority filter
-- [x] Custom saved perspectives with JSON filter trees
+- [x] Custom saved perspectives with JSON filter trees, including a
+      full-screen reminder filter that follows project and folder marks
+- [x] Hide empty custom views option: a saved view leaves the sidebar until
+      its filter matches again
 - [x] Availability: available, deferred, blocked, completed
 - [x] Sorting: manual, due, defer, name, flagged, estimate, created, completed
 - [x] Grouping: project, folder, tag, due, defer, flagged, estimate
@@ -74,6 +77,7 @@ working domain and GUI. This page tracks what is implemented and verified.
       Sort and Group chips
 - [x] First Available filter (only the next actionable row)
 - [x] Per-perspective sort, grouping, completed and availability memory
+- [x] Separate light and dark main-window wallpapers with a shared opacity
 
 ## CLI
 
@@ -260,10 +264,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Full-screen reminders are opt-in per task, project or folder. Marking a
       task (or a parent, project or folder above it) opens a borderless
       screen-sized reminder when it comes due while Flowlist is running, with
-      Complete, Snooze 10 minutes, Open task and Dismiss. Quick capture, the
+      Complete, Snooze, Open task and Dismiss. Quick capture, the
       inline add row and the project/folder sheets carry the mark at creation.
-- [x] Mac backgrounds: a custom wallpaper with an opacity choice sits behind
-      the main window. The full-screen reminder has its own backdrop: six
+- [x] Mac backgrounds: separate light and dark wallpapers with one opacity
+      choice sit behind the main window. The full-screen reminder has its own backdrop: six
       theme-synced abstract styles (Aurora, Dunes, Halo, Mesh, Tide, Ember)
       with visual previews, a Match-theme default, or a separate wallpaper with
       its own opacity.
@@ -273,6 +277,7 @@ working domain and GUI. This page tracks what is implemented and verified.
       due, and “Send full-screen test” opens the reminder screen directly.
       Snooze length is 15, 30 or 60 minutes. On the Mac reminder, **S**
       cycles the length, **Enter** snoozes and **⌘Enter** completes.
+      Reminder timestamps earlier than now are refused.
 - [x] Releases ship a drag-to-Applications DMG beside the updater's zip.
 - [x] The plus opens the capture panel over the window (the global shortcut
       stays screen-centered), the toast follows the visible middle pane, and

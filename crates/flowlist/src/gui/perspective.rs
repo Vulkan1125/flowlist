@@ -120,6 +120,7 @@ pub enum ViewField {
     Status,
     Due,
     Defer,
+    Fullscreen,
     Group,
     Sort,
 }
@@ -132,6 +133,7 @@ impl ViewField {
             ViewField::Status => "status",
             ViewField::Due => "due",
             ViewField::Defer => "defer",
+            ViewField::Fullscreen => "fullscreen",
             ViewField::Group => "group",
             ViewField::Sort => "sort",
         }
@@ -144,6 +146,7 @@ impl ViewField {
             ViewField::Status => "Status",
             ViewField::Due => "Due dates",
             ViewField::Defer => "Defer dates",
+            ViewField::Fullscreen => "Full-screen reminders",
             ViewField::Group => "Group by",
             ViewField::Sort => "Sort by",
         }
@@ -167,6 +170,7 @@ pub enum ViewChoice {
     Status(TaskStatus),
     Due(DueChoice),
     Defer(DeferChoice),
+    Fullscreen(Option<bool>),
     Group(GroupBy),
     Sort(SortBy),
 }
@@ -189,6 +193,9 @@ impl ViewChoice {
                 DueChoice::NoDate => "none",
             }
             .to_string(),
+            ViewChoice::Fullscreen(Some(true)) => "has".to_string(),
+            ViewChoice::Fullscreen(Some(false)) => "none".to_string(),
+            ViewChoice::Fullscreen(None) => "any".to_string(),
             ViewChoice::Defer(choice) => match choice {
                 DeferChoice::Any => "any",
                 DeferChoice::Today => "today",
@@ -287,6 +294,7 @@ pub struct PerspectiveForm {
     pub status: TaskStatus,
     pub dues: BTreeSet<DueChoice>,
     pub defers: BTreeSet<DeferChoice>,
+    pub fullscreen: Option<bool>,
     pub projects: BTreeSet<ProjectId>,
     pub tags: BTreeSet<TagId>,
     pub priorities: BTreeSet<Priority>,
@@ -314,6 +322,7 @@ impl Default for PerspectiveForm {
             status: TaskStatus::Any,
             dues: BTreeSet::new(),
             defers: BTreeSet::new(),
+            fullscreen: None,
             projects: BTreeSet::new(),
             tags: BTreeSet::new(),
             priorities: BTreeSet::new(),
@@ -390,6 +399,7 @@ impl PerspectiveForm {
             Condition::Priority { value } => {
                 self.priorities.insert(*value);
             }
+            Condition::FullscreenReminder { value } => self.fullscreen = Some(*value),
             Condition::Text { value } => {
                 self.text.set(value.clone());
             }
@@ -466,6 +476,9 @@ impl PerspectiveForm {
         }
         if self.status != TaskStatus::Any {
             conditions.push(Condition::Status { value: self.status });
+        }
+        if let Some(value) = self.fullscreen {
+            conditions.push(Condition::FullscreenReminder { value });
         }
         let mut grouped: Vec<FilterNode> = Vec::new();
         let mut group = |conditions: Vec<Condition>| {
@@ -627,6 +640,7 @@ impl PerspectiveForm {
             || self.flagged_only
             || self.show_completed
             || self.status != TaskStatus::Any
+            || self.fullscreen.is_some()
             || !self.dues.is_empty()
             || !self.defers.is_empty()
             || !self.projects.is_empty()
@@ -652,6 +666,7 @@ impl PerspectiveForm {
         self.flagged_only = false;
         self.show_completed = false;
         self.status = TaskStatus::Any;
+        self.fullscreen = None;
         self.dues.clear();
         self.defers.clear();
         self.projects.clear();
@@ -716,6 +731,22 @@ mod tests {
         assert!(conditions.contains(&Condition::Priority {
             value: Priority::High
         }));
+    }
+
+    #[test]
+    fn fullscreen_filter_round_trips() {
+        let mut form = PerspectiveForm::new();
+        form.name = TextBuffer::new("Alerts");
+        form.fullscreen = Some(true);
+        let perspective = form.to_perspective();
+        assert_eq!(
+            condition_set(&perspective.filter),
+            vec![Condition::FullscreenReminder { value: true }]
+        );
+
+        let edited = PerspectiveForm::edit(&perspective);
+        assert_eq!(edited.fullscreen, Some(true));
+        assert_eq!(edited.extra_condition_count(), 0);
     }
 
     #[test]

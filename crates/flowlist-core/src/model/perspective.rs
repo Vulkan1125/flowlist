@@ -169,6 +169,9 @@ pub enum Condition {
     HasRepeat {
         value: bool,
     },
+    FullscreenReminder {
+        value: bool,
+    },
     Estimate {
         min_minutes: Option<u32>,
         max_minutes: Option<u32>,

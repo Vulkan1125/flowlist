@@ -192,7 +192,8 @@ pub enum Modal {
         reminder_use_wallpaper: bool,
         reminder_wallpaper_opacity: f32,
         fullscreen_snooze_minutes: u32,
-        wallpaper: Option<std::path::PathBuf>,
+        wallpaper_light: Option<std::path::PathBuf>,
+        wallpaper_dark: Option<std::path::PathBuf>,
         use_wallpaper: bool,
         wallpaper_opacity: f32,
         wallpaper_note: Option<String>,
@@ -200,6 +201,8 @@ pub enum Modal {
         /// Keep finished subtasks visible under their parent while the view
         /// hides completed work, per device.
         keep_completed_subtasks: bool,
+        /// Drop saved views from the rail while their filter matches nothing.
+        hide_empty_views: bool,
         follow_system: bool,
         theme: ThemeKind,
         appearance: Appearance,
@@ -527,12 +530,14 @@ impl Modal {
             reminder_use_wallpaper: app.reminder_use_wallpaper,
             reminder_wallpaper_opacity: app.reminder_wallpaper_opacity,
             fullscreen_snooze_minutes: app.reminder_snooze_minutes,
-            wallpaper: app.wallpaper.clone(),
+            wallpaper_light: app.wallpaper_light.clone(),
+            wallpaper_dark: app.wallpaper_dark.clone(),
             use_wallpaper: app.use_wallpaper,
             wallpaper_opacity: app.wallpaper_opacity,
             wallpaper_note: None,
             reminder_wallpaper_note: None,
             keep_completed_subtasks: app.keep_completed_subtasks,
+            hide_empty_views: app.hide_empty_views,
             follow_system: app.follow_system,
             theme: app.theme.kind(),
             appearance: app.theme.appearance(),
@@ -978,19 +983,22 @@ impl FlowlistApp {
             );
         }
 
-        // The settings sheet is taller than the window on short displays. A
-        // scroll region keeps every control, especially the full theme grid,
-        // reachable instead of clipped by the card's rounded corners.
+        // Ordinary modals scroll as one column. Settings is different: its
+        // rail must stay put while only the chosen section scrolls, so the
+        // sheet owns that scroll region (see render_settings_sheet).
         let mut body = div()
             .id("modal-body")
             .flex()
             .flex_col()
             .gap_3()
             .flex_1()
-            .min_h_0()
-            .pr(px(14.))
-            .overflow_y_scroll()
-            .track_scroll(&self.modal_scroll);
+            .min_h_0();
+        if !is_settings {
+            body = body
+                .pr(px(14.))
+                .overflow_y_scroll()
+                .track_scroll(&self.modal_scroll);
+        }
 
         if is_help {
             body = body.child(help_body(theme));
@@ -1332,15 +1340,17 @@ impl FlowlistApp {
             }
         }
 
-        let body = div()
+        let mut body = div()
             .relative()
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
             .w_full()
-            .child(body)
-            .child(self.modal_scrollbar(theme, cx));
+            .child(body);
+        if !is_settings {
+            body = body.child(self.modal_scrollbar(theme, cx));
+        }
         // The settings sheet carries the theme grid, the accent picker and the
         // window chrome row. Size it to the window so a tall display shows
         // everything at once while a short one falls back to scrolling.
@@ -1439,7 +1449,7 @@ impl FlowlistApp {
                         ) {
                             "Esc close · ⇥ switch choice"
                         } else if is_settings {
-                            "Esc close · ⌘1–7 sections · ⇥ field"
+                            "Esc close · ⌘1–8 sections · ⇥ field"
                         } else if field_count > 0 {
                             "Esc close · ⇥ next field"
                         } else {
@@ -1459,6 +1469,9 @@ impl FlowlistApp {
                             )
                             .child(
                                 div()
+                                    .on_children_prepainted(
+                                        self.theme_probe("modal-save".to_string()),
+                                    )
                                     .id("modal-save")
                                     .child(widgets::button(theme, confirm_label, true))
                                     .on_click(cx.listener(|this, _, _, cx| this.commit_modal(cx))),
@@ -1837,6 +1850,11 @@ impl FlowlistApp {
             1 => form.defers.first().expect("length checked").label().to_string(),
             count => format!("{count} defer filters"),
         };
+        let fullscreen_label = match form.fullscreen {
+            None => "Any".to_string(),
+            Some(true) => "Has full-screen reminder".to_string(),
+            Some(false) => "No full-screen reminder".to_string(),
+        };
         let extra = form.extra_condition_count();
         // A live count turns the sheet into a preview: every change shows how
         // many tasks the saved view would list.
@@ -1980,6 +1998,15 @@ impl FlowlistApp {
                 cx,
             )));
 
+        let fullscreen_row = div().flex().items_start().gap_2().child(
+            div().flex_1().min_w_0().child(self.perspective_select(
+                ViewField::Fullscreen,
+                fullscreen_label,
+                form.fullscreen.is_some(),
+                cx,
+            )),
+        );
+
         let layout_row = div()
             .flex()
             .items_start()
@@ -2065,6 +2092,7 @@ impl FlowlistApp {
             .child(priority_toggles)
             .child(project_tag_row)
             .child(windows_row)
+            .child(fullscreen_row)
             .child(widgets::divider(theme))
             .child(heading("LAYOUT"))
             .child(layout_row)
@@ -2204,6 +2232,10 @@ impl FlowlistApp {
             .into_iter()
             .map(ViewChoice::Due)
             .collect(),
+            ViewField::Fullscreen => [None, Some(true), Some(false)]
+                .into_iter()
+                .map(ViewChoice::Fullscreen)
+                .collect(),
             ViewField::Defer => [
                 super::perspective::DeferChoice::Any,
                 super::perspective::DeferChoice::Today,
@@ -2267,6 +2299,9 @@ impl FlowlistApp {
             .to_string(),
             ViewChoice::Due(choice) => choice.label().to_string(),
             ViewChoice::Defer(choice) => choice.label().to_string(),
+            ViewChoice::Fullscreen(None) => "Any".to_string(),
+            ViewChoice::Fullscreen(Some(true)) => "Has full-screen reminder".to_string(),
+            ViewChoice::Fullscreen(Some(false)) => "No full-screen reminder".to_string(),
             ViewChoice::Group(group) => super::group_label(Some(*group)).to_string(),
             ViewChoice::Sort(sort) => super::sort_label(Some(*sort)).to_string(),
         }
@@ -2287,6 +2322,7 @@ impl FlowlistApp {
                 (*choice == DeferChoice::Any && form.defers.is_empty())
                     || form.defers.contains(choice)
             }
+            ViewChoice::Fullscreen(value) => form.fullscreen == *value,
             ViewChoice::Group(group) => form.group == *group,
             ViewChoice::Sort(sort) => form.sort == *sort,
         }
@@ -2327,6 +2363,7 @@ impl FlowlistApp {
                 ViewChoice::Status(status) => form.status = status,
                 ViewChoice::Due(choice) => form.toggle_due(choice),
                 ViewChoice::Defer(choice) => form.toggle_defer(choice),
+                ViewChoice::Fullscreen(value) => form.fullscreen = value,
                 ViewChoice::Group(group) => form.group = group,
                 ViewChoice::Sort(sort) => form.sort = sort,
             }
@@ -2704,36 +2741,62 @@ impl FlowlistApp {
         for item in SettingsSection::ALL {
             rail = rail.child(self.settings_nav_row(item, section, cx));
         }
-        let pane = div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .flex_1()
-            .min_w_0()
-            .min_h(px(440.))
-            .pl_3()
-            .child(self.settings_section_header(section));
-        let pane = match section {
-            SettingsSection::Appearance => pane.child(self.render_settings_controls(cx)),
-            SettingsSection::Sidebar => pane.child(self.render_sidebar_settings(cx)),
-            SettingsSection::Workflow => pane.child(self.render_workflow_settings(cx)),
-            SettingsSection::Reminders => pane.child(self.render_reminder_settings(cx)),
-            SettingsSection::Nearby => pane.child(self.render_nearby_settings(cx)),
-            SettingsSection::Trash => pane.child(self.render_trash_settings(cx)),
-            SettingsSection::Mobile => pane.child(self.render_mobile_settings(cx)),
-            SettingsSection::About => pane.child(self.render_about_settings(cx)),
+        let content = match section {
+            SettingsSection::Appearance => self.render_settings_controls(cx),
+            SettingsSection::Sidebar => self.render_sidebar_settings(cx).into_any_element(),
+            SettingsSection::Workflow => self.render_workflow_settings(cx),
+            SettingsSection::Reminders => self.render_reminder_settings(cx),
+            SettingsSection::Nearby => self.render_nearby_settings(cx),
+            SettingsSection::Trash => self.render_trash_settings(cx),
+            SettingsSection::Mobile => self.render_mobile_settings(cx),
+            SettingsSection::About => self.render_about_settings(cx),
         };
-        // A section change fades its pane in, matching the sheet's own 120 ms
-        // entrance. The id carries the section so the animation restarts on
-        // every switch rather than only on the sheet's first open.
-        let pane = pane.with_animation(
+        // A section change fades its content in, matching the sheet's own
+        // 120 ms entrance. The id carries the section so the animation
+        // restarts on every switch rather than only on the first open.
+        let content = div().child(content).with_animation(
             gpui::ElementId::Name(format!("settings-pane-{}", section.slug()).into()),
             Animation::new(Duration::from_millis(120)),
-            |pane, delta| pane.opacity(delta),
+            |content, delta| content.opacity(delta),
         );
+        // The rail sits outside the scroll region so choosing a section never
+        // moves it. Only the pane scrolls, with its own scrollbar at the sheet
+        // edge and breathing room before the content.
+        let pane = div()
+            .relative()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .pl_3()
+            .child(self.settings_section_header(section))
+            .child(
+                div()
+                    .relative()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .child(
+                        div()
+                            .id("settings-scroll")
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .flex_1()
+                            .min_h_0()
+                            .pr(px(14.))
+                            .overflow_y_scroll()
+                            .track_scroll(&self.modal_scroll)
+                            .child(content),
+                    )
+                    .child(self.modal_scrollbar(theme, cx)),
+            );
         div()
             .flex()
-            .items_start()
+            .flex_1()
+            .min_h_0()
             .w_full()
             .child(rail)
             .child(pane)
@@ -2892,12 +2955,16 @@ impl FlowlistApp {
         card.into_any_element()
     }
 
-    fn choose_app_wallpaper(&mut self, cx: &mut Context<Self>) {
+    fn choose_app_wallpaper(&mut self, appearance: Appearance, cx: &mut Context<Self>) {
+        let slot = match appearance {
+            Appearance::Light => "light",
+            Appearance::Dark => "dark",
+        };
         let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some("Choose wallpaper".into()),
+            prompt: Some(format!("Choose {slot} wallpaper").into()),
         });
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(paths))) = picked.await else {
@@ -2910,19 +2977,26 @@ impl FlowlistApp {
                 match super::background::install_wallpaper(
                     &path,
                     &this.store.paths().root,
-                    "app",
+                    &format!("app-{slot}"),
                 ) {
                     Ok(copied) => {
                         if let Some(Modal::Settings {
-                            wallpaper,
+                            wallpaper_light,
+                            wallpaper_dark,
                             use_wallpaper,
                             wallpaper_note,
                             ..
                         }) = &mut this.modal
                         {
-                            *wallpaper = Some(copied);
+                            match appearance {
+                                Appearance::Light => *wallpaper_light = Some(copied),
+                                Appearance::Dark => *wallpaper_dark = Some(copied),
+                            }
                             *use_wallpaper = true;
-                            *wallpaper_note = Some("Wallpaper selected · Save to apply".to_string());
+                            *wallpaper_note = Some(format!(
+                                "{} wallpaper selected · Save to apply",
+                                appearance.label()
+                            ));
                         }
                     }
                     Err(error) => {
@@ -3010,22 +3084,30 @@ impl FlowlistApp {
                 ..
             })
         );
-        let (app_wallpaper, use_app_wallpaper, app_wallpaper_opacity, app_wallpaper_note) =
-            match &self.modal {
-                Some(Modal::Settings {
-                    wallpaper,
-                    use_wallpaper,
-                    wallpaper_opacity,
-                    wallpaper_note,
-                    ..
-                }) => (
-                    wallpaper.clone(),
-                    *use_wallpaper,
-                    *wallpaper_opacity,
-                    wallpaper_note.clone(),
-                ),
-                _ => (None, false, 0.35, None),
-            };
+        let (
+            app_wallpaper_light,
+            app_wallpaper_dark,
+            use_app_wallpaper,
+            app_wallpaper_opacity,
+            app_wallpaper_note,
+        ) = match &self.modal {
+            Some(Modal::Settings {
+                wallpaper_light,
+                wallpaper_dark,
+                use_wallpaper,
+                wallpaper_opacity,
+                wallpaper_note,
+                ..
+            }) => (
+                wallpaper_light.clone(),
+                wallpaper_dark.clone(),
+                *use_wallpaper,
+                *wallpaper_opacity,
+                wallpaper_note.clone(),
+            ),
+            _ => (None, None, false, 0.35, None),
+        };
+        let has_app_wallpaper = app_wallpaper_light.is_some() || app_wallpaper_dark.is_some();
 
         let mut modes = div()
             .flex()
@@ -3234,13 +3316,19 @@ impl FlowlistApp {
                         div()
                             .id("settings-use-wallpaper")
                             .child(widgets::switch(theme, use_app_wallpaper))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                let has_wallpaper = matches!(
-                                    &this.modal,
-                                    Some(Modal::Settings { wallpaper: Some(_), .. })
-                                );
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                let has_wallpaper = match &this.modal {
+                                    Some(Modal::Settings {
+                                        wallpaper_light,
+                                        wallpaper_dark,
+                                        ..
+                                    }) => {
+                                        wallpaper_light.is_some() || wallpaper_dark.is_some()
+                                    }
+                                    _ => false,
+                                };
                                 if !has_wallpaper {
-                                    this.choose_app_wallpaper(cx);
+                                    this.choose_app_wallpaper(appearance, cx);
                                 } else if let Some(Modal::Settings { use_wallpaper, .. }) =
                                     &mut this.modal
                                 {
@@ -3249,50 +3337,134 @@ impl FlowlistApp {
                                 }
                             })),
                     ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .on_children_prepainted(
-                                self.theme_probe("settings-choose-wallpaper".to_string()),
-                            )
-                            .id("settings-choose-wallpaper")
-                            .child(widgets::button(
-                                theme,
-                                if app_wallpaper.is_some() {
-                                    "Replace wallpaper"
-                                } else {
-                                    "Choose wallpaper"
-                                },
-                                false,
-                            ))
-                            .on_click(cx.listener(|this, _, _, cx| this.choose_app_wallpaper(cx))),
-                    )
-                    .when(app_wallpaper.is_some(), |this| {
-                        this.child(
+            );
+        for mode in [Appearance::Light, Appearance::Dark] {
+            let path = match mode {
+                Appearance::Light => app_wallpaper_light.clone(),
+                Appearance::Dark => app_wallpaper_dark.clone(),
+            };
+            let choose_id = match mode {
+                Appearance::Light => "settings-choose-wallpaper",
+                Appearance::Dark => "settings-choose-wallpaper-dark",
+            };
+            let choose_probe = format!("settings-choose-wallpaper-{}", mode.slug());
+            let remove_id = match mode {
+                Appearance::Light => "settings-remove-wallpaper",
+                Appearance::Dark => "settings-remove-wallpaper-dark",
+            };
+            let on_screen = appearance == mode;
+            let mut section = div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
                             div()
-                                .id("settings-remove-wallpaper")
-                                .child(widgets::button(theme, "Remove", false))
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(Modal::Settings {
-                                        wallpaper,
-                                        use_wallpaper,
-                                        ..
-                                    }) = &mut this.modal
-                                    {
-                                        *wallpaper = None;
-                                        *use_wallpaper = false;
-                                    }
-                                    cx.notify();
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .child(div().text_sm().child(format!(
+                                    "{} wallpaper",
+                                    mode.label()
+                                )))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.text_faint)
+                                        .child(format!(
+                                            "Shown while the app is {}.",
+                                            mode.label().to_lowercase()
+                                        )),
+                                ),
+                        )
+                        .when(on_screen, |this| {
+                            this.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.accent)
+                                    .child("On screen"),
+                            )
+                        }),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .on_children_prepainted(self.theme_probe(choose_probe))
+                                .id(choose_id)
+                                .child(widgets::button(
+                                    theme,
+                                    if path.is_some() {
+                                        "Replace wallpaper"
+                                    } else {
+                                        "Choose wallpaper"
+                                    },
+                                    false,
+                                ))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.choose_app_wallpaper(mode, cx);
                                 })),
                         )
-                    }),
-            );
-        if app_wallpaper.is_some() {
+                        .when(path.is_some(), |this| {
+                            this.child(
+                                div()
+                                    .id(remove_id)
+                                    .child(widgets::button(theme, "Remove", false))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        if let Some(Modal::Settings {
+                                            wallpaper_light,
+                                            wallpaper_dark,
+                                            use_wallpaper,
+                                            ..
+                                        }) = &mut this.modal
+                                        {
+                                            match mode {
+                                                Appearance::Light => *wallpaper_light = None,
+                                                Appearance::Dark => *wallpaper_dark = None,
+                                            }
+                                            if wallpaper_light.is_none()
+                                                && wallpaper_dark.is_none()
+                                            {
+                                                *use_wallpaper = false;
+                                            }
+                                        }
+                                        cx.notify();
+                                    })),
+                            )
+                        }),
+                );
+            if let Some(path) = &path {
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "Wallpaper".to_string());
+                section = section.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            img(path.clone())
+                                .object_fit(ObjectFit::Cover)
+                                .w(px(72.))
+                                .h(px(48.))
+                                .rounded_md()
+                                .opacity(app_wallpaper_opacity),
+                        )
+                        .child(div().text_xs().text_color(theme.text_faint).child(name)),
+                );
+            }
+            background_body = background_body.child(section);
+        }
+        if has_app_wallpaper {
             let mut opacity_row = div().flex().items_center().gap_1();
             for percent in [20, 35, 50, 70, 90] {
                 let value = percent as f32 / 100.0;
@@ -3322,32 +3494,6 @@ impl FlowlistApp {
             background_body = background_body
                 .child(div().text_xs().text_color(theme.text_faint).child("Wallpaper opacity"))
                 .child(opacity_row);
-        }
-        if let Some(path) = &app_wallpaper {
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "Wallpaper".to_string());
-            background_body = background_body.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        img(path.clone())
-                            .object_fit(ObjectFit::Cover)
-                            .w(px(72.))
-                            .h(px(48.))
-                            .rounded_md()
-                            .opacity(app_wallpaper_opacity),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child(name),
-                    ),
-            );
         }
         if let Some(note) = &app_wallpaper_note {
             let success = {
@@ -4975,6 +5121,53 @@ impl FlowlistApp {
             .collect();
         tag_items.sort_by_cached_key(|item| item.1.to_lowercase());
         let theme = self.theme;
+        let hide_empty_views = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                hide_empty_views: true,
+                ..
+            })
+        );
+        let hide_empty_row = div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .gap_0p5()
+                    .child(div().text_sm().child("Hide empty custom views"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .whitespace_normal()
+                            .text_color(theme.text_faint)
+                            .child(
+                                "A saved view leaves the rail while its filter matches nothing, and returns with the first matching task.",
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .on_children_prepainted(
+                        self.theme_probe("hide-empty-views-toggle".to_string()),
+                    )
+                    .id("hide-empty-views-toggle")
+                    .child(widgets::switch(theme, hide_empty_views))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Settings {
+                            hide_empty_views, ..
+                        }) = &mut this.modal
+                        {
+                            *hide_empty_views = !*hide_empty_views;
+                        }
+                        cx.notify();
+                    })),
+            );
         self.settings_card(
             "Sidebar",
             Some(
@@ -4985,6 +5178,9 @@ impl FlowlistApp {
                 .w_full()
                 .flex()
                 .flex_col()
+                .gap_2()
+                .child(hide_empty_row)
+                .child(widgets::divider(theme))
                 .child(
                     div()
                         .w_full()

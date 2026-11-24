@@ -6,7 +6,9 @@ use gpui::{
 };
 
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId};
-use flowlist_core::model::{BuiltinPerspective, Priority, ProjectStatus, SidebarOptions};
+use flowlist_core::model::{
+    BuiltinPerspective, Perspective, Priority, ProjectStatus, SidebarOptions,
+};
 use flowlist_core::query;
 use flowlist_core::time::now;
 
@@ -205,6 +207,23 @@ impl FlowlistApp {
             }))
     }
 
+    /// A saved view earns its rail row only while its filter finds work. The
+    /// check uses the same query the view itself runs, so completed-task and
+    /// date windows agree with what opening it would show.
+    pub(super) fn perspective_has_tasks(&self, perspective: &Perspective) -> bool {
+        let db = self.store.db();
+        query::run(
+            db,
+            &perspective.filter,
+            perspective.sort,
+            perspective.group_by,
+            perspective.show_completed,
+            now(),
+        )
+        .iter()
+        .any(|group| !group.rows.is_empty())
+    }
+
     pub(super) fn sidebar_targets(&self) -> Vec<SidebarTarget> {
         let db = self.store.db();
         let options = &db.settings.sidebar;
@@ -226,9 +245,13 @@ impl FlowlistApp {
         if self.is_open("section:saved", true) {
             for perspective in db.perspectives.values() {
                 let target = SidebarTarget::Custom(perspective.id.clone());
-                if !options.is_hidden(&target.key()) {
-                    out.push(target);
+                if options.is_hidden(&target.key()) {
+                    continue;
                 }
+                if self.hide_empty_views && !self.perspective_has_tasks(perspective) {
+                    continue;
+                }
+                out.push(target);
             }
         }
         if self.is_open("section:library", true) {
@@ -986,6 +1009,7 @@ impl FlowlistApp {
             .values()
             .filter(|perspective| {
                 !options.is_hidden(&format!("custom:{}", perspective.id))
+                    && (!self.hide_empty_views || self.perspective_has_tasks(perspective))
             })
             .map(|perspective| PerspectiveRow {
                 id: perspective.id.clone(),

@@ -17,6 +17,17 @@
   their tiles instead of stopping short and no longer glow in the middle.
   JPEG XL wallpapers are converted to PNG with `sips`, and replacing a
   wallpaper now always loads the new image.
+- **Full-screen views and empty-view cleanup.** The saved-view editor can
+  filter on full-screen reminder marks, including marks inherited from a
+  project or folder. **Settings → Sidebar → Hide empty custom views** keeps a
+  saved view out of the rail until its filter matches again.
+- **Light and dark wallpapers.** Appearance now stores a separate wallpaper
+  for each appearance, with one opacity choice for both. Older single
+  wallpapers migrate into both slots.
+- **Reminders stay in the future.** The inspector refuses a reminder timestamp
+  before now, greys out past days in the calendar, and rejects past text.
+- **Fixed settings rail.** Scrolling a settings section no longer scrolls the
+  section rail; only the pane moves.
 - **Full-screen test button.** Mac opens the actual reminder window; Android
   opens the alarm screen directly instead of posting a regular notification.
 - **Mac file-picker fix.** Choosing a wallpaper uses the asynchronous GPUI

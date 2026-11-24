@@ -173,6 +173,9 @@ pub struct Session {
     /// hiding completed work. Per device, like the Android app's setting.
     #[serde(default)]
     pub keep_completed_subtasks: Option<bool>,
+    /// Keep saved views out of the rail while their filter matches nothing.
+    #[serde(default)]
+    pub hide_empty_views: Option<bool>,
     #[serde(default)]
     pub vim_mode: Option<bool>,
     /// Due-date reminders on this Mac. Per device, not per library.
@@ -194,8 +197,15 @@ pub struct Session {
     #[serde(default)]
     pub reminder_use_wallpaper: Option<bool>,
     /// A user-picked image behind the main window.
+    /// Legacy single wallpaper, migrated into the per-appearance slots.
     #[serde(default)]
     pub wallpaper: Option<String>,
+    /// Wallpaper used while the app is light.
+    #[serde(default)]
+    pub wallpaper_light: Option<String>,
+    /// Wallpaper used while the app is dark.
+    #[serde(default)]
+    pub wallpaper_dark: Option<String>,
     /// Show the main-window wallpaper.
     #[serde(default)]
     pub use_wallpaper: Option<bool>,
