@@ -340,6 +340,11 @@ below; this list is the current map.
       screen-sized reminder on Mac or an alarm-style full-screen-intent
       reminder on Android, with Complete, Snooze ten minutes, Open and Dismiss.
       Marks inherit down through parent tasks, projects and folders.
+- [x] **Full-screen reminder polish** — quick capture accepts `fsr:1h30m`,
+      `fsr:2d` and bare `fsr`; simultaneous reminders offer **View all** into a
+      built-in Full-screen view; marks with no due or explicit time are
+      ignored; and Settings can keep one wallpaper or separate light/dark
+      wallpapers for both the main window and the reminder.
 - [x] **Settings and saved-view polish** — the Settings rail stays fixed while
       a section scrolls, full-screen reminder times earlier than now are
       refused, saved views can filter on full-screen reminder marks (including

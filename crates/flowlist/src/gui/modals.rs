@@ -188,12 +188,15 @@ pub enum Modal {
         fullscreen_reminders: bool,
         reminder_background: super::background::AbstractStyle,
         reminder_match_theme: bool,
-        reminder_wallpaper: Option<std::path::PathBuf>,
+        reminder_wallpaper_light: Option<std::path::PathBuf>,
+        reminder_wallpaper_dark: Option<std::path::PathBuf>,
+        reminder_wallpaper_separate: bool,
         reminder_use_wallpaper: bool,
         reminder_wallpaper_opacity: f32,
         fullscreen_snooze_minutes: u32,
         wallpaper_light: Option<std::path::PathBuf>,
         wallpaper_dark: Option<std::path::PathBuf>,
+        wallpaper_separate: bool,
         use_wallpaper: bool,
         wallpaper_opacity: f32,
         wallpaper_note: Option<String>,
@@ -526,12 +529,15 @@ impl Modal {
             fullscreen_reminders: app.fullscreen_reminders,
             reminder_background: app.reminder_background,
             reminder_match_theme: app.reminder_match_theme,
-            reminder_wallpaper: app.reminder_wallpaper.clone(),
+            reminder_wallpaper_light: app.reminder_wallpaper_light.clone(),
+            reminder_wallpaper_dark: app.reminder_wallpaper_dark.clone(),
+            reminder_wallpaper_separate: app.reminder_wallpaper_separate,
             reminder_use_wallpaper: app.reminder_use_wallpaper,
             reminder_wallpaper_opacity: app.reminder_wallpaper_opacity,
             fullscreen_snooze_minutes: app.reminder_snooze_minutes,
             wallpaper_light: app.wallpaper_light.clone(),
             wallpaper_dark: app.wallpaper_dark.clone(),
+            wallpaper_separate: app.wallpaper_separate,
             use_wallpaper: app.use_wallpaper,
             wallpaper_opacity: app.wallpaper_opacity,
             wallpaper_note: None,
@@ -2983,6 +2989,7 @@ impl FlowlistApp {
                         if let Some(Modal::Settings {
                             wallpaper_light,
                             wallpaper_dark,
+                            wallpaper_separate,
                             use_wallpaper,
                             wallpaper_note,
                             ..
@@ -2993,10 +3000,14 @@ impl FlowlistApp {
                                 Appearance::Dark => *wallpaper_dark = Some(copied),
                             }
                             *use_wallpaper = true;
-                            *wallpaper_note = Some(format!(
-                                "{} wallpaper selected · Save to apply",
-                                appearance.label()
-                            ));
+                            *wallpaper_note = Some(if *wallpaper_separate {
+                                format!(
+                                    "{} wallpaper selected · Save to apply",
+                                    appearance.label()
+                                )
+                            } else {
+                                "Wallpaper selected · Save to apply".to_string()
+                            });
                         }
                     }
                     Err(error) => {
@@ -3013,12 +3024,16 @@ impl FlowlistApp {
         .detach();
     }
 
-    fn choose_reminder_wallpaper(&mut self, cx: &mut Context<Self>) {
+    fn choose_reminder_wallpaper(&mut self, appearance: Appearance, cx: &mut Context<Self>) {
+        let slot = match appearance {
+            Appearance::Light => "light",
+            Appearance::Dark => "dark",
+        };
         let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some("Choose reminder wallpaper".into()),
+            prompt: Some(format!("Choose {slot} reminder wallpaper").into()),
         });
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(paths))) = picked.await else {
@@ -3031,21 +3046,33 @@ impl FlowlistApp {
                 match super::background::install_wallpaper(
                     &path,
                     &this.store.paths().root,
-                    "reminder",
+                    &format!("reminder-{slot}"),
                 ) {
                     Ok(copied) => {
                         if let Some(Modal::Settings {
-                            reminder_wallpaper,
+                            reminder_wallpaper_light,
+                            reminder_wallpaper_dark,
+                            reminder_wallpaper_separate,
                             reminder_use_wallpaper,
                             reminder_match_theme,
                             reminder_wallpaper_note,
                             ..
                         }) = &mut this.modal
                         {
-                            *reminder_wallpaper = Some(copied);
+                            match appearance {
+                                Appearance::Light => *reminder_wallpaper_light = Some(copied),
+                                Appearance::Dark => *reminder_wallpaper_dark = Some(copied),
+                            }
                             *reminder_use_wallpaper = true;
                             *reminder_match_theme = false;
-                            *reminder_wallpaper_note = Some("Reminder wallpaper selected · Save to apply".to_string());
+                            *reminder_wallpaper_note = Some(if *reminder_wallpaper_separate {
+                                format!(
+                                    "{} reminder wallpaper selected · Save to apply",
+                                    appearance.label()
+                                )
+                            } else {
+                                "Reminder wallpaper selected · Save to apply".to_string()
+                            });
                         }
                     }
                     Err(error) => {
@@ -3087,6 +3114,7 @@ impl FlowlistApp {
         let (
             app_wallpaper_light,
             app_wallpaper_dark,
+            app_wallpaper_separate,
             use_app_wallpaper,
             app_wallpaper_opacity,
             app_wallpaper_note,
@@ -3094,6 +3122,7 @@ impl FlowlistApp {
             Some(Modal::Settings {
                 wallpaper_light,
                 wallpaper_dark,
+                wallpaper_separate,
                 use_wallpaper,
                 wallpaper_opacity,
                 wallpaper_note,
@@ -3101,13 +3130,20 @@ impl FlowlistApp {
             }) => (
                 wallpaper_light.clone(),
                 wallpaper_dark.clone(),
+                *wallpaper_separate,
                 *use_wallpaper,
                 *wallpaper_opacity,
                 wallpaper_note.clone(),
             ),
-            _ => (None, None, false, 0.35, None),
+            _ => (None, None, false, false, 0.35, None),
         };
-        let has_app_wallpaper = app_wallpaper_light.is_some() || app_wallpaper_dark.is_some();
+        let has_app_wallpaper = app_wallpaper_light.is_some()
+            || (app_wallpaper_separate && app_wallpaper_dark.is_some());
+        let wallpaper_pick_mode = if app_wallpaper_separate {
+            appearance
+        } else {
+            Appearance::Light
+        };
 
         let mut modes = div()
             .flex()
@@ -3317,18 +3353,8 @@ impl FlowlistApp {
                             .id("settings-use-wallpaper")
                             .child(widgets::switch(theme, use_app_wallpaper))
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                let has_wallpaper = match &this.modal {
-                                    Some(Modal::Settings {
-                                        wallpaper_light,
-                                        wallpaper_dark,
-                                        ..
-                                    }) => {
-                                        wallpaper_light.is_some() || wallpaper_dark.is_some()
-                                    }
-                                    _ => false,
-                                };
-                                if !has_wallpaper {
-                                    this.choose_app_wallpaper(appearance, cx);
+                                if !has_app_wallpaper {
+                                    this.choose_app_wallpaper(wallpaper_pick_mode, cx);
                                 } else if let Some(Modal::Settings { use_wallpaper, .. }) =
                                     &mut this.modal
                                 {
@@ -3337,8 +3363,66 @@ impl FlowlistApp {
                                 }
                             })),
                     ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .min_w_0()
+                            .gap_0p5()
+                            .child(div().text_sm().child(
+                                "Use separate wallpapers for light and dark modes",
+                            ))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .whitespace_normal()
+                                    .text_color(theme.text_faint)
+                                    .child(
+                                        "Off keeps one wallpaper for both appearances. On shows a picker for each.",
+                                    ),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .on_children_prepainted(
+                                self.theme_probe("wallpaper-separate-toggle".to_string()),
+                            )
+                            .id("wallpaper-separate-toggle")
+                            .child(widgets::switch(theme, app_wallpaper_separate))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(Modal::Settings {
+                                    wallpaper_separate,
+                                    wallpaper_light,
+                                    wallpaper_dark,
+                                    ..
+                                }) = &mut this.modal
+                                {
+                                    *wallpaper_separate = !*wallpaper_separate;
+                                    if *wallpaper_separate && wallpaper_dark.is_none() {
+                                        *wallpaper_dark = wallpaper_light.clone();
+                                    }
+                                    if !*wallpaper_separate && wallpaper_light.is_none() {
+                                        *wallpaper_light = wallpaper_dark.clone();
+                                    }
+                                }
+                                cx.notify();
+                            })),
+                    ),
             );
-        for mode in [Appearance::Light, Appearance::Dark] {
+        let wallpaper_modes: &[Appearance] = if app_wallpaper_separate {
+            &[Appearance::Light, Appearance::Dark]
+        } else {
+            &[Appearance::Light]
+        };
+        for &mode in wallpaper_modes {
             let path = match mode {
                 Appearance::Light => app_wallpaper_light.clone(),
                 Appearance::Dark => app_wallpaper_dark.clone(),
@@ -3347,12 +3431,25 @@ impl FlowlistApp {
                 Appearance::Light => "settings-choose-wallpaper",
                 Appearance::Dark => "settings-choose-wallpaper-dark",
             };
-            let choose_probe = format!("settings-choose-wallpaper-{}", mode.slug());
+            let choose_probe = match mode {
+                Appearance::Light => "settings-choose-wallpaper".to_string(),
+                Appearance::Dark => "settings-choose-wallpaper-dark".to_string(),
+            };
             let remove_id = match mode {
                 Appearance::Light => "settings-remove-wallpaper",
                 Appearance::Dark => "settings-remove-wallpaper-dark",
             };
-            let on_screen = appearance == mode;
+            let title = if app_wallpaper_separate {
+                format!("{} wallpaper", mode.label())
+            } else {
+                "Wallpaper".to_string()
+            };
+            let hint = if app_wallpaper_separate {
+                format!("Shown while the app is {}.", mode.label().to_lowercase())
+            } else {
+                "Shown in both light and dark modes.".to_string()
+            };
+            let on_screen = app_wallpaper_separate && appearance == mode;
             let mut section = div()
                 .flex()
                 .flex_col()
@@ -3368,18 +3465,12 @@ impl FlowlistApp {
                                 .flex()
                                 .flex_col()
                                 .gap_0p5()
-                                .child(div().text_sm().child(format!(
-                                    "{} wallpaper",
-                                    mode.label()
-                                )))
+                                .child(div().text_sm().child(title))
                                 .child(
                                     div()
                                         .text_xs()
                                         .text_color(theme.text_faint)
-                                        .child(format!(
-                                            "Shown while the app is {}.",
-                                            mode.label().to_lowercase()
-                                        )),
+                                        .child(hint),
                                 ),
                         )
                         .when(on_screen, |this| {
@@ -4098,7 +4189,9 @@ impl FlowlistApp {
         let (
             reminder_style,
             reminder_match,
-            reminder_wallpaper,
+            reminder_wallpaper_light,
+            reminder_wallpaper_dark,
+            reminder_wallpaper_separate,
             reminder_use_wallpaper,
             reminder_opacity,
             reminder_wallpaper_note,
@@ -4106,7 +4199,9 @@ impl FlowlistApp {
             Some(Modal::Settings {
                 reminder_background,
                 reminder_match_theme,
-                reminder_wallpaper,
+                reminder_wallpaper_light,
+                reminder_wallpaper_dark,
+                reminder_wallpaper_separate,
                 reminder_use_wallpaper,
                 reminder_wallpaper_opacity,
                 reminder_wallpaper_note,
@@ -4114,7 +4209,9 @@ impl FlowlistApp {
             }) => (
                 *reminder_background,
                 *reminder_match_theme,
-                reminder_wallpaper.clone(),
+                reminder_wallpaper_light.clone(),
+                reminder_wallpaper_dark.clone(),
+                *reminder_wallpaper_separate,
                 *reminder_use_wallpaper,
                 *reminder_wallpaper_opacity,
                 reminder_wallpaper_note.clone(),
@@ -4123,11 +4220,23 @@ impl FlowlistApp {
                 super::background::AbstractStyle::Aurora,
                 true,
                 None,
+                None,
+                false,
                 false,
                 0.35,
                 None,
             ),
         };
+        let reminder_wallpaper = if reminder_wallpaper_separate {
+            match theme.appearance() {
+                Appearance::Light => reminder_wallpaper_light.clone(),
+                Appearance::Dark => reminder_wallpaper_dark.clone(),
+            }
+        } else {
+            reminder_wallpaper_light.clone()
+        };
+        let has_reminder_wallpaper = reminder_wallpaper_light.is_some()
+            || (reminder_wallpaper_separate && reminder_wallpaper_dark.is_some());
         let draft_backdrop = if reminder_use_wallpaper {
             reminder_wallpaper
                 .clone()
@@ -4473,9 +4582,68 @@ impl FlowlistApp {
             );
         }
         background_body = background_body.child(styles);
-        if reminder_wallpaper.is_some() {
+        background_body = background_body.child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_w_0()
+                        .gap_0p5()
+                        .child(div().text_sm().child(
+                            "Use separate reminder wallpapers for light and dark modes",
+                        ))
+                        .child(
+                            div()
+                                .text_xs()
+                                .whitespace_normal()
+                                .text_color(theme.text_faint)
+                                .child(
+                                    "Off keeps one reminder wallpaper for both appearances. On shows a picker for each.",
+                                ),
+                        ),
+                )
+                .child(
+                    div()
+                        .on_children_prepainted(
+                            self.theme_probe("reminder-wallpaper-separate-toggle".to_string()),
+                        )
+                        .id("reminder-wallpaper-separate-toggle")
+                        .child(widgets::switch(theme, reminder_wallpaper_separate))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(Modal::Settings {
+                                reminder_wallpaper_separate,
+                                reminder_wallpaper_light,
+                                reminder_wallpaper_dark,
+                                ..
+                            }) = &mut this.modal
+                            {
+                                *reminder_wallpaper_separate =
+                                    !*reminder_wallpaper_separate;
+                                if *reminder_wallpaper_separate
+                                    && reminder_wallpaper_dark.is_none()
+                                {
+                                    *reminder_wallpaper_dark =
+                                        reminder_wallpaper_light.clone();
+                                }
+                                if !*reminder_wallpaper_separate
+                                    && reminder_wallpaper_light.is_none()
+                                {
+                                    *reminder_wallpaper_light =
+                                        reminder_wallpaper_dark.clone();
+                                }
+                            }
+                            cx.notify();
+                        })),
+                ),
+        );
+        if has_reminder_wallpaper {
             background_body = background_body
-                .child(div().text_xs().text_color(theme.text_faint).child("Wallpaper"))
                 .child(
                     div()
                         .flex()
@@ -4509,7 +4677,8 @@ impl FlowlistApp {
                                         ..
                                     }) = &mut this.modal
                                     {
-                                        *reminder_use_wallpaper = !*reminder_use_wallpaper;
+                                        *reminder_use_wallpaper =
+                                            !*reminder_use_wallpaper;
                                         if *reminder_use_wallpaper {
                                             *reminder_match_theme = false;
                                         }
@@ -4545,75 +4714,166 @@ impl FlowlistApp {
                                 })),
                         );
                     }
-                    this.child(div().flex().flex_col().gap_1().child(
-                        div().text_xs().text_color(theme.text_faint).child("Wallpaper opacity"),
-                    ).child(row))
-                });
-        }
-        background_body = background_body.child(
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(
-                    div()
-                        .on_children_prepainted(
-                            self.theme_probe("settings-choose-reminder-wallpaper".to_string()),
-                        )
-                        .id("reminder-background-choose")
-                        .child(widgets::button(
-                            theme,
-                            if reminder_wallpaper.is_some() {
-                                "Replace wallpaper"
-                            } else {
-                                "Choose wallpaper"
-                            },
-                            false,
-                        ))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.choose_reminder_wallpaper(cx);
-                        })),
-                )
-                .when(reminder_wallpaper.is_some(), |this| {
                     this.child(
                         div()
-                            .id("reminder-background-remove")
-                            .child(widgets::button(theme, "Remove", false))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(Modal::Settings {
-                                    reminder_wallpaper,
-                                    reminder_use_wallpaper,
-                                    ..
-                                }) = &mut this.modal
-                                {
-                                    *reminder_wallpaper = None;
-                                    *reminder_use_wallpaper = false;
-                                }
-                                cx.notify();
-                            })),
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.text_faint)
+                                    .child("Wallpaper opacity"),
+                            )
+                            .child(row),
                     )
-                }),
-        );
-        if let Some(path) = &reminder_wallpaper {
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "Wallpaper".to_string());
-            background_body = background_body.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        img(path.clone())
-                            .object_fit(ObjectFit::Cover)
-                            .w(px(72.))
-                            .h(px(48.))
-                            .rounded_md()
-                            .opacity(reminder_opacity),
-                    )
-                    .child(div().text_xs().text_color(theme.text_faint).child(name)),
-            );
+                });
+        }
+        let reminder_modes: &[Appearance] = if reminder_wallpaper_separate {
+            &[Appearance::Light, Appearance::Dark]
+        } else {
+            &[Appearance::Light]
+        };
+        for &mode in reminder_modes {
+            let path = match mode {
+                Appearance::Light => reminder_wallpaper_light.clone(),
+                Appearance::Dark => reminder_wallpaper_dark.clone(),
+            };
+            let choose_id = match mode {
+                Appearance::Light => "reminder-background-choose",
+                Appearance::Dark => "reminder-background-choose-dark",
+            };
+            let choose_probe = match mode {
+                Appearance::Light => "settings-choose-reminder-wallpaper".to_string(),
+                Appearance::Dark => "settings-choose-reminder-wallpaper-dark".to_string(),
+            };
+            let remove_id = match mode {
+                Appearance::Light => "reminder-background-remove",
+                Appearance::Dark => "reminder-background-remove-dark",
+            };
+            let title = if reminder_wallpaper_separate {
+                format!("{} reminder wallpaper", mode.label())
+            } else {
+                "Reminder wallpaper".to_string()
+            };
+            let hint = if reminder_wallpaper_separate {
+                format!("Shown while the app is {}.", mode.label().to_lowercase())
+            } else {
+                "Shown in both light and dark modes.".to_string()
+            };
+            let mut section = div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .child(div().text_sm().child(title))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.text_faint)
+                                        .child(hint),
+                                ),
+                        )
+                        .when(
+                            reminder_wallpaper_separate && theme.appearance() == mode,
+                            |this| {
+                                this.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.accent)
+                                        .child("On screen"),
+                                )
+                            },
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .on_children_prepainted(self.theme_probe(choose_probe))
+                                .id(choose_id)
+                                .child(widgets::button(
+                                    theme,
+                                    if path.is_some() {
+                                        "Replace wallpaper"
+                                    } else {
+                                        "Choose wallpaper"
+                                    },
+                                    false,
+                                ))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.choose_reminder_wallpaper(mode, cx);
+                                })),
+                        )
+                        .when(path.is_some(), |this| {
+                            this.child(
+                                div()
+                                    .id(remove_id)
+                                    .child(widgets::button(theme, "Remove", false))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        if let Some(Modal::Settings {
+                                            reminder_wallpaper_light,
+                                            reminder_wallpaper_dark,
+                                            reminder_wallpaper_separate,
+                                            reminder_use_wallpaper,
+                                            ..
+                                        }) = &mut this.modal
+                                        {
+                                            match mode {
+                                                Appearance::Light => {
+                                                    *reminder_wallpaper_light = None
+                                                }
+                                                Appearance::Dark => {
+                                                    *reminder_wallpaper_dark = None
+                                                }
+                                            }
+                                            let left = reminder_wallpaper_light.is_some()
+                                                || (*reminder_wallpaper_separate
+                                                    && reminder_wallpaper_dark.is_some());
+                                            if !left {
+                                                *reminder_use_wallpaper = false;
+                                            }
+                                        }
+                                        cx.notify();
+                                    })),
+                            )
+                        }),
+                );
+            if let Some(path) = &path {
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "Wallpaper".to_string());
+                section = section.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            img(path.clone())
+                                .object_fit(ObjectFit::Cover)
+                                .w(px(72.))
+                                .h(px(48.))
+                                .rounded_md()
+                                .opacity(reminder_opacity),
+                        )
+                        .child(div().text_xs().text_color(theme.text_faint).child(name)),
+                );
+            }
+            background_body = background_body.child(section);
         }
         if let Some(note) = &reminder_wallpaper_note {
             let success = {

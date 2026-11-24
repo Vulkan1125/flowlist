@@ -28,6 +28,16 @@
   before now, greys out past days in the calendar, and rejects past text.
 - **Fixed settings rail.** Scrolling a settings section no longer scrolls the
   section rail; only the pane moves.
+- **Quick-entry full-screen reminders.** Type `fsr:1h30m`, `fsr:2d`, or bare
+  `fsr` to follow the due time instead of using a capture button. Compact
+  offsets such as `due:3d` work too. A mark without a due or explicit reminder
+  time is ignored.
+- **Full-screen view.** A built-in **Full-screen** view lists tasks with an
+  effective reminder. When several reminders come due together, the reminder
+  offers **View all** (or **V**) instead of stepping through them.
+- **Optional split wallpapers.** A Settings toggle reveals separate light and
+  dark pickers for the main window and for full-screen reminders; off keeps a
+  single wallpaper for both.
 - **Full-screen test button.** Mac opens the actual reminder window; Android
   opens the alarm screen directly instead of posting a regular notification.
 - **Mac file-picker fix.** Choosing a wallpaper uses the asynchronous GPUI

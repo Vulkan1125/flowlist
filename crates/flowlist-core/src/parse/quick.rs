@@ -9,6 +9,8 @@
 //! * `!` — flag the task
 //! * `@1`, `@2`, `@3` — priority high, medium, low
 //! * `due:`, `defer:` — natural-language dates (`due:(next friday 5pm)`)
+//! * `fsr:` — full-screen reminder time (`fsr:1h30m`, `fsr:2d`); bare `fsr`
+//!   follows the due time
 //! * `est:` / `estimate:` — duration (`est:1h30m`)
 //! * `repeat:` — repeat rule (`repeat:(every 2 weeks after completion)`)
 //! * `//` — everything after is a note
@@ -35,6 +37,10 @@ pub struct QuickEntry {
     pub priority: Option<Priority>,
     pub repeat: Option<RepeatRule>,
     pub notes: String,
+    /// Opt this capture into a full-screen reminder.
+    pub fullscreen_reminder: bool,
+    /// An explicit reminder time; `None` follows the due time.
+    pub reminder_at: Option<Stamp>,
 }
 
 impl QuickEntry {
@@ -49,6 +55,11 @@ impl QuickEntry {
         task.priority = self.priority;
         task.repeat = self.repeat.clone();
         task.notes = self.notes.clone();
+        // A mark with no due and no explicit reminder has nothing to fire.
+        task.fullscreen_reminder =
+            self.fullscreen_reminder && (self.due.is_some() || self.reminder_at.is_some());
+        task.reminder_at = self.reminder_at;
+        task.reminder_match_due = self.reminder_at.is_none();
         task
     }
 }
@@ -68,6 +79,10 @@ pub fn parse(input: &str, reference: DateTime<Utc>) -> Result<QuickEntry> {
     for token in tokenize(main) {
         if token == "!" {
             entry.flagged = true;
+            continue;
+        }
+        if token.eq_ignore_ascii_case("fsr") {
+            entry.fullscreen_reminder = true;
             continue;
         }
         match token.as_str() {
@@ -101,6 +116,10 @@ pub fn parse(input: &str, reference: DateTime<Utc>) -> Result<QuickEntry> {
             match key.as_str() {
                 "due" => entry.due = Some(parse_stamp(&value, reference)?),
                 "defer" => entry.defer = Some(parse_stamp(&value, reference)?),
+                "fsr" => {
+                    entry.fullscreen_reminder = true;
+                    entry.reminder_at = Some(parse_stamp(&value, reference)?);
+                }
                 "est" | "estimate" => entry.estimate_min = Some(parse_duration(&value)?),
                 "repeat" => entry.repeat = Some(parse_repeat(&value, reference)?),
                 "note" => {
@@ -130,7 +149,7 @@ fn split_attribute(token: &str) -> Option<(String, String)> {
     let value = value.trim().trim_matches(|c| c == '(' || c == ')').trim();
     if !matches!(
         key.as_str(),
-        "due" | "defer" | "est" | "estimate" | "repeat" | "note" | "project"
+        "due" | "defer" | "fsr" | "est" | "estimate" | "repeat" | "note" | "project"
     ) {
         return None;
     }
@@ -243,6 +262,41 @@ mod tests {
         let entry = parse("Read @9", reference()).unwrap();
         assert_eq!(entry.priority, None);
         assert_eq!(entry.title, "Read @9");
+    }
+
+    #[test]
+    fn parses_fullscreen_reminder_syntax() {
+        let entry = parse("do this task fsr:1h30m @1", reference()).unwrap();
+        assert_eq!(entry.title, "do this task");
+        assert!(entry.fullscreen_reminder);
+        assert_eq!(
+            entry.reminder_at.unwrap().local_time(),
+            NaiveTime::from_hms_opt(10, 30, 0).unwrap()
+        );
+        let task = entry.into_new_task();
+        assert!(task.fullscreen_reminder);
+        assert!(!task.reminder_match_due);
+
+        let entry = parse("send mail fsr:2d due:3d @1 #work", reference()).unwrap();
+        assert!(entry.fullscreen_reminder);
+        assert_eq!(
+            entry.due.unwrap().local_date(),
+            NaiveDate::from_ymd_opt(2026, 11, 15).unwrap()
+        );
+        assert_eq!(
+            entry.reminder_at.unwrap().local_date(),
+            NaiveDate::from_ymd_opt(2026, 11, 14).unwrap()
+        );
+        assert_eq!(entry.tag_paths, vec!["work".to_string()]);
+
+        let entry = parse("follow due fsr due:tomorrow", reference()).unwrap();
+        let task = entry.into_new_task();
+        assert!(task.fullscreen_reminder);
+        assert!(task.reminder_match_due);
+        assert!(task.reminder_at.is_none());
+
+        let entry = parse("nothing to schedule fsr", reference()).unwrap();
+        assert!(!entry.into_new_task().fullscreen_reminder);
     }
 
     #[test]

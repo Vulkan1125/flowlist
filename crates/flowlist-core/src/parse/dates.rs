@@ -7,6 +7,7 @@
 use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveTime, Utc};
 
 use crate::error::{Error, Result};
+use super::duration::parse_duration;
 use crate::time::{IntervalUnit, Stamp, add_interval, local_date, next_weekday, parse_weekday};
 
 pub fn parse_stamp(input: &str, reference: DateTime<Utc>) -> Result<Stamp> {
@@ -21,6 +22,16 @@ pub fn parse_stamp(input: &str, reference: DateTime<Utc>) -> Result<Stamp> {
     if lower == "now" {
         return Ok(Stamp {
             at: reference,
+            has_time: true,
+        });
+    }
+    // Compact relative offsets such as `1h30m`, `2d` and `3w` are how the
+    // quick-entry `fsr:` and `due:` markers express "from now".
+    if lower.chars().any(|c| c.is_ascii_alphabetic())
+        && let Ok(minutes) = parse_duration(&lower)
+    {
+        return Ok(Stamp {
+            at: reference + Duration::minutes(minutes as i64),
             has_time: true,
         });
     }

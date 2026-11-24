@@ -28,7 +28,8 @@ land. A plain thought goes to the Inbox; `::Project` files it into a project;
 | --- | --- |
 | `#writing`, `#work/website` | tag (nested tags are created as needed) |
 | `::Website`, `::Work/Website` | project (created if missing) |
-| `due:friday`, `defer:tomorrow`, `due:(next monday 9am)` | dates |
+| `due:friday`, `defer:tomorrow`, `due:(next monday 9am)`, `due:3d` | dates |
+| `fsr:1h30m`, `fsr:2d`, or bare `fsr` | full-screen reminder time; bare `fsr` follows due |
 | `est:45m`, `est:2h30m` | estimate |
 | `repeat:every week` | repeat rule |
 | `!` | flag |
@@ -215,8 +216,9 @@ move. The section rail stays put while the chosen section scrolls. It has
 eight sections on the left (`⌘1`…`⌘8` jump between them):
 
 - **Appearance** — theme family, light/dark, Plain's accent presets and custom
-  colour picker, screen eyedropper, six Dock icon colours, separate light and
-  dark wallpapers with a shared opacity, and the window controls.
+  colour picker, screen eyedropper, six Dock icon colours, a wallpaper with a
+  shared opacity, and the window controls. **Use separate wallpapers for light
+  and dark modes** reveals a second picker; otherwise one photo covers both.
 - **Sidebar** — a collapsible matrix of every rail item with **Hide** and **Hide count** boxes, indented under their heading. Every heading starts collapsed and opening one closes the rest. A ticked box hides the row and strikes its name through; hiding a row also greys out its count box, since a count on a hidden row makes no sense. Inbox, Today and Trash always stay and have no Hide box at all. Saved perspectives show their open count, or a bare tick when nothing matches. **Hide empty custom views** drops a saved view from the rail while its filter matches nothing and brings it back as soon as a task does.
 - **Workflow** — Vim mode, macOS due reminders, and the review/changed/completed windows.
 - **Nearby** — the radius used by the Nearby view.
@@ -235,26 +237,29 @@ tasks remind at 09:00 local. Toggling it on asks macOS for permission, and
 **Send test** checks that banners are working.
 
 **Full-screen reminders** are opt-in per task, project or folder. Mark a task
-in the inspector, or tick **Full-screen reminder** while capturing a task or
-creating a project or folder. A marked task, and every task inside a marked
+in the inspector, type `fsr:1h30m` in quick capture, or tick **Full-screen
+reminder** while creating a project or folder. A marked task, and every task inside a marked
 project or folder, opens a screen-sized reminder when it comes due while
 Flowlist is running. Complete, Snooze, Open task and Dismiss are on that
 screen; Dismiss and Esc leave the task alone. **S** cycles the snooze length,
-**Enter** snoozes with it and **⌘Enter** completes the task.
+**Enter** snoozes with it and **⌘Enter** completes the task. When several
+reminders share a time, **View all** (or **V**) opens the Full-screen view
+instead of stepping through them. A mark with neither a due nor an explicit
+reminder time is ignored.
 
 The reminder sits on a theme-synced abstract backdrop by default. Pick another
 abstract style from its preview, follow the current theme, or choose a
 wallpaper from **Settings → Reminders → Reminder background**; the wallpaper has
-its own opacity and a **Send full-screen test** button opens the reminder
-screen directly.
+its own opacity, an optional separate light/dark pair, and a **Send full-screen
+test** button that opens the reminder screen directly.
 
 When a task is marked for full-screen reminders, its inspector shows **Match
 due date & time**. Leave it on to follow the due stamp, or turn it off and set
 a separate reminder date and time. The date field is greyed out while it
 follows the due stamp, and a reminder cannot be saved in the past. **Snooze
 length** offers 15, 30 or 60 minutes. **Settings → Appearance → Background**
-sets separate light and dark wallpapers behind the main window, sharing one
-opacity choice.
+sets the main-window wallpaper, with an optional split between light and dark,
+sharing one opacity choice.
 
 macOS needs an Apple Development or Developer ID signature before it can grant
 notification permission; the reminder window itself works while Flowlist is

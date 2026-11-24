@@ -264,10 +264,15 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Full-screen reminders are opt-in per task, project or folder. Marking a
       task (or a parent, project or folder above it) opens a borderless
       screen-sized reminder when it comes due while Flowlist is running, with
-      Complete, Snooze, Open task and Dismiss. Quick capture, the
-      inline add row and the project/folder sheets carry the mark at creation.
-- [x] Mac backgrounds: separate light and dark wallpapers with one opacity
-      choice sit behind the main window. The full-screen reminder has its own backdrop: six
+      Complete, Snooze, Open task and Dismiss. Quick capture accepts
+      `fsr:1h30m` or `fsr:2d` (and bare `fsr` to follow due), and the
+      project/folder sheets carry the mark at creation. Multiple reminders
+      due together offer **View all**, which opens the Full-screen view. A
+      mark without a due or explicit reminder time is ignored.
+- [x] Mac backgrounds: a wallpaper sits behind the main window with one
+      opacity choice; a Settings toggle reveals separate light and dark
+      pickers. The reminder wallpaper has the same optional split. The
+      full-screen reminder has its own backdrop: six
       theme-synced abstract styles (Aurora, Dunes, Halo, Mesh, Tide, Ember)
       with visual previews, a Match-theme default, or a separate wallpaper with
       its own opacity.

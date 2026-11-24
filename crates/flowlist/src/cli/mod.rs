@@ -215,6 +215,9 @@ pub struct ListArgs {
     /// List tasks that have attachments (files or links).
     #[arg(long)]
     pub attachments: bool,
+    /// List tasks with an active full-screen reminder.
+    #[arg(long)]
+    pub fullscreen: bool,
     /// List the tasks of finished and dropped projects.
     #[arg(long)]
     pub archive: bool,
@@ -1051,6 +1054,8 @@ fn cmd_list(cli: &Cli, args: ListArgs, paint: &Paint) -> Result<()> {
         query::view(db, BuiltinPerspective::Today, at)
     } else if args.changed {
         query::view(db, BuiltinPerspective::Changed, at)
+    } else if args.fullscreen {
+        query::view(db, BuiltinPerspective::Fullscreen, at)
     } else if args.attachments {
         query::view(db, BuiltinPerspective::Attachments, at)
     } else if args.archive {

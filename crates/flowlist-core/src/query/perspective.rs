@@ -49,7 +49,11 @@ pub fn condition_matches(db: &Db, task: &Task, condition: &Condition, at: DateTi
         Condition::Deferred { window } => window_matches(task.defer, *window, at),
         Condition::HasRepeat { value } => task.repeat.is_some() == *value,
         Condition::FullscreenReminder { value } => {
-            db.wants_fullscreen_reminder(&task.id) == *value
+            // A mark without a due or explicit reminder has nothing to fire,
+            // so it is not an effective full-screen reminder.
+            let effective = db.wants_fullscreen_reminder(&task.id)
+                && db.reminder_stamp(&task.id).is_some();
+            effective == *value
         }
         Condition::Estimate {
             min_minutes,

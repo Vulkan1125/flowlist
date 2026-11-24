@@ -67,7 +67,8 @@ flowlist add 'Draft the launch email #writing ::Website due:friday est:45m // as
 | --- | --- |
 | `#writing`, `#work/website` | tag (nested tags are created) |
 | `::Website`, `::Work/Website` | project (created if missing) |
-| `due:friday`, `defer:tomorrow` | dates; wrap phrases with spaces in parentheses |
+| `due:friday`, `defer:tomorrow`, `due:3d` | dates; compact offsets and parenthesised phrases |
+| `fsr:1h30m`, `fsr:2d` | full-screen reminder time, or bare `fsr` to follow due |
 | `est:45m`, `est:2h30m` | estimate |
 | `repeat:every week` | repeat rule |
 | `!` | flag |

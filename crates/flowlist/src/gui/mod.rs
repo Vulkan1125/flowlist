@@ -533,13 +533,18 @@ pub struct FlowlistApp {
     /// Follow the theme's default abstract backdrop.
     reminder_match_theme: bool,
     /// Custom reminder wallpaper and how strongly it shows.
-    reminder_wallpaper: Option<PathBuf>,
+    reminder_wallpaper_light: Option<PathBuf>,
+    reminder_wallpaper_dark: Option<PathBuf>,
+    /// Show a different reminder wallpaper in light and dark.
+    reminder_wallpaper_separate: bool,
     reminder_use_wallpaper: bool,
     reminder_wallpaper_opacity: f32,
     reminder_snooze_minutes: u32,
     /// Custom wallpaper behind the main window, one per appearance.
     wallpaper_light: Option<PathBuf>,
     wallpaper_dark: Option<PathBuf>,
+    /// Show a different wallpaper in light and dark; otherwise one is shared.
+    wallpaper_separate: bool,
     use_wallpaper: bool,
     wallpaper_opacity: f32,
     notification_permission: notifications::Permission,
@@ -558,7 +563,6 @@ pub struct FlowlistApp {
     focus_handle: FocusHandle,
     capture: text::TextBuffer,
     /// Opt the next inline capture into a full-screen reminder.
-    capture_fullscreen: bool,
     search: text::TextBuffer,
     /// An image or PDF shown over the list, closed with Esc.
     preview: Option<preview::Preview>,
@@ -683,11 +687,29 @@ impl FlowlistApp {
             .as_deref()
             .and_then(AbstractStyle::from_slug)
             .unwrap_or_else(|| AbstractStyle::for_theme(theme.kind()));
-        let reminder_wallpaper = session
+        let legacy_reminder_wallpaper = session
             .reminder_wallpaper
             .as_ref()
             .map(PathBuf::from)
             .filter(|path| path.exists());
+        let reminder_wallpaper_light = session
+            .reminder_wallpaper_light
+            .as_ref()
+            .map(PathBuf::from)
+            .or_else(|| legacy_reminder_wallpaper.clone())
+            .filter(|path| path.exists());
+        let reminder_wallpaper_dark = session
+            .reminder_wallpaper_dark
+            .as_ref()
+            .map(PathBuf::from)
+            .or_else(|| legacy_reminder_wallpaper)
+            .filter(|path| path.exists());
+        let reminder_wallpaper_separate =
+            session.reminder_wallpaper_separate.unwrap_or_else(|| {
+                reminder_wallpaper_light.is_some()
+                    && reminder_wallpaper_dark.is_some()
+                    && reminder_wallpaper_light != reminder_wallpaper_dark
+            });
         let reminder_use_wallpaper = session.reminder_use_wallpaper.unwrap_or(false);
         let reminder_wallpaper_opacity = session
             .reminder_wallpaper_opacity
@@ -714,6 +736,9 @@ impl FlowlistApp {
             .map(PathBuf::from)
             .or_else(|| legacy_wallpaper)
             .filter(|path| path.exists());
+        let wallpaper_separate = session.wallpaper_separate.unwrap_or_else(|| {
+            wallpaper_light.is_some() && wallpaper_dark.is_some() && wallpaper_light != wallpaper_dark
+        });
         let use_wallpaper = session.use_wallpaper.unwrap_or(false);
         let wallpaper_opacity = session.wallpaper_opacity.unwrap_or(0.35).clamp(0.05, 0.95);
         let app_icon = session
@@ -863,12 +888,15 @@ impl FlowlistApp {
             last_reminder_backdrop: None,
             reminder_background,
             reminder_match_theme,
-            reminder_wallpaper,
+            reminder_wallpaper_light,
+            reminder_wallpaper_dark,
+            reminder_wallpaper_separate,
             reminder_use_wallpaper,
             reminder_wallpaper_opacity,
             reminder_snooze_minutes,
             wallpaper_light,
             wallpaper_dark,
+            wallpaper_separate,
             use_wallpaper,
             wallpaper_opacity,
             notification_permission: notifications::Permission::Unknown,
@@ -881,7 +909,6 @@ impl FlowlistApp {
             focus: FocusArea::Content,
             focus_handle,
             capture: text::TextBuffer::empty(),
-            capture_fullscreen: false,
             search: text::TextBuffer::empty(),
             preview: None,
             update: update::UpdateState::Idle,
@@ -1013,8 +1040,16 @@ impl FlowlistApp {
     }
 
     fn reminder_backdrop(&self) -> reminder::ReminderBackdrop {
+        let wallpaper = if self.reminder_wallpaper_separate {
+            match self.theme.appearance() {
+                Appearance::Light => self.reminder_wallpaper_light.clone(),
+                Appearance::Dark => self.reminder_wallpaper_dark.clone(),
+            }
+        } else {
+            self.reminder_wallpaper_light.clone()
+        };
         if self.reminder_use_wallpaper
-            && let Some(path) = self.reminder_wallpaper.clone()
+            && let Some(path) = wallpaper
         {
             return reminder::ReminderBackdrop::Wallpaper(path, self.reminder_wallpaper_opacity);
         }
@@ -1194,14 +1229,18 @@ impl FlowlistApp {
         self.reminder_open = false;
     }
 
+    /// Open the list of tasks that have an effective full-screen reminder.
+    pub(super) fn open_fullscreen_view(&mut self, cx: &mut Context<Self>) {
+        self.set_view(View::Builtin(BuiltinPerspective::Fullscreen));
+        self.focus = FocusArea::Content;
+        self.save_session();
+        cx.activate(true);
+        cx.notify();
+    }
+
     /// Show the task in the main window and bring that window forward.
     pub(super) fn open_reminder_task(&mut self, id: &TaskId, cx: &mut Context<Self>) {
         self.reveal_task(id.clone(), cx);
-        for any in cx.windows() {
-            if let Some(handle) = any.downcast::<FlowlistApp>() {
-                let _ = handle.update(cx, |_, window, _| window.activate_window());
-            }
-        }
         cx.activate(true);
     }
 
@@ -1225,10 +1264,16 @@ impl FlowlistApp {
             fullscreen_reminders: Some(self.fullscreen_reminders),
             reminder_background: Some(self.reminder_background.slug().to_string()),
             reminder_match_theme: Some(self.reminder_match_theme),
-            reminder_wallpaper: self
-                .reminder_wallpaper
+            reminder_wallpaper: None,
+            reminder_wallpaper_light: self
+                .reminder_wallpaper_light
                 .as_ref()
                 .map(|path| path.display().to_string()),
+            reminder_wallpaper_dark: self
+                .reminder_wallpaper_dark
+                .as_ref()
+                .map(|path| path.display().to_string()),
+            reminder_wallpaper_separate: Some(self.reminder_wallpaper_separate),
             reminder_use_wallpaper: Some(self.reminder_use_wallpaper),
             reminder_wallpaper_opacity: Some(self.reminder_wallpaper_opacity),
             fullscreen_snooze_minutes: Some(self.reminder_snooze_minutes),
@@ -1241,6 +1286,7 @@ impl FlowlistApp {
                 .wallpaper_dark
                 .as_ref()
                 .map(|path| path.display().to_string()),
+            wallpaper_separate: Some(self.wallpaper_separate),
             use_wallpaper: Some(self.use_wallpaper),
             wallpaper_opacity: Some(self.wallpaper_opacity),
             app_icon: Some(self.app_icon.slug().to_string()),
@@ -2419,8 +2465,6 @@ impl FlowlistApp {
             Ok(entry) => {
                 let mut new_task = entry.into_new_task();
                 self.apply_view_defaults(&mut new_task);
-                new_task.fullscreen_reminder = self.capture_fullscreen;
-                self.capture_fullscreen = false;
                 self.execute(Command::CreateTask(new_task));
             }
             Err(error) => {
@@ -4157,12 +4201,15 @@ impl FlowlistApp {
                 fullscreen_reminders,
                 reminder_background,
                 reminder_match_theme,
-                reminder_wallpaper,
+                reminder_wallpaper_light,
+                reminder_wallpaper_dark,
+                reminder_wallpaper_separate,
                 reminder_use_wallpaper,
                 reminder_wallpaper_opacity,
                 fullscreen_snooze_minutes,
                 wallpaper_light,
                 wallpaper_dark,
+                wallpaper_separate,
                 use_wallpaper,
                 wallpaper_opacity,
                 keep_completed_subtasks,
@@ -4218,12 +4265,15 @@ impl FlowlistApp {
                 self.fullscreen_reminders = *fullscreen_reminders;
                 self.reminder_background = *reminder_background;
                 self.reminder_match_theme = *reminder_match_theme;
-                self.reminder_wallpaper = reminder_wallpaper.clone();
+                self.reminder_wallpaper_light = reminder_wallpaper_light.clone();
+                self.reminder_wallpaper_dark = reminder_wallpaper_dark.clone();
+                self.reminder_wallpaper_separate = *reminder_wallpaper_separate;
                 self.reminder_use_wallpaper = *reminder_use_wallpaper;
                 self.reminder_wallpaper_opacity = *reminder_wallpaper_opacity;
                 self.reminder_snooze_minutes = (*fullscreen_snooze_minutes).clamp(1, 1440);
                 self.wallpaper_light = wallpaper_light.clone();
                 self.wallpaper_dark = wallpaper_dark.clone();
+                self.wallpaper_separate = *wallpaper_separate;
                 self.use_wallpaper = *use_wallpaper;
                 self.wallpaper_opacity = *wallpaper_opacity;
                 self.keep_completed_subtasks = *keep_completed_subtasks;
@@ -6109,6 +6159,16 @@ impl FlowlistApp {
                     !task.completed && !task.is_trashed() && !task.attachments.is_empty()
                 })
                 .count(),
+            BuiltinPerspective::Fullscreen => db
+                .tasks
+                .values()
+                .filter(|task| {
+                    !task.completed
+                        && !task.is_trashed()
+                        && db.wants_fullscreen_reminder(&task.id)
+                        && db.reminder_stamp(&task.id).is_some()
+                })
+                .count(),
             BuiltinPerspective::Trash => db.trash_count(),
         }
     }
@@ -6472,30 +6532,68 @@ impl FlowlistApp {
             Some(modals::Modal::Settings {
                 wallpaper_light,
                 wallpaper_dark,
+                wallpaper_separate,
                 use_wallpaper,
                 wallpaper_note,
                 ..
             }) => {
-                let active = match self.theme.appearance() {
-                    Appearance::Light => wallpaper_light,
-                    Appearance::Dark => wallpaper_dark,
+                let active = if *wallpaper_separate {
+                    match self.theme.appearance() {
+                        Appearance::Light => wallpaper_light,
+                        Appearance::Dark => wallpaper_dark,
+                    }
+                } else {
+                    wallpaper_light
                 };
                 Some(serde_json::json!({
                     "path": active.as_ref().map(|path| path.display().to_string()),
                     "light": wallpaper_light.as_ref().map(|path| path.display().to_string()),
                     "dark": wallpaper_dark.as_ref().map(|path| path.display().to_string()),
+                    "separate": wallpaper_separate,
                     "use": use_wallpaper,
                     "note": wallpaper_note,
                 }))
             }
             _ => None,
         });
+        state["reminder_wallpaper_light"] = serde_json::json!(
+            self.reminder_wallpaper_light
+                .as_ref()
+                .map(|path| path.display().to_string())
+        );
+        state["reminder_wallpaper_dark"] = serde_json::json!(
+            self.reminder_wallpaper_dark
+                .as_ref()
+                .map(|path| path.display().to_string())
+        );
+        state["reminder_wallpaper_separate"] =
+            serde_json::json!(self.reminder_wallpaper_separate);
         state["modal_reminder_wallpaper"] = serde_json::json!(match &self.modal {
-            Some(modals::Modal::Settings { reminder_wallpaper, reminder_use_wallpaper, reminder_wallpaper_note, .. }) => Some(serde_json::json!({
-                "path": reminder_wallpaper.as_ref().map(|path| path.display().to_string()),
-                "use": reminder_use_wallpaper,
-                "note": reminder_wallpaper_note,
-            })),
+            Some(modals::Modal::Settings {
+                reminder_wallpaper_light,
+                reminder_wallpaper_dark,
+                reminder_wallpaper_separate,
+                reminder_use_wallpaper,
+                reminder_wallpaper_note,
+                ..
+            }) => {
+                let active = if *reminder_wallpaper_separate {
+                    match self.theme.appearance() {
+                        Appearance::Light => reminder_wallpaper_light,
+                        Appearance::Dark => reminder_wallpaper_dark,
+                    }
+                } else {
+                    reminder_wallpaper_light
+                };
+                Some(serde_json::json!({
+                    "path": active.as_ref().map(|path| path.display().to_string()),
+                    "light": reminder_wallpaper_light.as_ref().map(|path| path.display().to_string()),
+                    "dark": reminder_wallpaper_dark.as_ref().map(|path| path.display().to_string()),
+                    "separate": reminder_wallpaper_separate,
+                    "use": reminder_use_wallpaper,
+                    "note": reminder_wallpaper_note,
+                }))
+            }
             _ => None,
         });
         state["modal_sidebar"] = serde_json::json!(match &self.modal {
@@ -7153,9 +7251,13 @@ impl Render for FlowlistApp {
                     cx.notify();
                 }),
             );
-        let wallpaper = match self.theme.appearance() {
-            Appearance::Light => self.wallpaper_light.clone(),
-            Appearance::Dark => self.wallpaper_dark.clone(),
+        let wallpaper = if self.wallpaper_separate {
+            match self.theme.appearance() {
+                Appearance::Light => self.wallpaper_light.clone(),
+                Appearance::Dark => self.wallpaper_dark.clone(),
+            }
+        } else {
+            self.wallpaper_light.clone()
         };
         if self.use_wallpaper
             && let Some(path) = wallpaper

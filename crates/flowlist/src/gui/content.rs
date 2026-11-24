@@ -1472,49 +1472,12 @@ impl FlowlistApp {
                         .child(widgets::text_field(
                             theme,
                             &self.capture,
-                            "Add a task…  #tag  ::Project  @1  due:tomorrow  est:15m",
+                            "Add a task…  #tag  ::Project  fsr:1h  due:tomorrow  est:15m",
                             self.focus == super::FocusArea::Capture,
                         ))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.focus = super::FocusArea::Capture;
                             this.capture.end(false);
-                            cx.notify();
-                        })),
-                )
-                .child(
-                    div()
-                        .id("capture-fullscreen")
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .h(px(22.))
-                        .px(px(6.))
-                        .rounded_md()
-                        .cursor_pointer()
-                        .text_xs()
-                        .text_color(if self.capture_fullscreen {
-                            theme.accent
-                        } else {
-                            theme.text_faint
-                        })
-                        .bg(if self.capture_fullscreen {
-                            theme.selection
-                        } else {
-                            theme.clear
-                        })
-                        .flow_tip(self, cx, theme, "Full-screen reminder")
-                        .hover(|style| style.bg(theme.hover))
-                        .child(icons::icon(
-                            Icon::Clock,
-                            12.0,
-                            if self.capture_fullscreen {
-                                theme.accent
-                            } else {
-                                theme.text_faint
-                            },
-                        ))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.capture_fullscreen = !this.capture_fullscreen;
                             cx.notify();
                         })),
                 )

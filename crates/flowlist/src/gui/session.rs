@@ -88,6 +88,7 @@ impl View {
             View::Builtin(BuiltinPerspective::Archive) => "Finished and dropped projects",
             View::Builtin(BuiltinPerspective::Changed) => "Recently edited work",
             View::Builtin(BuiltinPerspective::Attachments) => "Files attached to tasks",
+            View::Builtin(BuiltinPerspective::Fullscreen) => "Reminders that take over the screen",
             View::Builtin(BuiltinPerspective::Nearby) => "Contexts with a location",
             View::Builtin(BuiltinPerspective::Trash) => "Deleted tasks, restorable for a while",
             View::Project(_) => "Project outline",
@@ -190,9 +191,18 @@ pub struct Session {
     /// Use the abstract style that belongs to the current theme.
     #[serde(default)]
     pub reminder_match_theme: Option<bool>,
-    /// A user-picked image for the full-screen reminder.
+    /// Keep a different reminder wallpaper for light and dark appearances.
+    #[serde(default)]
+    pub reminder_wallpaper_separate: Option<bool>,
+    /// Legacy reminder wallpaper, migrated into the per-appearance slots.
     #[serde(default)]
     pub reminder_wallpaper: Option<String>,
+    /// Reminder wallpaper used while the app is light.
+    #[serde(default)]
+    pub reminder_wallpaper_light: Option<String>,
+    /// Reminder wallpaper used while the app is dark.
+    #[serde(default)]
+    pub reminder_wallpaper_dark: Option<String>,
     /// Show the reminder wallpaper instead of the abstract style.
     #[serde(default)]
     pub reminder_use_wallpaper: Option<bool>,
@@ -200,6 +210,9 @@ pub struct Session {
     /// Legacy single wallpaper, migrated into the per-appearance slots.
     #[serde(default)]
     pub wallpaper: Option<String>,
+    /// Keep a different wallpaper for light and dark appearances.
+    #[serde(default)]
+    pub wallpaper_separate: Option<bool>,
     /// Wallpaper used while the app is light.
     #[serde(default)]
     pub wallpaper_light: Option<String>,

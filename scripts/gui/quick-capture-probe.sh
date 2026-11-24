@@ -190,7 +190,24 @@ if ! title_list --forecast | grep -qx 'Dated capture'; then
 fi
 echo "  dated: left the Inbox for Forecast"
 
-# 3. Return closes the panel and puts the old app back in front.
+# 3. Full-screen reminder syntax opts the capture in without a button.
+paste 'Reminder capture fsr:1h30m @1'
+"$helpers/flowctl" key 36 shift
+wait_value "$capture" last_captured 'Reminder capture'
+if ! title_list --fullscreen | grep -qx 'Reminder capture'; then
+	echo "FAIL: fsr: capture was not a full-screen reminder" >&2
+	exit 1
+fi
+paste 'Discarded capture fsr'
+"$helpers/flowctl" key 36 shift
+wait_value "$capture" last_captured 'Discarded capture'
+if title_list --fullscreen | grep -qx 'Discarded capture'; then
+	echo "FAIL: a mark with no time should be discarded" >&2
+	exit 1
+fi
+echo "  fsr: opted in, no-time mark ignored"
+
+# 4. Return closes the panel and puts the old app back in front.
 paste 'Closing capture'
 "$helpers/flowctl" key 36
 wait_value "$capture" open False

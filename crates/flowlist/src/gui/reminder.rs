@@ -151,6 +151,13 @@ impl Reminder {
         cx.notify();
     }
 
+    fn view_all(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(app) = self.app.upgrade() {
+            let _ = app.update(cx, |app, cx| app.open_fullscreen_view(cx));
+        }
+        self.close(window, cx);
+    }
+
     fn open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(task) = self.current().cloned() else {
             self.close(window, cx);
@@ -180,6 +187,7 @@ impl Reminder {
             "enter" | "return" if command => self.complete(window, cx),
             "enter" | "return" => self.snooze(window, cx),
             "s" if !command => self.cycle_snooze(cx),
+            "v" => self.view_all(window, cx),
             "o" => self.open(window, cx),
             _ => {}
         }
@@ -228,6 +236,7 @@ impl Reminder {
                 match id {
                     "reminder-complete" => this.complete(window, cx),
                     "reminder-snooze" => this.snooze(window, cx),
+                    "reminder-view" => this.view_all(window, cx),
                     "reminder-open" => this.open(window, cx),
                     _ => this.dismiss(window, cx),
                 }
@@ -246,7 +255,11 @@ impl Render for Reminder {
             Some(project) => format!("{project} · at {}", task.time),
             None => format!("Inbox · at {}", task.time),
         };
-        let due_label = "Reminder";
+        let due_label = if self.tasks.len() > 1 {
+            format!("{} reminders due", self.tasks.len())
+        } else {
+            "Reminder".to_string()
+        };
         let backdrop = match &self.backdrop {
             ReminderBackdrop::Abstract(style) => background::render(*style, theme),
             ReminderBackdrop::Wallpaper(path, opacity) => div()
@@ -353,7 +366,16 @@ impl Render for Reminder {
                                         Icon::Close,
                                         false,
                                         cx,
-                                    )),
+                                    ))
+                                    .when(self.tasks.len() > 1, |this| {
+                                        this.child(self.action(
+                                            "reminder-view",
+                                            "View all",
+                                            Icon::ListChecks,
+                                            false,
+                                            cx,
+                                        ))
+                                    }),
                             )
                             .child(div().text_xs().text_color(theme.text_faint).child(format!(
                                 "{position} · Esc dismisses · S cycles snooze · Enter snoozes · ⌘Enter completes"

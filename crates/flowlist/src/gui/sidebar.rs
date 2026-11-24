@@ -91,6 +91,7 @@ fn glyph(perspective: BuiltinPerspective) -> Icon {
         BuiltinPerspective::Archive => Icon::Archive,
         BuiltinPerspective::Changed => Icon::Clock,
         BuiltinPerspective::Attachments => Icon::Paperclip,
+        BuiltinPerspective::Fullscreen => Icon::Clock,
         BuiltinPerspective::Nearby => Icon::Nearby,
         BuiltinPerspective::Trash => Icon::Trash,
     }

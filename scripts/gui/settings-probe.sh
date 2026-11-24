@@ -147,12 +147,14 @@ wait_value settings_section "workflow"
 "$helpers/flowctl" key 19 cmd
 wait_value settings_section "sidebar"
 "$helpers/flowctl" key 21 cmd
-wait_value settings_section "nearby"
+wait_value settings_section "reminders"
 "$helpers/flowctl" key 23 cmd
-wait_value settings_section "trash"
+wait_value settings_section "nearby"
 "$helpers/flowctl" key 22 cmd
-wait_value settings_section "mobile"
+wait_value settings_section "trash"
 "$helpers/flowctl" key 26 cmd
+wait_value settings_section "mobile"
+"$helpers/flowctl" key 28 cmd
 wait_value settings_section "about"
 "$helpers/flowctl" key 18 cmd
 wait_value settings_section "appearance"

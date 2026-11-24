@@ -2510,7 +2510,10 @@ fn a_view_can_filter_on_fullscreen_reminder_inheritance() {
     let folder = store.db().resolve_folder(&folder).unwrap();
     let project = add_project_in(&mut store, "Ops", Some(&folder));
     let mut marked = NewTask::new("Inherited alert");
-    marked.project = Some(project);
+    marked.project = Some(project.clone());
+    marked.due = Some(Stamp::date_only(
+        local_date(Utc::now()) + chrono::Duration::days(1),
+    ));
     let marked = store
         .execute(Command::CreateTask(marked))
         .unwrap()
@@ -2519,6 +2522,16 @@ fn a_view_can_filter_on_fullscreen_reminder_inheritance() {
         .cloned()
         .unwrap();
     let marked = store.db().resolve_task(&marked).unwrap();
+    let mut undated = NewTask::new("Undated alert");
+    undated.project = Some(project);
+    let undated = store
+        .execute(Command::CreateTask(undated))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .unwrap();
+    let undated = store.db().resolve_task(&undated).unwrap();
     let plain = add_task(&mut store, "Quiet task");
     let at = Utc::now();
 
@@ -2538,8 +2551,11 @@ fn a_view_can_filter_on_fullscreen_reminder_inheritance() {
         .collect::<Vec<_>>()
     };
 
-    assert_eq!(ids_for(true), vec![marked]);
-    assert_eq!(ids_for(false), vec![plain]);
+    assert_eq!(ids_for(true), vec![marked.clone()]);
+    let without = ids_for(false);
+    assert!(without.contains(&plain));
+    assert!(without.contains(&undated));
+    assert!(!without.contains(&marked));
 }
 
 #[test]

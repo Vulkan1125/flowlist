@@ -252,6 +252,15 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
             }
             groups
         }
+        BuiltinPerspective::Fullscreen => {
+            let filter = FilterNode::condition(Condition::FullscreenReminder { value: true });
+            let mut groups = run(db, &filter, SortBy::Due, GroupBy::None, false, at);
+            for group in &mut groups {
+                group.rows.retain(|row| db.reminder_stamp(&row.id).is_some());
+            }
+            groups.retain(|group| !group.rows.is_empty());
+            groups
+        }
         BuiltinPerspective::Nearby => {
             let hits = nearby(db, at);
             let ids: Vec<TaskId> = hits.into_iter().map(|hit| hit.task).collect();

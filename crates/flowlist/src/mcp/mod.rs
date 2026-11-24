@@ -614,6 +614,7 @@ impl Server {
             "nearby" => query::view(db, BuiltinPerspective::Nearby, at),
             "changed" => query::view(db, BuiltinPerspective::Changed, at),
             "attachments" => query::view(db, BuiltinPerspective::Attachments, at),
+            "fullscreen" => query::view(db, BuiltinPerspective::Fullscreen, at),
             "trash" => query::view(db, BuiltinPerspective::Trash, at),
             "review" => Vec::new(),
             "custom" | "perspective" => {

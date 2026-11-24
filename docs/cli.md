@@ -31,7 +31,8 @@ flowlist add 'Draft launch email #Work/Website ::Work/Launch due:tomorrow est:45
 | --- | --- |
 | `#Tag`, `#Parent/Child` | attach a tag; missing tags are created |
 | `::Project`, `::Folder/Project` | file into a project; missing containers are created |
-| `due:`, `defer:` | natural-language dates (`due:(next friday 5pm)`) |
+| `due:`, `defer:` | natural-language dates (`due:(next friday 5pm)`) or compact offsets (`due:3d`) |
+| `fsr:` | full-screen reminder time (`fsr:1h30m`, `fsr:2d`); bare `fsr` follows due |
 | `est:` / `estimate:` | duration (`15m`, `1h30m`) |
 | `repeat:` | repeat rule (`every 2 weeks`, `every week after completion`) |
 | `@1`, `@2`, `@3` | priority: high, medium, low |
@@ -72,6 +73,7 @@ Choose a view or filter:
 | `--trash` | tasks currently in Trash |
 | `--changed` | tasks edited within the Changed window |
 | `--attachments` | open tasks that have attachments (files or links) |
+| `--fullscreen` | tasks with an effective full-screen reminder |
 | `--archive` | tasks in finished and dropped projects |
 | `--available` | only available tasks |
 | `--priority high\|medium\|low` | only tasks with that priority |
