@@ -25,7 +25,6 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.PreferencesStore
-import dev.flowlist.android.data.Repository
 import dev.flowlist.android.data.ThemeStore
 import dev.flowlist.android.ui.FlowlistTheme
 import dev.flowlist.android.ui.MainScreen
@@ -36,6 +35,7 @@ import dev.flowlist.android.ui.isDark
 import dev.flowlist.android.widget.FlowlistWidget
 import dev.flowlist.android.widget.WidgetUpdater
 import dev.flowlist.android.notify.DueNotifications
+import dev.flowlist.android.notify.TaskReminders
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -147,7 +147,9 @@ private fun FlowlistApp(
     onCaptureConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    val repository = remember { Repository(context.applicationContext) }
+    val repository = remember {
+        (context.applicationContext as FlowlistApplication).repository
+    }
     val themeStore = remember { ThemeStore(context.applicationContext) }
     val preferencesStore = remember { PreferencesStore(context.applicationContext) }
     var theme by remember { mutableStateOf(themeStore.load()) }
@@ -223,6 +225,10 @@ private fun FlowlistApp(
         }
     }
 
+    LaunchedEffect(preferences.fullScreenReminders) {
+        TaskReminders.setEnabled(context, preferences.fullScreenReminders)
+    }
+
     LaunchedEffect(state.paired) {
         if (!state.paired) return@LaunchedEffect
         repository.sync()
@@ -236,6 +242,7 @@ private fun FlowlistApp(
         if (state.snapshot != null) {
             FlowlistWidget().updateAll(context.applicationContext)
             NearbyReminders.sync(context, state.snapshot!!.db)
+            TaskReminders.sync(context, state.snapshot!!.db)
         }
     }
 

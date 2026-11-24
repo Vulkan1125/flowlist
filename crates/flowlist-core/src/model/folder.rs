@@ -14,6 +14,9 @@ pub struct Folder {
     pub parent: Option<FolderId>,
     #[serde(default)]
     pub child_order: Vec<ContainerId>,
+    /// Opt every project and task in this folder into full-screen reminders.
+    #[serde(default)]
+    pub fullscreen_reminder: bool,
     #[serde(default = "now")]
     pub created_at: DateTime<Utc>,
     #[serde(default = "now")]
@@ -28,6 +31,7 @@ impl Folder {
             name: name.into(),
             parent: None,
             child_order: Vec::new(),
+            fullscreen_reminder: false,
             created_at: at,
             modified_at: at,
         }

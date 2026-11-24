@@ -18,6 +18,8 @@ data class AppPreferences(
     val forecastView: String = "month",
     val keepCompletedSubtasks: Boolean = false,
     val nearbyReminders: Boolean = true,
+    /// Take over the screen when a task comes due, not just a banner.
+    val fullScreenReminders: Boolean = false,
     /// Trash swipe layout: restore_right (left deletes, right restores),
     /// restore_left, or off.
     val trashSwipe: String = "restore_right",
@@ -66,6 +68,7 @@ class PreferencesStore(context: Context) {
             forecastView = prefs.getString("forecast_view", "month") ?: "month",
             keepCompletedSubtasks = prefs.getBoolean("keep_completed_subtasks", false),
             nearbyReminders = prefs.getBoolean("nearby_reminders", true),
+            fullScreenReminders = prefs.getBoolean("full_screen_reminders", false),
             trashSwipe = prefs.getString("trash_swipe", "restore_right") ?: "restore_right",
             sortBy = prefs.getString("sort_by", "manual") ?: "manual",
             viewSorts = viewSorts,
@@ -87,6 +90,7 @@ class PreferencesStore(context: Context) {
             .putString("forecast_view", value.forecastView)
             .putBoolean("keep_completed_subtasks", value.keepCompletedSubtasks)
             .putBoolean("nearby_reminders", value.nearbyReminders)
+            .putBoolean("full_screen_reminders", value.fullScreenReminders)
             .putString("trash_swipe", value.trashSwipe)
             .putString("sort_by", value.sortBy)
             .putString(

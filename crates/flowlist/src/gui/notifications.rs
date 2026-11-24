@@ -377,7 +377,7 @@ fn reminders(db: &Db, reference: chrono::DateTime<chrono::Utc>) -> Vec<Reminder>
     pending
 }
 
-fn reminder_at(due: flowlist_core::time::Stamp) -> chrono::DateTime<chrono::Utc> {
+pub(super) fn reminder_at(due: flowlist_core::time::Stamp) -> chrono::DateTime<chrono::Utc> {
     if due.has_time {
         due.at
     } else {

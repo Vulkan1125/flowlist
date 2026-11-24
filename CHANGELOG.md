@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Full-screen task reminders.** Tasks, projects and folders can be marked as
+  full-screen reminders when they are created (or from the task inspector).
+  Marking a project or folder covers its tasks. On Mac, a marked task that
+  comes due while Flowlist is running opens a borderless screen-sized reminder
+  with Complete, Snooze 10 minutes, Open task and Dismiss. Android posts an
+  alarm-style full-screen-intent reminder with the same actions, rescheduled
+  after a reboot. Nothing takes over the screen unless it carries the mark or
+  inherits it from its project or folder.
 - **Cleaner Mac login item.** The mobile server agent is associated with the
   Flowlist app bundle, so Login Items lists one **Flowlist** row with the app
   icon. Installing from a bare build now points the agent at the packaged app

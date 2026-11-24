@@ -16,6 +16,7 @@ mod notifications;
 mod perspective;
 mod preview;
 mod quick_capture;
+mod reminder;
 mod screen_picker;
 mod session;
 mod sidebar;
@@ -502,6 +503,14 @@ pub struct FlowlistApp {
     vim_mode: bool,
     /// Send macOS notifications for upcoming due dates (this device only).
     due_notifications: bool,
+    /// Show a full-screen reminder when a task comes due while the app runs.
+    fullscreen_reminders: bool,
+    /// Due instants already shown, so a full-screen reminder fires once.
+    reminder_seen: BTreeSet<String>,
+    /// Tasks snoozed from the reminder, and when to show them again.
+    reminder_snoozed: BTreeMap<TaskId, chrono::DateTime<chrono::Utc>>,
+    /// Whether a full-screen reminder window is open.
+    reminder_open: bool,
     notification_permission: notifications::Permission,
     /// How many reminders the last scheduling pass added.
     notification_scheduled: usize,
@@ -517,6 +526,8 @@ pub struct FlowlistApp {
     focus: FocusArea,
     focus_handle: FocusHandle,
     capture: text::TextBuffer,
+    /// Opt the next inline capture into a full-screen reminder.
+    capture_fullscreen: bool,
     search: text::TextBuffer,
     /// An image or PDF shown over the list, closed with Esc.
     preview: Option<preview::Preview>,
@@ -630,6 +641,7 @@ impl FlowlistApp {
         let show_inspector = session.inspector.unwrap_or(true);
         let vim_mode = session.vim_mode.unwrap_or(true);
         let due_notifications = session.notifications.unwrap_or(false);
+        let fullscreen_reminders = session.fullscreen_reminders.unwrap_or(true);
         let app_icon = session
             .app_icon
             .as_deref()
@@ -661,6 +673,7 @@ impl FlowlistApp {
                         cx.notify();
                     }
                     this.sync_notifications(cx);
+                    this.check_fullscreen_reminders(cx);
                 });
                 if alive.is_err() {
                     break;
@@ -767,6 +780,10 @@ impl FlowlistApp {
             keep_completed_subtasks,
             vim_mode,
             due_notifications,
+            fullscreen_reminders,
+            reminder_seen: BTreeSet::new(),
+            reminder_snoozed: BTreeMap::new(),
+            reminder_open: false,
             notification_permission: notifications::Permission::Unknown,
             notification_scheduled: 0,
             notified_revision: None,
@@ -777,6 +794,7 @@ impl FlowlistApp {
             focus: FocusArea::Content,
             focus_handle,
             capture: text::TextBuffer::empty(),
+            capture_fullscreen: false,
             search: text::TextBuffer::empty(),
             preview: None,
             update: update::UpdateState::Idle,
@@ -905,6 +923,125 @@ impl FlowlistApp {
         }
     }
 
+    /// Open the full-screen reminder for anything that just came due. The
+    /// check runs once a second from the same background tick that keeps
+    /// notifications in step. Tasks that came due long before Flowlist opened
+    /// are left to the normal notification rather than ambushing the user.
+    fn check_fullscreen_reminders(&mut self, cx: &mut Context<Self>) {
+        if !self.fullscreen_reminders {
+            return;
+        }
+        let at = now();
+        let grace = chrono::Duration::minutes(2);
+        let mut due = Vec::new();
+        let mut shown = Vec::new();
+        {
+            let db = self.store.db();
+            for task in db.tasks.values() {
+                if task.completed || task.is_trashed() {
+                    continue;
+                }
+                let Some(stamp) = task.due else {
+                    continue;
+                };
+                let due_at = notifications::reminder_at(stamp);
+                if due_at > at {
+                    continue;
+                }
+                let key = format!("{}:{}", task.id, due_at.timestamp());
+                if self.reminder_seen.contains(&key) {
+                    continue;
+                }
+                let snoozed_until = self.reminder_snoozed.get(&task.id).copied();
+                if snoozed_until.is_some_and(|until| until > at) {
+                    continue;
+                }
+                // A snoozed task is deliberately late; only unsnoozed tasks
+                // use the short grace window.
+                if snoozed_until.is_none() && at - due_at > grace {
+                    continue;
+                }
+                if db
+                    .effective_project(&task.id)
+                    .and_then(|project| db.projects.get(&project))
+                    .is_some_and(|project| project.status.is_closed())
+                {
+                    continue;
+                }
+                if !db.wants_fullscreen_reminder(&task.id) {
+                    continue;
+                }
+                let project = db
+                    .effective_project(&task.id)
+                    .map(|project| db.project_path(&project));
+                let time = if stamp.has_time {
+                    due_at.with_timezone(&chrono::Local).format("%H:%M").to_string()
+                } else {
+                    "09:00".to_string()
+                };
+                due.push(reminder::ReminderTask {
+                    id: task.id.clone(),
+                    title: task.title.clone(),
+                    project,
+                    time,
+                    due_at,
+                });
+                shown.push(key);
+            }
+        }
+        if due.is_empty() {
+            return;
+        }
+        for key in shown {
+            self.reminder_seen.insert(key);
+        }
+        for task in &due {
+            self.reminder_snoozed.remove(&task.id);
+        }
+        if let Err(error) = reminder::show(cx.weak_entity(), self.theme, due, cx) {
+            self.toast = Some(format!("Could not open the reminder: {error}"));
+            self.reminder_open = false;
+        } else {
+            self.reminder_open = true;
+        }
+    }
+
+    /// Complete a task from the full-screen reminder. It is an ordinary
+    /// command, so the main window's Undo still reverses it.
+    pub(super) fn complete_reminder_task(&mut self, id: &TaskId, cx: &mut Context<Self>) {
+        self.execute(Command::CompleteTasks {
+            ids: vec![id.clone()],
+            completed: true,
+        });
+        self.sync_notifications(cx);
+        cx.notify();
+    }
+
+    /// Bring a snoozed task back after the requested delay.
+    pub(super) fn snooze_reminder_task(&mut self, id: &TaskId, minutes: i64) {
+        self.reminder_seen
+            .retain(|key| !key.starts_with(&format!("{id}:")));
+        self.reminder_snoozed
+            .insert(id.clone(), now() + chrono::Duration::minutes(minutes));
+        self.save_session();
+    }
+
+    /// The reminder window went away, so a later due task can open it again.
+    pub(super) fn reminder_closed(&mut self) {
+        self.reminder_open = false;
+    }
+
+    /// Show the task in the main window and bring that window forward.
+    pub(super) fn open_reminder_task(&mut self, id: &TaskId, cx: &mut Context<Self>) {
+        self.reveal_task(id.clone(), cx);
+        for any in cx.windows() {
+            if let Some(handle) = any.downcast::<FlowlistApp>() {
+                let _ = handle.update(cx, |_, window, _| window.activate_window());
+            }
+        }
+        cx.activate(true);
+    }
+
     fn save_session(&self) {
         let session = Session {
             view: Some(self.view.key()),
@@ -921,6 +1058,7 @@ impl FlowlistApp {
             keep_completed_subtasks: Some(self.keep_completed_subtasks),
             vim_mode: Some(self.vim_mode),
             notifications: Some(self.due_notifications),
+            fullscreen_reminders: Some(self.fullscreen_reminders),
             app_icon: Some(self.app_icon.slug().to_string()),
             priority_filter: self.priority_filter.map(|p| p.slug().to_string()),
             only_available: Some(self.only_available),
@@ -2097,6 +2235,8 @@ impl FlowlistApp {
             Ok(entry) => {
                 let mut new_task = entry.into_new_task();
                 self.apply_view_defaults(&mut new_task);
+                new_task.fullscreen_reminder = self.capture_fullscreen;
+                self.capture_fullscreen = false;
                 self.execute(Command::CreateTask(new_task));
             }
             Err(error) => {
@@ -3464,6 +3604,7 @@ impl FlowlistApp {
                 review_days,
                 kind,
                 icon,
+                fullscreen_reminder,
                 ..
             } => {
                 let name = name.text().trim().to_string();
@@ -3497,6 +3638,7 @@ impl FlowlistApp {
                 new_project.icon = *icon;
                 new_project.review_interval_days = review_interval_days;
                 new_project.sequential = *kind == ProjectKind::Sequential;
+                new_project.fullscreen_reminder = *fullscreen_reminder;
                 new_project.folder = folder;
                 new_project.position = ContainerPosition::End;
                 if let Some(outcome) = self.execute(Command::CreateProject(new_project)) {
@@ -3576,7 +3718,10 @@ impl FlowlistApp {
                     });
                 }
             }
-            modals::Modal::NewFolder { name } => {
+            modals::Modal::NewFolder {
+                name,
+                fullscreen_reminder,
+            } => {
                 let name = name.text().trim().to_string();
                 if name.is_empty() {
                     return Err("A folder needs a name".to_string());
@@ -3589,6 +3734,7 @@ impl FlowlistApp {
                     name,
                     parent,
                     position: ContainerPosition::End,
+                    fullscreen_reminder: *fullscreen_reminder,
                 });
             }
             modals::Modal::AttachLink {
@@ -3781,6 +3927,7 @@ impl FlowlistApp {
                 trash_days,
                 vim_mode,
                 notifications,
+                fullscreen_reminders,
                 keep_completed_subtasks,
                 follow_system,
                 theme,
@@ -3830,6 +3977,7 @@ impl FlowlistApp {
                 }
                 self.vim_mode = *vim_mode;
                 self.due_notifications = *notifications;
+                self.fullscreen_reminders = *fullscreen_reminders;
                 self.keep_completed_subtasks = *keep_completed_subtasks;
                 self.notification_requested = false;
                 if self.due_notifications && !notifications::permission().allowed() {
@@ -5861,6 +6009,9 @@ impl FlowlistApp {
             "error": notifications::last_error(),
             "supported": notifications::supported(),
         });
+        state["fullscreen_reminders"] = serde_json::json!(self.fullscreen_reminders);
+        state["reminder_open"] = serde_json::json!(self.reminder_open);
+        state["reminder_seen"] = serde_json::json!(self.reminder_seen.len());
         state["preview"] = serde_json::json!(self.preview.as_ref().map(|preview| {
             serde_json::json!({
                 "path": preview.path,

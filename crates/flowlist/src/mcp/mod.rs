@@ -1088,6 +1088,7 @@ impl Server {
                         name: part.to_string(),
                         parent: parent.clone(),
                         position: ContainerPosition::End,
+                        fullscreen_reminder: false,
                     })?;
                     let created = outcome
                         .created

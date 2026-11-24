@@ -1,6 +1,8 @@
 package dev.flowlist.android.ui
 
 import android.Manifest
+import android.app.AlarmManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -89,6 +91,7 @@ import dev.flowlist.android.data.UpdateInfo
 import dev.flowlist.android.icon.AppIcon
 import dev.flowlist.android.icon.AppIcons
 import dev.flowlist.android.notify.DueNotifications
+import dev.flowlist.android.notify.TaskReminders
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -694,6 +697,9 @@ private fun NotificationSettings(
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(DueNotifications.enabled(context)) }
     var denied by remember { mutableStateOf(false) }
+    var fullScreen by remember(preferences.fullScreenReminders) {
+        mutableStateOf(preferences.fullScreenReminders)
+    }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             DueNotifications.setEnabled(context, true)
@@ -703,6 +709,20 @@ private fun NotificationSettings(
             denied = true
         }
     }
+    val fullPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            fullScreen = true
+            onPreferencesChange(preferences.copy(fullScreenReminders = true))
+            TaskReminders.setEnabled(context, true)
+        }
+    }
+    val needsNotificationPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+        android.content.pm.PackageManager.PERMISSION_GRANTED
+    val canFullScreen = Build.VERSION.SDK_INT < 34 ||
+        context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+    val canExactAlarms = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+        context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
     SettingsCard("Due reminders") {
         ToggleRow(
             title = "Due reminders",
@@ -739,6 +759,74 @@ private fun NotificationSettings(
             style = MaterialTheme.typography.labelSmall,
             color = flow.faint,
         )
+    }
+    Spacer(modifier = Modifier.height(14.dp))
+    SettingsCard("Full-screen reminders") {
+        ToggleRow(
+            title = "Full-screen reminders",
+            detail = when {
+                fullScreen && !canFullScreen -> "Allow full-screen notifications in Android settings"
+                fullScreen -> "Only marked tasks, projects and folders"
+                else -> "Off"
+            },
+            checked = fullScreen,
+            danger = fullScreen && !canFullScreen,
+        ) {
+            if (fullScreen) {
+                fullScreen = false
+                onPreferencesChange(preferences.copy(fullScreenReminders = false))
+                TaskReminders.setEnabled(context, false)
+            } else if (needsNotificationPermission) {
+                fullPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                fullScreen = true
+                onPreferencesChange(preferences.copy(fullScreenReminders = true))
+                TaskReminders.setEnabled(context, true)
+            }
+        }
+        if (fullScreen) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Only tasks, projects and folders marked for full-screen reminders take over the screen. Exact alarms and full-screen notifications both need permission on recent Android versions.",
+                style = MaterialTheme.typography.labelSmall,
+                color = flow.faint,
+            )
+            if (!canFullScreen) {
+                TextButton(onClick = {
+                    if (Build.VERSION.SDK_INT >= 34) {
+                        runCatching {
+                            context.startActivity(
+                                Intent(
+                                    Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                                    Uri.parse("package:${context.packageName}"),
+                                ),
+                            )
+                        }
+                    }
+                }) {
+                    Text("Allow full-screen notifications", color = flow.accent)
+                }
+            }
+            if (!canExactAlarms) {
+                TextButton(onClick = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        runCatching {
+                            context.startActivity(
+                                Intent(
+                                    Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                    Uri.parse("package:${context.packageName}"),
+                                ),
+                            )
+                        }
+                    }
+                }) {
+                    Text("Allow exact alarms", color = flow.accent)
+                }
+            }
+            TextButton(onClick = { TaskReminders.sendTest(context) }) {
+                Text("Send a test full-screen reminder", color = flow.accent)
+            }
+        }
     }
     Spacer(modifier = Modifier.height(14.dp))
     GeotagSettings(preferences, onPreferencesChange)

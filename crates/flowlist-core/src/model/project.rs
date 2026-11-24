@@ -373,6 +373,9 @@ pub struct Project {
     pub folder: Option<FolderId>,
     #[serde(default)]
     pub status: ProjectStatus,
+    /// Opt the project's tasks into full-screen reminders.
+    #[serde(default)]
+    pub fullscreen_reminder: bool,
     #[serde(default)]
     pub tags: BTreeSet<TagId>,
     #[serde(default)]
@@ -420,6 +423,7 @@ impl Project {
             notes: String::new(),
             folder: None,
             status: ProjectStatus::Active,
+            fullscreen_reminder: false,
             tags: BTreeSet::new(),
             due: None,
             defer: None,

@@ -297,3 +297,12 @@ Until then, Flowlist compensates with:
 - Window title, window bounds and launch were verified through the macOS
   accessibility API. A full VoiceOver walk-through is not possible with GPUI
   0.2.2 because the internal controls are not in the tree.
+
+## Full-screen reminders
+
+A task, project or folder can be marked for full-screen reminders at creation,
+or from the task inspector. Only marked items (and tasks inside a marked
+project or folder) take over the screen. The reminder window is focusable:
+**Enter** completes the task, **S** snoozes it for ten minutes, **O** opens it
+in the main window, and **Esc** dismisses the reminder. Every action is also a
+labelled button. On Android the same actions are buttons on the alarm screen.

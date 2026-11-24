@@ -52,6 +52,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -116,6 +118,7 @@ fun ProjectEditorSheet(
         notes: String,
         reviewDays: Int,
         icon: String,
+        fullscreenReminder: Boolean,
     ) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
@@ -132,6 +135,9 @@ fun ProjectEditorSheet(
     var notes by remember(project?.id) { mutableStateOf(project?.notes.orEmpty()) }
     var reviewDays by remember(project?.id) {
         mutableStateOf((project?.reviewIntervalDays ?: defaultReviewDays).toString())
+    }
+    var fullscreenReminder by remember(project?.id) {
+        mutableStateOf(project?.fullscreenReminder ?: false)
     }
     val sortedFolders = remember(folders) { folders.sortedBy { it.name.lowercase() } }
     val canSave = name.isNotBlank()
@@ -249,6 +255,28 @@ fun ProjectEditorSheet(
                 Text("days", style = MaterialTheme.typography.bodyMedium, color = colors.faint)
             }
 
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    LibraryLabel("Full-screen reminder")
+                    Text(
+                        text = "Take over the screen when a task in this project is due.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.faint,
+                    )
+                }
+                Switch(
+                    checked = fullscreenReminder,
+                    onCheckedChange = { fullscreenReminder = it },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = colors.onAccent,
+                        checkedTrackColor = colors.accent,
+                        uncheckedThumbColor = colors.faint,
+                        uncheckedTrackColor = colors.field,
+                        uncheckedBorderColor = colors.hairline,
+                    ),
+                )
+            }
+
             if (project != null) {
                 LibraryLabel("Status")
                 Row(
@@ -290,6 +318,7 @@ fun ProjectEditorSheet(
                             notes.trim(),
                             reviewDays.toIntOrNull()?.coerceIn(1, 365) ?: defaultReviewDays,
                             iconSlug,
+                            fullscreenReminder,
                         )
                     },
                     enabled = canSave,
@@ -310,7 +339,7 @@ fun FolderEditorDialog(
     target: FolderEditorTarget,
     folders: List<FolderDto>,
     onDismiss: () -> Unit,
-    onSave: (name: String, parent: String?) -> Unit,
+    onSave: (name: String, parent: String?, fullscreenReminder: Boolean) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
     val colors = flow
@@ -318,6 +347,9 @@ fun FolderEditorDialog(
     var name by remember(folder?.id) { mutableStateOf(folder?.name.orEmpty()) }
     var parent by remember(folder?.id, target.parent) {
         mutableStateOf(folder?.parent ?: target.parent)
+    }
+    var fullscreenReminder by remember(folder?.id) {
+        mutableStateOf(folder?.fullscreenReminder ?: false)
     }
     val blocked = folder?.let { folderFamily(it.id, folders) }.orEmpty()
     val options = remember(folders, blocked) {
@@ -353,6 +385,29 @@ fun FolderEditorDialog(
                         LibraryPill(item.name, parent == item.id) { parent = item.id }
                     }
                 }
+                if (folder == null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            LibraryLabel("Full-screen reminder")
+                            Text(
+                                text = "Take over the screen when a task in this folder is due.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.faint,
+                            )
+                        }
+                        Switch(
+                            checked = fullscreenReminder,
+                            onCheckedChange = { fullscreenReminder = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = colors.onAccent,
+                                checkedTrackColor = colors.accent,
+                                uncheckedThumbColor = colors.faint,
+                                uncheckedTrackColor = colors.field,
+                                uncheckedBorderColor = colors.hairline,
+                            ),
+                        )
+                    }
+                }
                 if (onDelete != null) {
                     TextButton(onClick = onDelete, modifier = Modifier.padding(top = 10.dp)) {
                         Text("Delete folder", color = colors.danger)
@@ -362,7 +417,7 @@ fun FolderEditorDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(name.trim(), parent) },
+                onClick = { onSave(name.trim(), parent, fullscreenReminder) },
                 enabled = name.isNotBlank(),
             ) {
                 Text(if (folder == null) "Create" else "Save", color = colors.accent)

@@ -89,6 +89,7 @@ Inbox, Today, Forecast and Browse show a small hand-drawn illustration when they
 
 - **Widget**: add Flowlist from the Android widget picker to see today's and Inbox counts. Tap it to open the app. The **+** button opens the floating capture card in its own task, so it does not pull the app forward when Flowlist is in the background. A widget set to **Follow app** updates its colours immediately when the app theme changes.
 - **Due reminders**: Settings → Due reminders schedules a quiet summary when tasks are due today or overdue. Android 13 and later asks for notification permission the first time; nothing is sent off the device.
+- **Full-screen reminders**: mark a task, project or folder when creating or editing it, then turn on Settings → Full-screen reminders. A marked task wakes the screen and opens an alarm-style reminder when it comes due; Complete, Snooze 10 minutes, Open Flowlist and Dismiss are on that screen. Android may ask separately for notification, full-screen-intent and exact-alarm permission on recent versions.
 
 ## Settings
 

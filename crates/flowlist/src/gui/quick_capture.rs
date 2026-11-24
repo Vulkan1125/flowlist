@@ -61,6 +61,8 @@ pub struct QuickCapture {
     focus_handle: FocusHandle,
     error: Option<String>,
     flash: Option<String>,
+    /// Opt this capture into a full-screen reminder when it comes due.
+    fullscreen_reminder: bool,
     last_captured: Option<String>,
     test_state_path: Option<PathBuf>,
     test_state_last: Option<String>,
@@ -81,6 +83,7 @@ impl QuickCapture {
             focus_handle: cx.focus_handle(),
             error: None,
             flash: None,
+            fullscreen_reminder: false,
             last_captured: None,
             test_state_path: std::env::var_os("FLOWLIST_TEST_STATE")
                 .map(PathBuf::from)
@@ -175,7 +178,9 @@ impl QuickCapture {
             self.error = Some("Add a title before the markers".to_string());
             return Commit::Failed;
         }
-        let task = entry.into_new_task();
+        let mut task = entry.into_new_task();
+        task.fullscreen_reminder = self.fullscreen_reminder;
+        self.fullscreen_reminder = false;
         match self.store.execute(Command::CreateTask(task)) {
             Ok(outcome) => {
                 self.error = None;
@@ -496,8 +501,9 @@ impl QuickCapture {
         row.into_any_element()
     }
 
-    fn render_footer(&self) -> impl IntoElement {
+    fn render_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
+        let fullscreen = self.fullscreen_reminder;
         let text = self.buffer.text().trim().to_string();
         let parsed = if text.is_empty() {
             None
@@ -562,12 +568,50 @@ impl QuickCapture {
                 div()
                     .flex()
                     .items_center()
-                    .gap_2()
-                    .child(keycap(theme, "⏎"))
+                    .gap_3()
+                    .child(
+                        div()
+                            .id("capture-fullscreen")
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .h(px(24.))
+                            .px(px(7.))
+                            .rounded_md()
+                            .cursor_pointer()
+                            .text_size(px(11.))
+                            .text_color(if fullscreen {
+                                theme.accent
+                            } else {
+                                theme.text_faint
+                            })
+                            .hover(|style| style.bg(theme.hover))
+                            .child(icons::icon(
+                                Icon::Clock,
+                                12.0,
+                                if fullscreen {
+                                    theme.accent
+                                } else {
+                                    theme.text_faint
+                                },
+                            ))
+                            .child("Full-screen")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.fullscreen_reminder = !this.fullscreen_reminder;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(keycap(theme, "⏎"))
                     .child(label(theme, "Add"))
                     .child(div().w(px(4.)))
-                    .child(keycap(theme, "⌘⏎"))
-                    .child(label(theme, "Add & open")),
+                            .child(keycap(theme, "⌘⏎"))
+                            .child(label(theme, "Add & open")),
+                    ),
             )
     }
 }
@@ -616,7 +660,7 @@ impl Render for QuickCapture {
             )
             .child(self.render_input(window, cx))
             .child(self.render_preview())
-            .child(self.render_footer())
+            .child(self.render_footer(cx))
     }
 }
 

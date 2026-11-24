@@ -56,12 +56,13 @@ import kotlinx.coroutines.delay
 @Composable
 fun CaptureSheet(
     onDismiss: () -> Unit,
-    onAdd: (String) -> Unit,
+    onAdd: (String, Boolean) -> Unit,
     initialText: String = "",
     attachmentLabel: String? = null,
 ) {
     val colors = flow
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var fullscreenReminder by rememberSaveable { mutableStateOf(false) }
     var text by rememberSaveable(initialText, stateSaver = TextFieldValue.Saver) {
         mutableStateOf(
             TextFieldValue(
@@ -128,7 +129,7 @@ fun CaptureSheet(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(
                     onDone = {
-                        if (text.text.isNotBlank()) onAdd(text.text)
+                        if (text.text.isNotBlank()) onAdd(text.text, fullscreenReminder)
                     },
                 ),
                 modifier = Modifier
@@ -194,9 +195,35 @@ fun CaptureSheet(
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Full-screen reminder",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.ink,
+                    )
+                    Text(
+                        text = "Take over the screen when this task is due.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.faint,
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = fullscreenReminder,
+                    onCheckedChange = { fullscreenReminder = it },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = colors.onAccent,
+                        checkedTrackColor = colors.accent,
+                        uncheckedThumbColor = colors.faint,
+                        uncheckedTrackColor = colors.field,
+                        uncheckedBorderColor = colors.hairline,
+                    ),
+                )
+            }
             Spacer(modifier = Modifier.height(18.dp))
             Button(
-                onClick = { if (text.text.isNotBlank()) onAdd(text.text) },
+                onClick = { if (text.text.isNotBlank()) onAdd(text.text, fullscreenReminder) },
                 enabled = text.text.isNotBlank(),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
 import androidx.core.content.ContextCompat
+import dev.flowlist.android.data.Repository
 import dev.flowlist.android.widget.WidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +17,10 @@ import kotlinx.coroutines.launch
 /// change needs a repaint. Application callbacks fire while the process is
 /// cached, which is enough to keep the widget in step without a service.
 class FlowlistApplication : Application() {
+    /// One repository for the main window and the full-screen reminder, so a
+    /// "Complete" from the reminder and a checkbox in the list share an outbox.
+    val repository: Repository by lazy { Repository(this) }
+
     private val themeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             repaintWidgets()

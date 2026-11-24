@@ -140,6 +140,7 @@ impl FlowlistApp {
         let notes = task.notes.clone();
         let completed = task.completed;
         let flagged = task.flagged;
+        let fullscreen = task.fullscreen_reminder;
         let priority = task.priority;
         let project = task
             .project
@@ -234,6 +235,7 @@ impl FlowlistApp {
             )
             .child(self.inspector_text_field("Title", EditField::Title, &title, cx))
             .child(self.inspector_priority(&id, priority, cx))
+            .child(self.inspector_fullscreen(&id, fullscreen, cx))
             .child(self.inspector_notes(&notes, cx))
             .child(self.inspector_task_type(&id, sequential, cx))
             .child(self.inspector_attachments(
@@ -1180,6 +1182,49 @@ impl FlowlistApp {
                     .child("←↑↓→ set · ⇥ hour/min · ⏎ done"),
             )
             .into_any_element()
+    }
+
+    fn inspector_fullscreen(
+        &self,
+        id: &TaskId,
+        enabled: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let id = id.clone();
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_0p5()
+                    .child(div().text_sm().child("Full-screen reminder"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child("Take over the screen when this task is due."),
+                    ),
+            )
+            .child(
+                div()
+                    .id("inspector-fullscreen")
+                    .child(widgets::switch(theme, enabled))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let patch = flowlist_core::command::TaskPatch {
+                            fullscreen_reminder: Some(!enabled),
+                            ..Default::default()
+                        };
+                        this.execute(Command::UpdateTask {
+                            id: id.clone(),
+                            patch,
+                        });
+                        cx.notify();
+                    })),
+            )
     }
 
     fn inspector_notes(&self, notes: &str, cx: &mut Context<Self>) -> impl IntoElement {

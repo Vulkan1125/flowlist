@@ -172,6 +172,7 @@ fun TaskEditSheet(
     var defer by remember(task.id) { mutableStateOf(task.defer) }
     var priority by remember(task.id) { mutableStateOf(task.priority) }
     var flagged by remember(task.id) { mutableStateOf(task.flagged) }
+    var fullscreenReminder by remember(task.id) { mutableStateOf(task.fullscreenReminder) }
     var stepMode by remember(task.id) {
         mutableStateOf(
             when {
@@ -1015,6 +1016,29 @@ fun TaskEditSheet(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Label("Full-screen reminder")
+                    Text(
+                        text = "Take over the screen when this task is due.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.faint,
+                    )
+                }
+                Switch(
+                    checked = fullscreenReminder,
+                    onCheckedChange = { fullscreenReminder = it },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = colors.onAccent,
+                        checkedTrackColor = colors.accent,
+                        uncheckedThumbColor = colors.faint,
+                        uncheckedTrackColor = colors.field,
+                        uncheckedBorderColor = colors.hairline,
+                    ),
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
             Label("Estimate")
             OutlinedTextField(
                 value = estimate,
@@ -1114,6 +1138,7 @@ fun TaskEditSheet(
                         defer = defer,
                         priority = priority,
                         flagged = flagged,
+                        fullscreenReminder = fullscreenReminder,
                         estimateMin = estimate.toIntOrNull(),
                         tags = selectedTags,
                         repeat = repeat,

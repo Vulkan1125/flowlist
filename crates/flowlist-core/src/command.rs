@@ -52,6 +52,9 @@ pub struct NewTask {
     pub defer: Option<Stamp>,
     pub estimate_min: Option<u32>,
     pub flagged: bool,
+    /// Opt this task into full-screen reminders.
+    #[serde(default)]
+    pub fullscreen_reminder: bool,
     pub priority: Option<Priority>,
     pub attachments: Vec<String>,
     pub repeat: Option<RepeatRule>,
@@ -74,6 +77,7 @@ impl NewTask {
             defer: None,
             estimate_min: None,
             flagged: false,
+            fullscreen_reminder: false,
             priority: None,
             attachments: Vec::new(),
             repeat: None,
@@ -124,6 +128,7 @@ pub struct TaskPatch {
     #[serde(deserialize_with = "deserialize_double_option")]
     pub estimate_min: Option<Option<u32>>,
     pub flagged: Option<bool>,
+    pub fullscreen_reminder: Option<bool>,
     #[serde(deserialize_with = "deserialize_double_option")]
     pub priority: Option<Option<Priority>>,
     pub attachments: Option<Vec<String>>,
@@ -147,6 +152,9 @@ pub struct NewProject {
     pub kind: ProjectKind,
     pub icon: ProjectIcon,
     pub attachments: Vec<String>,
+    /// Opt the project's tasks into full-screen reminders.
+    #[serde(default)]
+    pub fullscreen_reminder: bool,
     pub position: ContainerPosition,
 }
 
@@ -165,6 +173,7 @@ impl NewProject {
             kind: ProjectKind::Parallel,
             icon: ProjectIcon::default(),
             attachments: Vec::new(),
+            fullscreen_reminder: false,
             position: ContainerPosition::End,
         }
     }
@@ -188,6 +197,7 @@ pub struct ProjectPatch {
     pub kind: Option<ProjectKind>,
     pub icon: Option<ProjectIcon>,
     pub attachments: Option<Vec<String>>,
+    pub fullscreen_reminder: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -367,6 +377,8 @@ pub enum Command {
         name: String,
         parent: Option<FolderId>,
         position: ContainerPosition,
+        #[serde(default)]
+        fullscreen_reminder: bool,
     },
     RenameFolder {
         id: FolderId,
@@ -611,6 +623,7 @@ impl Command {
                 ensure_dates_in_order(task.due, task.defer)?;
                 task.estimate_min = new_task.estimate_min;
                 task.flagged = new_task.flagged;
+                task.fullscreen_reminder = new_task.fullscreen_reminder;
                 task.priority = new_task.priority;
                 task.attachments = new_task.attachments;
                 task.repeat = new_task.repeat;
@@ -667,6 +680,9 @@ impl Command {
                     }
                     if let Some(flagged) = patch.flagged {
                         task.flagged = flagged;
+                    }
+                    if let Some(fullscreen) = patch.fullscreen_reminder {
+                        task.fullscreen_reminder = fullscreen;
                     }
                     if let Some(priority) = patch.priority {
                         task.priority = priority;
@@ -782,6 +798,7 @@ impl Command {
                     let notes = task.notes.clone();
                     let estimate = task.estimate_min;
                     let flagged = task.flagged;
+                    let fullscreen_reminder = task.fullscreen_reminder;
                     let sequential = task.sequential;
                     {
                         let task = db.task_mut(&id)?;
@@ -809,6 +826,7 @@ impl Command {
                                 spawned.defer = next.defer;
                                 spawned.estimate_min = estimate;
                                 spawned.flagged = flagged;
+                                spawned.fullscreen_reminder = fullscreen_reminder;
                                 spawned.priority = series_priority;
                                 spawned.sequential = sequential;
                                 spawned.checklist = db
@@ -1241,6 +1259,7 @@ impl Command {
                 project.sequential = project.kind == ProjectKind::Sequential;
                 project.icon = new_project.icon;
                 project.attachments = clean_attachments(new_project.attachments);
+                project.fullscreen_reminder = new_project.fullscreen_reminder;
                 project.modified_at = at;
                 let id = project.id.clone();
                 db.projects.insert(id.clone(), project);
@@ -1292,6 +1311,9 @@ impl Command {
                     }
                     if let Some(attachments) = patch.attachments {
                         project.attachments = clean_attachments(attachments);
+                    }
+                    if let Some(fullscreen) = patch.fullscreen_reminder {
+                        project.fullscreen_reminder = fullscreen;
                     }
                     if let Some(kind) = patch.kind {
                         project.kind = kind;
@@ -1427,6 +1449,7 @@ impl Command {
                 name,
                 parent,
                 position,
+                fullscreen_reminder,
             } => {
                 let name = name.trim();
                 if name.is_empty() {
@@ -1438,6 +1461,7 @@ impl Command {
                 ensure_unique_folder_name(db, parent.as_ref(), name, None)?;
                 let mut folder = Folder::new(name);
                 folder.parent = parent.clone();
+                folder.fullscreen_reminder = fullscreen_reminder;
                 let id = folder.id.clone();
                 db.folders.insert(id.clone(), folder);
                 db.insert_container(parent, ContainerId::Folder(id.clone()), position);

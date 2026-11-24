@@ -56,6 +56,7 @@ fn add_folder_in(store: &mut Store, name: &str, parent: Option<&FolderId>) -> Fo
             name: name.into(),
             parent: parent.cloned(),
             position: ContainerPosition::End,
+            fullscreen_reminder: false,
         })
         .unwrap()
         .created
@@ -1721,6 +1722,7 @@ fn dragging_a_project_into_a_folder_and_back_is_undoable() {
             name: "Work".into(),
             parent: None,
             position: ContainerPosition::End,
+            fullscreen_reminder: false,
         })
         .unwrap()
         .created[0]
@@ -2430,4 +2432,60 @@ fn every_project_icon_round_trips_by_slug() {
         assert!(slugs.insert(icon.slug()), "duplicate icon slug");
     }
     assert_eq!(ProjectIcon::ALL.len(), 54);
+}
+
+#[test]
+fn fullscreen_reminders_follow_task_project_and_folder_marks() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let folder = store
+        .execute(Command::CreateFolder {
+            name: "Focus".into(),
+            parent: None,
+            position: ContainerPosition::End,
+            fullscreen_reminder: true,
+        })
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .unwrap();
+    let folder = store.db().resolve_folder(&folder).unwrap();
+    let project = add_project_in(&mut store, "Launch", Some(&folder));
+
+    let mut task = NewTask::new("Call Ana");
+    task.project = Some(project.clone());
+    let task = store
+        .execute(Command::CreateTask(task))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .unwrap();
+    let task = store.db().resolve_task(&task).unwrap();
+
+    assert!(store.db().wants_fullscreen_reminder(&task));
+
+    store
+        .execute(Command::UpdateTask {
+            id: task.clone(),
+            patch: TaskPatch {
+                fullscreen_reminder: Some(true),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert!(store.db().wants_fullscreen_reminder(&task));
+
+    store
+        .execute(Command::UpdateProject {
+            id: project,
+            patch: ProjectPatch {
+                fullscreen_reminder: Some(true),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert!(store.db().wants_fullscreen_reminder(&task));
 }

@@ -257,6 +257,11 @@ working domain and GUI. This page tracks what is implemented and verified.
       09:00 and a 30-day horizon. The permission is requested on enable; an
       ad-hoc build shows the signing requirement, while an Apple Development or
       Developer ID signature enables delivery.
+- [x] Full-screen reminders are opt-in per task, project or folder. Marking a
+      task (or a parent, project or folder above it) opens a borderless
+      screen-sized reminder when it comes due while Flowlist is running, with
+      Complete, Snooze 10 minutes, Open task and Dismiss. Quick capture, the
+      inline add row and the project/folder sheets carry the mark at creation.
 - [x] Releases ship a drag-to-Applications DMG beside the updater's zip.
 - [x] The plus opens the capture panel over the window (the global shortcut
       stays screen-centered), the toast follows the visible middle pane, and

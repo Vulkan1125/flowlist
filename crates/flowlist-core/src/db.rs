@@ -389,6 +389,49 @@ impl Db {
         out
     }
 
+    /// Whether a task should use a full-screen reminder. A mark on the task,
+    /// any parent task, its project or any folder above the project opts it in.
+    pub fn wants_fullscreen_reminder(&self, task_id: &TaskId) -> bool {
+        if self
+            .tasks
+            .get(task_id)
+            .is_some_and(|task| task.fullscreen_reminder)
+        {
+            return true;
+        }
+        let mut current = self.tasks.get(task_id).and_then(|task| task.parent.clone());
+        while let Some(id) = current {
+            if let Some(task) = self.tasks.get(&id) {
+                if task.fullscreen_reminder {
+                    return true;
+                }
+                current = task.parent.clone();
+            } else {
+                break;
+            }
+        }
+        let Some(project_id) = self.effective_project(task_id) else {
+            return false;
+        };
+        let Some(project) = self.projects.get(&project_id) else {
+            return false;
+        };
+        if project.fullscreen_reminder {
+            return true;
+        }
+        let mut folder = project.folder.clone();
+        while let Some(id) = folder {
+            let Some(node) = self.folders.get(&id) else {
+                break;
+            };
+            if node.fullscreen_reminder {
+                return true;
+            }
+            folder = node.parent.clone();
+        }
+        false
+    }
+
     pub fn effective_project(&self, task_id: &TaskId) -> Option<ProjectId> {
         let mut current = self.tasks.get(task_id).and_then(|task| task.parent.clone());
         while let Some(id) = current {

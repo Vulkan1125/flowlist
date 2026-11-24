@@ -391,6 +391,7 @@ fun createProjectCommand(
     notes: String = "",
     reviewDays: Int? = null,
     icon: String = "project",
+    fullscreenReminder: Boolean = false,
 ): JsonObject = buildJsonObject {
     put(
         "create_project",
@@ -407,6 +408,7 @@ fun createProjectCommand(
             put("kind", kind)
             put("icon", icon)
             put("attachments", buildJsonArray {})
+            put("fullscreen_reminder", fullscreenReminder)
             put("position", "end")
         },
     )
@@ -424,12 +426,13 @@ fun deleteProjectCommand(id: String): JsonObject = buildJsonObject {
     put("delete_project", buildJsonObject { put("id", id) })
 }
 
-fun createFolderCommand(name: String, parent: String?): JsonObject = buildJsonObject {
+fun createFolderCommand(name: String, parent: String?, fullscreenReminder: Boolean = false): JsonObject = buildJsonObject {
     put(
         "create_folder",
         buildJsonObject {
             put("name", name)
             put("parent", parent?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("fullscreen_reminder", fullscreenReminder)
             put("position", "end")
         },
     )

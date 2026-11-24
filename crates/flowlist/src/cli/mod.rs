@@ -2766,6 +2766,7 @@ fn ensure_folder(store: &mut Store, path: &str) -> Result<FolderId> {
                     name: part.to_string(),
                     parent: parent.clone(),
                     position: ContainerPosition::End,
+                    fullscreen_reminder: false,
                 })?;
                 let created = outcome
                     .created

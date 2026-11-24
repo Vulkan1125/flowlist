@@ -178,6 +178,9 @@ pub struct Session {
     /// Due-date reminders on this Mac. Per device, not per library.
     #[serde(default)]
     pub notifications: Option<bool>,
+    /// Take over the screen with a due reminder while Flowlist is running.
+    #[serde(default)]
+    pub fullscreen_reminders: Option<bool>,
     /// Global priority filter, `high`, `medium`, `low`, or absent for all.
     #[serde(default)]
     pub priority_filter: Option<String>,

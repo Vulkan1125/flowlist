@@ -90,6 +90,10 @@ pub struct Task {
     pub estimate_min: Option<u32>,
     #[serde(default)]
     pub flagged: bool,
+    /// Take over the screen when this task comes due. Marks on an ancestor
+    /// project, folder or parent task also opt the task in.
+    #[serde(default)]
+    pub fullscreen_reminder: bool,
     /// Optional importance, independent of the flag.
     #[serde(default)]
     pub priority: Option<Priority>,
@@ -142,6 +146,7 @@ impl Task {
             defer: None,
             estimate_min: None,
             flagged: false,
+            fullscreen_reminder: false,
             priority: None,
             completed: false,
             completed_at: None,

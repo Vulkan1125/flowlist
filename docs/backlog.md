@@ -335,6 +335,11 @@ below; this list is the current map.
 - [x] **Geotag notification channel** — geotag arrival reminders have a
       separate Android notification channel, with a link from the app’s
       Notifications section to Android notification settings.
+- [x] **Full-screen task reminders** — tasks, projects and folders opt in at
+      creation (and tasks from the inspector). A marked task opens a
+      screen-sized reminder on Mac or an alarm-style full-screen-intent
+      reminder on Android, with Complete, Snooze ten minutes, Open and Dismiss.
+      Marks inherit down through parent tasks, projects and folders.
 - [x] **Mac tag groups** — the sidebar TAGS section splits into General and
       Geotags, with the group labels indented under the section heading. The
       review-reminder dot is gone from project rows, the Review count stays

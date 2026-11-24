@@ -1251,6 +1251,7 @@ fun MainScreen(
                         due = task.due,
                         defer = task.defer,
                         flagged = task.flagged,
+                        fullscreenReminder = task.fullscreenReminder,
                         priority = task.priority,
                         completed = task.completed,
                         pending = task.id in state.pending,
@@ -1283,11 +1284,19 @@ fun MainScreen(
             folders = snapshot?.db?.folders?.values?.toList().orEmpty(),
             defaultReviewDays = snapshot?.db?.settings?.defaultReviewDays ?: 7,
             onDismiss = { projectEditor = null },
-            onSave = { name, folder, status, kind, notes, reviewDays, icon ->
+            onSave = { name, folder, status, kind, notes, reviewDays, icon, fullscreen ->
                 projectEditor = null
                 scope.launch {
                     if (editing == null) {
-                        repository.createProject(name, folder, kind, notes, reviewDays, icon)
+                        repository.createProject(
+                            name,
+                            folder,
+                            kind,
+                            notes,
+                            reviewDays,
+                            icon,
+                            fullscreen,
+                        )
                     } else {
                         repository.updateProject(
                             editing,
@@ -1298,6 +1307,7 @@ fun MainScreen(
                             notes,
                             reviewDays,
                             icon,
+                            fullscreen,
                         )
                     }
                 }
@@ -1323,11 +1333,11 @@ fun MainScreen(
             target = target,
             folders = snapshot?.db?.folders?.values?.toList().orEmpty(),
             onDismiss = { folderEditor = null },
-            onSave = { name, parent ->
+            onSave = { name, parent, fullscreen ->
                 folderEditor = null
                 scope.launch {
                     if (editing == null) {
-                        repository.createFolder(name, parent)
+                        repository.createFolder(name, parent, fullscreen)
                     } else {
                         repository.updateFolder(editing, name, parent)
                     }
@@ -1530,7 +1540,7 @@ fun MainScreen(
                 captureAttachment = null
                 captureAttachmentLabel = null
             },
-            onAdd = { text ->
+            onAdd = { text, fullscreen ->
                 capture = false
                 val attachment = captureAttachment
                 captureAttachment = null
@@ -1539,16 +1549,20 @@ fun MainScreen(
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
                 scope.launch {
-                    if (attachment == null) {
+                    val task = if (attachment == null) {
                         repository.capture(text)
                     } else {
-                        val task = repository.captureShared(text, listOf(attachment))
-                        if (task != null) {
-                            toasts.show(
-                                message = "Added “${task.title}” with its attachment",
-                                duration = SnackbarDuration.Short,
-                            )
+                        repository.captureShared(text, listOf(attachment)).also { created ->
+                            if (created != null) {
+                                toasts.show(
+                                    message = "Added “${created.title}” with its attachment",
+                                    duration = SnackbarDuration.Short,
+                                )
+                            }
                         }
+                    }
+                    if (fullscreen && task != null) {
+                        repository.setFullscreenReminder(task, true)
                     }
                 }
             },

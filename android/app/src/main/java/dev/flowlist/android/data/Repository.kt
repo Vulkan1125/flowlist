@@ -20,6 +20,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.put
+import dev.flowlist.android.notify.TaskReminders
 import java.io.File
 import java.util.UUID
 
@@ -333,6 +334,28 @@ class Repository(context: Context) {
     }
 
     /// Completes or reopens a whole selection with one command and one sync.
+    /// Opt a task into or out of full-screen reminders without opening the
+    /// full editor. Used by the capture sheet and the reminder itself.
+    suspend fun setFullscreenReminder(task: TaskDto, enabled: Boolean) {
+        val snapshot = _state.value.snapshot ?: return
+        val updatedTask = task.copy(fullscreenReminder = enabled)
+        val updated = snapshot.copy(db = snapshot.db.copy(tasks = snapshot.db.tasks + (task.id to updatedTask)))
+        _state.update { it.copy(snapshot = updated) }
+        persist(updated)
+        TaskReminders.sync(appContext, updated.db)
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = updateCommand(
+                    task.id,
+                    buildJsonObject { put("fullscreen_reminder", enabled) },
+                ),
+                label = if (enabled) "Full-screen reminder" else "No full-screen reminder",
+            ),
+        )
+        sync()
+    }
+
     suspend fun completeMany(taskIds: List<String>, completed: Boolean) {
         if (taskIds.isEmpty()) return
         val snapshot = _state.value.snapshot ?: return
@@ -450,6 +473,7 @@ class Repository(context: Context) {
             defer = edit.defer,
             priority = edit.priority,
             flagged = edit.flagged,
+            fullscreenReminder = edit.fullscreenReminder,
             estimateMin = edit.estimateMin,
             tags = edit.tags.toList(),
             repeat = edit.repeat,
@@ -460,6 +484,9 @@ class Repository(context: Context) {
         val updated = snapshot.copy(db = db.copy(tasks = db.tasks + (task.id to updatedTask)))
         _state.update { it.copy(snapshot = updated) }
         persist(updated)
+        if (task.fullscreenReminder != edit.fullscreenReminder) {
+            TaskReminders.sync(appContext, updated.db)
+        }
 
         val projectJson: JsonElement = edit.project?.let { JsonPrimitive(it) } ?: JsonNull
         val priorityJson: JsonElement = edit.priority?.let { JsonPrimitive(it) } ?: JsonNull
@@ -474,6 +501,7 @@ class Repository(context: Context) {
             put("defer", deferJson)
             put("priority", priorityJson)
             put("flagged", edit.flagged)
+            put("fullscreen_reminder", edit.fullscreenReminder)
             put("estimate_min", estimateJson)
             put("repeat", edit.repeat ?: JsonNull)
             if (task.stepsOneOff == edit.stepsOneOff) {
@@ -1137,11 +1165,12 @@ class Repository(context: Context) {
         notes: String = "",
         reviewDays: Int? = null,
         icon: String = "project",
+        fullscreenReminder: Boolean = false,
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         send(
-            createProjectCommand(trimmed, folder, kind, notes, reviewDays, icon),
+            createProjectCommand(trimmed, folder, kind, notes, reviewDays, icon, fullscreenReminder),
             "New project “$trimmed”",
         )
     }
@@ -1155,6 +1184,7 @@ class Repository(context: Context) {
         notes: String = project.notes,
         reviewDays: Int = project.reviewIntervalDays,
         icon: String = project.icon,
+        fullscreenReminder: Boolean = project.fullscreenReminder,
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
@@ -1171,6 +1201,9 @@ class Repository(context: Context) {
                 put("review_interval_days", reviewDays)
             }
             if (icon != project.icon) put("icon", icon)
+            if (fullscreenReminder != project.fullscreenReminder) {
+                put("fullscreen_reminder", fullscreenReminder)
+            }
         }
         if (patch.isNotEmpty()) {
             enqueue(
@@ -1203,10 +1236,10 @@ class Repository(context: Context) {
         send(deleteProjectCommand(project.id), "Delete project “${project.name}”")
     }
 
-    suspend fun createFolder(name: String, parent: String?) {
+    suspend fun createFolder(name: String, parent: String?, fullscreenReminder: Boolean = false) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        send(createFolderCommand(trimmed, parent), "New folder “$trimmed”")
+        send(createFolderCommand(trimmed, parent, fullscreenReminder), "New folder “$trimmed”")
     }
 
     suspend fun updateFolder(folder: FolderDto, name: String, parent: String?) {

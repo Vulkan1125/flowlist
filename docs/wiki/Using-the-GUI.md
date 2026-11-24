@@ -232,6 +232,13 @@ task due in the next 30 days. Timestamped tasks remind at their time; date-only
 tasks remind at 09:00 local. Toggling it on asks macOS for permission, and
 **Send test** checks that banners are working.
 
+**Full-screen reminders** are opt-in per task, project or folder. Mark a task
+in the inspector, or tick **Full-screen reminder** while capturing a task or
+creating a project or folder. A marked task, and every task inside a marked
+project or folder, opens a screen-sized reminder when it comes due while
+Flowlist is running. Complete, Snooze 10 minutes, Open task and Dismiss are on
+that screen; Dismiss and Esc leave the task alone.
+
 macOS only grants notification permission to a signed app. The downloadable
 build is ad-hoc signed, so this sheet shows **Blocked for this ad-hoc build**.
 Use an Apple Development or Developer ID certificate when packaging (`set

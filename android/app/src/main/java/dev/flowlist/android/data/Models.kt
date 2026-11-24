@@ -67,6 +67,7 @@ data class TaskDto(
     val defer: StampDto? = null,
     @SerialName("estimate_min") val estimateMin: Int? = null,
     val flagged: Boolean = false,
+    @SerialName("fullscreen_reminder") val fullscreenReminder: Boolean = false,
     val priority: String? = null,
     val completed: Boolean = false,
     @SerialName("completed_at") val completedAt: String? = null,
@@ -104,6 +105,7 @@ data class ProjectDto(
     val notes: String = "",
     val status: String = "active",
     val folder: String? = null,
+    @SerialName("fullscreen_reminder") val fullscreenReminder: Boolean = false,
     @SerialName("next_review") val nextReview: String? = null,
     @SerialName("review_interval_days") val reviewIntervalDays: Int = 7,
     @SerialName("task_order") val taskOrder: List<String> = emptyList(),
@@ -120,6 +122,7 @@ data class FolderDto(
     val id: String,
     val name: String = "",
     val parent: String? = null,
+    @SerialName("fullscreen_reminder") val fullscreenReminder: Boolean = false,
     @SerialName("child_order") val childOrder: List<JsonElement> = emptyList(),
 )
 
@@ -177,6 +180,7 @@ data class TaskEdit(
     val defer: StampDto?,
     val priority: String?,
     val flagged: Boolean,
+    val fullscreenReminder: Boolean,
     val estimateMin: Int?,
     val tags: Set<String>,
     val repeat: JsonElement? = null,
@@ -197,6 +201,7 @@ data class TaskView(
     val due: StampDto?,
     val defer: StampDto?,
     val flagged: Boolean,
+    val fullscreenReminder: Boolean,
     val priority: String?,
     val completed: Boolean,
     val pending: Boolean,
@@ -214,6 +219,34 @@ data class TaskView(
 
 val TaskDto.isActive: Boolean
     get() = !completed && trashedAt == null
+
+/// A task opts into full-screen reminders itself, through a parent task, or
+/// through its project or any folder above the project.
+fun Db.wantsFullscreenReminder(task: TaskDto): Boolean {
+    if (task.fullscreenReminder) return true
+    var parent = task.parent
+    while (parent != null) {
+        val ancestor = tasks[parent] ?: break
+        if (ancestor.fullscreenReminder) return true
+        parent = ancestor.parent
+    }
+    var projectId = task.project
+    var cursor = task.parent
+    while (projectId == null && cursor != null) {
+        val ancestor = tasks[cursor] ?: break
+        projectId = ancestor.project
+        cursor = ancestor.parent
+    }
+    val project = projectId?.let { projects[it] } ?: return false
+    if (project.fullscreenReminder) return true
+    var folder = project.folder
+    while (folder != null) {
+        val node = folders[folder] ?: break
+        if (node.fullscreenReminder) return true
+        folder = node.parent
+    }
+    return false
+}
 
 fun Db.taskViews(
     pending: Set<String> = emptySet(),
@@ -238,6 +271,7 @@ fun Db.taskViews(
                 due = task.due,
                 defer = task.defer,
                 flagged = task.flagged,
+                fullscreenReminder = task.fullscreenReminder,
                 priority = task.priority,
                 completed = task.completed,
                 pending = task.id in pending,
@@ -359,6 +393,7 @@ private fun TaskDto.toView(db: Db) = TaskView(
     due = due,
     defer = defer,
     flagged = flagged,
+    fullscreenReminder = fullscreenReminder,
     priority = priority,
     completed = completed,
     pending = false,

@@ -96,6 +96,7 @@ pub enum Modal {
         icon: ProjectIcon,
         /// The icon grid stays folded away until the current icon is clicked.
         icon_open: bool,
+        fullscreen_reminder: bool,
     },
     /// Typing a project path that does not exist yet asks before creating it,
     /// so a typo cannot silently fill the sidebar with projects.
@@ -162,6 +163,7 @@ pub enum Modal {
     },
     NewFolder {
         name: TextBuffer,
+        fullscreen_reminder: bool,
     },
     NewTag {
         name: TextBuffer,
@@ -182,6 +184,8 @@ pub enum Modal {
         vim_mode: bool,
         /// Due-date reminders, per device.
         notifications: bool,
+        /// Take over the screen when a task comes due, per device.
+        fullscreen_reminders: bool,
         /// Keep finished subtasks visible under their parent while the view
         /// hides completed work, per device.
         keep_completed_subtasks: bool,
@@ -386,6 +390,7 @@ impl Modal {
             kind: ProjectKind::Parallel,
             icon: ProjectIcon::default(),
             icon_open: false,
+            fullscreen_reminder: false,
         }
     }
 
@@ -457,6 +462,7 @@ impl Modal {
     pub fn new_folder(_app: &FlowlistApp) -> Self {
         Modal::NewFolder {
             name: TextBuffer::empty(),
+            fullscreen_reminder: false,
         }
     }
 
@@ -494,6 +500,7 @@ impl Modal {
             trash_days: TextBuffer::new(settings.trash_retention_days.to_string()),
             vim_mode: app.vim_mode,
             notifications: app.due_notifications,
+            fullscreen_reminders: app.fullscreen_reminders,
             keep_completed_subtasks: app.keep_completed_subtasks,
             follow_system: app.follow_system,
             theme: app.theme.kind(),
@@ -702,7 +709,7 @@ impl Modal {
                 1 => Some(name),
                 _ => None,
             },
-            Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
+            Modal::NewFolder { name, .. } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => match index {
                 0 => Some(&form.name),
                 1 => Some(&form.text),
@@ -763,7 +770,7 @@ impl Modal {
                 1 => Some(name),
                 _ => None,
             },
-            Modal::NewFolder { name } | Modal::NewTag { name } => (index == 0).then_some(name),
+            Modal::NewFolder { name, .. } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => match index {
                 0 => Some(&mut form.name),
                 1 => Some(&mut form.text),
@@ -1279,6 +1286,9 @@ impl FlowlistApp {
             }
             if is_new_project {
                 body = body.child(self.render_new_project_controls(cx));
+            }
+            if matches!(modal, Modal::NewFolder { .. }) {
+                body = body.child(self.render_new_folder_controls(cx));
             }
             if is_perspective {
                 body = body.child(self.render_perspective_controls(cx));
@@ -2435,14 +2445,15 @@ impl FlowlistApp {
 
     fn render_new_project_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
-        let (kind, icon, icon_open) = match &self.modal {
+        let (kind, icon, icon_open, fullscreen) = match &self.modal {
             Some(Modal::NewProject {
                 kind,
                 icon,
                 icon_open,
+                fullscreen_reminder,
                 ..
-            }) => (*kind, *icon, *icon_open),
-            _ => (ProjectKind::Parallel, ProjectIcon::default(), false),
+            }) => (*kind, *icon, *icon_open, *fullscreen_reminder),
+            _ => (ProjectKind::Parallel, ProjectIcon::default(), false, false),
         };
         let mut row = div().flex().flex_col().gap_1().child(
             div()
@@ -2562,7 +2573,83 @@ impl FlowlistApp {
                 }
                 this.child(icons)
             });
-        row.child(icon_row)
+        row.child(icon_row).child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_0p5()
+                        .child(div().text_sm().child("Full-screen reminder"))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("Take over the screen when a task in this project is due."),
+                        ),
+                )
+                .child(
+                    div()
+                        .id("new-project-fullscreen")
+                        .child(widgets::switch(theme, fullscreen))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(Modal::NewProject {
+                                fullscreen_reminder,
+                                ..
+                            }) = &mut this.modal
+                            {
+                                *fullscreen_reminder = !*fullscreen_reminder;
+                            }
+                            cx.notify();
+                        })),
+                ),
+        )
+    }
+
+    fn render_new_folder_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let fullscreen = matches!(
+            &self.modal,
+            Some(Modal::NewFolder {
+                fullscreen_reminder: true,
+                ..
+            })
+        );
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_0p5()
+                    .child(div().text_sm().child("Full-screen reminder"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child("Take over the screen when a task in this folder is due."),
+                    ),
+            )
+            .child(
+                div()
+                    .id("new-folder-fullscreen")
+                    .child(widgets::switch(theme, fullscreen))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::NewFolder {
+                            fullscreen_reminder,
+                            ..
+                        }) = &mut this.modal
+                        {
+                            *fullscreen_reminder = !*fullscreen_reminder;
+                        }
+                        cx.notify();
+                    })),
+            )
     }
 
     /// The Settings sheet: a fixed section rail on the left and one section at
@@ -3558,6 +3645,13 @@ impl FlowlistApp {
                 ..
             })
         );
+        let fullscreen_reminders = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                fullscreen_reminders: true,
+                ..
+            })
+        );
         let permission = self.notification_permission;
         let supported = super::notifications::supported();
         let blocked = super::notifications::signature_blocked();
@@ -3613,7 +3707,7 @@ impl FlowlistApp {
         let reminders_card = self.settings_card(
             "Reminders",
             Some(
-                "Due dates can send a macOS notification, even when Flowlist is in the background.",
+                "Due dates can send a macOS notification, even when Flowlist is in the background. Full-screen reminders are opt-in per task, project or folder.",
             ),
             div()
                 .flex()
@@ -3644,6 +3738,34 @@ impl FlowlistApp {
                 .child(div().text_xs().text_color(theme.text_faint).child(
                     "Date-only tasks remind at 09:00; timestamped tasks at their time. The next 30 days are scheduled.",
                 ))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(div().text_sm().child("Full-screen reminders"))
+                        .child(
+                            div()
+                                .on_children_prepainted(
+                                    self.theme_probe("notify-fullscreen-toggle".to_string()),
+                                )
+                                .id("notify-fullscreen-toggle")
+                                .child(widgets::switch(theme, fullscreen_reminders))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Settings {
+                                        fullscreen_reminders,
+                                        ..
+                                    }) = &mut this.modal
+                                    {
+                                        *fullscreen_reminders = !*fullscreen_reminders;
+                                    }
+                                    cx.notify();
+                                })),
+                        )
+                        .child(div().text_xs().text_color(theme.text_faint).child(
+                            "Only tasks, projects and folders marked for full-screen reminders take over the screen.",
+                        )),
+                )
                 .child(actions)
                 .when(blocked, |this| {
                     this.child(
