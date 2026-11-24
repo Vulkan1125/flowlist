@@ -181,6 +181,30 @@ pub struct Session {
     /// Take over the screen with a due reminder while Flowlist is running.
     #[serde(default)]
     pub fullscreen_reminders: Option<bool>,
+    /// Abstract style used by full-screen reminders, or `None`.
+    #[serde(default)]
+    pub reminder_background: Option<String>,
+    /// Use the abstract style that belongs to the current theme.
+    #[serde(default)]
+    pub reminder_match_theme: Option<bool>,
+    /// A user-picked image for the full-screen reminder.
+    #[serde(default)]
+    pub reminder_wallpaper: Option<String>,
+    /// Show the reminder wallpaper instead of the abstract style.
+    #[serde(default)]
+    pub reminder_use_wallpaper: Option<bool>,
+    /// A user-picked image behind the main window.
+    #[serde(default)]
+    pub wallpaper: Option<String>,
+    /// Show the main-window wallpaper.
+    #[serde(default)]
+    pub use_wallpaper: Option<bool>,
+    /// How strongly the main-window wallpaper shows.
+    #[serde(default)]
+    pub wallpaper_opacity: Option<f32>,
+    /// How strongly the reminder wallpaper shows.
+    #[serde(default)]
+    pub reminder_wallpaper_opacity: Option<f32>,
     /// Global priority filter, `high`, `medium`, `low`, or absent for all.
     #[serde(default)]
     pub priority_filter: Option<String>,

@@ -788,7 +788,6 @@ fun MainScreen(
                     .weight(1f)
                     .fillMaxHeight(),
             ) {
-            HorizontalDivider(thickness = 1.dp, color = colors.background)
             val activeMore = moreView
             val activeSaved = savedPerspective
             val canSelect = activeSaved != null ||

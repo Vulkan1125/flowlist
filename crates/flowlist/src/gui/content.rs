@@ -34,6 +34,11 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
+        let content_bg = if self.use_wallpaper {
+            theme.bg.opacity(0.80)
+        } else {
+            theme.bg
+        };
         let groups = self.current_groups();
         // Rebuilt as rows paint, so the test state lists only what is on
         // screen, including the subtasks an expanded parent reveals.
@@ -46,7 +51,7 @@ impl FlowlistApp {
             .flex_1()
             .min_w_0()
             .h_full()
-            .bg(theme.bg)
+            .bg(content_bg)
             .overflow_hidden()
             .on_mouse_down(
                 MouseButton::Left,

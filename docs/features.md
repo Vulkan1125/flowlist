@@ -262,6 +262,10 @@ working domain and GUI. This page tracks what is implemented and verified.
       screen-sized reminder when it comes due while Flowlist is running, with
       Complete, Snooze 10 minutes, Open task and Dismiss. Quick capture, the
       inline add row and the project/folder sheets carry the mark at creation.
+- [x] Mac backgrounds: a custom wallpaper with an opacity choice sits behind
+      the main window. The full-screen reminder has its own backdrop: six
+      theme-synced abstract styles (Aurora, Dunes, Halo, Mesh, Tide, Ember),
+      a Match-theme default, or a separate wallpaper with its own opacity.
 - [x] Releases ship a drag-to-Applications DMG beside the updater's zip.
 - [x] The plus opens the capture panel over the window (the global shortcut
       stays screen-centered), the toast follows the visible middle pane, and
@@ -317,12 +321,11 @@ working domain and GUI. This page tracks what is implemented and verified.
       sheet opened with, and Save keeps the new one. Plain also carries the
       accent presets, custom picker and eyedropper; the other families keep
       their own accent as part of their identity.
-- [x] Android ambient backgrounds: twelve gradients, one tuned for each theme
-      family, with a **Match theme** toggle. Any gradient can be picked
-      regardless of the theme, and a **None** choice keeps the plain surface.
-- [x] Android custom wallpaper: choose any image from the phone; it is copied
-      into app storage so the picker grant is not needed later, and it can be
-      replaced or removed from Settings → Appearance.
+- [x] Android backgrounds: the main window can show a custom wallpaper with
+      its own opacity. Twelve ambient gradients, one tuned for each theme
+      family, live on the full-screen reminder instead, with **Match theme**
+      and free choice regardless of theme. The reminder can also use the
+      wallpaper with a separate opacity.
 - [x] Follow-system appearance: keep the theme family, take light/dark from
       the macOS window appearance. A manual light/dark switch turns this off so
       the chosen mode is not reverted on the next frame.

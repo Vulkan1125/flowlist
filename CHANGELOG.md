@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.9.47 — 2026-11-24
 
+- **Mac wallpaper and reminder backdrops.** Settings → Appearance has a
+  custom wallpaper behind the main window, with an opacity choice. The
+  full-screen reminder has six theme-synced abstract styles (Aurora, Dunes,
+  Halo, Mesh, Tide, Ember), a Match-theme default, or its own wallpaper and
+  opacity. The reminder content sits on an opaque card so text stays readable.
 - **Full-screen task reminders.** Tasks, projects and folders can be marked as
   full-screen reminders when they are created (or from the task inspector).
   Marking a project or folder covers its tasks. On Mac, a marked task that
@@ -10,14 +15,15 @@
   alarm-style full-screen-intent reminder with the same actions, rescheduled
   after a reboot. Nothing takes over the screen unless it carries the mark or
   inherits it from its project or folder.
-- **Android ambient backgrounds and wallpaper.** Twelve ambient gradients, one
-  tuned for each theme family, are available regardless of the active theme.
-  **Match theme** follows the current family, **None** keeps the plain
-  surface, and **Choose wallpaper** copies any picked image into app storage
-  and paints it behind the app. Cards, sheets and menus stay opaque, with one
-  scrim under the main content, so text does not bleed through the background.
-  The Full-screen reminders card is now first in Settings → Notifications, and
-  the capture sheet shows the per-task toggle above its chips.
+- **Android wallpaper and reminder backgrounds.** The main window can show a
+  custom wallpaper with its own opacity slider. The twelve ambient gradients,
+  one tuned for each theme family, now belong to the full-screen reminder,
+  with **Match theme**, free choice regardless of theme, and **None**. The
+  reminder can also use the wallpaper with a separate opacity. Cards, sheets
+  and menus stay opaque, with one scrim under the main content, so text does
+  not bleed through the background. The Full-screen reminders card is first in
+  Settings → Notifications, and the capture sheet shows the per-task toggle
+  above its chips.
 - **Cleaner Mac login item.** The mobile server agent is associated with the
   Flowlist app bundle, so Login Items lists one **Flowlist** row with the app
   icon. Installing from a bare build now points the agent at the packaged app

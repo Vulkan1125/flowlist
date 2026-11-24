@@ -281,7 +281,7 @@ fun FlowlistTheme(
     // competes with the image. Every card, sheet and menu keeps the opaque
     // theme surface regardless.
     val ambientScrim = baseColors.background.copy(
-        alpha = if (background is AppBackground.Custom) 0.80f else 0.62f,
+        alpha = if (background is AppBackground.Custom) 0.45f else 0.62f,
     )
     val surfaceColors = baseColors
     val scheme = if (dark) {
@@ -332,16 +332,8 @@ fun FlowlistTheme(
                             model = File(layer.path),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
-                            alpha = if (dark) 0.65f else 0.55f,
+                            alpha = layer.opacity,
                             modifier = Modifier.fillMaxSize(),
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    if (dark) Color.Black.copy(alpha = 0.30f)
-                                    else Color.White.copy(alpha = 0.22f),
-                                ),
                         )
                     }
                 }

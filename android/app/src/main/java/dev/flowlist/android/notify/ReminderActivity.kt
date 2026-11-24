@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -24,15 +27,19 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import dev.flowlist.android.FlowlistApplication
 import dev.flowlist.android.MainActivity
+import dev.flowlist.android.data.PreferencesStore
 import dev.flowlist.android.data.ThemeStore
 import dev.flowlist.android.ui.FlowlistTheme
 import dev.flowlist.android.ui.flow
+import dev.flowlist.android.ui.isDark
+import dev.flowlist.android.ui.reminderBackgroundFor
 import kotlinx.coroutines.launch
 
 /** The alarm-style task reminder. Shown over the lock screen by a full-screen intent. */
@@ -70,9 +77,13 @@ class ReminderActivity : ComponentActivity() {
         TaskReminders.markFired(this, taskId)
         getSystemService(android.app.NotificationManager::class.java)?.cancel(taskId.hashCode())
         val theme = ThemeStore(this).load()
+        val preferences = PreferencesStore(this).load()
 
         setContent {
-            FlowlistTheme(theme) {
+            FlowlistTheme(
+                theme,
+                background = preferences.reminderBackgroundFor(theme, theme.isDark()),
+            ) {
                 ReminderScreen(
                     title = title,
                     project = project,
@@ -132,59 +143,69 @@ private fun ReminderScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background)
-            .padding(horizontal = 28.dp, vertical = 40.dp),
+            .padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = "DUE NOW · $whenText",
-            style = MaterialTheme.typography.labelLarge,
-            color = colors.accent,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(modifier = Modifier.height(18.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.displaySmall,
-            color = colors.ink,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = project?.takeIf { it.isNotBlank() } ?: "Inbox",
-            style = MaterialTheme.typography.titleMedium,
-            color = colors.faint,
-        )
-        Spacer(modifier = Modifier.height(38.dp))
-        Button(
-            onClick = onComplete,
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(58.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = colors.accent,
-                contentColor = colors.onAccent,
-            ),
+                .widthIn(max = 560.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(colors.background)
+                .border(1.dp, colors.hairline, RoundedCornerShape(28.dp))
+                .padding(horizontal = 28.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("Complete", style = MaterialTheme.typography.titleMedium)
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedButton(
-            onClick = onSnooze,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-        ) {
-            Text("Snooze 10 minutes", color = colors.ink)
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        TextButton(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
-            Text("Open Flowlist", color = colors.accent)
-        }
-        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-            Text("Dismiss", color = colors.faint)
+            Text(
+                text = "DUE NOW · $whenText",
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.accent,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.displaySmall,
+                color = colors.ink,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = project?.takeIf { it.isNotBlank() } ?: "Inbox",
+                style = MaterialTheme.typography.titleMedium,
+                color = colors.faint,
+            )
+            Spacer(modifier = Modifier.height(38.dp))
+            Button(
+                onClick = onComplete,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(58.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.accent,
+                    contentColor = colors.onAccent,
+                ),
+            ) {
+                Text("Complete", style = MaterialTheme.typography.titleMedium)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onSnooze,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            ) {
+                Text("Snooze 10 minutes", color = colors.ink)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
+                Text("Open Flowlist", color = colors.accent)
+            }
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text("Dismiss", color = colors.faint)
+            }
         }
     }
 }

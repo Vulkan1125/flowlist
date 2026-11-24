@@ -186,6 +186,14 @@ pub enum Modal {
         notifications: bool,
         /// Take over the screen when a task comes due, per device.
         fullscreen_reminders: bool,
+        reminder_background: super::background::AbstractStyle,
+        reminder_match_theme: bool,
+        reminder_wallpaper: Option<std::path::PathBuf>,
+        reminder_use_wallpaper: bool,
+        reminder_wallpaper_opacity: f32,
+        wallpaper: Option<std::path::PathBuf>,
+        use_wallpaper: bool,
+        wallpaper_opacity: f32,
         /// Keep finished subtasks visible under their parent while the view
         /// hides completed work, per device.
         keep_completed_subtasks: bool,
@@ -501,6 +509,14 @@ impl Modal {
             vim_mode: app.vim_mode,
             notifications: app.due_notifications,
             fullscreen_reminders: app.fullscreen_reminders,
+            reminder_background: app.reminder_background,
+            reminder_match_theme: app.reminder_match_theme,
+            reminder_wallpaper: app.reminder_wallpaper.clone(),
+            reminder_use_wallpaper: app.reminder_use_wallpaper,
+            reminder_wallpaper_opacity: app.reminder_wallpaper_opacity,
+            wallpaper: app.wallpaper.clone(),
+            use_wallpaper: app.use_wallpaper,
+            wallpaper_opacity: app.wallpaper_opacity,
             keep_completed_subtasks: app.keep_completed_subtasks,
             follow_system: app.follow_system,
             theme: app.theme.kind(),
@@ -2854,6 +2870,27 @@ impl FlowlistApp {
         card.into_any_element()
     }
 
+    fn choose_app_wallpaper(&mut self, cx: &mut Context<Self>) {
+        let Some(path) = super::background::choose_wallpaper() else {
+            return;
+        };
+        match super::background::install_wallpaper(&path, &self.store.paths().root, "app") {
+            Ok(copied) => {
+                if let Some(Modal::Settings {
+                    wallpaper,
+                    use_wallpaper,
+                    ..
+                }) = &mut self.modal
+                {
+                    *wallpaper = Some(copied);
+                    *use_wallpaper = true;
+                }
+            }
+            Err(error) => self.toast = Some(error.to_string()),
+        }
+        cx.notify();
+    }
+
     fn render_settings_controls(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
         let (selected, appearance) = match &self.modal {
@@ -2876,6 +2913,15 @@ impl FlowlistApp {
                 ..
             })
         );
+        let (app_wallpaper, use_app_wallpaper, app_wallpaper_opacity) = match &self.modal {
+            Some(Modal::Settings {
+                wallpaper,
+                use_wallpaper,
+                wallpaper_opacity,
+                ..
+            }) => (wallpaper.clone(), *use_wallpaper, *wallpaper_opacity),
+            _ => (None, false, 0.35),
+        };
 
         let mut modes = div()
             .flex()
@@ -3054,6 +3100,114 @@ impl FlowlistApp {
             )
         };
 
+        let mut background_body = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(div().text_sm().child("Use wallpaper"))
+                    .child(
+                        div()
+                            .id("settings-use-wallpaper")
+                            .child(widgets::switch(theme, use_app_wallpaper))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                let has_wallpaper = matches!(
+                                    &this.modal,
+                                    Some(Modal::Settings { wallpaper: Some(_), .. })
+                                );
+                                if !has_wallpaper {
+                                    this.choose_app_wallpaper(cx);
+                                } else if let Some(Modal::Settings { use_wallpaper, .. }) =
+                                    &mut this.modal
+                                {
+                                    *use_wallpaper = !*use_wallpaper;
+                                    cx.notify();
+                                }
+                            })),
+                    )
+                    .child(div().text_xs().text_color(theme.text_faint).child(
+                        "A photo behind the window chrome and list.",
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .id("settings-choose-wallpaper")
+                            .child(widgets::button(
+                                theme,
+                                if app_wallpaper.is_some() {
+                                    "Replace wallpaper"
+                                } else {
+                                    "Choose wallpaper"
+                                },
+                                false,
+                            ))
+                            .on_click(cx.listener(|this, _, _, cx| this.choose_app_wallpaper(cx))),
+                    )
+                    .when(app_wallpaper.is_some(), |this| {
+                        this.child(
+                            div()
+                                .id("settings-remove-wallpaper")
+                                .child(widgets::button(theme, "Remove", false))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Settings {
+                                        wallpaper,
+                                        use_wallpaper,
+                                        ..
+                                    }) = &mut this.modal
+                                    {
+                                        *wallpaper = None;
+                                        *use_wallpaper = false;
+                                    }
+                                    cx.notify();
+                                })),
+                        )
+                    }),
+            );
+        if app_wallpaper.is_some() {
+            let mut opacity_row = div().flex().items_center().gap_1();
+            for percent in [20, 35, 50, 70, 90] {
+                let value = percent as f32 / 100.0;
+                let active = (app_wallpaper_opacity - value).abs() < 0.005;
+                let key = format!("app-wallpaper-opacity:{percent}");
+                opacity_row = opacity_row.child(
+                    div()
+                        .id(super::sid(key))
+                        .cursor_pointer()
+                        .child(widgets::toggle_chip(
+                            theme,
+                            format!("{percent}%"),
+                            active,
+                        ))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(Modal::Settings {
+                                wallpaper_opacity,
+                                ..
+                            }) = &mut this.modal
+                            {
+                                *wallpaper_opacity = value;
+                            }
+                            cx.notify();
+                        })),
+                );
+            }
+            background_body = background_body
+                .child(div().text_xs().text_color(theme.text_faint).child("Wallpaper opacity"))
+                .child(opacity_row);
+        }
+        let app_background_card = self.settings_card(
+            "Background",
+            Some("A custom wallpaper behind the main window, with its own opacity."),
+            background_body,
+        );
         let boxes = self.settings_toggle_boxes.clone();
         // One slim row rather than a full card: the toggle belongs with the
         // window's appearance, but it does not need its own heading.
@@ -3127,6 +3281,7 @@ impl FlowlistApp {
             .child(theme_card)
             .child(icon_card)
             .child(accent)
+            .child(app_background_card)
             .child(window_card)
             .into_any_element()
     }
@@ -3778,6 +3933,227 @@ impl FlowlistApp {
                     )
                 }),
         );
+        let (
+            reminder_style,
+            reminder_match,
+            reminder_wallpaper,
+            reminder_use_wallpaper,
+            reminder_opacity,
+        ) = match &self.modal {
+            Some(Modal::Settings {
+                reminder_background,
+                reminder_match_theme,
+                reminder_wallpaper,
+                reminder_use_wallpaper,
+                reminder_wallpaper_opacity,
+                ..
+            }) => (
+                *reminder_background,
+                *reminder_match_theme,
+                reminder_wallpaper.clone(),
+                *reminder_use_wallpaper,
+                *reminder_wallpaper_opacity,
+            ),
+            _ => (
+                super::background::AbstractStyle::Aurora,
+                true,
+                None,
+                false,
+                0.35,
+            ),
+        };
+        let mut background_body = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(div().text_sm().child("Match theme"))
+                    .child(
+                        div()
+                            .id("reminder-background-match")
+                            .child(widgets::switch(theme, reminder_match))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(Modal::Settings {
+                                    reminder_match_theme,
+                                    reminder_use_wallpaper,
+                                    ..
+                                }) = &mut this.modal
+                                {
+                                    *reminder_match_theme = !*reminder_match_theme;
+                                    if *reminder_match_theme {
+                                        *reminder_use_wallpaper = false;
+                                    }
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .child(div().text_xs().text_color(theme.text_faint).child(
+                        "Use the abstract style that belongs to the current theme.",
+                    )),
+            )
+            .child(div().text_xs().text_color(theme.text_faint).child("Abstract style"));
+        let mut styles = div().flex().flex_wrap().items_center().gap_1();
+        for style in super::background::AbstractStyle::ALL {
+            let active = !reminder_match && reminder_style == style;
+            let key = format!("reminder-background:{}", style.slug());
+            styles = styles.child(
+                div()
+                    .id(super::sid(key))
+                    .cursor_pointer()
+                    .child(widgets::toggle_chip(theme, style.label(), active))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::Settings {
+                            reminder_background,
+                            reminder_match_theme,
+                            reminder_use_wallpaper,
+                            ..
+                        }) = &mut this.modal
+                        {
+                            *reminder_background = style;
+                            *reminder_match_theme = false;
+                            *reminder_use_wallpaper = false;
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        background_body = background_body.child(styles);
+        if reminder_wallpaper.is_some() {
+            background_body = background_body
+                .child(div().text_xs().text_color(theme.text_faint).child("Wallpaper"))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(div().text_sm().child("Use my wallpaper"))
+                        .child(
+                            div()
+                                .id("reminder-background-wallpaper")
+                                .child(widgets::switch(theme, reminder_use_wallpaper))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Settings {
+                                        reminder_use_wallpaper,
+                                        reminder_match_theme,
+                                        ..
+                                    }) = &mut this.modal
+                                    {
+                                        *reminder_use_wallpaper = !*reminder_use_wallpaper;
+                                        if *reminder_use_wallpaper {
+                                            *reminder_match_theme = false;
+                                        }
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .when(reminder_use_wallpaper, |this| {
+                    let mut row = div().flex().items_center().gap_1();
+                    for percent in [20, 35, 50, 70, 90] {
+                        let value = percent as f32 / 100.0;
+                        let active = (reminder_opacity - value).abs() < 0.005;
+                        let key = format!("reminder-opacity:{percent}");
+                        row = row.child(
+                            div()
+                                .id(super::sid(key))
+                                .cursor_pointer()
+                                .child(widgets::toggle_chip(
+                                    theme,
+                                    format!("{percent}%"),
+                                    active,
+                                ))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if let Some(Modal::Settings {
+                                        reminder_wallpaper_opacity,
+                                        ..
+                                    }) = &mut this.modal
+                                    {
+                                        *reminder_wallpaper_opacity = value;
+                                    }
+                                    cx.notify();
+                                })),
+                        );
+                    }
+                    this.child(div().flex().flex_col().gap_1().child(
+                        div().text_xs().text_color(theme.text_faint).child("Wallpaper opacity"),
+                    ).child(row))
+                });
+        }
+        background_body = background_body.child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .id("reminder-background-choose")
+                        .child(widgets::button(
+                            theme,
+                            if reminder_wallpaper.is_some() {
+                                "Replace wallpaper"
+                            } else {
+                                "Choose wallpaper"
+                            },
+                            false,
+                        ))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let Some(path) = super::background::choose_wallpaper() else {
+                                return;
+                            };
+                            match super::background::install_wallpaper(
+                                &path,
+                                &this.store.paths().root,
+                                "reminder",
+                            ) {
+                                Ok(copied) => {
+                                    if let Some(Modal::Settings {
+                                        reminder_wallpaper,
+                                        reminder_use_wallpaper,
+                                        reminder_match_theme,
+                                        ..
+                                    }) = &mut this.modal
+                                    {
+                                        *reminder_wallpaper = Some(copied);
+                                        *reminder_use_wallpaper = true;
+                                        *reminder_match_theme = false;
+                                    }
+                                }
+                                Err(error) => this.toast = Some(error.to_string()),
+                            }
+                            cx.notify();
+                        })),
+                )
+                .when(reminder_wallpaper.is_some(), |this| {
+                    this.child(
+                        div()
+                            .id("reminder-background-remove")
+                            .child(widgets::button(theme, "Remove", false))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(Modal::Settings {
+                                    reminder_wallpaper,
+                                    reminder_use_wallpaper,
+                                    ..
+                                }) = &mut this.modal
+                                {
+                                    *reminder_wallpaper = None;
+                                    *reminder_use_wallpaper = false;
+                                }
+                                cx.notify();
+                            })),
+                    )
+                }),
+        );
+        let reminder_background_card = self.settings_card(
+            "Reminder background",
+            Some(
+                "Full-screen reminders can sit on a theme-synced abstract backdrop or your own wallpaper. The main window keeps its normal surfaces.",
+            ),
+            background_body,
+        );
         let keep_subtasks = matches!(
             &self.modal,
             Some(Modal::Settings {
@@ -3818,6 +4194,7 @@ impl FlowlistApp {
             .gap_3()
             .child(self.settings_card("Keyboard", None, keyboard))
             .child(reminders_card)
+            .child(reminder_background_card)
             .child(subtasks_card)
             .child(
                 self.settings_card(

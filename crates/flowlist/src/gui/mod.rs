@@ -4,6 +4,7 @@
 //! edit goes through `Store::execute`, so undo, validation and cross-process
 //! locking behave exactly the same everywhere.
 
+mod background;
 mod blur;
 mod content;
 mod drag;
@@ -43,9 +44,9 @@ use anyhow::Result;
 use chrono::{Datelike, Timelike};
 use gpui::{
     Animation, AnimationExt, App, Application, Bounds, ClipboardItem, Context, CursorStyle,
-    FocusHandle, Focusable, IntoElement, KeyDownEvent, Keystroke, MouseButton, Render,
+    FocusHandle, Focusable, IntoElement, KeyDownEvent, Keystroke, MouseButton, ObjectFit, Render,
     ScrollHandle, SharedString, Window, WindowBackgroundAppearance, WindowBounds, WindowKind,
-    WindowOptions, div, ease_out_quint, point, prelude::*, px, size,
+    WindowOptions, div, ease_out_quint, img, point, prelude::*, px, size,
 };
 
 use flowlist_core::command::{
@@ -63,6 +64,7 @@ use flowlist_core::time::{Stamp, format_duration, local_date, now};
 use flowlist_core::{export, taskpaper};
 
 use crate::app_icon::{self, AppIcon};
+use background::AbstractStyle;
 use drag::{DragFolder, DragProject, DragTask};
 use icons::Icon;
 
@@ -511,6 +513,18 @@ pub struct FlowlistApp {
     reminder_snoozed: BTreeMap<TaskId, chrono::DateTime<chrono::Utc>>,
     /// Whether a full-screen reminder window is open.
     reminder_open: bool,
+    /// Abstract backdrop for full-screen reminders.
+    reminder_background: AbstractStyle,
+    /// Follow the theme's default abstract backdrop.
+    reminder_match_theme: bool,
+    /// Custom reminder wallpaper and how strongly it shows.
+    reminder_wallpaper: Option<PathBuf>,
+    reminder_use_wallpaper: bool,
+    reminder_wallpaper_opacity: f32,
+    /// Custom wallpaper behind the main window.
+    wallpaper: Option<PathBuf>,
+    use_wallpaper: bool,
+    wallpaper_opacity: f32,
     notification_permission: notifications::Permission,
     /// How many reminders the last scheduling pass added.
     notification_scheduled: usize,
@@ -642,6 +656,29 @@ impl FlowlistApp {
         let vim_mode = session.vim_mode.unwrap_or(true);
         let due_notifications = session.notifications.unwrap_or(false);
         let fullscreen_reminders = session.fullscreen_reminders.unwrap_or(true);
+        let reminder_match_theme = session.reminder_match_theme.unwrap_or(true);
+        let reminder_background = session
+            .reminder_background
+            .as_deref()
+            .and_then(AbstractStyle::from_slug)
+            .unwrap_or_else(|| AbstractStyle::for_theme(theme.kind()));
+        let reminder_wallpaper = session
+            .reminder_wallpaper
+            .as_ref()
+            .map(PathBuf::from)
+            .filter(|path| path.exists());
+        let reminder_use_wallpaper = session.reminder_use_wallpaper.unwrap_or(false);
+        let reminder_wallpaper_opacity = session
+            .reminder_wallpaper_opacity
+            .unwrap_or(0.35)
+            .clamp(0.05, 0.95);
+        let wallpaper = session
+            .wallpaper
+            .as_ref()
+            .map(PathBuf::from)
+            .filter(|path| path.exists());
+        let use_wallpaper = session.use_wallpaper.unwrap_or(false);
+        let wallpaper_opacity = session.wallpaper_opacity.unwrap_or(0.35).clamp(0.05, 0.95);
         let app_icon = session
             .app_icon
             .as_deref()
@@ -784,6 +821,14 @@ impl FlowlistApp {
             reminder_seen: BTreeSet::new(),
             reminder_snoozed: BTreeMap::new(),
             reminder_open: false,
+            reminder_background,
+            reminder_match_theme,
+            reminder_wallpaper,
+            reminder_use_wallpaper,
+            reminder_wallpaper_opacity,
+            wallpaper,
+            use_wallpaper,
+            wallpaper_opacity,
             notification_permission: notifications::Permission::Unknown,
             notification_scheduled: 0,
             notified_revision: None,
@@ -998,7 +1043,30 @@ impl FlowlistApp {
         for task in &due {
             self.reminder_snoozed.remove(&task.id);
         }
-        if let Err(error) = reminder::show(cx.weak_entity(), self.theme, due, cx) {
+        let backdrop = if self.reminder_use_wallpaper {
+            self.reminder_wallpaper
+                .clone()
+                .map(|path| {
+                    reminder::ReminderBackdrop::Wallpaper(
+                        path,
+                        self.reminder_wallpaper_opacity,
+                    )
+                })
+                .unwrap_or_else(|| {
+                    reminder::ReminderBackdrop::Abstract(if self.reminder_match_theme {
+                        AbstractStyle::for_theme(self.theme.kind())
+                    } else {
+                        self.reminder_background
+                    })
+                })
+        } else {
+            reminder::ReminderBackdrop::Abstract(if self.reminder_match_theme {
+                AbstractStyle::for_theme(self.theme.kind())
+            } else {
+                self.reminder_background
+            })
+        };
+        if let Err(error) = reminder::show(cx.weak_entity(), self.theme, backdrop, due, cx) {
             self.toast = Some(format!("Could not open the reminder: {error}"));
             self.reminder_open = false;
         } else {
@@ -1059,6 +1127,20 @@ impl FlowlistApp {
             vim_mode: Some(self.vim_mode),
             notifications: Some(self.due_notifications),
             fullscreen_reminders: Some(self.fullscreen_reminders),
+            reminder_background: Some(self.reminder_background.slug().to_string()),
+            reminder_match_theme: Some(self.reminder_match_theme),
+            reminder_wallpaper: self
+                .reminder_wallpaper
+                .as_ref()
+                .map(|path| path.display().to_string()),
+            reminder_use_wallpaper: Some(self.reminder_use_wallpaper),
+            reminder_wallpaper_opacity: Some(self.reminder_wallpaper_opacity),
+            wallpaper: self
+                .wallpaper
+                .as_ref()
+                .map(|path| path.display().to_string()),
+            use_wallpaper: Some(self.use_wallpaper),
+            wallpaper_opacity: Some(self.wallpaper_opacity),
             app_icon: Some(self.app_icon.slug().to_string()),
             priority_filter: self.priority_filter.map(|p| p.slug().to_string()),
             only_available: Some(self.only_available),
@@ -3928,6 +4010,14 @@ impl FlowlistApp {
                 vim_mode,
                 notifications,
                 fullscreen_reminders,
+                reminder_background,
+                reminder_match_theme,
+                reminder_wallpaper,
+                reminder_use_wallpaper,
+                reminder_wallpaper_opacity,
+                wallpaper,
+                use_wallpaper,
+                wallpaper_opacity,
                 keep_completed_subtasks,
                 follow_system,
                 theme,
@@ -3978,6 +4068,14 @@ impl FlowlistApp {
                 self.vim_mode = *vim_mode;
                 self.due_notifications = *notifications;
                 self.fullscreen_reminders = *fullscreen_reminders;
+                self.reminder_background = *reminder_background;
+                self.reminder_match_theme = *reminder_match_theme;
+                self.reminder_wallpaper = reminder_wallpaper.clone();
+                self.reminder_use_wallpaper = *reminder_use_wallpaper;
+                self.reminder_wallpaper_opacity = *reminder_wallpaper_opacity;
+                self.wallpaper = wallpaper.clone();
+                self.use_wallpaper = *use_wallpaper;
+                self.wallpaper_opacity = *wallpaper_opacity;
                 self.keep_completed_subtasks = *keep_completed_subtasks;
                 self.notification_requested = false;
                 if self.due_notifications && !notifications::permission().allowed() {
@@ -6828,9 +6926,11 @@ impl Render for FlowlistApp {
         let theme = self.theme;
 
         let mut root = div()
+            .relative()
             .flex()
             .flex_col()
             .size_full()
+            .overflow_hidden()
             .bg(theme.clear)
             .text_color(theme.text)
             .font_family("SF Pro Text")
@@ -6848,6 +6948,23 @@ impl Render for FlowlistApp {
                     cx.notify();
                 }),
             );
+        if self.use_wallpaper
+            && let Some(path) = self.wallpaper.clone()
+        {
+            root = root.child(
+                div()
+                    .absolute()
+                    .size_full()
+                    .overflow_hidden()
+                    .child(
+                        img(path)
+                            .object_fit(ObjectFit::Cover)
+                            .size_full()
+                            .opacity(self.wallpaper_opacity),
+                    )
+                    .child(div().absolute().size_full().bg(theme.bg.opacity(0.18))),
+            );
+        }
         root = root.child(self.render_header(window, cx));
         let mut body = div().flex().flex_1().min_h_0();
         body = body.child(self.render_sidebar(window, cx));

@@ -60,6 +60,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -96,6 +98,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 enum class SettingsSection(val label: String, val icon: ImageVector) {
@@ -188,7 +191,11 @@ fun SettingsScreen(
                             onRemoveAllSaved = onRemoveAllSaved,
                         )
                     }
-                    SettingsSection.Notifications -> NotificationSettings(preferences, onPreferencesChange)
+                    SettingsSection.Notifications -> NotificationSettings(
+                        theme = theme,
+                        preferences = preferences,
+                        onPreferencesChange = onPreferencesChange,
+                    )
                     SettingsSection.Connection -> ConnectionSettings(state, onSync, onSignOut)
                     SettingsSection.About -> AboutSettings(state)
                 }
@@ -298,7 +305,7 @@ private fun AppearanceSettings(
                     onPreferencesChange(
                         preferences.copy(
                             customWallpaper = path,
-                            matchThemeBackground = false,
+                            useWallpaper = true,
                         ),
                     )
                 }
@@ -349,130 +356,65 @@ private fun AppearanceSettings(
     }
     Spacer(modifier = Modifier.height(14.dp))
     SettingsCard("Background") {
+        val wallpaper = preferences.customWallpaper
         ToggleRow(
-            title = "Match theme",
-            detail = "Follow the ambient background that belongs to the current theme",
-            checked = preferences.matchThemeBackground,
+            title = "Use wallpaper",
+            detail = when {
+                wallpaper == null -> "Choose a photo to show behind the app"
+                preferences.useWallpaper -> "Your photo is behind the app"
+                else -> "Theme background"
+            },
+            checked = preferences.useWallpaper,
         ) {
-            onPreferencesChange(preferences.copy(matchThemeBackground = it))
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        SmallLabel("Ambient")
-        val themePreset = AmbientBackgrounds.forFamily(
-            if (colors.dark) theme.darkFamily else theme.family,
-        )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            item(key = "background-none") {
-                val selected = !preferences.matchThemeBackground &&
-                    preferences.customWallpaper == null &&
-                    preferences.ambientBackground == "none"
-                Column(
-                    modifier = Modifier
-                        .width(86.dp)
-                        .clickable {
-                            onPreferencesChange(
-                                preferences.copy(
-                                    matchThemeBackground = false,
-                                    ambientBackground = "none",
-                                    customWallpaper = null,
-                                ),
-                            )
-                        },
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.background)
-                            .border(
-                                if (selected) 2.dp else 1.dp,
-                                if (selected) colors.accent else colors.hairline,
-                                RoundedCornerShape(10.dp),
-                            ),
-                    )
-                    Text(
-                        "None",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (selected) colors.accent else colors.faint,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-            }
-            items(AmbientBackgrounds.all, key = { it.id }) { preset ->
-                val selected = !preferences.matchThemeBackground &&
-                    preferences.customWallpaper == null &&
-                    preferences.ambientBackground == preset.id
-                val follows = preferences.matchThemeBackground && themePreset.id == preset.id
-                Column(
-                    modifier = Modifier
-                        .width(86.dp)
-                        .clickable {
-                            onPreferencesChange(
-                                preferences.copy(
-                                    matchThemeBackground = false,
-                                    ambientBackground = preset.id,
-                                    customWallpaper = null,
-                                ),
-                            )
-                        },
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(preset.brush(colors.dark))
-                            .border(
-                                if (selected || follows) 2.dp else 1.dp,
-                                if (selected || follows) colors.accent else colors.hairline,
-                                RoundedCornerShape(10.dp),
-                            ),
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            preset.label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (selected) colors.accent else colors.faint,
-                            maxLines = 1,
-                        )
-                        if (follows) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                "Theme",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = colors.accent,
-                            )
-                        }
-                    }
-                }
+            if (!preferences.useWallpaper && wallpaper == null) {
+                wallpaperPicker.launch("image/*")
+            } else {
+                onPreferencesChange(preferences.copy(useWallpaper = it))
             }
         }
-        Spacer(modifier = Modifier.height(12.dp))
-        SmallLabel("Custom wallpaper")
+        Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { wallpaperPicker.launch("image/*") }) {
                 Text(
-                    if (preferences.customWallpaper == null) "Choose wallpaper" else "Replace wallpaper",
+                    if (wallpaper == null) "Choose wallpaper" else "Replace wallpaper",
                     color = colors.accent,
                 )
             }
-            if (preferences.customWallpaper != null) {
+            if (wallpaper != null) {
                 TextButton(
-                    onClick = { onPreferencesChange(preferences.copy(customWallpaper = null)) },
+                    onClick = {
+                        onPreferencesChange(
+                            preferences.copy(customWallpaper = null, useWallpaper = false),
+                        )
+                    },
                 ) {
                     Text("Remove", color = colors.danger)
                 }
             }
         }
+        if (wallpaper != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            SmallLabel("Wallpaper opacity")
+            Slider(
+                value = preferences.wallpaperOpacity.coerceIn(0.05f, 0.95f),
+                onValueChange = {
+                    onPreferencesChange(preferences.copy(wallpaperOpacity = it))
+                },
+                valueRange = 0.05f..0.95f,
+                colors = SliderDefaults.colors(
+                    thumbColor = colors.accent,
+                    activeTrackColor = colors.accent,
+                    inactiveTrackColor = colors.hairline,
+                ),
+            )
+            Text(
+                "${(preferences.wallpaperOpacity * 100).roundToInt()}%",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.faint,
+            )
+        }
         Text(
-            text = if (preferences.matchThemeBackground) {
-                "Turn Match theme off to use a chosen ambient background or wallpaper."
-            } else if (preferences.customWallpaper != null) {
-                "Your wallpaper is used behind the app. Pick any ambient above to replace it."
-            } else {
-                "Ambient backgrounds are independent of the theme. Match theme follows the current family."
-            },
+            text = "The full-screen reminder can use this photo or the ambient background chosen in Notifications.",
             style = MaterialTheme.typography.labelSmall,
             color = colors.faint,
         )
@@ -845,6 +787,7 @@ private fun LibrarySettings(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NotificationSettings(
+    theme: ThemeSettings,
     preferences: AppPreferences,
     onPreferencesChange: (AppPreferences) -> Unit,
 ) {
@@ -943,6 +886,59 @@ private fun NotificationSettings(
                 Text("Send a test full-screen reminder", color = flow.accent)
             }
         }
+    }
+    Spacer(modifier = Modifier.height(14.dp))
+    SettingsCard("Reminder background") {
+        ToggleRow(
+            title = "Match theme",
+            detail = "Use the ambient gradient for the current theme",
+            checked = preferences.matchThemeBackground,
+        ) {
+            onPreferencesChange(
+                preferences.copy(
+                    matchThemeBackground = it,
+                    reminderUseWallpaper = if (it) false else preferences.reminderUseWallpaper,
+                ),
+            )
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        SmallLabel("Ambient")
+        AmbientPicker(theme, preferences, onPreferencesChange)
+        if (preferences.customWallpaper != null) {
+            Spacer(modifier = Modifier.height(10.dp))
+            ToggleRow(
+                title = "Use my wallpaper",
+                detail = "Show the photo chosen in Appearance",
+                checked = preferences.reminderUseWallpaper,
+            ) {
+                onPreferencesChange(preferences.copy(reminderUseWallpaper = it))
+            }
+            if (preferences.reminderUseWallpaper) {
+                SmallLabel("Wallpaper opacity")
+                Slider(
+                    value = preferences.reminderWallpaperOpacity.coerceIn(0.05f, 0.95f),
+                    onValueChange = {
+                        onPreferencesChange(preferences.copy(reminderWallpaperOpacity = it))
+                    },
+                    valueRange = 0.05f..0.95f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = flow.accent,
+                        activeTrackColor = flow.accent,
+                        inactiveTrackColor = flow.hairline,
+                    ),
+                )
+                Text(
+                    "${(preferences.reminderWallpaperOpacity * 100).roundToInt()}%",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = flow.faint,
+                )
+            }
+        }
+        Text(
+            text = "These backgrounds appear on the full-screen reminder. The app itself uses the wallpaper from Appearance.",
+            style = MaterialTheme.typography.labelSmall,
+            color = flow.faint,
+        )
     }
     Spacer(modifier = Modifier.height(14.dp))
     SettingsCard("Due reminders") {

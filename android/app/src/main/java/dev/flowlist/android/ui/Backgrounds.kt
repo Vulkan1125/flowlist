@@ -1,7 +1,21 @@
 package dev.flowlist.android.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import dev.flowlist.android.data.AppPreferences
 import java.io.File
 
@@ -55,24 +69,30 @@ object AmbientBackgrounds {
 sealed interface AppBackground {
     data object None : AppBackground
     data class Ambient(val preset: AmbientPreset) : AppBackground
-    data class Custom(val path: String) : AppBackground
+    data class Custom(val path: String, val opacity: Float) : AppBackground
 
     val active: Boolean get() = this !is None
 }
 
-/** Resolve the saved choice against the current theme. */
+/** The main app shows the picked wallpaper, or the plain theme surface. */
 fun AppPreferences.backgroundFor(theme: ThemeSettings, dark: Boolean): AppBackground {
+    customWallpaper
+        ?.takeIf { useWallpaper && it.isNotBlank() && File(it).exists() }
+        ?.let { return AppBackground.Custom(it, wallpaperOpacity.coerceIn(0.05f, 0.95f)) }
+    return AppBackground.None
+}
+
+/** The full-screen reminder can use the wallpaper or a theme ambient layer. */
+fun AppPreferences.reminderBackgroundFor(theme: ThemeSettings, dark: Boolean): AppBackground {
+    customWallpaper
+        ?.takeIf { reminderUseWallpaper && it.isNotBlank() && File(it).exists() }
+        ?.let { return AppBackground.Custom(it, reminderWallpaperOpacity.coerceIn(0.05f, 0.95f)) }
     if (matchThemeBackground) {
         return AppBackground.Ambient(
             AmbientBackgrounds.forFamily(if (dark) theme.darkFamily else theme.family),
         )
     }
-    customWallpaper?.takeIf { it.isNotBlank() && File(it).exists() }?.let {
-        return AppBackground.Custom(it)
-    }
-    if (ambientBackground == "none") {
-        return AppBackground.None
-    }
+    if (ambientBackground == "none") return AppBackground.None
     return AppBackground.Ambient(
         AmbientBackgrounds.byId(ambientBackground)
             ?: AmbientBackgrounds.forFamily(if (dark) theme.darkFamily else theme.family),
@@ -92,3 +112,112 @@ suspend fun saveWallpaper(context: android.content.Context, uri: android.net.Uri
             file.absolutePath
         }.getOrNull()
     }
+
+/** A horizontal swatch strip for the reminder's ambient background. */
+@Composable
+fun AmbientPicker(
+    theme: ThemeSettings,
+    preferences: AppPreferences,
+    onPreferencesChange: (AppPreferences) -> Unit,
+) {
+    val colors = flow
+    val themePreset = AmbientBackgrounds.forFamily(
+        if (colors.dark) theme.darkFamily else theme.family,
+    )
+    LazyRow(
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+    ) {
+        item(key = "reminder-background-none") {
+            val selected = !preferences.matchThemeBackground &&
+                !preferences.reminderUseWallpaper &&
+                preferences.ambientBackground == "none"
+            androidx.compose.foundation.layout.Column(
+                modifier = androidx.compose.ui.Modifier
+                    .width(86.dp)
+                    .clickable {
+                        onPreferencesChange(
+                            preferences.copy(
+                                matchThemeBackground = false,
+                                ambientBackground = "none",
+                                reminderUseWallpaper = false,
+                            ),
+                        )
+                    },
+            ) {
+                androidx.compose.foundation.layout.Box(
+                    modifier = androidx.compose.ui.Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                        .background(colors.background)
+                        .border(
+                            if (selected) 2.dp else 1.dp,
+                            if (selected) colors.accent else colors.hairline,
+                            androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                        ),
+                )
+                androidx.compose.material3.Text(
+                    "None",
+                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                    color = if (selected) colors.accent else colors.faint,
+                    modifier = androidx.compose.ui.Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+        items(
+            AmbientBackgrounds.all,
+            key = { it.id },
+        ) { preset ->
+            val selected = !preferences.matchThemeBackground &&
+                !preferences.reminderUseWallpaper &&
+                preferences.ambientBackground == preset.id
+            val follows = preferences.matchThemeBackground && themePreset.id == preset.id
+            androidx.compose.foundation.layout.Column(
+                modifier = androidx.compose.ui.Modifier
+                    .width(86.dp)
+                    .clickable {
+                        onPreferencesChange(
+                            preferences.copy(
+                                matchThemeBackground = false,
+                                ambientBackground = preset.id,
+                                reminderUseWallpaper = false,
+                            ),
+                        )
+                    },
+            ) {
+                androidx.compose.foundation.layout.Box(
+                    modifier = androidx.compose.ui.Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                        .background(preset.brush(colors.dark))
+                        .border(
+                            if (selected || follows) 2.dp else 1.dp,
+                            if (selected || follows) colors.accent else colors.hairline,
+                            androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                        ),
+                )
+                androidx.compose.foundation.layout.Row(
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.Text(
+                        preset.label,
+                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                        color = if (selected) colors.accent else colors.faint,
+                        maxLines = 1,
+                    )
+                    if (follows) {
+                        androidx.compose.foundation.layout.Spacer(
+                            androidx.compose.ui.Modifier.width(4.dp),
+                        )
+                        androidx.compose.material3.Text(
+                            "Theme",
+                            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                            color = colors.accent,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

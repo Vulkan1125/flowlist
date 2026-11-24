@@ -239,6 +239,16 @@ project or folder, opens a screen-sized reminder when it comes due while
 Flowlist is running. Complete, Snooze 10 minutes, Open task and Dismiss are on
 that screen; Dismiss and Esc leave the task alone.
 
+The reminder sits on a theme-synced abstract backdrop by default. Pick another
+abstract style, follow the current theme, or choose a wallpaper from
+**Settings → Workflow → Reminder background**; the wallpaper has its own
+opacity. **Settings → Appearance → Background** sets a separate wallpaper
+behind the main window, also with an opacity choice.
+
+macOS needs an Apple Development or Developer ID signature before it can grant
+notification permission; the reminder window itself works while Flowlist is
+running.
+
 macOS only grants notification permission to a signed app. The downloadable
 build is ad-hoc signed, so this sheet shows **Blocked for this ad-hoc build**.
 Use an Apple Development or Developer ID certificate when packaging (`set

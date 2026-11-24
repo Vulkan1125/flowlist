@@ -6,17 +6,26 @@
 //! Completing goes through the ordinary command layer, which keeps Undo
 //! working in the main window.
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use flowlist_core::ids::TaskId;
 use gpui::{
-    App, Bounds, Context, CursorStyle, FocusHandle, IntoElement, KeyDownEvent, MouseButton, Render,
-    WeakEntity, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div,
-    point, prelude::*, px, size,
+    App, Bounds, Context, CursorStyle, FocusHandle, IntoElement, KeyDownEvent, MouseButton,
+    ObjectFit, Render, WeakEntity, Window, WindowBackgroundAppearance, WindowBounds, WindowKind,
+    WindowOptions, div, img, point, prelude::*, px, size,
 };
 
 use super::FlowlistApp;
+use super::background::{self, AbstractStyle};
 use super::icons::{self, Icon};
 use super::theme::Theme;
+
+#[derive(Clone)]
+pub enum ReminderBackdrop {
+    Abstract(AbstractStyle),
+    Wallpaper(PathBuf, f32),
+}
 
 #[derive(Clone, Debug)]
 pub struct ReminderTask {
@@ -30,6 +39,7 @@ pub struct ReminderTask {
 pub struct Reminder {
     app: WeakEntity<FlowlistApp>,
     theme: Theme,
+    backdrop: ReminderBackdrop,
     tasks: Vec<ReminderTask>,
     index: usize,
     focus_handle: FocusHandle,
@@ -39,12 +49,14 @@ impl Reminder {
     fn new(
         app: WeakEntity<FlowlistApp>,
         theme: Theme,
+        backdrop: ReminderBackdrop,
         tasks: Vec<ReminderTask>,
         cx: &mut Context<Self>,
     ) -> Self {
         Self {
             app,
             theme,
+            backdrop,
             tasks,
             index: 0,
             focus_handle: cx.focus_handle(),
@@ -54,11 +66,13 @@ impl Reminder {
     fn reset(
         &mut self,
         theme: Theme,
+        backdrop: ReminderBackdrop,
         tasks: Vec<ReminderTask>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.theme = theme;
+        self.backdrop = backdrop;
         let was_empty = self.tasks.is_empty();
         for task in tasks {
             if !self.tasks.iter().any(|existing| existing.id == task.id) {
@@ -211,13 +225,25 @@ impl Render for Reminder {
         } else {
             "Coming up"
         };
+        let backdrop = match &self.backdrop {
+            ReminderBackdrop::Abstract(style) => background::render(*style, theme),
+            ReminderBackdrop::Wallpaper(path, opacity) => div()
+                .absolute()
+                .size_full()
+                .overflow_hidden()
+                .child(
+                    img(path.clone())
+                        .object_fit(ObjectFit::Cover)
+                        .size_full()
+                        .opacity(*opacity),
+                )
+                .child(div().absolute().size_full().bg(theme.bg.opacity(0.28)))
+                .into_any_element(),
+        };
         div()
+            .relative()
             .size_full()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap_6()
+            .overflow_hidden()
             .bg(theme.bg)
             .text_color(theme.text)
             .font_family("SF Pro Display")
@@ -231,48 +257,87 @@ impl Render for Reminder {
                     cx.notify();
                 }),
             )
+            .child(backdrop)
             .child(
                 div()
+                    .absolute()
+                    .size_full()
                     .flex()
                     .items_center()
-                    .gap_2()
-                    .text_sm()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(theme.accent)
-                    .child(icons::icon(Icon::Clock, 16.0, theme.accent))
-                    .child(due_label),
-            )
-            .child(
-                div()
-                    .max_w(px(880.))
-                    .px_8()
-                    .text_center()
-                    .text_size(px(58.))
-                    .font_weight(gpui::FontWeight::BOLD)
-                    .line_height(px(68.))
-                    .child(task.title.clone()),
-            )
-            .child(
-                div()
-                    .text_lg()
-                    .text_color(theme.text_dim)
-                    .child(detail),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .child(self.action("reminder-complete", "Complete", Icon::Check, true, cx))
-                    .child(self.action("reminder-snooze", "Snooze 10 min", Icon::Clock, false, cx))
-                    .child(self.action("reminder-open", "Open task", Icon::ListChecks, false, cx))
-                    .child(self.action("reminder-dismiss", "Dismiss", Icon::Close, false, cx)),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child(format!("{position} · Esc dismisses · S snoozes · Enter completes")),
+                    .justify_center()
+                    .p(px(56.))
+                    .child(
+                        div()
+                            .w_full()
+                            .max_w(px(920.))
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .gap_6()
+                            .rounded_lg()
+                            .border_1()
+                            .border_color(theme.border)
+                            .bg(theme.bg)
+                            .p(px(44.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .text_sm()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(theme.accent)
+                                    .child(icons::icon(Icon::Clock, 16.0, theme.accent))
+                                    .child(due_label),
+                            )
+                            .child(
+                                div()
+                                    .max_w(px(800.))
+                                    .text_center()
+                                    .text_size(px(58.))
+                                    .font_weight(gpui::FontWeight::BOLD)
+                                    .line_height(px(68.))
+                                    .child(task.title.clone()),
+                            )
+                            .child(div().text_lg().text_color(theme.text_dim).child(detail))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .child(self.action(
+                                        "reminder-complete",
+                                        "Complete",
+                                        Icon::Check,
+                                        true,
+                                        cx,
+                                    ))
+                                    .child(self.action(
+                                        "reminder-snooze",
+                                        "Snooze 10 min",
+                                        Icon::Clock,
+                                        false,
+                                        cx,
+                                    ))
+                                    .child(self.action(
+                                        "reminder-open",
+                                        "Open task",
+                                        Icon::ListChecks,
+                                        false,
+                                        cx,
+                                    ))
+                                    .child(self.action(
+                                        "reminder-dismiss",
+                                        "Dismiss",
+                                        Icon::Close,
+                                        false,
+                                        cx,
+                                    )),
+                            )
+                            .child(div().text_xs().text_color(theme.text_faint).child(format!(
+                                "{position} · Esc dismisses · S snoozes · Enter completes"
+                            ))),
+                    ),
             )
     }
 }
@@ -281,13 +346,14 @@ impl Render for Reminder {
 pub fn show(
     app: WeakEntity<FlowlistApp>,
     theme: Theme,
+    backdrop: ReminderBackdrop,
     tasks: Vec<ReminderTask>,
     cx: &mut App,
 ) -> Result<()> {
     for any in cx.windows() {
         if let Some(handle) = any.downcast::<Reminder>() {
             let updated = handle.update(cx, |view, window, cx| {
-                view.reset(theme, tasks.clone(), window, cx);
+                view.reset(theme, backdrop.clone(), tasks.clone(), window, cx);
             });
             if updated.is_ok() {
                 return Ok(());
@@ -316,7 +382,7 @@ pub fn show(
             ..Default::default()
         },
         move |window, cx| {
-            let view = cx.new(|cx| Reminder::new(app.clone(), theme, tasks, cx));
+            let view = cx.new(|cx| Reminder::new(app.clone(), theme, backdrop, tasks, cx));
             let handle = view.read(cx).focus_handle.clone();
             window.focus(&handle);
             window.activate_window();
