@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.48 — 2026-11-24
+
+- **Fix the Mac wallpaper picker.** Choosing a wallpaper from Settings no
+  longer aborts the app. The picker now uses the same asynchronous macOS file
+  prompt as attachments instead of a nested modal event loop.
+
 ## 0.9.47 — 2026-11-24
 
 - **Mac wallpaper and reminder backdrops.** Settings → Appearance has a

@@ -170,49 +170,6 @@ pub fn render(style: AbstractStyle, theme: Theme) -> AnyElement {
     }
 }
 
-/// Open the macOS file panel for an image and return its path.
-#[cfg(target_os = "macos")]
-pub fn choose_wallpaper() -> Option<std::path::PathBuf> {
-    use objc::runtime::Object;
-    use objc::{class, msg_send, sel, sel_impl};
-    unsafe {
-        let panel: *mut Object = msg_send![class!(NSOpenPanel), openPanel];
-        if panel.is_null() {
-            return None;
-        }
-        let _: () = msg_send![panel, setCanChooseFiles: 1i8];
-        let _: () = msg_send![panel, setCanChooseDirectories: 0i8];
-        let _: () = msg_send![panel, setAllowsMultipleSelection: 0i8];
-        let _: () = msg_send![panel, setMessage: nsstring("Choose a background image")];
-        let response: isize = msg_send![panel, runModal];
-        if response != 1 {
-            return None;
-        }
-        let url: *mut Object = msg_send![panel, URL];
-        if url.is_null() {
-            return None;
-        }
-        let path: *mut Object = msg_send![url, path];
-        if path.is_null() {
-            return None;
-        }
-        let text: *const std::os::raw::c_char = msg_send![path, UTF8String];
-        if text.is_null() {
-            return None;
-        }
-        let path = std::ffi::CStr::from_ptr(text)
-            .to_string_lossy()
-            .into_owned();
-        let path = std::path::PathBuf::from(path);
-        image_extension(&path).map(|_| path)
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn choose_wallpaper() -> Option<std::path::PathBuf> {
-    None
-}
-
 fn image_extension(path: &std::path::Path) -> Option<&'static str> {
     let extension = path.extension()?.to_str()?.to_ascii_lowercase();
     match extension.as_str() {
@@ -239,12 +196,4 @@ pub fn install_wallpaper(
     let destination = directory.join(format!("{name}.{extension}"));
     std::fs::copy(source, &destination)?;
     Ok(destination)
-}
-
-#[cfg(target_os = "macos")]
-fn nsstring(text: &str) -> *mut objc::runtime::Object {
-    use objc::runtime::Object;
-    use objc::{class, msg_send, sel, sel_impl};
-    let text = std::ffi::CString::new(text).unwrap_or_default();
-    unsafe { msg_send![class!(NSString), stringWithUTF8String: text.as_ptr()] }
 }

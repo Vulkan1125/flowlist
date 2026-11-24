@@ -2871,24 +2871,85 @@ impl FlowlistApp {
     }
 
     fn choose_app_wallpaper(&mut self, cx: &mut Context<Self>) {
-        let Some(path) = super::background::choose_wallpaper() else {
-            return;
-        };
-        match super::background::install_wallpaper(&path, &self.store.paths().root, "app") {
-            Ok(copied) => {
-                if let Some(Modal::Settings {
-                    wallpaper,
-                    use_wallpaper,
-                    ..
-                }) = &mut self.modal
-                {
-                    *wallpaper = Some(copied);
-                    *use_wallpaper = true;
+        let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Choose wallpaper".into()),
+        });
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(paths))) = picked.await else {
+                return;
+            };
+            let Some(path) = paths.into_iter().next() else {
+                return;
+            };
+            this.update(cx, |this, cx| {
+                match super::background::install_wallpaper(
+                    &path,
+                    &this.store.paths().root,
+                    "app",
+                ) {
+                    Ok(copied) => {
+                        if let Some(Modal::Settings {
+                            wallpaper,
+                            use_wallpaper,
+                            ..
+                        }) = &mut this.modal
+                        {
+                            *wallpaper = Some(copied);
+                            *use_wallpaper = true;
+                        }
+                    }
+                    Err(error) => this.toast = Some(error.to_string()),
                 }
-            }
-            Err(error) => self.toast = Some(error.to_string()),
-        }
-        cx.notify();
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn choose_reminder_wallpaper(&mut self, cx: &mut Context<Self>) {
+        let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Choose reminder wallpaper".into()),
+        });
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(paths))) = picked.await else {
+                return;
+            };
+            let Some(path) = paths.into_iter().next() else {
+                return;
+            };
+            this.update(cx, |this, cx| {
+                match super::background::install_wallpaper(
+                    &path,
+                    &this.store.paths().root,
+                    "reminder",
+                ) {
+                    Ok(copied) => {
+                        if let Some(Modal::Settings {
+                            reminder_wallpaper,
+                            reminder_use_wallpaper,
+                            reminder_match_theme,
+                            ..
+                        }) = &mut this.modal
+                        {
+                            *reminder_wallpaper = Some(copied);
+                            *reminder_use_wallpaper = true;
+                            *reminder_match_theme = false;
+                        }
+                    }
+                    Err(error) => this.toast = Some(error.to_string()),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     fn render_settings_controls(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -3140,6 +3201,9 @@ impl FlowlistApp {
                     .gap_2()
                     .child(
                         div()
+                            .on_children_prepainted(
+                                self.theme_probe("settings-choose-wallpaper".to_string()),
+                            )
                             .id("settings-choose-wallpaper")
                             .child(widgets::button(
                                 theme,
@@ -4101,30 +4165,7 @@ impl FlowlistApp {
                             false,
                         ))
                         .on_click(cx.listener(|this, _, _, cx| {
-                            let Some(path) = super::background::choose_wallpaper() else {
-                                return;
-                            };
-                            match super::background::install_wallpaper(
-                                &path,
-                                &this.store.paths().root,
-                                "reminder",
-                            ) {
-                                Ok(copied) => {
-                                    if let Some(Modal::Settings {
-                                        reminder_wallpaper,
-                                        reminder_use_wallpaper,
-                                        reminder_match_theme,
-                                        ..
-                                    }) = &mut this.modal
-                                    {
-                                        *reminder_wallpaper = Some(copied);
-                                        *reminder_use_wallpaper = true;
-                                        *reminder_match_theme = false;
-                                    }
-                                }
-                                Err(error) => this.toast = Some(error.to_string()),
-                            }
-                            cx.notify();
+                            this.choose_reminder_wallpaper(cx);
                         })),
                 )
                 .when(reminder_wallpaper.is_some(), |this| {
