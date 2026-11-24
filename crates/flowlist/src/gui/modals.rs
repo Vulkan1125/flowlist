@@ -191,6 +191,7 @@ pub enum Modal {
         reminder_wallpaper: Option<std::path::PathBuf>,
         reminder_use_wallpaper: bool,
         reminder_wallpaper_opacity: f32,
+        fullscreen_snooze_minutes: u32,
         wallpaper: Option<std::path::PathBuf>,
         use_wallpaper: bool,
         wallpaper_opacity: f32,
@@ -525,6 +526,7 @@ impl Modal {
             reminder_wallpaper: app.reminder_wallpaper.clone(),
             reminder_use_wallpaper: app.reminder_use_wallpaper,
             reminder_wallpaper_opacity: app.reminder_wallpaper_opacity,
+            fullscreen_snooze_minutes: app.reminder_snooze_minutes,
             wallpaper: app.wallpaper.clone(),
             use_wallpaper: app.use_wallpaper,
             wallpaper_opacity: app.wallpaper_opacity,
@@ -3924,6 +3926,13 @@ impl FlowlistApp {
 
     fn render_reminder_settings(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
+        let snooze_minutes = match &self.modal {
+            Some(Modal::Settings {
+                fullscreen_snooze_minutes,
+                ..
+            }) => *fullscreen_snooze_minutes,
+            _ => 10,
+        };
         // Reminders are a per-device setting, unlike the library defaults in
         // the next card. The toggle is a draft until Save, matching Vim mode.
         let reminders = matches!(
@@ -4038,7 +4047,11 @@ impl FlowlistApp {
                     .id("fullscreen-test")
                     .child(widgets::button(theme, "Send full-screen test", false))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.send_fullscreen_test(draft_backdrop.clone(), cx);
+                        this.send_fullscreen_test(
+                            draft_backdrop.clone(),
+                            snooze_minutes,
+                            cx,
+                        );
                     })),
             );
         }
@@ -4155,6 +4168,47 @@ impl FlowlistApp {
                                     cx.notify();
                                 })),
                         ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("Snooze length"),
+                        )
+                        .child({
+                            let mut row = div().flex().flex_wrap().items_center().gap_1();
+                            for minutes in [10u32, 15, 30, 60] {
+                                let label = if minutes == 60 {
+                                    "1 hour".to_string()
+                                } else {
+                                    format!("{minutes} min")
+                                };
+                                let active = snooze_minutes == minutes;
+                                let key = format!("snooze-length:{minutes}");
+                                row = row.child(
+                                    div()
+                                        .id(super::sid(key))
+                                        .cursor_pointer()
+                                        .child(widgets::toggle_chip(theme, label, active))
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            if let Some(Modal::Settings {
+                                                fullscreen_snooze_minutes,
+                                                ..
+                                            }) = &mut this.modal
+                                            {
+                                                *fullscreen_snooze_minutes = minutes;
+                                            }
+                                            cx.notify();
+                                        })),
+                                );
+                            }
+                            row
+                        }),
                 )
                 .child(actions)
                 .when(blocked, |this| {

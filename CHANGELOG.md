@@ -9,7 +9,11 @@
   “selected · Save to apply” note. HEIC photos are converted with `sips`.
 - **Per-reminder timing.** A full-screen reminder can follow the task's due
   date and time, or carry its own date and time. Mac's inspector and Android's
-  task editor expose the choice.
+  task editor expose the choice. The picker is disabled while matching due.
+- **Reminder polish.** Snooze length can be 10, 15, 30 or 60 minutes. The
+  inspector gains a scrollbar with breathing room. Abstract backdrops are now
+  smooth layered washes instead of hard bars, and JPEG XL wallpapers are
+  converted to PNG with `sips`.
 - **Full-screen test button.** Mac opens the actual reminder window; Android
   opens the alarm screen directly instead of posting a regular notification.
 - **Mac file-picker fix.** Choosing a wallpaper uses the asynchronous GPUI

@@ -2,7 +2,9 @@
 //! list. Every field commits through the same command layer as the CLI.
 
 use chrono::{Datelike, Duration, Timelike};
-use gpui::{AnyElement, Context, CursorStyle, IntoElement, Window, div, prelude::*, px};
+use gpui::{
+    AnyElement, Context, CursorStyle, IntoElement, MouseButton, Window, div, prelude::*, px,
+};
 
 use flowlist_core::command::{Command, ProjectPatch};
 use flowlist_core::ids::{ChecklistId, TaskId};
@@ -78,14 +80,92 @@ impl FlowlistApp {
 
         panel.child(
             div()
-                .id("inspector-scroll")
+                .relative()
                 .flex()
                 .flex_col()
                 .flex_1()
                 .min_h_0()
-                .overflow_y_scroll()
-                .child(content),
+                .child(
+                    div()
+                        .id("inspector-scroll")
+                        .size_full()
+                        .pr(px(18.))
+                        .overflow_y_scroll()
+                        .track_scroll(&self.inspector_scroll)
+                        .child(content),
+                )
+                .child(self.inspector_scrollbar(theme, cx)),
         )
+    }
+
+    fn inspector_scrollbar(
+        &self,
+        theme: super::theme::Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        const THUMB_WIDTH: f32 = 6.0;
+        const TRACK_WIDTH: f32 = 14.0;
+        const PADDING: f32 = 4.0;
+        const MIN_THUMB: f32 = 24.0;
+
+        let handle = &self.inspector_scroll;
+        let bounds = handle.bounds();
+        let viewport = f32::from(bounds.size.height);
+        let max_offset = f32::from(handle.max_offset().height);
+        if viewport <= 0.0 || max_offset <= 1.0 {
+            return div().into_any_element();
+        }
+        let scrolled = (-f32::from(handle.offset().y)).clamp(0.0, max_offset);
+        let thumb_height =
+            (viewport * viewport / (viewport + max_offset)).clamp(MIN_THUMB, viewport);
+        let travel = (viewport - thumb_height).max(1.0);
+        let thumb_top = (scrolled / max_offset) * travel;
+        let thumb_top_window = f32::from(bounds.origin.y) + thumb_top;
+        let thumb = div()
+            .id("inspector-scroll-thumb")
+            .absolute()
+            .top(px(thumb_top))
+            .right(px(PADDING))
+            .w(px(THUMB_WIDTH))
+            .h(px(thumb_height))
+            .rounded_full()
+            .bg(theme.border)
+            .hover(|style| style.bg(theme.text_faint));
+        div()
+            .id("inspector-scroll-track")
+            .absolute()
+            .top_0()
+            .right_0()
+            .h_full()
+            .w(px(TRACK_WIDTH))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    let pointer = f32::from(event.position.y);
+                    if pointer >= thumb_top_window
+                        && pointer <= thumb_top_window + thumb_height
+                    {
+                        return;
+                    }
+                    let bounds = this.inspector_scroll.bounds();
+                    let viewport = f32::from(bounds.size.height);
+                    let max_offset = f32::from(this.inspector_scroll.max_offset().height);
+                    if viewport <= 0.0 || max_offset <= 0.0 {
+                        return;
+                    }
+                    let thumb_height = (viewport * viewport / (viewport + max_offset))
+                        .clamp(MIN_THUMB, viewport);
+                    let travel = (viewport - thumb_height).max(1.0);
+                    let pointer = f32::from(event.position.y - bounds.origin.y);
+                    let thumb_top = (pointer - thumb_height / 2.0).clamp(0.0, travel);
+                    let scroll = (thumb_top / travel) * max_offset;
+                    this.inspector_scroll
+                        .set_offset(gpui::point(px(0.), px(-scroll)));
+                    cx.notify();
+                }),
+            )
+            .child(thumb)
+            .into_any_element()
     }
 
     fn render_empty_inspector(&self) -> impl IntoElement {
@@ -1312,13 +1392,60 @@ impl FlowlistApp {
                             })),
                     ),
             )
-            .child(
-                self.inspector_date_field(
-                    DateField::Reminder,
-                    if match_due { due } else { reminder },
-                    cx,
-                ),
-            )
+            .child(if match_due {
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child("Reminder"),
+                    )
+                    .child(
+                        div()
+                            .h(px(28.))
+                            .flex()
+                            .items_center()
+                            .rounded_lg()
+                            .border_1()
+                            .border_color(theme.border_soft)
+                            .bg(theme.field.opacity(0.45))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .px_2()
+                                    .text_sm()
+                                    .text_color(theme.text_faint)
+                                    .child(if due.is_empty() {
+                                        "Matches the due date".to_string()
+                                    } else {
+                                        format!("Matches due · {due}")
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .px_2()
+                                    .child(icons::icon(
+                                        Icon::Calendar,
+                                        12.0,
+                                        theme.text_faint,
+                                    )),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .whitespace_normal()
+                            .text_color(theme.text_faint)
+                            .child("Turn off Match due date & time to edit."),
+                    )
+                    .into_any_element()
+            } else {
+                self.inspector_date_field(DateField::Reminder, reminder, cx)
+                    .into_any_element()
+            })
     }
 
     fn inspector_notes(&self, notes: &str, cx: &mut Context<Self>) -> impl IntoElement {

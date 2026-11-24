@@ -40,6 +40,7 @@ pub struct Reminder {
     app: WeakEntity<FlowlistApp>,
     theme: Theme,
     backdrop: ReminderBackdrop,
+    snooze_minutes: u32,
     tasks: Vec<ReminderTask>,
     index: usize,
     focus_handle: FocusHandle,
@@ -50,6 +51,7 @@ impl Reminder {
         app: WeakEntity<FlowlistApp>,
         theme: Theme,
         backdrop: ReminderBackdrop,
+        snooze_minutes: u32,
         tasks: Vec<ReminderTask>,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -57,6 +59,7 @@ impl Reminder {
             app,
             theme,
             backdrop,
+            snooze_minutes,
             tasks,
             index: 0,
             focus_handle: cx.focus_handle(),
@@ -67,12 +70,14 @@ impl Reminder {
         &mut self,
         theme: Theme,
         backdrop: ReminderBackdrop,
+        snooze_minutes: u32,
         tasks: Vec<ReminderTask>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.theme = theme;
         self.backdrop = backdrop;
+        self.snooze_minutes = snooze_minutes;
         let was_empty = self.tasks.is_empty();
         for task in tasks {
             if !self.tasks.iter().any(|existing| existing.id == task.id) {
@@ -125,7 +130,8 @@ impl Reminder {
             return;
         };
         if let Some(app) = self.app.upgrade() {
-            let _ = app.update(cx, |app, _| app.snooze_reminder_task(&task.id, 10));
+            let minutes = self.snooze_minutes as i64;
+            let _ = app.update(cx, |app, _| app.snooze_reminder_task(&task.id, minutes));
         }
         self.advance(window, cx);
     }
@@ -163,11 +169,12 @@ impl Reminder {
     fn action(
         &self,
         id: &'static str,
-        label: &'static str,
+        label: impl Into<String>,
         icon: Icon,
         primary: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let label = label.into();
         let theme = self.theme;
         div()
             .id(id)
@@ -233,7 +240,6 @@ impl Render for Reminder {
                         .size_full()
                         .opacity(*opacity),
                 )
-                .child(div().absolute().size_full().bg(theme.bg.opacity(0.28)))
                 .into_any_element(),
         };
         div()
@@ -310,7 +316,7 @@ impl Render for Reminder {
                                     ))
                                     .child(self.action(
                                         "reminder-snooze",
-                                        "Snooze 10 min",
+                                        snooze_label(self.snooze_minutes),
                                         Icon::Clock,
                                         false,
                                         cx,
@@ -338,18 +344,34 @@ impl Render for Reminder {
     }
 }
 
+fn snooze_label(minutes: u32) -> String {
+    if minutes == 60 {
+        "Snooze 1 hour".to_string()
+    } else {
+        format!("Snooze {minutes} min")
+    }
+}
+
 /// Show the reminder, reusing the open reminder window when there is one.
 pub fn show(
     app: WeakEntity<FlowlistApp>,
     theme: Theme,
     backdrop: ReminderBackdrop,
+    snooze_minutes: u32,
     tasks: Vec<ReminderTask>,
     cx: &mut App,
 ) -> Result<()> {
     for any in cx.windows() {
         if let Some(handle) = any.downcast::<Reminder>() {
             let updated = handle.update(cx, |view, window, cx| {
-                view.reset(theme, backdrop.clone(), tasks.clone(), window, cx);
+                view.reset(
+                    theme,
+                    backdrop.clone(),
+                    snooze_minutes,
+                    tasks.clone(),
+                    window,
+                    cx,
+                );
             });
             if updated.is_ok() {
                 return Ok(());
@@ -378,7 +400,9 @@ pub fn show(
             ..Default::default()
         },
         move |window, cx| {
-            let view = cx.new(|cx| Reminder::new(app.clone(), theme, backdrop, tasks, cx));
+            let view = cx.new(|cx| {
+                Reminder::new(app.clone(), theme, backdrop, snooze_minutes, tasks, cx)
+            });
             let handle = view.read(cx).focus_handle.clone();
             window.focus(&handle);
             window.activate_window();

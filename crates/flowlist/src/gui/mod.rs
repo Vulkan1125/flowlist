@@ -533,6 +533,7 @@ pub struct FlowlistApp {
     reminder_wallpaper: Option<PathBuf>,
     reminder_use_wallpaper: bool,
     reminder_wallpaper_opacity: f32,
+    reminder_snooze_minutes: u32,
     /// Custom wallpaper behind the main window.
     wallpaper: Option<PathBuf>,
     use_wallpaper: bool,
@@ -604,6 +605,7 @@ pub struct FlowlistApp {
     group: Option<GroupBy>,
     scroll: ScrollHandle,
     sidebar_scroll: ScrollHandle,
+    inspector_scroll: ScrollHandle,
     last_sync: Instant,
     /// Set by `FLOWLIST_TEST_STATE`; the window writes a small JSON state file
     /// for the GUI smoke test. Off in normal use.
@@ -684,6 +686,10 @@ impl FlowlistApp {
             .reminder_wallpaper_opacity
             .unwrap_or(0.35)
             .clamp(0.05, 0.95);
+        let reminder_snooze_minutes = session
+            .fullscreen_snooze_minutes
+            .unwrap_or(10)
+            .clamp(1, 1440);
         let wallpaper = session
             .wallpaper
             .as_ref()
@@ -840,6 +846,7 @@ impl FlowlistApp {
             reminder_wallpaper,
             reminder_use_wallpaper,
             reminder_wallpaper_opacity,
+            reminder_snooze_minutes,
             wallpaper,
             use_wallpaper,
             wallpaper_opacity,
@@ -884,6 +891,7 @@ impl FlowlistApp {
             group,
             scroll: ScrollHandle::new(),
             sidebar_scroll: ScrollHandle::new(),
+            inspector_scroll: ScrollHandle::new(),
             last_sync: Instant::now(),
             test_state_path: std::env::var_os("FLOWLIST_TEST_STATE").map(PathBuf::from),
             test_state_last: None,
@@ -1000,6 +1008,7 @@ impl FlowlistApp {
     pub(super) fn send_fullscreen_test(
         &mut self,
         backdrop: reminder::ReminderBackdrop,
+        snooze_minutes: u32,
         cx: &mut Context<Self>,
     ) {
         self.last_reminder_backdrop = Some(match &backdrop {
@@ -1017,7 +1026,15 @@ impl FlowlistApp {
             time: "09:00".to_string(),
             due_at: now(),
         };
-        if reminder::show(cx.weak_entity(), self.theme, backdrop, vec![task], cx).is_ok()
+        if reminder::show(
+            cx.weak_entity(),
+            self.theme,
+            backdrop,
+            snooze_minutes,
+            vec![task],
+            cx,
+        )
+        .is_ok()
         {
             self.reminder_open = true;
         }
@@ -1100,7 +1117,14 @@ impl FlowlistApp {
             self.reminder_snoozed.remove(&task.id);
         }
         let backdrop = self.reminder_backdrop();
-        if let Err(error) = reminder::show(cx.weak_entity(), self.theme, backdrop, due, cx) {
+        if let Err(error) = reminder::show(
+            cx.weak_entity(),
+            self.theme,
+            backdrop,
+            self.reminder_snooze_minutes,
+            due,
+            cx,
+        ) {
             self.toast = Some(format!("Could not open the reminder: {error}"));
             self.reminder_open = false;
         } else {
@@ -1169,6 +1193,7 @@ impl FlowlistApp {
                 .map(|path| path.display().to_string()),
             reminder_use_wallpaper: Some(self.reminder_use_wallpaper),
             reminder_wallpaper_opacity: Some(self.reminder_wallpaper_opacity),
+            fullscreen_snooze_minutes: Some(self.reminder_snooze_minutes),
             wallpaper: self
                 .wallpaper
                 .as_ref()
@@ -4079,6 +4104,7 @@ impl FlowlistApp {
                 reminder_wallpaper,
                 reminder_use_wallpaper,
                 reminder_wallpaper_opacity,
+                fullscreen_snooze_minutes,
                 wallpaper,
                 use_wallpaper,
                 wallpaper_opacity,
@@ -4137,6 +4163,7 @@ impl FlowlistApp {
                 self.reminder_wallpaper = reminder_wallpaper.clone();
                 self.reminder_use_wallpaper = *reminder_use_wallpaper;
                 self.reminder_wallpaper_opacity = *reminder_wallpaper_opacity;
+                self.reminder_snooze_minutes = (*fullscreen_snooze_minutes).clamp(1, 1440);
                 self.wallpaper = wallpaper.clone();
                 self.use_wallpaper = *use_wallpaper;
                 self.wallpaper_opacity = *wallpaper_opacity;
@@ -6174,6 +6201,11 @@ impl FlowlistApp {
         });
         state["fullscreen_reminders"] = serde_json::json!(self.fullscreen_reminders);
         state["reminder_open"] = serde_json::json!(self.reminder_open);
+        state["inspector_scroll"] = serde_json::json!({
+            "max": f32::from(self.inspector_scroll.max_offset().height),
+            "offset": f32::from(self.inspector_scroll.offset().y),
+            "viewport": f32::from(self.inspector_scroll.bounds().size.height),
+        });
         state["last_reminder_backdrop"] = serde_json::json!(self.last_reminder_backdrop);
         state["reminder_seen"] = serde_json::json!(self.reminder_seen.len());
         state["preview"] = serde_json::json!(self.preview.as_ref().map(|preview| {
@@ -7043,8 +7075,7 @@ impl Render for FlowlistApp {
                             .object_fit(ObjectFit::Cover)
                             .size_full()
                             .opacity(self.wallpaper_opacity),
-                    )
-                    .child(div().absolute().size_full().bg(theme.bg.opacity(0.18))),
+                    ),
             );
         }
         root = root.child(self.render_header(window, cx));

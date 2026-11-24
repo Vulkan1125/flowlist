@@ -812,6 +812,9 @@ private fun NotificationSettings(
     var fullScreen by remember(preferences.fullScreenReminders) {
         mutableStateOf(preferences.fullScreenReminders)
     }
+    var snoozeMinutes by remember(preferences.snoozeMinutes) {
+        mutableStateOf(preferences.snoozeMinutes)
+    }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             DueNotifications.setEnabled(context, true)
@@ -899,6 +902,19 @@ private fun NotificationSettings(
             }
             TextButton(onClick = { TaskReminders.preview(context) }) {
                 Text("Preview a full-screen reminder", color = flow.accent)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            SmallLabel("Snooze length")
+            ChoiceRow {
+                listOf(10, 15, 30, 60).forEach { minutes ->
+                    Pill(
+                        label = if (minutes == 60) "1 hour" else "$minutes min",
+                        selected = snoozeMinutes == minutes,
+                    ) {
+                        snoozeMinutes = minutes
+                        onPreferencesChange(preferences.copy(snoozeMinutes = minutes))
+                    }
+                }
             }
         }
     }

@@ -88,6 +88,7 @@ class ReminderActivity : ComponentActivity() {
                     title = title,
                     project = project,
                     dueAt = dueAt,
+                    snoozeMinutes = preferences.snoozeMinutes,
                     onComplete = {
                         lifecycleScope.launch {
                             runCatching {
@@ -103,7 +104,7 @@ class ReminderActivity : ComponentActivity() {
                             taskId,
                             title,
                             project,
-                            10,
+                            preferences.snoozeMinutes,
                         )
                         finish()
                     },
@@ -129,6 +130,7 @@ private fun ReminderScreen(
     title: String,
     project: String?,
     dueAt: Long,
+    snoozeMinutes: Int,
     onComplete: () -> Unit,
     onSnooze: () -> Unit,
     onOpen: () -> Unit,
@@ -197,7 +199,10 @@ private fun ReminderScreen(
                     .fillMaxWidth()
                     .height(52.dp),
             ) {
-                Text("Snooze 10 minutes", color = colors.ink)
+                Text(
+                if (snoozeMinutes == 60) "Snooze 1 hour" else "Snooze $snoozeMinutes minutes",
+                color = colors.ink,
+            )
             }
             Spacer(modifier = Modifier.height(8.dp))
             TextButton(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {

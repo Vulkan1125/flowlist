@@ -205,6 +205,9 @@ pub struct Session {
     /// How strongly the reminder wallpaper shows.
     #[serde(default)]
     pub reminder_wallpaper_opacity: Option<f32>,
+    /// Minutes the full-screen reminder snoozes for.
+    #[serde(default)]
+    pub fullscreen_snooze_minutes: Option<u32>,
     /// Global priority filter, `high`, `medium`, `low`, or absent for all.
     #[serde(default)]
     pub priority_filter: Option<String>,

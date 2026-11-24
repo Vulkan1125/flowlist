@@ -1,10 +1,10 @@
 //! Theme-synced abstract backdrops.
 //!
-//! The full-screen reminder can sit on a soft, layered abstract instead of a
-//! flat colour. Every shape takes its colour from the active palette, so the
-//! same style looks right in Plain, Nord, Dracula and the rest.
+//! The full-screen reminder can sit on a soft, layered wash instead of a flat
+//! colour. Every layer takes its colour from the active palette, so the same
+//! style looks right in Plain, Nord, Dracula and the rest.
 
-use gpui::{AnyElement, IntoElement, div, prelude::*, px, linear_color_stop, linear_gradient};
+use gpui::{AnyElement, IntoElement, div, linear_color_stop, linear_gradient, prelude::*, px};
 
 use super::theme::{Theme, ThemeKind};
 
@@ -70,30 +70,20 @@ impl AbstractStyle {
     }
 }
 
-fn blob(color: gpui::Hsla, x: f32, y: f32, size: f32) -> AnyElement {
+fn wash(angle: f32, from: gpui::Hsla, to: gpui::Hsla) -> AnyElement {
     div()
         .absolute()
-        .left(px(x))
-        .top(px(y))
-        .size(px(size))
-        .rounded_full()
-        .bg(color)
-        .into_any_element()
-}
-
-fn slab(color: gpui::Hsla, x: f32, y: f32, width: f32, height: f32) -> AnyElement {
-    div()
-        .absolute()
-        .left(px(x))
-        .top(px(y))
-        .w(px(width))
-        .h(px(height))
-        .rounded_full()
-        .bg(color)
+        .size_full()
+        .bg(linear_gradient(
+            angle,
+            linear_color_stop(from, 0.0),
+            linear_color_stop(to, 1.0),
+        ))
         .into_any_element()
 }
 
 pub fn render(style: AbstractStyle, theme: Theme) -> AnyElement {
+    let clear = theme.bg.opacity(0.0);
     let base = div()
         .absolute()
         .size_full()
@@ -102,72 +92,53 @@ pub fn render(style: AbstractStyle, theme: Theme) -> AnyElement {
     match style {
         AbstractStyle::None => base.into_any_element(),
         AbstractStyle::Aurora => base
-            .bg(linear_gradient(
-                130.0,
-                linear_color_stop(theme.bg, 0.0),
-                linear_color_stop(theme.accent.opacity(0.10), 1.0),
-            ))
-            .child(blob(theme.accent.opacity(0.14), -240.0, -260.0, 860.0))
-            .child(blob(theme.success.opacity(0.11), 820.0, 180.0, 700.0))
-            .child(blob(theme.warning.opacity(0.08), 280.0, 760.0, 540.0))
+            .child(wash(135.0, theme.accent.opacity(0.16), clear))
+            .child(wash(25.0, theme.success.opacity(0.10), clear))
+            .child(wash(310.0, theme.warning.opacity(0.06), clear))
             .into_any_element(),
         AbstractStyle::Dunes => base
             .bg(linear_gradient(
-                35.0,
+                20.0,
                 linear_color_stop(theme.bg, 0.0),
                 linear_color_stop(theme.field, 1.0),
             ))
-            .child(slab(theme.accent.opacity(0.10), -80.0, 220.0, 1180.0, 220.0))
-            .child(slab(theme.warning.opacity(0.09), 140.0, 470.0, 980.0, 180.0))
-            .child(slab(theme.success.opacity(0.07), -60.0, 720.0, 1040.0, 190.0))
+            .child(wash(10.0, theme.accent.opacity(0.10), clear))
+            .child(wash(170.0, theme.warning.opacity(0.08), clear))
             .into_any_element(),
         AbstractStyle::Halo => base
-            .bg(linear_gradient(
-                120.0,
-                linear_color_stop(theme.bg, 0.0),
-                linear_color_stop(theme.accent.opacity(0.07), 1.0),
-            ))
-            .child(
-                div()
-                    .absolute()
-                    .left(px(280.))
-                    .top(px(90.))
-                    .size(px(760.))
-                    .rounded_full()
-                    .border_8()
-                    .border_color(theme.accent.opacity(0.12)),
-            )
-            .child(blob(theme.accent.opacity(0.10), 420.0, 230.0, 480.0))
-            .child(blob(theme.success.opacity(0.08), 760.0, 540.0, 380.0))
+            .child(wash(90.0, theme.accent.opacity(0.14), clear))
+            .child(wash(270.0, theme.success.opacity(0.09), clear))
             .into_any_element(),
         AbstractStyle::Mesh => base
-            .bg(theme.bg)
-            .child(slab(theme.accent.opacity(0.11), -140.0, -100.0, 680.0, 680.0))
-            .child(slab(theme.success.opacity(0.10), 620.0, 120.0, 560.0, 560.0))
-            .child(slab(theme.warning.opacity(0.08), 140.0, 620.0, 560.0, 480.0))
-            .child(blob(theme.danger.opacity(0.05), 760.0, 680.0, 420.0))
+            .child(wash(45.0, theme.accent.opacity(0.11), clear))
+            .child(wash(135.0, theme.success.opacity(0.09), clear))
+            .child(wash(90.0, theme.warning.opacity(0.07), clear))
             .into_any_element(),
         AbstractStyle::Tide => base
             .bg(linear_gradient(
                 65.0,
                 linear_color_stop(theme.bg, 0.0),
-                linear_color_stop(theme.accent.opacity(0.12), 1.0),
+                linear_color_stop(theme.accent.opacity(0.08), 1.0),
             ))
-            .child(slab(theme.accent.opacity(0.12), 120.0, 120.0, 1100.0, 160.0))
-            .child(slab(theme.success.opacity(0.09), -120.0, 380.0, 1120.0, 130.0))
-            .child(slab(theme.warning.opacity(0.07), 220.0, 640.0, 980.0, 150.0))
+            .child(wash(115.0, theme.success.opacity(0.09), clear))
             .into_any_element(),
         AbstractStyle::Ember => base
-            .bg(linear_gradient(
-                145.0,
-                linear_color_stop(theme.bg, 0.0),
-                linear_color_stop(theme.danger.opacity(0.10), 1.0),
-            ))
-            .child(blob(theme.danger.opacity(0.12), -180.0, 120.0, 760.0))
-            .child(blob(theme.warning.opacity(0.11), 700.0, -120.0, 620.0))
-            .child(blob(theme.accent.opacity(0.09), 360.0, 680.0, 560.0))
+            .child(wash(145.0, theme.danger.opacity(0.14), clear))
+            .child(wash(35.0, theme.warning.opacity(0.10), clear))
             .into_any_element(),
     }
+}
+
+/// A small version of the backdrop for the style picker.
+pub fn preview(style: AbstractStyle, theme: Theme) -> AnyElement {
+    div()
+        .relative()
+        .w(px(72.))
+        .h(px(48.))
+        .rounded_md()
+        .overflow_hidden()
+        .child(render(style, theme))
+        .into_any_element()
 }
 
 fn image_extension(path: &std::path::Path) -> Option<&'static str> {
@@ -180,6 +151,7 @@ fn image_extension(path: &std::path::Path) -> Option<&'static str> {
         "bmp" => Some("bmp"),
         "tif" | "tiff" => Some("tiff"),
         "heic" | "heif" => Some("heic"),
+        "jxl" => Some("jxl"),
         _ => None,
     }
 }
@@ -190,12 +162,13 @@ pub fn install_wallpaper(
     root: &std::path::Path,
     name: &str,
 ) -> anyhow::Result<std::path::PathBuf> {
-    let extension = image_extension(source)
-        .ok_or_else(|| anyhow::anyhow!("Choose a PNG, JPEG, WebP, GIF, BMP or TIFF image"))?;
+    let extension = image_extension(source).ok_or_else(|| {
+        anyhow::anyhow!("Choose a PNG, JPEG, WebP, JXL, GIF, BMP or TIFF image")
+    })?;
     let directory = root.join("wallpapers");
     std::fs::create_dir_all(&directory)?;
-    if extension == "heic" {
-        // The image crate cannot decode HEIC. macOS can convert it natively.
+    if extension == "heic" || extension == "jxl" {
+        // The renderer cannot decode HEIC or JPEG XL. macOS can convert both.
         let destination = directory.join(format!("{name}.png"));
         let status = std::process::Command::new("/usr/bin/sips")
             .args(["-s", "format", "png"])
@@ -204,7 +177,7 @@ pub fn install_wallpaper(
             .arg(&destination)
             .status()?;
         if !status.success() {
-            anyhow::bail!("Could not convert that HEIC image. Try a JPEG or PNG.");
+            anyhow::bail!("Could not convert that HEIC/JXL image. Try a JPEG or PNG.");
         }
         return Ok(destination);
     }
@@ -213,70 +186,15 @@ pub fn install_wallpaper(
     Ok(destination)
 }
 
-/// A small version of the backdrop for the style picker.
-pub fn preview(style: AbstractStyle, theme: Theme) -> AnyElement {
-    let base = div()
-        .relative()
-        .w(px(72.))
-        .h(px(48.))
-        .rounded_md()
-        .overflow_hidden()
-        .bg(theme.bg);
-    match style {
-        AbstractStyle::None => base.into_any_element(),
-        AbstractStyle::Aurora => base
-            .bg(linear_gradient(
-                130.0,
-                linear_color_stop(theme.bg, 0.0),
-                linear_color_stop(theme.accent.opacity(0.16), 1.0),
-            ))
-            .child(blob(theme.accent.opacity(0.45), -8.0, -10.0, 42.0))
-            .child(blob(theme.success.opacity(0.38), 34.0, 18.0, 34.0))
-            .into_any_element(),
-        AbstractStyle::Dunes => base
-            .bg(linear_gradient(
-                35.0,
-                linear_color_stop(theme.bg, 0.0),
-                linear_color_stop(theme.field, 1.0),
-            ))
-            .child(slab(theme.accent.opacity(0.34), -6.0, 8.0, 70.0, 10.0))
-            .child(slab(theme.warning.opacity(0.30), 8.0, 24.0, 62.0, 9.0))
-            .into_any_element(),
-        AbstractStyle::Halo => base
-            .child(
-                div()
-                    .absolute()
-                    .left(px(18.))
-                    .top(px(6.))
-                    .size(px(38.))
-                    .rounded_full()
-                    .border_4()
-                    .border_color(theme.accent.opacity(0.45)),
-            )
-            .child(blob(theme.success.opacity(0.28), 30.0, 24.0, 24.0))
-            .into_any_element(),
-        AbstractStyle::Mesh => base
-            .child(slab(theme.accent.opacity(0.34), -4.0, -6.0, 38.0, 34.0))
-            .child(slab(theme.success.opacity(0.30), 32.0, 8.0, 30.0, 28.0))
-            .child(slab(theme.warning.opacity(0.26), 14.0, 28.0, 34.0, 24.0))
-            .into_any_element(),
-        AbstractStyle::Tide => base
-            .bg(linear_gradient(
-                65.0,
-                linear_color_stop(theme.bg, 0.0),
-                linear_color_stop(theme.accent.opacity(0.16), 1.0),
-            ))
-            .child(slab(theme.accent.opacity(0.34), 4.0, 8.0, 76.0, 9.0))
-            .child(slab(theme.success.opacity(0.28), -6.0, 24.0, 64.0, 8.0))
-            .into_any_element(),
-        AbstractStyle::Ember => base
-            .bg(linear_gradient(
-                145.0,
-                linear_color_stop(theme.bg, 0.0),
-                linear_color_stop(theme.danger.opacity(0.16), 1.0),
-            ))
-            .child(blob(theme.danger.opacity(0.42), -6.0, 2.0, 38.0))
-            .child(blob(theme.warning.opacity(0.36), 34.0, 16.0, 32.0))
-            .into_any_element(),
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn image_extensions_cover_the_picker() {
+        for name in ["a.png", "a.JPG", "a.webp", "a.heic", "a.jxl", "a.tiff"] {
+            assert!(image_extension(std::path::Path::new(name)).is_some());
+        }
+        assert!(image_extension(std::path::Path::new("a.txt")).is_none());
     }
 }

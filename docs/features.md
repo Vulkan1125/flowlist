@@ -269,8 +269,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       its own opacity.
 - [x] Full-screen reminders can follow the due date and time or carry their
       own reminder date and time. The inspector (Mac) and task editor
-      (Android) expose both choices, and “Send full-screen test” opens the
-      reminder screen directly.
+      (Android) expose both choices, the picker is disabled while matching
+      due, and “Send full-screen test” opens the reminder screen directly.
+      Snooze length is selectable as 10, 15, 30 or 60 minutes.
 - [x] Releases ship a drag-to-Applications DMG beside the updater's zip.
 - [x] The plus opens the capture panel over the window (the global shortcut
       stays screen-centered), the toast follows the visible middle pane, and
