@@ -264,7 +264,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Full-screen reminders are opt-in per task, project or folder. Marking a
       task (or a parent, project or folder above it) opens a borderless
       screen-sized reminder when it comes due while Flowlist is running, with
-      Complete, Snooze, Open task and Dismiss. Quick capture accepts
+      Complete, Snooze, Pause media, Open task and Dismiss. Quick capture accepts
       `fsr:1h30m` or `fsr:2d` (and bare `fsr` to follow due), and the
       project/folder sheets carry the mark at creation. Multiple reminders
       due together offer **View all**, which opens the Full-screen view. A

@@ -7,6 +7,12 @@
 - **Background terminology.** Wallpaper controls and picker text are now
   labelled Background throughout the app. A single background picker no longer
   says “light” when the same image is used in both appearances.
+- **Custom background controls.** “Use background” is now **Use custom
+  background** in Appearance and on the reminder. When it is off, the picker,
+  separate light/dark toggle, thumbnail, opacity and notes are hidden.
+- **Pause media from the reminder.** The full-screen reminder has a Pause
+  media / Resume media button (and the **M** key) that controls system
+  playback without leaving the screen.
 
 ## 0.9.49 — 2026-11-24
 

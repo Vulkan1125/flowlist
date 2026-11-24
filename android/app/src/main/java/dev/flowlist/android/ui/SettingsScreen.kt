@@ -362,7 +362,7 @@ private fun AppearanceSettings(
     SettingsCard("Background") {
         val wallpaper = preferences.customWallpaper
         ToggleRow(
-            title = "Use background",
+            title = "Use custom background",
             detail = when {
                 wallpaper == null -> "Choose a photo to show behind the app"
                 preferences.useWallpaper -> "Your photo is behind the app"
@@ -376,6 +376,7 @@ private fun AppearanceSettings(
                 onPreferencesChange(preferences.copy(useWallpaper = it))
             }
         }
+        if (preferences.useWallpaper || wallpaper == null) {
         Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { wallpaperPicker.launch("image/*") }) {
@@ -427,6 +428,7 @@ private fun AppearanceSettings(
                 style = MaterialTheme.typography.labelSmall,
                 color = colors.faint,
             )
+        }
         }
         Text(
             text = "The full-screen reminder can use this photo or the ambient background chosen in Notifications.",
@@ -938,7 +940,7 @@ private fun NotificationSettings(
         if (preferences.customWallpaper != null) {
             Spacer(modifier = Modifier.height(10.dp))
             ToggleRow(
-                title = "Use my background",
+                title = "Use custom background",
                 detail = "Show the photo chosen in Appearance",
                 checked = preferences.reminderUseWallpaper,
             ) {

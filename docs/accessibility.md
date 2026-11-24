@@ -306,7 +306,7 @@ A task, project or folder can be marked for full-screen reminders at creation,
 or from the task inspector. Only marked items (and tasks inside a marked
 project or folder) take over the screen. The reminder window is focusable:
 **S** cycles the snooze length (15, 30 or 60 minutes), **Enter** snoozes with
-the shown length, **⌘Enter** completes the task, **O** opens it in the main
-window, **V** opens the Full-screen view when several share a time, and **Esc**
-dismisses the reminder. Every action is also a labelled
+the shown length, **⌘Enter** completes the task, **M** pauses or resumes media,
+**O** opens it in the main window, **V** opens the Full-screen view when several
+share a time, and **Esc** dismisses the reminder. Every action is also a labelled
 button. On Android the same actions are buttons on the alarm screen.

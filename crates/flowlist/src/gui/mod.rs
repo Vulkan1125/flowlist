@@ -10,6 +10,7 @@ mod content;
 mod drag;
 mod favicon;
 mod hotkey;
+mod media;
 mod icons;
 mod inspector;
 mod modals;

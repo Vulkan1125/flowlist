@@ -3363,7 +3363,7 @@ impl FlowlistApp {
                             .flex_1()
                             .min_w_0()
                             .gap_0p5()
-                            .child(div().text_sm().child("Use background"))
+                            .child(div().text_sm().child("Use custom background"))
                             .child(
                                 div()
                                     .text_xs()
@@ -3388,59 +3388,61 @@ impl FlowlistApp {
                             })),
                     ),
             )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_w_0()
-                            .gap_0p5()
-                            .child(div().text_sm().child(
-                                "Use separate backgrounds for light and dark modes",
-                            ))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .whitespace_normal()
-                                    .text_color(theme.text_faint)
-                                    .child(
-                                        "Off keeps one background for both appearances. On shows a picker for each.",
-                                    ),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .on_children_prepainted(
-                                self.theme_probe("wallpaper-separate-toggle".to_string()),
-                            )
-                            .id("wallpaper-separate-toggle")
-                            .child(widgets::switch(theme, app_wallpaper_separate))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(Modal::Settings {
-                                    wallpaper_separate,
-                                    wallpaper_light,
-                                    wallpaper_dark,
-                                    ..
-                                }) = &mut this.modal
-                                {
-                                    *wallpaper_separate = !*wallpaper_separate;
-                                    if *wallpaper_separate && wallpaper_dark.is_none() {
-                                        *wallpaper_dark = wallpaper_light.clone();
+            .when(use_app_wallpaper, |this| {
+                this.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_0p5()
+                                .child(div().text_sm().child(
+                                    "Use separate backgrounds for light and dark modes",
+                                ))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .whitespace_normal()
+                                        .text_color(theme.text_faint)
+                                        .child(
+                                            "Off keeps one background for both appearances. On shows a picker for each.",
+                                        ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .on_children_prepainted(
+                                    self.theme_probe("wallpaper-separate-toggle".to_string()),
+                                )
+                                .id("wallpaper-separate-toggle")
+                                .child(widgets::switch(theme, app_wallpaper_separate))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Settings {
+                                        wallpaper_separate,
+                                        wallpaper_light,
+                                        wallpaper_dark,
+                                        ..
+                                    }) = &mut this.modal
+                                    {
+                                        *wallpaper_separate = !*wallpaper_separate;
+                                        if *wallpaper_separate && wallpaper_dark.is_none() {
+                                            *wallpaper_dark = wallpaper_light.clone();
+                                        }
+                                        if !*wallpaper_separate && wallpaper_light.is_none() {
+                                            *wallpaper_light = wallpaper_dark.clone();
+                                        }
                                     }
-                                    if !*wallpaper_separate && wallpaper_light.is_none() {
-                                        *wallpaper_light = wallpaper_dark.clone();
-                                    }
-                                }
-                                cx.notify();
-                            })),
-                    ),
-            );
+                                    cx.notify();
+                                })),
+                        ),
+                )
+            });
         let wallpaper_modes: &[Appearance] = if app_wallpaper_separate {
             &[Appearance::Light, Appearance::Dark]
         } else {
@@ -3577,9 +3579,11 @@ impl FlowlistApp {
                         .child(div().text_xs().text_color(theme.text_faint).child(name)),
                 );
             }
-            background_body = background_body.child(section);
+            if use_app_wallpaper {
+                background_body = background_body.child(section);
+            }
         }
-        if has_app_wallpaper {
+        if use_app_wallpaper && has_app_wallpaper {
             let mut opacity_row = div().flex().items_center().gap_1();
             for percent in [20, 35, 50, 70, 90] {
                 let value = percent as f32 / 100.0;
@@ -3610,7 +3614,9 @@ impl FlowlistApp {
                 .child(div().text_xs().text_color(theme.text_faint).child("Background opacity"))
                 .child(opacity_row);
         }
-        if let Some(note) = &app_wallpaper_note {
+        if use_app_wallpaper
+            && let Some(note) = &app_wallpaper_note
+        {
             let success = {
                 let lower = note.to_lowercase();
                 lower.contains("saved") || lower.contains("selected")
@@ -4681,7 +4687,7 @@ impl FlowlistApp {
                                 .flex_1()
                                 .min_w_0()
                                 .gap_0p5()
-                                .child(div().text_sm().child("Use my background"))
+                                .child(div().text_sm().child("Use custom background"))
                                 .child(
                                     div()
                                         .text_xs()
