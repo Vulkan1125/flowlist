@@ -1,21 +1,24 @@
-//! System-wide media play/pause for the full-screen reminder.
+//! System media play/pause for the full-screen reminder.
+//!
+//! Pausing uses MediaRemote's transport command, not a synthetic media key.
+//! macOS 26 gates media control behind **Device control and data access**; the
+//! Reminders setting explains that grant. The transport command avoids
+//! synthesising hardware-key events while the grant is in place.
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use std::ffi::{CStr, c_char, c_void};
+    use std::ffi::{CStr, CString, c_char, c_void};
     use std::ptr;
-    use std::thread;
-    use std::time::Duration;
+    use std::sync::OnceLock;
 
     use objc::runtime::Object;
     use objc::{class, msg_send, sel, sel_impl};
 
-    const NSEVENT_TYPE_SYSTEM_DEFINED: usize = 14;
-    const NSEVENT_SUBTYPE_MEDIA: i16 = 8;
-    const NX_KEYTYPE_PLAY: i64 = 16;
-    const KEY_DOWN: i64 = 0xA;
-    const KEY_UP: i64 = 0xB;
-    const CG_HID_EVENT_TAP: u32 = 0;
+    type SendCommand = unsafe extern "C" fn(u32, *mut c_void) -> u8;
+
+    const MR_COMMAND_PLAY: u32 = 0;
+    const MR_COMMAND_PAUSE: u32 = 1;
+    const RTLD_LAZY: i32 = 1;
     const MEDIA_BUNDLES: &[&str] = &[
         "com.apple.Music",
         "com.apple.iTunes",
@@ -34,15 +37,50 @@ mod platform {
         "com.plexapp.plex",
     ];
 
-    #[repr(C)]
-    struct NSPoint {
-        x: f64,
-        y: f64,
+    unsafe extern "C" {
+        fn dlopen(filename: *const c_char, flags: i32) -> *mut c_void;
+        fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
     }
 
-    #[link(name = "CoreGraphics", kind = "framework")]
-    unsafe extern "C" {
-        fn CGEventPost(tap: u32, event: *const c_void);
+    static SEND_COMMAND: OnceLock<Option<SendCommand>> = OnceLock::new();
+
+    fn send_command(command: u32) -> bool {
+        let sender = SEND_COMMAND.get_or_init(|| {
+            // SAFETY: both paths are NUL-terminated C strings that live for
+            // this call. The handle is deliberately leaked for the process
+            // lifetime; dlsym returns a function with the documented
+            // MRMediaRemoteSendCommand signature.
+            unsafe {
+                let path = CString::new(
+                    "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote",
+                )
+                .ok()?;
+                let handle = dlopen(path.as_ptr(), RTLD_LAZY);
+                if handle.is_null() {
+                    return None;
+                }
+                let symbol = CString::new("MRMediaRemoteSendCommand").ok()?;
+                let pointer = dlsym(handle, symbol.as_ptr());
+                if pointer.is_null() {
+                    return None;
+                }
+                Some(std::mem::transmute::<*mut c_void, SendCommand>(pointer))
+            }
+        });
+        let Some(sender) = sender else {
+            return false;
+        };
+        // SAFETY: the function pointer came from MediaRemote, and the command
+        // takes an optional dictionary that we do not need.
+        unsafe { sender(command, ptr::null_mut()) != 0 }
+    }
+
+    pub(super) fn pause() -> bool {
+        send_command(MR_COMMAND_PAUSE)
+    }
+
+    pub(super) fn resume() -> bool {
+        send_command(MR_COMMAND_PLAY)
     }
 
     #[repr(C)]
@@ -71,8 +109,7 @@ mod platform {
     const AUDIO_PROCESS_IS_RUNNING_OUTPUT: u32 = 0x7069_726f; // 'piro'
 
     /// Whether any process is currently producing audio output. CoreAudio's
-    /// public process list avoids sending a media key when nothing is playing,
-    /// which would otherwise let macOS fall back to Music.
+    /// public process list keeps a silent reminder from touching playback.
     pub(super) fn is_audio_playing() -> bool {
         let list_address = AudioObjectPropertyAddress {
             selector: AUDIO_PROCESS_LIST,
@@ -122,47 +159,14 @@ mod platform {
         false
     }
 
-    fn post(state: i64) -> bool {
-        let flags = if state == KEY_DOWN { 0xA00u64 } else { 0xB00u64 };
-        let data1 = (NX_KEYTYPE_PLAY << 16) | (state << 8);
-        // SAFETY: the event is an autoreleased NSEvent. Every selector and
-        // struct layout below comes from AppKit's public NSEvent factory, and
-        // CGEventPost only consumes the backing event during this call.
-        unsafe {
-            let event: *mut Object = msg_send![
-                class!(NSEvent),
-                otherEventWithType: NSEVENT_TYPE_SYSTEM_DEFINED
-                location: NSPoint { x: 0.0, y: 0.0 }
-                modifierFlags: flags
-                timestamp: 0.0f64
-                windowNumber: 0isize
-                context: std::ptr::null::<Object>()
-                subtype: NSEVENT_SUBTYPE_MEDIA
-                data1: data1
-                data2: -1isize
-            ];
-            if event.is_null() {
-                return false;
-            }
-            let cg_event: *mut c_void = msg_send![event, CGEvent];
-            if cg_event.is_null() {
-                return false;
-            }
-            CGEventPost(CG_HID_EVENT_TAP, cg_event);
-            true
-        }
-    }
-
-    /// Sending a media key with no player open can launch Music, so the close
-    /// path only resumes when a media-capable app is still running. Browsers
-    /// are included because they own the now-playing session for web audio.
+    /// Whether a media-capable app is still running. Used only before resuming,
+    /// so quitting the player while the reminder is open cannot launch Music.
     pub(super) fn is_media_app_running() -> bool {
         // SAFETY: NSWorkspace and every returned object are autoreleased AppKit
         // values. The UTF8String bytes stay valid while the bundle object is
         // alive, which is the duration of this call.
         unsafe {
-            let workspace: *mut Object =
-                msg_send![class!(NSWorkspace), sharedWorkspace];
+            let workspace: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
             if workspace.is_null() {
                 return false;
             }
@@ -193,18 +197,18 @@ mod platform {
         }
         false
     }
-
-    pub(super) fn toggle_playback() -> bool {
-        if !post(KEY_DOWN) {
-            return false;
-        }
-        thread::sleep(Duration::from_millis(35));
-        post(KEY_UP)
-    }
 }
 
 #[cfg(not(target_os = "macos"))]
 mod platform {
+    pub(super) fn pause() -> bool {
+        false
+    }
+
+    pub(super) fn resume() -> bool {
+        false
+    }
+
     pub(super) fn is_audio_playing() -> bool {
         false
     }
@@ -212,10 +216,14 @@ mod platform {
     pub(super) fn is_media_app_running() -> bool {
         false
     }
+}
 
-    pub(super) fn toggle_playback() -> bool {
-        false
-    }
+pub(super) fn pause() -> bool {
+    platform::pause()
+}
+
+pub(super) fn resume() -> bool {
+    platform::resume()
 }
 
 pub(super) fn is_audio_playing() -> bool {
@@ -226,16 +234,10 @@ pub(super) fn is_media_app_running() -> bool {
     platform::is_media_app_running()
 }
 
-pub(super) fn toggle_playback() -> bool {
-    platform::toggle_playback()
-}
-
 #[cfg(test)]
 mod tests {
     #[test]
-    fn audio_query_is_safe_when_nothing_is_playing() {
-        // Exercises the CoreAudio FFI. The answer depends on the machine's
-        // current audio output, so only the call itself is asserted here.
+    fn audio_and_player_queries_are_safe() {
         let _ = super::is_audio_playing();
         let _ = super::is_media_app_running();
     }

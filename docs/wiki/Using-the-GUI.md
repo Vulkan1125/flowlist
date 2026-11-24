@@ -240,7 +240,8 @@ task due in the next 30 days. Timestamped tasks remind at their time; date-only
 tasks remind at 09:00 local. Toggling it on asks macOS for permission, and
 **Send test** checks that banners are working. **Pause media on full-screen
 reminders** pauses system playback when a reminder opens and resumes it when the
-reminder closes.
+reminder closes. macOS asks for **Device control and data access** for this;
+allow Flowlist under Privacy & Security.
 
 **Full-screen reminders** are opt-in per task, project or folder. Mark a task
 in the inspector, type `fsr:1h30m` in quick capture, or tick **Full-screen

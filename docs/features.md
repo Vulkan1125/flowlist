@@ -265,7 +265,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       task (or a parent, project or folder above it) opens a borderless
       screen-sized reminder when it comes due while Flowlist is running, with
       Complete, Snooze, Open task and Dismiss. An optional setting pauses system
-      media while the reminder is on screen and resumes it on close. Quick capture accepts
+      media while the reminder is on screen and resumes it on close; macOS
+      requires Device control and data access for it. Quick capture accepts
       `fsr:1h30m` or `fsr:2d` (and bare `fsr` to follow due), and the
       project/folder sheets carry the mark at creation. Multiple reminders
       due together offer **View all**, which opens the Full-screen view. A

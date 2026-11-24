@@ -4487,7 +4487,7 @@ impl FlowlistApp {
                                         .whitespace_normal()
                                         .text_color(theme.text_faint)
                                         .child(
-                                            "Uses the system play/pause key when the reminder opens and closes.",
+                                            "Pauses the current player when the reminder opens and resumes it on close.",
                                         ),
                                 ),
                         )
@@ -4513,6 +4513,17 @@ impl FlowlistApp {
                                 })),
                         ),
                 )
+                .when(pause_media_on_reminder, |this| {
+                    this.child(
+                        div()
+                            .text_xs()
+                            .whitespace_normal()
+                            .text_color(theme.warning)
+                            .child(
+                                "macOS requires Device control and data access for media control. Allow Flowlist in System Settings → Privacy & Security.",
+                            ),
+                    )
+                })
                 .child(
                     div()
                         .flex()

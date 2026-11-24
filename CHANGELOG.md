@@ -12,8 +12,9 @@
   separate light/dark toggle, thumbnail, opacity and notes are hidden.
 - **Pause media on full-screen reminders.** A new Reminders setting pauses
   system playback when a full-screen reminder opens and resumes it when the
-  reminder closes. It only sends the media key when a known media app is
-  already running.
+  reminder closes. It uses MediaRemote's transport command only when audio is
+  actually playing. macOS gates this behind **Device control and data access**,
+  so the enabled setting explains where to allow Flowlist.
 
 ## 0.9.49 — 2026-11-24
 

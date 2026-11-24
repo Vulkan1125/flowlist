@@ -63,9 +63,8 @@ impl Reminder {
         pause_media: bool,
         cx: &mut Context<Self>,
     ) -> Self {
-        let paused_media = pause_media
-            && super::media::is_audio_playing()
-            && super::media::toggle_playback();
+        let paused_media =
+            pause_media && super::media::is_audio_playing() && super::media::pause();
         Self {
             app,
             theme,
@@ -115,10 +114,8 @@ impl Reminder {
             let _ = app.update(cx, |app, _| app.reminder_closed());
         }
         window.remove_window();
-        if self.paused_media
-            && super::media::is_media_app_running()
-        {
-            let _ = super::media::toggle_playback();
+        if self.paused_media && super::media::is_media_app_running() {
+            let _ = super::media::resume();
         }
         self.paused_media = false;
         if restore_previous
