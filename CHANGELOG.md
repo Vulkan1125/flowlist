@@ -2,9 +2,10 @@
 
 ## Unreleased
 
-- **Quick capture polish.** Removed the `esc`, `⏎` and `⌘⏎` keycap boxes,
-  leaving plain Add / Add & open labels. The panel is opaque and its text is
-  pixel-aligned with a normal weight, so the input no longer looks soft.
+- **Quick capture polish.** Removed the outer keycap boxes but kept `esc`, `⏎`
+  and `⌘⏎` as plain text beside Add / Add & open. The panel is opaque and its
+  text is pixel-aligned with a normal weight, so the input no longer looks
+  soft.
 - **Background polish.** The main app keeps a custom wallpaper with an
   opacity slider. The twelve ambient gradients now belong to the full-screen
   reminder, which can also use a wallpaper with its own opacity. Abstract

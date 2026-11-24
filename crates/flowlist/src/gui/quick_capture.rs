@@ -361,6 +361,7 @@ impl QuickCapture {
                     ))
                     .cursor(CursorStyle::IBeam),
             )
+            .child(key_hint(theme, "esc"))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
@@ -571,8 +572,16 @@ impl QuickCapture {
                         div()
                             .flex()
                             .items_center()
-                            .gap_3()
-                            .child(label(theme, "Add"))
+                            .gap_1()
+                            .child(key_hint(theme, "⏎"))
+                            .child(label(theme, "Add")),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(key_hint(theme, "⌘⏎"))
                             .child(label(theme, "Add & open")),
                     ),
             )
@@ -905,7 +914,7 @@ fn panel_bounds(cx: &App, anchor: Option<Bounds<gpui::Pixels>>) -> Bounds<gpui::
 
 /// Room for the title line inside the 620px panel, after the plus badge and
 /// the panel padding have taken theirs.
-const INPUT_ROOM: f32 = 524.0;
+const INPUT_ROOM: f32 = 500.0;
 
 fn field_text(
     theme: Theme,
@@ -1045,6 +1054,17 @@ fn chip(icon: Icon, text: impl Into<SharedString>, color: gpui::Hsla) -> impl In
         .text_color(color)
         .child(icons::icon(icon, 11.0, color))
         .child(div().flex_1().min_w_0().truncate().child(text.into()))
+}
+
+/// A shortcut printed as plain text. No border, background or rounded box, so
+/// it cannot pick up a corner artefact or disappear into the panel tint.
+fn key_hint(theme: Theme, text: impl Into<SharedString>) -> impl IntoElement {
+    div()
+        .flex_shrink_0()
+        .text_size(px(11.))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(theme.text_dim)
+        .child(text.into())
 }
 
 fn label(theme: Theme, text: impl Into<SharedString>) -> impl IntoElement {
