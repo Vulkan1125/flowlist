@@ -26,9 +26,9 @@ reach them without the mouse.
 
 ### Quick capture panel
 
-`⌃⌥Space` opens the floating capture panel from any app. The title field has
-keyboard focus as soon as the panel opens, and `Esc` always closes it without
-filing. Inside the panel:
+`⌃⌥Space` opens the floating capture panel from any app; the same chord closes
+it again without filing. The title field has keyboard focus as soon as the
+panel opens, and `Esc` always closes it without filing. Inside the panel:
 
 | Key | Action |
 | --- | --- |

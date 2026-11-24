@@ -17,6 +17,8 @@
 #![allow(unexpected_cfgs)]
 
 use std::path::PathBuf;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use flowlist_core::command::Command;
@@ -276,6 +278,11 @@ impl QuickCapture {
         let stroke = &event.keystroke;
         let mods = stroke.modifiers;
 
+        if mods.control && mods.alt && stroke.key == "space" {
+            mark_toggle();
+            self.dismiss(window, cx, true);
+            return;
+        }
         if mods.platform && matches!(stroke.key.as_str(), "enter" | "return") {
             self.capture(true, window, cx);
             return;
@@ -634,6 +641,43 @@ impl Render for QuickCapture {
             .child(self.render_preview())
             .child(self.render_footer(cx))
     }
+}
+
+/// The global shortcut is a toggle: the second press puts the panel away
+/// without filing anything. A short debounce absorbs the duplicate event when
+/// both the Carbon hotkey and the in-window fallback see the same chord.
+static LAST_TOGGLE: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// Mark a toggle that was handled locally, so the global hotkey callback
+/// ignores the duplicate event a moment later.
+pub(super) fn mark_toggle() {
+    if let Ok(mut last) = LAST_TOGGLE.lock() {
+        *last = Some(Instant::now());
+    }
+}
+
+pub fn toggle(
+    cx: &mut App,
+    paths: DataPaths,
+    theme: Theme,
+    anchor: Option<Bounds<gpui::Pixels>>,
+) -> Result<()> {
+    let now = Instant::now();
+    if let Ok(mut last) = LAST_TOGGLE.lock() {
+        if last.is_some_and(|last| now.duration_since(last) < Duration::from_millis(180)) {
+            return Ok(());
+        }
+        *last = Some(now);
+    }
+    for any in cx.windows() {
+        if let Some(handle) = any.downcast::<QuickCapture>() {
+            handle.update(cx, |view, window, cx| {
+                view.dismiss(window, cx, true);
+            })?;
+            return Ok(());
+        }
+    }
+    show(cx, paths, theme, anchor)
 }
 
 /// Open or bring forward the capture panel.

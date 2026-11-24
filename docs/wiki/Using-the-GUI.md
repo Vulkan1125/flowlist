@@ -13,7 +13,8 @@ accent picker. Every family is one click away in Settings → Appearance.*
 There are three ways to add a task:
 
 - **`⌃⌥Space`** from any app opens the floating capture panel over what you are
-  doing. The main window stays where it is.
+  doing; press it again to put the panel away. The main window stays where it
+  is.
 - **Add task** in the title bar opens the same panel over the Flowlist window.
 - **`n`** puts the caret in the capture bar at the top of the list, when the
   view has one.

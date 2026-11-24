@@ -2,8 +2,9 @@
 
 ## Unreleased
 
-- **Quick capture polish.** Removed the outer keycap boxes but kept `esc`, `⏎`
-  and `⌘⏎` as plain text beside Add / Add & open. The panel is opaque and its
+- **Quick capture polish.** The `⌃⌥Space` shortcut now toggles the panel: a
+  second press puts it away without filing. Removed the outer keycap boxes but
+  kept `esc`, `⏎` and `⌘⏎` as plain text beside Add / Add & open. The panel is opaque and its
   text is pixel-aligned with a normal weight, so the input no longer looks
   soft.
 - **Background polish.** The main app keeps a custom wallpaper with an

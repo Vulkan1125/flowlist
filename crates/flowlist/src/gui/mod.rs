@@ -2431,6 +2431,18 @@ impl FlowlistApp {
         }
     }
 
+    /// The global chord toggles the panel: a second press puts it away.
+    pub(super) fn toggle_quick_capture(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let theme = self.theme;
+        let anchor = window.bounds();
+        if let Err(error) =
+            quick_capture::toggle(cx, self.store.paths().clone(), theme, Some(anchor))
+        {
+            self.toast = Some(format!("Could not open quick capture: {error}"));
+            self.focus_capture(window, cx);
+        }
+    }
+
     /// Select a just-captured task in the main window. `⌘⏎` in the capture
     /// panel calls this after the task has been filed.
     pub(super) fn reveal_task(&mut self, id: TaskId, cx: &mut Context<Self>) {
@@ -4371,7 +4383,7 @@ impl FlowlistApp {
         // handler runs. Keeping the same chord here means the panel still opens
         // when global registration is unavailable.
         if mods.control && mods.alt && stroke.key == "space" {
-            self.open_quick_capture(window, cx);
+            self.toggle_quick_capture(window, cx);
             return;
         }
 
@@ -7507,7 +7519,7 @@ pub fn run(paths: DataPaths) -> Result<()> {
                             let theme = window
                                 .read_with(cx, |app, _| app.theme)
                                 .unwrap_or_else(|_| quick_capture::stored_theme(&paths));
-                            quick_capture::show(cx, paths.clone(), theme, None)
+                            quick_capture::toggle(cx, paths.clone(), theme, None)
                         });
                         match opened {
                             Ok(Ok(())) => {}
