@@ -340,6 +340,10 @@ below; this list is the current map.
       screen-sized reminder on Mac or an alarm-style full-screen-intent
       reminder on Android, with Complete, Snooze ten minutes, Open and Dismiss.
       Marks inherit down through parent tasks, projects and folders.
+- [x] **Quick capture rebuild** — opaque square panel with a single plus button
+      and title field, plus a live marker read-out that resolves dates and wraps
+      to a second line instead of truncating. The chip row, footer, drag handle
+      and keycaps are gone.
 - [x] **Full-screen reminder polish** — quick capture accepts `fsr:1h30m`,
       `fsr:2d` and bare `fsr`; simultaneous reminders offer **View all** into a
       built-in Full-screen view; marks with no due or explicit time are

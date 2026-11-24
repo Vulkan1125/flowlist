@@ -20,9 +20,13 @@ There are three ways to add a task:
 
 ![The floating capture panel with a parsed task](images/gui-capture.png)
 
-The line is parsed as you type, and the chips under it show where the task will
-land. A plain thought goes to the Inbox; `::Project` files it into a project;
-`due:` and `defer:` schedule it into Today or Forecast.
+The line is parsed as you type. Under it, a plain read-out shows only the
+markers it understood, with dates resolved: `due:3d` might read
+`due: 2026-11-27 12:50`, `@1` reads `priority: high`, and `fsr:2d` reads the
+actual reminder date. It wraps onto a second line instead of truncating. The
+title itself never appears there. A plain thought goes to the Inbox;
+`::Project` files it into a project; `due:` and `defer:` schedule it into Today
+or Forecast.
 
 | Text | Meaning |
 | --- | --- |
