@@ -128,8 +128,7 @@ fun SettingsScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .background(flow.background),
+            .fillMaxSize(),
     ) {
         if (current == null) {
             SettingsHome(
@@ -255,13 +254,23 @@ private fun summary(
     state: AppState,
     context: Context,
 ): String = when (section) {
-    SettingsSection.Appearance -> "${theme.family.label} / ${theme.darkFamily.label} · ${theme.mode.name.lowercase()}"
+    SettingsSection.Appearance -> buildString {
+        append("${theme.family.label} / ${theme.darkFamily.label} · ${theme.mode.name.lowercase()}")
+        append(
+            when {
+                preferences.matchThemeBackground -> " · theme background"
+                preferences.customWallpaper != null -> " · wallpaper"
+                else -> " · ambient"
+            },
+        )
+    }
     SettingsSection.Tasks -> "Opens ${preferences.startTab.replaceFirstChar { it.uppercase() }} · week starts ${if (preferences.weekStartsMonday) "Monday" else "Sunday"}"
     SettingsSection.Library -> "Review ${library.defaultReviewDays}d · trash ${if (library.trashRetentionDays == 0) "forever" else "${library.trashRetentionDays}d"}"
     SettingsSection.Notifications -> buildString {
         append(if (DueNotifications.enabled(context)) "Due on" else "Due off")
         append(" · ")
         append(if (preferences.nearbyReminders) "geotags on" else "geotags off")
+        append(if (preferences.fullScreenReminders) " · full-screen on" else " · full-screen off")
     }
     SettingsSection.Connection -> if (state.online) "Connected" else "Offline"
     SettingsSection.About -> "Version ${dev.flowlist.android.BuildConfig.VERSION_NAME}"
@@ -281,6 +290,21 @@ private fun AppearanceSettings(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var appIcon by remember { mutableStateOf(AppIcons.current(context)) }
+    val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val path = saveWallpaper(context, uri)
+                if (path != null) {
+                    onPreferencesChange(
+                        preferences.copy(
+                            customWallpaper = path,
+                            matchThemeBackground = false,
+                        ),
+                    )
+                }
+            }
+        }
+    }
     BottomBarSettings(preferences, onPreferencesChange)
     Spacer(modifier = Modifier.height(14.dp))
     SettingsCard("Theme") {
@@ -322,6 +346,136 @@ private fun AppearanceSettings(
                 }
             }
         }
+    }
+    Spacer(modifier = Modifier.height(14.dp))
+    SettingsCard("Background") {
+        ToggleRow(
+            title = "Match theme",
+            detail = "Follow the ambient background that belongs to the current theme",
+            checked = preferences.matchThemeBackground,
+        ) {
+            onPreferencesChange(preferences.copy(matchThemeBackground = it))
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        SmallLabel("Ambient")
+        val themePreset = AmbientBackgrounds.forFamily(
+            if (colors.dark) theme.darkFamily else theme.family,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            item(key = "background-none") {
+                val selected = !preferences.matchThemeBackground &&
+                    preferences.customWallpaper == null &&
+                    preferences.ambientBackground == "none"
+                Column(
+                    modifier = Modifier
+                        .width(86.dp)
+                        .clickable {
+                            onPreferencesChange(
+                                preferences.copy(
+                                    matchThemeBackground = false,
+                                    ambientBackground = "none",
+                                    customWallpaper = null,
+                                ),
+                            )
+                        },
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.background)
+                            .border(
+                                if (selected) 2.dp else 1.dp,
+                                if (selected) colors.accent else colors.hairline,
+                                RoundedCornerShape(10.dp),
+                            ),
+                    )
+                    Text(
+                        "None",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (selected) colors.accent else colors.faint,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+            items(AmbientBackgrounds.all, key = { it.id }) { preset ->
+                val selected = !preferences.matchThemeBackground &&
+                    preferences.customWallpaper == null &&
+                    preferences.ambientBackground == preset.id
+                val follows = preferences.matchThemeBackground && themePreset.id == preset.id
+                Column(
+                    modifier = Modifier
+                        .width(86.dp)
+                        .clickable {
+                            onPreferencesChange(
+                                preferences.copy(
+                                    matchThemeBackground = false,
+                                    ambientBackground = preset.id,
+                                    customWallpaper = null,
+                                ),
+                            )
+                        },
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(preset.brush(colors.dark))
+                            .border(
+                                if (selected || follows) 2.dp else 1.dp,
+                                if (selected || follows) colors.accent else colors.hairline,
+                                RoundedCornerShape(10.dp),
+                            ),
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            preset.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (selected) colors.accent else colors.faint,
+                            maxLines = 1,
+                        )
+                        if (follows) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "Theme",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.accent,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        SmallLabel("Custom wallpaper")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { wallpaperPicker.launch("image/*") }) {
+                Text(
+                    if (preferences.customWallpaper == null) "Choose wallpaper" else "Replace wallpaper",
+                    color = colors.accent,
+                )
+            }
+            if (preferences.customWallpaper != null) {
+                TextButton(
+                    onClick = { onPreferencesChange(preferences.copy(customWallpaper = null)) },
+                ) {
+                    Text("Remove", color = colors.danger)
+                }
+            }
+        }
+        Text(
+            text = if (preferences.matchThemeBackground) {
+                "Turn Match theme off to use a chosen ambient background or wallpaper."
+            } else if (preferences.customWallpaper != null) {
+                "Your wallpaper is used behind the app. Pick any ambient above to replace it."
+            } else {
+                "Ambient backgrounds are independent of the theme. Match theme follows the current family."
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.faint,
+        )
     }
     Spacer(modifier = Modifier.height(14.dp))
     SettingsCard("Accent") {
@@ -723,44 +877,6 @@ private fun NotificationSettings(
         context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
     val canExactAlarms = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
         context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
-    SettingsCard("Due reminders") {
-        ToggleRow(
-            title = "Due reminders",
-            detail = when {
-                denied -> "Allow notifications in Android settings"
-                enabled -> "A summary when tasks are due today"
-                else -> "Off"
-            },
-            checked = enabled,
-            danger = denied,
-        ) {
-            if (enabled) {
-                DueNotifications.setEnabled(context, false)
-                enabled = false
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                permission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            } else {
-                DueNotifications.setEnabled(context, true)
-                enabled = true
-            }
-        }
-        if (enabled) {
-            Spacer(modifier = Modifier.height(8.dp))
-            TextButton(onClick = { DueNotifications.sendTest(context) }) {
-                Text("Send a test notification", color = flow.accent)
-            }
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "Android may delay a summary to save battery.",
-            style = MaterialTheme.typography.labelSmall,
-            color = flow.faint,
-        )
-    }
-    Spacer(modifier = Modifier.height(14.dp))
     SettingsCard("Full-screen reminders") {
         ToggleRow(
             title = "Full-screen reminders",
@@ -827,6 +943,44 @@ private fun NotificationSettings(
                 Text("Send a test full-screen reminder", color = flow.accent)
             }
         }
+    }
+    Spacer(modifier = Modifier.height(14.dp))
+    SettingsCard("Due reminders") {
+        ToggleRow(
+            title = "Due reminders",
+            detail = when {
+                denied -> "Allow notifications in Android settings"
+                enabled -> "A summary when tasks are due today"
+                else -> "Off"
+            },
+            checked = enabled,
+            danger = denied,
+        ) {
+            if (enabled) {
+                DueNotifications.setEnabled(context, false)
+                enabled = false
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                DueNotifications.setEnabled(context, true)
+                enabled = true
+            }
+        }
+        if (enabled) {
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = { DueNotifications.sendTest(context) }) {
+                Text("Send a test notification", color = flow.accent)
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Android may delay a summary to save battery.",
+            style = MaterialTheme.typography.labelSmall,
+            color = flow.faint,
+        )
     }
     Spacer(modifier = Modifier.height(14.dp))
     GeotagSettings(preferences, onPreferencesChange)

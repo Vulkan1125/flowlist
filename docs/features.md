@@ -317,6 +317,12 @@ working domain and GUI. This page tracks what is implemented and verified.
       sheet opened with, and Save keeps the new one. Plain also carries the
       accent presets, custom picker and eyedropper; the other families keep
       their own accent as part of their identity.
+- [x] Android ambient backgrounds: twelve gradients, one tuned for each theme
+      family, with a **Match theme** toggle. Any gradient can be picked
+      regardless of the theme, and a **None** choice keeps the plain surface.
+- [x] Android custom wallpaper: choose any image from the phone; it is copied
+      into app storage so the picker grant is not needed later, and it can be
+      replaced or removed from Settings → Appearance.
 - [x] Follow-system appearance: keep the theme family, take light/dark from
       the macOS window appearance. A manual light/dark switch turns this off so
       the chosen mode is not reverted on the next frame.

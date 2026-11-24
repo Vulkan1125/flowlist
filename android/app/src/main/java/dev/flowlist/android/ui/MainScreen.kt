@@ -640,7 +640,7 @@ fun MainScreen(
         },
     ) {
     Scaffold(
-        containerColor = colors.background,
+        containerColor = Color.Transparent,
         snackbarHost = { FlowSnackbarHost(snackbarHost) },
         bottomBar = {
             if (selecting) {
@@ -761,8 +761,7 @@ fun MainScreen(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .background(colors.background),
+                .padding(padding),
         ) {
             if (wide) {
                 TabletRail(
@@ -787,8 +786,7 @@ fun MainScreen(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-                    .background(colors.background),
+                    .fillMaxHeight(),
             ) {
             HorizontalDivider(thickness = 1.dp, color = colors.background)
             val activeMore = moreView
@@ -1645,7 +1643,7 @@ private fun TabletRail(
     val colors = flow
     NavigationRail(
         modifier = Modifier.fillMaxHeight(),
-        containerColor = colors.background,
+        containerColor = Color.Transparent,
     ) {
         Spacer(modifier = Modifier.height(8.dp))
         perspectives.forEach { item ->

@@ -94,7 +94,6 @@ fun PairingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background)
             .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 28.dp),

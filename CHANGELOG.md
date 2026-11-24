@@ -10,6 +10,13 @@
   alarm-style full-screen-intent reminder with the same actions, rescheduled
   after a reboot. Nothing takes over the screen unless it carries the mark or
   inherits it from its project or folder.
+- **Android ambient backgrounds and wallpaper.** Twelve ambient gradients, one
+  tuned for each theme family, are available regardless of the active theme.
+  **Match theme** follows the current family, **None** keeps the plain
+  surface, and **Choose wallpaper** copies any picked image into app storage
+  and paints it behind the app. The Full-screen reminders card is now first in
+  Settings → Notifications, and the capture sheet shows the per-task toggle
+  above its chips.
 - **Cleaner Mac login item.** The mobile server agent is associated with the
   Flowlist app bundle, so Login Items lists one **Flowlist** row with the app
   icon. Installing from a bare build now points the agent at the packaged app

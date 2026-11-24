@@ -163,6 +163,32 @@ fun CaptureSheet(
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Full-screen reminder",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.ink,
+                    )
+                    Text(
+                        text = "Take over the screen when this task is due.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.faint,
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = fullscreenReminder,
+                    onCheckedChange = { fullscreenReminder = it },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = colors.onAccent,
+                        checkedTrackColor = colors.accent,
+                        uncheckedThumbColor = colors.faint,
+                        uncheckedTrackColor = colors.field,
+                        uncheckedBorderColor = colors.hairline,
+                    ),
+                )
+            }
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -194,32 +220,6 @@ fun CaptureSheet(
                         ),
                     )
                 }
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Full-screen reminder",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = colors.ink,
-                    )
-                    Text(
-                        text = "Take over the screen when this task is due.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.faint,
-                    )
-                }
-                androidx.compose.material3.Switch(
-                    checked = fullscreenReminder,
-                    onCheckedChange = { fullscreenReminder = it },
-                    colors = androidx.compose.material3.SwitchDefaults.colors(
-                        checkedThumbColor = colors.onAccent,
-                        checkedTrackColor = colors.accent,
-                        uncheckedThumbColor = colors.faint,
-                        uncheckedTrackColor = colors.field,
-                        uncheckedBorderColor = colors.hairline,
-                    ),
-                )
             }
             Spacer(modifier = Modifier.height(18.dp))
             Button(

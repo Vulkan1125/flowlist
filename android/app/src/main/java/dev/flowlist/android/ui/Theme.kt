@@ -2,7 +2,10 @@ package dev.flowlist.android.ui
 
 import android.os.Build
 import android.content.Context
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -12,12 +15,16 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import java.io.File
 
 enum class Family(val slug: String, val label: String, val hint: String) {
     Tomato("tomato", "Tomato", "Red on white"),
@@ -247,7 +254,11 @@ fun themeColors(settings: ThemeSettings, dark: Boolean): FlowColors {
 }
 
 @Composable
-fun FlowlistTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
+fun FlowlistTheme(
+    settings: ThemeSettings,
+    background: AppBackground = AppBackground.None,
+    content: @Composable () -> Unit,
+) {
     val context = LocalContext.current
     val systemDark = isSystemInDarkTheme()
     val dark = when (settings.mode) {
@@ -264,37 +275,86 @@ fun FlowlistTheme(settings: ThemeSettings, content: @Composable () -> Unit) {
             onAccent = if (accent.luminance() > 0.55f) Color(0xFF111111) else Color.White,
         )
     }
+    val baseColors = colors
+    // One scrim layer lets the ambient layer show through every screen while
+    // keeping task titles readable. Nested screens paint transparent roots so
+    // they do not stack this alpha into an opaque wall.
+    val surfaceColors = if (background.active) {
+        baseColors.copy(background = baseColors.background.copy(alpha = 0.62f))
+    } else {
+        baseColors
+    }
     val scheme = if (dark) {
         darkColorScheme(
-            primary = colors.accent,
-            onPrimary = colors.onAccent,
-            background = colors.background,
-            onBackground = colors.ink,
-            surface = colors.background,
-            onSurface = colors.ink,
-            surfaceVariant = colors.field,
-            onSurfaceVariant = colors.faint,
-            outline = colors.hairline,
-            error = colors.danger,
+            primary = surfaceColors.accent,
+            onPrimary = surfaceColors.onAccent,
+            background = surfaceColors.background,
+            onBackground = surfaceColors.ink,
+            surface = surfaceColors.background,
+            onSurface = surfaceColors.ink,
+            surfaceVariant = surfaceColors.field,
+            onSurfaceVariant = surfaceColors.faint,
+            outline = surfaceColors.hairline,
+            error = surfaceColors.danger,
             onError = Color.White,
         )
     } else {
         lightColorScheme(
-            primary = colors.accent,
-            onPrimary = colors.onAccent,
-            background = colors.background,
-            onBackground = colors.ink,
-            surface = colors.background,
-            onSurface = colors.ink,
-            surfaceVariant = colors.field,
-            onSurfaceVariant = colors.faint,
-            outline = colors.hairline,
-            error = colors.danger,
+            primary = surfaceColors.accent,
+            onPrimary = surfaceColors.onAccent,
+            background = surfaceColors.background,
+            onBackground = surfaceColors.ink,
+            surface = surfaceColors.background,
+            onSurface = surfaceColors.ink,
+            surfaceVariant = surfaceColors.field,
+            onSurfaceVariant = surfaceColors.faint,
+            outline = surfaceColors.hairline,
+            error = surfaceColors.danger,
             onError = Color.White,
         )
     }
-    CompositionLocalProvider(LocalFlow provides colors) {
-        MaterialTheme(colorScheme = scheme, typography = typography, content = content)
+    CompositionLocalProvider(LocalFlow provides surfaceColors) {
+        MaterialTheme(colorScheme = scheme, typography = typography) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(baseColors.background),
+            ) {
+                when (val layer = background) {
+                    AppBackground.None -> Unit
+                    is AppBackground.Ambient -> Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(layer.preset.brush(dark)),
+                    )
+                    is AppBackground.Custom -> {
+                        AsyncImage(
+                            model = File(layer.path),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alpha = if (dark) 0.62f else 0.5f,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    if (dark) Color.Black.copy(alpha = 0.30f)
+                                    else Color.White.copy(alpha = 0.22f),
+                                ),
+                        )
+                    }
+                }
+                if (background.active) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(surfaceColors.background),
+                    )
+                }
+                content()
+            }
+        }
     }
 }
 

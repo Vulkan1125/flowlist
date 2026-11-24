@@ -27,6 +27,7 @@ import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.PreferencesStore
 import dev.flowlist.android.data.ThemeStore
 import dev.flowlist.android.ui.FlowlistTheme
+import dev.flowlist.android.ui.backgroundFor
 import dev.flowlist.android.ui.MainScreen
 import dev.flowlist.android.data.SharedPayload
 import dev.flowlist.android.notify.NearbyReminders
@@ -167,7 +168,7 @@ private fun FlowlistApp(
         }
     }
 
-    FlowlistTheme(theme) {
+    FlowlistTheme(theme, background = preferences.backgroundFor(theme, dark)) {
         if (!state.paired) {
             PairingScreen(
                 busy = state.syncing,
