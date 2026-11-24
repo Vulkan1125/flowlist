@@ -248,7 +248,9 @@ screen directly.
 When a task is marked for full-screen reminders, its inspector shows **Match
 due date & time**. Leave it on to follow the due stamp, or turn it off and set
 a separate reminder date and time. The date field is greyed out while it
-follows the due stamp. **Snooze length** offers 10, 15, 30 or 60 minutes. **Settings → Appearance → Background** sets a separate wallpaper
+follows the due stamp. **Snooze length** offers 15, 30 or 60 minutes; on the
+reminder itself, **S** cycles the length, **Enter** snoozes and **⌘Enter**
+completes the task. **Settings → Appearance → Background** sets a separate wallpaper
 behind the main window, also with an opacity choice.
 
 macOS needs an Apple Development or Developer ID signature before it can grant

@@ -906,7 +906,7 @@ private fun NotificationSettings(
             Spacer(modifier = Modifier.height(8.dp))
             SmallLabel("Snooze length")
             ChoiceRow {
-                listOf(10, 15, 30, 60).forEach { minutes ->
+                listOf(15, 30, 60).forEach { minutes ->
                     Pill(
                         label = if (minutes == 60) "1 hour" else "$minutes min",
                         selected = snoozeMinutes == minutes,

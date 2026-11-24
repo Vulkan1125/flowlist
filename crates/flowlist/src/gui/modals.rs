@@ -2907,12 +2907,21 @@ impl FlowlistApp {
                 return;
             };
             this.update(cx, |this, cx| {
+                let previous = match &this.modal {
+                    Some(Modal::Settings { wallpaper, .. }) => wallpaper.clone(),
+                    _ => None,
+                };
                 match super::background::install_wallpaper(
                     &path,
                     &this.store.paths().root,
                     "app",
                 ) {
                     Ok(copied) => {
+                        if let Some(old) = previous
+                            && old != copied
+                        {
+                            let _ = std::fs::remove_file(old);
+                        }
                         if let Some(Modal::Settings {
                             wallpaper,
                             use_wallpaper,
@@ -2954,12 +2963,21 @@ impl FlowlistApp {
                 return;
             };
             this.update(cx, |this, cx| {
+                let previous = match &this.modal {
+                    Some(Modal::Settings { reminder_wallpaper, .. }) => reminder_wallpaper.clone(),
+                    _ => None,
+                };
                 match super::background::install_wallpaper(
                     &path,
                     &this.store.paths().root,
                     "reminder",
                 ) {
                     Ok(copied) => {
+                        if let Some(old) = previous
+                            && old != copied
+                        {
+                            let _ = std::fs::remove_file(old);
+                        }
                         if let Some(Modal::Settings {
                             reminder_wallpaper,
                             reminder_use_wallpaper,
@@ -3931,7 +3949,7 @@ impl FlowlistApp {
                 fullscreen_snooze_minutes,
                 ..
             }) => *fullscreen_snooze_minutes,
-            _ => 10,
+            _ => 15,
         };
         // Reminders are a per-device setting, unlike the library defaults in
         // the next card. The toggle is a draft until Save, matching Vim mode.
@@ -4182,7 +4200,7 @@ impl FlowlistApp {
                         )
                         .child({
                             let mut row = div().flex().flex_wrap().items_center().gap_1();
-                            for minutes in [10u32, 15, 30, 60] {
+                            for minutes in [15u32, 30, 60] {
                                 let label = if minutes == 60 {
                                     "1 hour".to_string()
                                 } else {
@@ -4284,7 +4302,7 @@ impl FlowlistApp {
                         self.theme_probe(format!("reminder-style-{}", style.slug())),
                     )
                     .id(super::sid(key))
-                    .w(px(86.))
+                    .w(px(84.))
                     .flex()
                     .flex_col()
                     .gap_1()
@@ -4349,7 +4367,7 @@ impl FlowlistApp {
                                         .text_xs()
                                         .whitespace_normal()
                                         .text_color(theme.text_faint)
-                                        .child("Show the photo chosen in Appearance."),
+                                        .child("Show the reminder wallpaper chosen below."),
                                 ),
                         )
                         .child(

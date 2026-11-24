@@ -271,7 +271,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       own reminder date and time. The inspector (Mac) and task editor
       (Android) expose both choices, the picker is disabled while matching
       due, and “Send full-screen test” opens the reminder screen directly.
-      Snooze length is selectable as 10, 15, 30 or 60 minutes.
+      Snooze length is 15, 30 or 60 minutes. On the Mac reminder, **S**
+      cycles the length, **Enter** snoozes and **⌘Enter** completes.
 - [x] Releases ship a drag-to-Applications DMG beside the updater's zip.
 - [x] The plus opens the capture panel over the window (the global shortcut
       stays screen-centered), the toast follows the visible middle pane, and

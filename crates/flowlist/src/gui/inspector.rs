@@ -1405,6 +1405,10 @@ impl FlowlistApp {
                     )
                     .child(
                         div()
+                            .on_children_prepainted(
+                                self.theme_probe("inspector-reminder-locked".to_string()),
+                            )
+                            .id("inspector-reminder-locked")
                             .h(px(28.))
                             .flex()
                             .items_center()

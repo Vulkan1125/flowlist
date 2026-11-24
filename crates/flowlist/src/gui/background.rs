@@ -4,6 +4,8 @@
 //! colour. Every layer takes its colour from the active palette, so the same
 //! style looks right in Plain, Nord, Dracula and the rest.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use gpui::{AnyElement, IntoElement, div, linear_color_stop, linear_gradient, prelude::*, px};
 
 use super::theme::{Theme, ThemeKind};
@@ -70,70 +72,79 @@ impl AbstractStyle {
     }
 }
 
-fn wash(angle: f32, from: gpui::Hsla, to: gpui::Hsla) -> AnyElement {
-    div()
-        .absolute()
-        .size_full()
-        .bg(linear_gradient(
-            angle,
-            linear_color_stop(from, 0.0),
-            linear_color_stop(to, 1.0),
-        ))
-        .into_any_element()
+/// A palette colour washed over the theme background. Both ends are opaque so
+/// the gradient never fades through transparent black, which is what made the
+/// old backdrops look hazy at the edges.
+fn tint(theme: Theme, color: gpui::Hsla, amount: f32) -> gpui::Hsla {
+    theme.bg.blend(color.opacity(amount))
+}
+
+/// A single clean two-colour sweep. One gradient across the whole surface is
+/// crisp and predictable; stacking several translucent washes produced the
+/// halo in the middle that made the previews look muddy.
+fn sweep(angle: f32, from: gpui::Hsla, to: gpui::Hsla) -> gpui::Background {
+    linear_gradient(
+        angle,
+        linear_color_stop(from, 0.0),
+        linear_color_stop(to, 1.0),
+    )
 }
 
 pub fn render(style: AbstractStyle, theme: Theme) -> AnyElement {
-    let clear = theme.bg.opacity(0.0);
-    let base = div()
-        .absolute()
-        .size_full()
-        .overflow_hidden()
-        .bg(theme.bg);
+    let base = div().absolute().size_full().overflow_hidden().bg(theme.bg);
     match style {
         AbstractStyle::None => base.into_any_element(),
         AbstractStyle::Aurora => base
-            .child(wash(135.0, theme.accent.opacity(0.16), clear))
-            .child(wash(25.0, theme.success.opacity(0.10), clear))
-            .child(wash(310.0, theme.warning.opacity(0.06), clear))
+            .bg(sweep(
+                135.0,
+                tint(theme, theme.accent, 0.22),
+                tint(theme, theme.success, 0.14),
+            ))
             .into_any_element(),
         AbstractStyle::Dunes => base
-            .bg(linear_gradient(
-                20.0,
-                linear_color_stop(theme.bg, 0.0),
-                linear_color_stop(theme.field, 1.0),
+            .bg(sweep(
+                18.0,
+                tint(theme, theme.warning, 0.20),
+                tint(theme, theme.accent, 0.10),
             ))
-            .child(wash(10.0, theme.accent.opacity(0.10), clear))
-            .child(wash(170.0, theme.warning.opacity(0.08), clear))
             .into_any_element(),
         AbstractStyle::Halo => base
-            .child(wash(90.0, theme.accent.opacity(0.14), clear))
-            .child(wash(270.0, theme.success.opacity(0.09), clear))
+            .bg(sweep(
+                90.0,
+                tint(theme, theme.accent, 0.18),
+                tint(theme, theme.field, 0.55),
+            ))
             .into_any_element(),
         AbstractStyle::Mesh => base
-            .child(wash(45.0, theme.accent.opacity(0.11), clear))
-            .child(wash(135.0, theme.success.opacity(0.09), clear))
-            .child(wash(90.0, theme.warning.opacity(0.07), clear))
+            .bg(sweep(
+                45.0,
+                tint(theme, theme.success, 0.18),
+                tint(theme, theme.accent, 0.12),
+            ))
             .into_any_element(),
         AbstractStyle::Tide => base
-            .bg(linear_gradient(
-                65.0,
-                linear_color_stop(theme.bg, 0.0),
-                linear_color_stop(theme.accent.opacity(0.08), 1.0),
+            .bg(sweep(
+                70.0,
+                tint(theme, theme.accent, 0.17),
+                tint(theme, theme.bg, 0.0),
             ))
-            .child(wash(115.0, theme.success.opacity(0.09), clear))
             .into_any_element(),
         AbstractStyle::Ember => base
-            .child(wash(145.0, theme.danger.opacity(0.14), clear))
-            .child(wash(35.0, theme.warning.opacity(0.10), clear))
+            .bg(sweep(
+                160.0,
+                tint(theme, theme.danger, 0.20),
+                tint(theme, theme.warning, 0.12),
+            ))
             .into_any_element(),
     }
 }
 
-/// A small version of the backdrop for the style picker.
+/// A small version of the backdrop for the style picker. The preview fills its
+/// tile so it never looks cropped before the right edge.
 pub fn preview(style: AbstractStyle, theme: Theme) -> AnyElement {
     div()
         .relative()
-        .w(px(72.))
+        .w_full()
         .h(px(48.))
         .rounded_md()
         .overflow_hidden()
@@ -157,19 +168,28 @@ fn image_extension(path: &std::path::Path) -> Option<&'static str> {
 }
 
 /// Copy a picked image into the library root so the original can move away.
+///
+/// Every copy gets a unique name. GPUI caches decoded images by path, so
+/// replacing a file in place left the old picture on screen; a fresh path
+/// forces the new wallpaper to load.
 pub fn install_wallpaper(
     source: &std::path::Path,
     root: &std::path::Path,
     name: &str,
 ) -> anyhow::Result<std::path::PathBuf> {
-    let extension = image_extension(source).ok_or_else(|| {
-        anyhow::anyhow!("Choose a PNG, JPEG, WebP, JXL, GIF, BMP or TIFF image")
-    })?;
+    let extension = image_extension(source)
+        .ok_or_else(|| anyhow::anyhow!("Choose a PNG, JPEG, WebP, JXL, GIF, BMP or TIFF image"))?;
     let directory = root.join("wallpapers");
     std::fs::create_dir_all(&directory)?;
+    static NONCE: AtomicU64 = AtomicU64::new(0);
+    let nonce = NONCE.fetch_add(1, Ordering::Relaxed)
+        + std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_millis() as u64)
+            .unwrap_or(0);
     if extension == "heic" || extension == "jxl" {
         // The renderer cannot decode HEIC or JPEG XL. macOS can convert both.
-        let destination = directory.join(format!("{name}.png"));
+        let destination = directory.join(format!("{name}-{nonce}.png"));
         let status = std::process::Command::new("/usr/bin/sips")
             .args(["-s", "format", "png"])
             .arg(source)
@@ -181,7 +201,7 @@ pub fn install_wallpaper(
         }
         return Ok(destination);
     }
-    let destination = directory.join(format!("{name}.{extension}"));
+    let destination = directory.join(format!("{name}-{nonce}.{extension}"));
     std::fs::copy(source, &destination)?;
     Ok(destination)
 }
@@ -196,5 +216,25 @@ mod tests {
             assert!(image_extension(std::path::Path::new(name)).is_some());
         }
         assert!(image_extension(std::path::Path::new("a.txt")).is_none());
+    }
+
+    #[test]
+    fn replacing_a_wallpaper_gets_a_fresh_path() {
+        let root = std::env::temp_dir().join(format!(
+            "flowlist-wallpaper-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let source = root.join("picked.png");
+        std::fs::write(&source, b"not a real image").unwrap();
+        let first = install_wallpaper(&source, &root, "reminder").unwrap();
+        let second = install_wallpaper(&source, &root, "reminder").unwrap();
+        assert_ne!(first, second);
+        assert!(first.exists() && second.exists());
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

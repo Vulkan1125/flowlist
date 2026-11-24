@@ -36,7 +36,7 @@ data class AppPreferences(
     /// How strongly the wallpaper shows on the reminder.
     val reminderWallpaperOpacity: Float = 0.35f,
     /// Minutes a full-screen reminder sleeps for.
-    val snoozeMinutes: Int = 10,
+    val snoozeMinutes: Int = 15,
     /// Trash swipe layout: restore_right (left deletes, right restores),
     /// restore_left, or off.
     val trashSwipe: String = "restore_right",
@@ -93,7 +93,7 @@ class PreferencesStore(context: Context) {
             ambientBackground = prefs.getString("ambient_background", "ember") ?: "ember",
             reminderUseWallpaper = prefs.getBoolean("reminder_use_wallpaper", false),
             reminderWallpaperOpacity = prefs.getFloat("reminder_wallpaper_opacity", 0.35f),
-            snoozeMinutes = prefs.getInt("snooze_minutes", 10),
+            snoozeMinutes = prefs.getInt("snooze_minutes", 15),
             trashSwipe = prefs.getString("trash_swipe", "restore_right") ?: "restore_right",
             sortBy = prefs.getString("sort_by", "manual") ?: "manual",
             viewSorts = viewSorts,

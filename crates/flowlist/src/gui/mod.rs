@@ -688,7 +688,7 @@ impl FlowlistApp {
             .clamp(0.05, 0.95);
         let reminder_snooze_minutes = session
             .fullscreen_snooze_minutes
-            .unwrap_or(10)
+            .unwrap_or(15)
             .clamp(1, 1440);
         let wallpaper = session
             .wallpaper
@@ -1149,6 +1149,21 @@ impl FlowlistApp {
             .retain(|key| !key.starts_with(&format!("{id}:")));
         self.reminder_snoozed
             .insert(id.clone(), now() + chrono::Duration::minutes(minutes));
+        self.save_session();
+    }
+
+    /// Remember the length chosen on the reminder itself so the next one opens
+    /// with the same buttons.
+    pub(super) fn set_reminder_snooze_minutes(&mut self, minutes: u32) {
+        let minutes = match minutes {
+            30 => 30,
+            60 => 60,
+            _ => 15,
+        };
+        if self.reminder_snooze_minutes == minutes {
+            return;
+        }
+        self.reminder_snooze_minutes = minutes;
         self.save_session();
     }
 
@@ -6256,6 +6271,11 @@ impl FlowlistApp {
                 }))
                 .collect::<Vec<_>>()
         );
+        state["date_picker_open"] = serde_json::json!(self.date_picker.map(|field| match field {
+            DateField::Defer => "defer",
+            DateField::Due => "due",
+            DateField::Reminder => "reminder",
+        }));
         state["date_picker_time"] = serde_json::json!(
             self.date_picker_time
                 .map(|time| time.format("%H:%M").to_string())

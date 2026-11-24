@@ -130,10 +130,25 @@ impl Reminder {
             return;
         };
         if let Some(app) = self.app.upgrade() {
-            let minutes = self.snooze_minutes as i64;
-            let _ = app.update(cx, |app, _| app.snooze_reminder_task(&task.id, minutes));
+            let minutes = self.snooze_minutes;
+            let _ = app.update(cx, |app, _| {
+                app.snooze_reminder_task(&task.id, minutes as i64);
+                app.set_reminder_snooze_minutes(minutes);
+            });
         }
         self.advance(window, cx);
+    }
+
+    /// `s` walks the three lengths the reminder offers, so the choice is made
+    /// without leaving the full-screen view.
+    fn cycle_snooze(&mut self, cx: &mut Context<Self>) {
+        const CHOICES: [u32; 3] = [15, 30, 60];
+        let next = match CHOICES.iter().position(|minutes| *minutes == self.snooze_minutes) {
+            Some(index) => CHOICES[(index + 1) % CHOICES.len()],
+            None => CHOICES[0],
+        };
+        self.snooze_minutes = next;
+        cx.notify();
     }
 
     fn open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -157,10 +172,14 @@ impl Reminder {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let command = event.keystroke.modifiers.platform;
         match event.keystroke.key.as_str() {
             "escape" => self.dismiss(window, cx),
-            "enter" | "return" => self.complete(window, cx),
-            "s" => self.snooze(window, cx),
+            // Enter saves the snooze shown on the button; Command-Enter is the
+            // deliberate "done" action so a stray Return cannot complete a task.
+            "enter" | "return" if command => self.complete(window, cx),
+            "enter" | "return" => self.snooze(window, cx),
+            "s" if !command => self.cycle_snooze(cx),
             "o" => self.open(window, cx),
             _ => {}
         }
@@ -337,7 +356,7 @@ impl Render for Reminder {
                                     )),
                             )
                             .child(div().text_xs().text_color(theme.text_faint).child(format!(
-                                "{position} · Esc dismisses · S snoozes · Enter completes"
+                                "{position} · Esc dismisses · S cycles snooze · Enter snoozes · ⌘Enter completes"
                             ))),
                     ),
             )
