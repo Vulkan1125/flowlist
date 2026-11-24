@@ -1,10 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.9.49 — 2026-11-24
 
 - **Android full-screen counts.** Saved views using the full-screen reminder
   filter now evaluate it on Android instead of ignoring it, and the count
   includes matched subtasks just like the Mac sidebar badge.
+- **Wallpaper opacity fix.** A wallpaper chosen only for dark mode no longer
+  makes the plain light content surface translucent.
 - **Quick capture polish.** The `⌃⌥Space` shortcut now toggles the panel: a
   second press puts it away without filing. Removed the outer keycap boxes but
   kept `esc`, `⏎` and `⌘⏎` as plain text beside Add / Add & open. The panel is opaque and its
