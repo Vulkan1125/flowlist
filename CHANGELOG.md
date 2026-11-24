@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Cleaner Mac login item.** The mobile server agent is associated with the
+  Flowlist app bundle, so Login Items lists one **Flowlist** row with the app
+  icon. Installing from a bare build now points the agent at the packaged app
+  instead of `target/release/flowlist`, which previously left an anonymous
+  duplicate behind.
+
 ## 0.9.46 — 2026-11-23
 
 - **Mac Forecast week strip.** The Calendar chip now only hides and restores

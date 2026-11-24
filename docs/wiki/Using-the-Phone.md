@@ -8,7 +8,8 @@ Mac app.
 
 1. On the Mac, open **Settings → Mobile** (`⌘6`).
 2. Turn on **Serve to my phone**. This installs a login agent, so closing the
-   window does not stop syncing.
+   window does not stop syncing. macOS lists it in **Login Items** as
+   **Flowlist** with the app icon.
 3. The card shows one or more addresses and a six-digit code. Both devices must
    be on the same Wi-Fi, or both on Tailscale.
 4. On the phone, type one of the addresses and the code, then **Pair**.

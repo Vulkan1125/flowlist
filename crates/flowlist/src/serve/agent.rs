@@ -50,8 +50,7 @@ pub fn loaded() -> bool {
 }
 
 pub fn install(paths: &DataPaths, port: u16) -> Result<PathBuf> {
-    let binary = std::env::current_exe().context("finding the Flowlist executable")?;
-    let binary = std::fs::canonicalize(&binary).unwrap_or(binary);
+    let binary = install_binary();
     let plist = plist_path()?;
     let log = log_path()?;
     if let Some(parent) = plist.parent() {
@@ -62,39 +61,7 @@ pub fn install(paths: &DataPaths, port: u16) -> Result<PathBuf> {
         let _ = std::fs::create_dir_all(parent);
     }
 
-    let text = format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>{LABEL}</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>{binary}</string>
-        <string>--data-dir</string>
-        <string>{root}</string>
-        <string>serve</string>
-        <string>--port</string>
-        <string>{port}</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>ProcessType</key>
-    <string>Background</string>
-    <key>StandardOutPath</key>
-    <string>{log}</string>
-    <key>StandardErrorPath</key>
-    <string>{log}</string>
-</dict>
-</plist>
-"#,
-        binary = xml(&binary.display().to_string()),
-        root = xml(&paths.root.display().to_string()),
-        log = xml(&log.display().to_string()),
-    );
+    let text = plist_text(&binary, &paths.root, &log, port);
     std::fs::write(&plist, text).with_context(|| format!("writing {}", plist.display()))?;
 
     let uid = uid()?;
@@ -129,6 +96,99 @@ pub fn install(paths: &DataPaths, port: u16) -> Result<PathBuf> {
         .args(["enable", &format!("gui/{uid}/{LABEL}")])
         .status();
     Ok(plist)
+}
+
+/// The executable the agent should run. A binary inside `Flowlist.app` is
+/// ideal: macOS can attach the app's name and icon to the login item. When the
+/// command is run from a bare build such as `target/release/flowlist`, prefer a
+/// packaged app nearby so the login item does not appear as an anonymous
+/// executable.
+fn install_binary() -> PathBuf {
+    let exe = std::env::current_exe()
+        .ok()
+        .map(|path| std::fs::canonicalize(&path).unwrap_or(path));
+    let Some(exe) = exe else {
+        return PathBuf::from("flowlist");
+    };
+    if in_app_bundle(&exe) {
+        return exe;
+    }
+    for ancestor in exe.ancestors().skip(1).take(5) {
+        let bundled = ancestor
+            .join("dist")
+            .join("Flowlist.app")
+            .join("Contents")
+            .join("MacOS")
+            .join("flowlist");
+        if bundled.is_file() {
+            return bundled;
+        }
+    }
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    for root in [
+        Some(PathBuf::from("/Applications")),
+        home.map(|home| home.join("Applications")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let bundled = root
+            .join("Flowlist.app")
+            .join("Contents")
+            .join("MacOS")
+            .join("flowlist");
+        if bundled.is_file() {
+            return bundled;
+        }
+    }
+    exe
+}
+
+fn in_app_bundle(path: &Path) -> bool {
+    path.to_string_lossy().contains(".app/Contents/MacOS/")
+}
+
+/// The launchd plist for the mobile server. `AssociatedBundleIdentifiers`
+/// attaches the agent to the Flowlist app bundle, so Login Items shows the app
+/// name and icon instead of an anonymous command-line executable.
+fn plist_text(binary: &Path, root: &Path, log: &Path, port: u16) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{LABEL}</string>
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>dev.flowlist.Flowlist</string>
+    </array>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{binary}</string>
+        <string>--data-dir</string>
+        <string>{root}</string>
+        <string>serve</string>
+        <string>--port</string>
+        <string>{port}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardOutPath</key>
+    <string>{log}</string>
+    <key>StandardErrorPath</key>
+    <string>{log}</string>
+</dict>
+</plist>
+"#,
+        binary = xml(&binary.display().to_string()),
+        root = xml(&root.display().to_string()),
+        log = xml(&log.display().to_string()),
+    )
 }
 
 pub fn remove() -> Result<bool> {
@@ -194,5 +254,28 @@ mod tests {
     #[test]
     fn xml_escapes_paths() {
         assert_eq!(xml("/a&b/<c>"), "/a&amp;b/&lt;c&gt;");
+    }
+
+    #[test]
+    fn recognises_app_bundle_executables() {
+        assert!(in_app_bundle(Path::new(
+            "/Applications/Flowlist.app/Contents/MacOS/flowlist"
+        )));
+        assert!(!in_app_bundle(Path::new(
+            "/Users/me/Projects/flowlist/target/release/flowlist"
+        )));
+    }
+
+    #[test]
+    fn plist_associates_the_agent_with_the_app() {
+        let text = plist_text(
+            Path::new("/Applications/Flowlist.app/Contents/MacOS/flowlist"),
+            Path::new("/Users/me/Library/Application Support/Flowlist"),
+            Path::new("/Users/me/Library/Logs/Flowlist-serve.log"),
+            7777,
+        );
+        assert!(text.contains("<key>AssociatedBundleIdentifiers</key>"));
+        assert!(text.contains("<string>dev.flowlist.Flowlist</string>"));
+        assert!(text.contains("<string>7777</string>"));
     }
 }
