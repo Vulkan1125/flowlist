@@ -227,7 +227,7 @@ move. It has seven sections on the left (`⌘1`…`⌘7` jump between them):
 
 ### Reminders
 
-**Settings → Workflow → Reminders** can schedule a macOS notification for every
+**Settings → Reminders** (its own sidebar item) can schedule a macOS notification for every
 task due in the next 30 days. Timestamped tasks remind at their time; date-only
 tasks remind at 09:00 local. Toggling it on asks macOS for permission, and
 **Send test** checks that banners are working.
@@ -241,7 +241,7 @@ that screen; Dismiss and Esc leave the task alone.
 
 The reminder sits on a theme-synced abstract backdrop by default. Pick another
 abstract style from its preview, follow the current theme, or choose a
-wallpaper from **Settings → Workflow → Reminder background**; the wallpaper has
+wallpaper from **Settings → Reminders → Reminder background**; the wallpaper has
 its own opacity and a **Send full-screen test** button opens the reminder
 screen directly.
 

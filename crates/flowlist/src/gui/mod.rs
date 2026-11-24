@@ -523,6 +523,8 @@ pub struct FlowlistApp {
     reminder_snoozed: BTreeMap<TaskId, chrono::DateTime<chrono::Utc>>,
     /// Whether a full-screen reminder window is open.
     reminder_open: bool,
+    /// The backdrop of the last test reminder, for the GUI probe.
+    last_reminder_backdrop: Option<String>,
     /// Abstract backdrop for full-screen reminders.
     reminder_background: AbstractStyle,
     /// Follow the theme's default abstract backdrop.
@@ -832,6 +834,7 @@ impl FlowlistApp {
             reminder_seen: BTreeSet::new(),
             reminder_snoozed: BTreeMap::new(),
             reminder_open: false,
+            last_reminder_backdrop: None,
             reminder_background,
             reminder_match_theme,
             reminder_wallpaper,
@@ -994,7 +997,19 @@ impl FlowlistApp {
 
     /// Open the reminder window with a sample task so the backdrop can be
     /// checked without waiting for a real due time.
-    pub(super) fn send_fullscreen_test(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn send_fullscreen_test(
+        &mut self,
+        backdrop: reminder::ReminderBackdrop,
+        cx: &mut Context<Self>,
+    ) {
+        self.last_reminder_backdrop = Some(match &backdrop {
+            reminder::ReminderBackdrop::Abstract(style) => {
+                format!("abstract:{}", style.slug())
+            }
+            reminder::ReminderBackdrop::Wallpaper(path, opacity) => {
+                format!("wallpaper:{}:{opacity}", path.display())
+            }
+        });
         let task = reminder::ReminderTask {
             id: TaskId::from_string("flowlist-test-reminder"),
             title: "Full-screen reminder test".to_string(),
@@ -1002,14 +1017,7 @@ impl FlowlistApp {
             time: "09:00".to_string(),
             due_at: now(),
         };
-        if reminder::show(
-            cx.weak_entity(),
-            self.theme,
-            self.reminder_backdrop(),
-            vec![task],
-            cx,
-        )
-        .is_ok()
+        if reminder::show(cx.weak_entity(), self.theme, backdrop, vec![task], cx).is_ok()
         {
             self.reminder_open = true;
         }
@@ -6166,6 +6174,7 @@ impl FlowlistApp {
         });
         state["fullscreen_reminders"] = serde_json::json!(self.fullscreen_reminders);
         state["reminder_open"] = serde_json::json!(self.reminder_open);
+        state["last_reminder_backdrop"] = serde_json::json!(self.last_reminder_backdrop);
         state["reminder_seen"] = serde_json::json!(self.reminder_seen.len());
         state["preview"] = serde_json::json!(self.preview.as_ref().map(|preview| {
             serde_json::json!({

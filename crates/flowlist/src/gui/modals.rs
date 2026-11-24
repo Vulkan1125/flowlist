@@ -232,6 +232,7 @@ pub enum SettingsSection {
     Appearance,
     Sidebar,
     Workflow,
+    Reminders,
     Nearby,
     Trash,
     Mobile,
@@ -239,10 +240,11 @@ pub enum SettingsSection {
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 7] = [
+    pub const ALL: [SettingsSection; 8] = [
         SettingsSection::Appearance,
         SettingsSection::Sidebar,
         SettingsSection::Workflow,
+        SettingsSection::Reminders,
         SettingsSection::Nearby,
         SettingsSection::Trash,
         SettingsSection::Mobile,
@@ -254,6 +256,7 @@ impl SettingsSection {
             SettingsSection::Appearance => "appearance",
             SettingsSection::Sidebar => "sidebar",
             SettingsSection::Workflow => "workflow",
+            SettingsSection::Reminders => "reminders",
             SettingsSection::Nearby => "nearby",
             SettingsSection::Trash => "trash",
             SettingsSection::Mobile => "mobile",
@@ -266,6 +269,7 @@ impl SettingsSection {
             SettingsSection::Appearance => "Appearance",
             SettingsSection::Sidebar => "Sidebar",
             SettingsSection::Workflow => "Workflow",
+            SettingsSection::Reminders => "Reminders",
             SettingsSection::Nearby => "Nearby",
             SettingsSection::Trash => "Trash",
             SettingsSection::Mobile => "Mobile",
@@ -279,7 +283,10 @@ impl SettingsSection {
                 "Theme, accent, window controls and how light and dark are chosen."
             }
             SettingsSection::Sidebar => "Which sections, items and counts the rail shows.",
-            SettingsSection::Workflow => "Keyboard, reminders, review cadence and history windows.",
+            SettingsSection::Workflow => "Keyboard, review cadence and history windows.",
+            SettingsSection::Reminders => {
+                "Due notifications and full-screen reminder timing and backdrops."
+            }
             SettingsSection::Nearby => "How distance ranks tasks with tagged locations.",
             SettingsSection::Trash => "How long deleted tasks stay restorable.",
             SettingsSection::Mobile => "Pair your Android phone and keep it in sync with this Mac.",
@@ -296,6 +303,7 @@ impl SettingsSection {
             SettingsSection::Trash => &[4],
             SettingsSection::Appearance
             | SettingsSection::Sidebar
+            | SettingsSection::Reminders
             | SettingsSection::Mobile
             | SettingsSection::About => &[],
         }
@@ -306,6 +314,7 @@ impl SettingsSection {
             SettingsSection::Appearance => Icon::Palette,
             SettingsSection::Sidebar => Icon::PanelRight,
             SettingsSection::Workflow => Icon::Review,
+            SettingsSection::Reminders => Icon::Clock,
             SettingsSection::Nearby => Icon::Crosshair,
             SettingsSection::Trash => Icon::Trash,
             SettingsSection::Mobile => Icon::Smartphone,
@@ -2706,6 +2715,7 @@ impl FlowlistApp {
             SettingsSection::Appearance => pane.child(self.render_settings_controls(cx)),
             SettingsSection::Sidebar => pane.child(self.render_sidebar_settings(cx)),
             SettingsSection::Workflow => pane.child(self.render_workflow_settings(cx)),
+            SettingsSection::Reminders => pane.child(self.render_reminder_settings(cx)),
             SettingsSection::Nearby => pane.child(self.render_nearby_settings(cx)),
             SettingsSection::Trash => pane.child(self.render_trash_settings(cx)),
             SettingsSection::Mobile => pane.child(self.render_mobile_settings(cx)),
@@ -2839,7 +2849,13 @@ impl FlowlistApp {
             )
             .child(body);
         if let Some(hint) = hint {
-            card = card.child(div().text_xs().text_color(theme.text_faint).child(hint));
+            card = card.child(
+                div()
+                    .text_xs()
+                    .whitespace_normal()
+                    .text_color(theme.text_faint)
+                    .child(hint),
+            );
         }
         card.into_any_element()
     }
@@ -3194,8 +3210,24 @@ impl FlowlistApp {
                 div()
                     .flex()
                     .items_center()
+                    .justify_between()
                     .gap_2()
-                    .child(div().text_sm().child("Use wallpaper"))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .min_w_0()
+                            .gap_0p5()
+                            .child(div().text_sm().child("Use wallpaper"))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .whitespace_normal()
+                                    .text_color(theme.text_faint)
+                                    .child("A photo behind the window chrome and list."),
+                            ),
+                    )
                     .child(
                         div()
                             .id("settings-use-wallpaper")
@@ -3214,10 +3246,7 @@ impl FlowlistApp {
                                     cx.notify();
                                 }
                             })),
-                    )
-                    .child(div().text_xs().text_color(theme.text_faint).child(
-                        "A photo behind the window chrome and list.",
-                    )),
+                    ),
             )
             .child(
                 div()
@@ -3326,6 +3355,7 @@ impl FlowlistApp {
             background_body = background_body.child(
                 div()
                     .text_xs()
+                    .whitespace_normal()
                     .text_color(if success { theme.success } else { theme.danger })
                     .child(note.clone()),
             );
@@ -3892,32 +3922,8 @@ impl FlowlistApp {
         cx.notify();
     }
 
-    fn render_workflow_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_reminder_settings(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
-        let vim = matches!(&self.modal, Some(Modal::Settings { vim_mode: true, .. }));
-        let keyboard = div()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(
-                div()
-                    .id("modal-vim-mode")
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .cursor_pointer()
-                    .child(div().text_sm().child("Vim mode"))
-                    .child(widgets::switch(theme, vim))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(Modal::Settings { vim_mode, .. }) = &mut this.modal {
-                            *vim_mode = !*vim_mode;
-                        }
-                        cx.notify();
-                    })),
-            )
-            .child(div().text_xs().text_color(theme.text_faint).child(
-                "hjkl motions, counts, operators and pane focus. ⌘ shortcuts stay available.",
-            ));
         // Reminders are a per-device setting, unlike the library defaults in
         // the next card. The toggle is a draft until Save, matching Vim mode.
         let reminders = matches!(
@@ -3933,145 +3939,6 @@ impl FlowlistApp {
                 fullscreen_reminders: true,
                 ..
             })
-        );
-        let permission = self.notification_permission;
-        let supported = super::notifications::supported();
-        let blocked = super::notifications::signature_blocked();
-        // The status describes the toggle first. A permission is only relevant
-        // while reminders are switched on; showing "Allowed" next to an off
-        // toggle read as if reminders were active.
-        let status = if !supported {
-            "Notifications need the packaged Flowlist.app."
-        } else if !reminders {
-            "Off"
-        } else if blocked {
-            "Blocked for this ad-hoc build"
-        } else if permission.allowed() {
-            "On"
-        } else if permission == super::notifications::Permission::Denied {
-            "Denied in System Settings"
-        } else {
-            "Waiting for macOS permission…"
-        };
-        let mut actions = div().flex().items_center().gap_2();
-        if supported && reminders && permission.allowed() && !blocked {
-            actions = actions.child(
-                div()
-                    .on_children_prepainted(self.theme_probe("notify-test".to_string()))
-                    .id("notify-test")
-                    .child(widgets::button(theme, "Send test", false))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if super::notifications::send_test() {
-                            this.toast = Some("Test notification sent".to_string());
-                        } else {
-                            this.toast = Some("Allow notifications first".to_string());
-                        }
-                        cx.notify();
-                    })),
-            );
-        }
-        if fullscreen_reminders {
-            actions = actions.child(
-                div()
-                    .on_children_prepainted(
-                        self.theme_probe("fullscreen-test".to_string()),
-                    )
-                    .id("fullscreen-test")
-                    .child(widgets::button(theme, "Send full-screen test", false))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.send_fullscreen_test(cx);
-                    })),
-            );
-        }
-        if supported
-            && reminders
-            && !blocked
-            && permission == super::notifications::Permission::Denied
-        {
-            actions = actions.child(
-                div()
-                    .on_children_prepainted(self.theme_probe("notify-settings".to_string()))
-                    .id("notify-settings")
-                    .child(widgets::button(theme, "Open System Settings", false))
-                    .on_click(cx.listener(|_, _, _, cx| {
-                        super::notifications::open_settings();
-                        cx.notify();
-                    })),
-            );
-        }
-        let reminders_card = self.settings_card(
-            "Reminders",
-            Some(
-                "Due dates can send a macOS notification, even when Flowlist is in the background. Full-screen reminders are opt-in per task, project or folder.",
-            ),
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(div().text_sm().child("Due reminders"))
-                        .child(
-                            div()
-                                .on_children_prepainted(self.theme_probe("notify-toggle".to_string()))
-                                .id("notify-toggle")
-                                .child(widgets::switch(theme, reminders))
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(Modal::Settings { notifications, .. }) =
-                                        &mut this.modal
-                                    {
-                                        *notifications = !*notifications;
-                                    }
-                                    cx.notify();
-                                })),
-                        )
-                        .child(div().text_xs().text_color(theme.text_faint).child(status)),
-                )
-                .child(div().text_xs().text_color(theme.text_faint).child(
-                    "Date-only tasks remind at 09:00; timestamped tasks at their time. The next 30 days are scheduled.",
-                ))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(div().text_sm().child("Full-screen reminders"))
-                        .child(
-                            div()
-                                .on_children_prepainted(
-                                    self.theme_probe("notify-fullscreen-toggle".to_string()),
-                                )
-                                .id("notify-fullscreen-toggle")
-                                .child(widgets::switch(theme, fullscreen_reminders))
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(Modal::Settings {
-                                        fullscreen_reminders,
-                                        ..
-                                    }) = &mut this.modal
-                                    {
-                                        *fullscreen_reminders = !*fullscreen_reminders;
-                                    }
-                                    cx.notify();
-                                })),
-                        )
-                        .child(div().text_xs().text_color(theme.text_faint).child(
-                            "Only tasks, projects and folders marked for full-screen reminders take over the screen.",
-                        )),
-                )
-                .child(actions)
-                .when(blocked, |this| {
-                    this.child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.danger)
-                            .child(
-                                "macOS only grants notifications to a signed app. Build with an Apple Development or Developer ID certificate to enable reminders (see docs/packaging.md).",
-                            ),
-                    )
-                }),
         );
         let (
             reminder_style,
@@ -4106,6 +3973,202 @@ impl FlowlistApp {
                 None,
             ),
         };
+        let draft_backdrop = if reminder_use_wallpaper {
+            reminder_wallpaper
+                .clone()
+                .map(|path| {
+                    super::reminder::ReminderBackdrop::Wallpaper(path, reminder_opacity)
+                })
+                .unwrap_or_else(|| {
+                    super::reminder::ReminderBackdrop::Abstract(if reminder_match {
+                        super::background::AbstractStyle::for_theme(theme.kind())
+                    } else {
+                        reminder_style
+                    })
+                })
+        } else {
+            super::reminder::ReminderBackdrop::Abstract(if reminder_match {
+                super::background::AbstractStyle::for_theme(theme.kind())
+            } else {
+                reminder_style
+            })
+        };
+        let permission = self.notification_permission;
+        let supported = super::notifications::supported();
+        let blocked = super::notifications::signature_blocked();
+        // The status describes the toggle first. A permission is only relevant
+        // while reminders are switched on; showing "Allowed" next to an off
+        // toggle read as if reminders were active.
+        let status = if !supported {
+            "Notifications need the packaged Flowlist.app."
+        } else if !reminders {
+            "Off"
+        } else if blocked {
+            "Blocked for this ad-hoc build"
+        } else if permission.allowed() {
+            "On"
+        } else if permission == super::notifications::Permission::Denied {
+            "Denied in System Settings"
+        } else {
+            "Waiting for macOS permission…"
+        };
+        let mut actions = div().flex().flex_wrap().items_center().gap_2();
+        if supported && reminders && permission.allowed() && !blocked {
+            actions = actions.child(
+                div()
+                    .on_children_prepainted(self.theme_probe("notify-test".to_string()))
+                    .id("notify-test")
+                    .child(widgets::button(theme, "Send test", false))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if super::notifications::send_test() {
+                            this.toast = Some("Test notification sent".to_string());
+                        } else {
+                            this.toast = Some("Allow notifications first".to_string());
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        if fullscreen_reminders {
+            actions = actions.child(
+                div()
+                    .on_children_prepainted(
+                        self.theme_probe("fullscreen-test".to_string()),
+                    )
+                    .id("fullscreen-test")
+                    .child(widgets::button(theme, "Send full-screen test", false))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.send_fullscreen_test(draft_backdrop.clone(), cx);
+                    })),
+            );
+        }
+        if supported
+            && reminders
+            && !blocked
+            && permission == super::notifications::Permission::Denied
+        {
+            actions = actions.child(
+                div()
+                    .on_children_prepainted(self.theme_probe("notify-settings".to_string()))
+                    .id("notify-settings")
+                    .child(widgets::button(theme, "Open System Settings", false))
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        super::notifications::open_settings();
+                        cx.notify();
+                    })),
+            );
+        }
+        let reminders_card = self.settings_card(
+            "Reminders",
+            Some(
+                "Due dates can send a macOS notification, even when Flowlist is in the background. Full-screen reminders are opt-in per task, project or folder.",
+            ),
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_0p5()
+                                .child(div().text_sm().child("Due reminders"))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .whitespace_normal()
+                                        .text_color(theme.text_faint)
+                                        .child(status),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .on_children_prepainted(self.theme_probe("notify-toggle".to_string()))
+                                .id("notify-toggle")
+                                .child(widgets::switch(theme, reminders))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Settings { notifications, .. }) =
+                                        &mut this.modal
+                                    {
+                                        *notifications = !*notifications;
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .whitespace_normal()
+                        .text_color(theme.text_faint)
+                        .child(
+                            "Date-only tasks remind at 09:00; timestamped tasks at their time. The next 30 days are scheduled.",
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_0p5()
+                                .child(div().text_sm().child("Full-screen reminders"))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .whitespace_normal()
+                                        .text_color(theme.text_faint)
+                                        .child(
+                                            "Only tasks, projects and folders marked for full-screen reminders take over the screen.",
+                                        ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .on_children_prepainted(
+                                    self.theme_probe("notify-fullscreen-toggle".to_string()),
+                                )
+                                .id("notify-fullscreen-toggle")
+                                .child(widgets::switch(theme, fullscreen_reminders))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Settings {
+                                        fullscreen_reminders,
+                                        ..
+                                    }) = &mut this.modal
+                                    {
+                                        *fullscreen_reminders = !*fullscreen_reminders;
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .child(actions)
+                .when(blocked, |this| {
+                    this.child(
+                        div()
+                            .text_xs()
+                            .whitespace_normal()
+                            .text_color(theme.danger)
+                            .child(
+                                "macOS only grants notifications to a signed app. Build with an Apple Development or Developer ID certificate to enable reminders (see docs/packaging.md).",
+                            ),
+                    )
+                }),
+        );
         let mut background_body = div()
             .flex()
             .flex_col()
@@ -4114,8 +4177,26 @@ impl FlowlistApp {
                 div()
                     .flex()
                     .items_center()
+                    .justify_between()
                     .gap_2()
-                    .child(div().text_sm().child("Match theme"))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .min_w_0()
+                            .gap_0p5()
+                            .child(div().text_sm().child("Match theme"))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .whitespace_normal()
+                                    .text_color(theme.text_faint)
+                                    .child(
+                                        "Use the abstract style that belongs to the current theme.",
+                                    ),
+                            ),
+                    )
                     .child(
                         div()
                             .id("reminder-background-match")
@@ -4134,10 +4215,7 @@ impl FlowlistApp {
                                 }
                                 cx.notify();
                             })),
-                    )
-                    .child(div().text_xs().text_color(theme.text_faint).child(
-                        "Use the abstract style that belongs to the current theme.",
-                    )),
+                    ),
             )
             .child(div().text_xs().text_color(theme.text_faint).child("Abstract style"));
         let mut styles = div().flex().flex_wrap().items_center().gap_1();
@@ -4148,6 +4226,9 @@ impl FlowlistApp {
             let key = format!("reminder-background:{}", style.slug());
             styles = styles.child(
                 div()
+                    .on_children_prepainted(
+                        self.theme_probe(format!("reminder-style-{}", style.slug())),
+                    )
                     .id(super::sid(key))
                     .w(px(86.))
                     .flex()
@@ -4199,8 +4280,24 @@ impl FlowlistApp {
                     div()
                         .flex()
                         .items_center()
+                        .justify_between()
                         .gap_2()
-                        .child(div().text_sm().child("Use my wallpaper"))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_0p5()
+                                .child(div().text_sm().child("Use my wallpaper"))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .whitespace_normal()
+                                        .text_color(theme.text_faint)
+                                        .child("Show the photo chosen in Appearance."),
+                                ),
+                        )
                         .child(
                             div()
                                 .id("reminder-background-wallpaper")
@@ -4326,6 +4423,7 @@ impl FlowlistApp {
             background_body = background_body.child(
                 div()
                     .text_xs()
+                    .whitespace_normal()
                     .text_color(if success { theme.success } else { theme.danger })
                     .child(note.clone()),
             );
@@ -4337,6 +4435,47 @@ impl FlowlistApp {
             ),
             background_body,
         );
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(reminders_card)
+            .child(reminder_background_card)
+            .into_any_element()
+    }
+
+    fn render_workflow_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let vim = matches!(&self.modal, Some(Modal::Settings { vim_mode: true, .. }));
+        let keyboard = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .id("modal-vim-mode")
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .cursor_pointer()
+                    .child(div().text_sm().child("Vim mode"))
+                    .child(widgets::switch(theme, vim))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Settings { vim_mode, .. }) = &mut this.modal {
+                            *vim_mode = !*vim_mode;
+                        }
+                        cx.notify();
+                    })),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .whitespace_normal()
+                    .text_color(theme.text_faint)
+                    .child(
+                        "hjkl motions, counts, operators and pane focus. ⌘ shortcuts stay available.",
+                    ),
+            );
         let keep_subtasks = matches!(
             &self.modal,
             Some(Modal::Settings {
@@ -4376,8 +4515,6 @@ impl FlowlistApp {
             .flex_col()
             .gap_3()
             .child(self.settings_card("Keyboard", None, keyboard))
-            .child(reminders_card)
-            .child(reminder_background_card)
             .child(subtasks_card)
             .child(
                 self.settings_card(

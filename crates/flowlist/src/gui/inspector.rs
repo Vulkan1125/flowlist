@@ -1216,11 +1216,14 @@ impl FlowlistApp {
                 div()
                     .flex()
                     .flex_col()
+                    .flex_1()
+                    .min_w_0()
                     .gap_0p5()
                     .child(div().text_sm().child("Full-screen reminder"))
                     .child(
                         div()
                             .text_xs()
+                            .whitespace_normal()
                             .text_color(theme.text_faint)
                             .child("Take over the screen when this task is due."),
                     ),
@@ -1281,11 +1284,14 @@ impl FlowlistApp {
                         div()
                             .flex()
                             .flex_col()
+                            .flex_1()
+                            .min_w_0()
                             .gap_0p5()
                             .child(div().text_sm().child("Match due date & time"))
                             .child(
                                 div()
                                     .text_xs()
+                                    .whitespace_normal()
                                     .text_color(theme.text_faint)
                                     .child(detail),
                             ),
@@ -1306,11 +1312,13 @@ impl FlowlistApp {
                             })),
                     ),
             )
-            .when(!match_due, |this| {
-                this.child(
-                    self.inspector_date_field(DateField::Reminder, reminder, cx),
-                )
-            })
+            .child(
+                self.inspector_date_field(
+                    DateField::Reminder,
+                    if match_due { due } else { reminder },
+                    cx,
+                ),
+            )
     }
 
     fn inspector_notes(&self, notes: &str, cx: &mut Context<Self>) -> impl IntoElement {
