@@ -14,9 +14,10 @@
   tuned for each theme family, are available regardless of the active theme.
   **Match theme** follows the current family, **None** keeps the plain
   surface, and **Choose wallpaper** copies any picked image into app storage
-  and paints it behind the app. The Full-screen reminders card is now first in
-  Settings → Notifications, and the capture sheet shows the per-task toggle
-  above its chips.
+  and paints it behind the app. Cards, sheets and menus stay opaque, with one
+  scrim under the main content, so text does not bleed through the background.
+  The Full-screen reminders card is now first in Settings → Notifications, and
+  the capture sheet shows the per-task toggle above its chips.
 - **Cleaner Mac login item.** The mobile server agent is associated with the
   Flowlist app bundle, so Login Items lists one **Flowlist** row with the app
   icon. Installing from a bare build now points the agent at the packaged app

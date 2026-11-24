@@ -276,14 +276,14 @@ fun FlowlistTheme(
         )
     }
     val baseColors = colors
-    // One scrim layer lets the ambient layer show through every screen while
-    // keeping task titles readable. Nested screens paint transparent roots so
-    // they do not stack this alpha into an opaque wall.
-    val surfaceColors = if (background.active) {
-        baseColors.copy(background = baseColors.background.copy(alpha = 0.62f))
-    } else {
-        baseColors
-    }
+    // The ambient layer gets exactly one scrim under the main content. A photo
+    // needs a heavier veil than a low-contrast gradient so task text never
+    // competes with the image. Every card, sheet and menu keeps the opaque
+    // theme surface regardless.
+    val ambientScrim = baseColors.background.copy(
+        alpha = if (background is AppBackground.Custom) 0.80f else 0.62f,
+    )
+    val surfaceColors = baseColors
     val scheme = if (dark) {
         darkColorScheme(
             primary = surfaceColors.accent,
@@ -332,7 +332,7 @@ fun FlowlistTheme(
                             model = File(layer.path),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
-                            alpha = if (dark) 0.62f else 0.5f,
+                            alpha = if (dark) 0.65f else 0.55f,
                             modifier = Modifier.fillMaxSize(),
                         )
                         Box(
@@ -349,7 +349,7 @@ fun FlowlistTheme(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(surfaceColors.background),
+                            .background(ambientScrim),
                     )
                 }
                 content()
