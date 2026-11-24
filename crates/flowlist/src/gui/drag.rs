@@ -134,6 +134,20 @@ pub struct DragSettingsResize;
 #[derive(Clone, Copy, Debug)]
 pub struct DragSettingsScroll;
 
+/// The inspector's own scrollbar thumb. Kept separate from Settings so the
+/// two sheets cannot steal each other's drag.
+#[derive(Clone, Debug)]
+pub struct DragInspectorScroll;
+
+pub fn inspector_scroll_ghost(
+    _payload: &DragInspectorScroll,
+    _position: Point<Pixels>,
+    _window: &mut Window,
+    cx: &mut App,
+) -> gpui::Entity<ResizeGhost> {
+    cx.new(|_| ResizeGhost)
+}
+
 pub fn settings_scroll_ghost(
     _payload: &DragSettingsScroll,
     _position: Point<Pixels>,

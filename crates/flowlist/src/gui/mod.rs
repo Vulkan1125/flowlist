@@ -589,6 +589,8 @@ pub struct FlowlistApp {
     settings_size: Option<(f32, f32)>,
     /// Where the pointer grabbed the Settings scrollbar thumb, in points.
     scroll_drag_grab: Rc<Cell<Option<f32>>>,
+    /// Where the pointer grabbed the inspector scrollbar thumb, in points.
+    inspector_scroll_drag_grab: Rc<Cell<Option<f32>>>,
     toast: Option<String>,
     /// Last measured content size, persisted so the next launch reopens at it.
     window_size: Option<(f32, f32)>,
@@ -881,6 +883,7 @@ impl FlowlistApp {
             modal_scroll: ScrollHandle::new(),
             settings_size: None,
             scroll_drag_grab: Rc::new(Cell::new(None)),
+            inspector_scroll_drag_grab: Rc::new(Cell::new(None)),
             toast,
             window_size,
             window_dirty: false,

@@ -12,7 +12,9 @@ use flowlist_core::model::{Priority, ProjectIcon, ProjectStatus};
 use flowlist_core::time::{format_duration, human_date, local_date, now};
 
 use super::content::month_grid;
-use super::drag::{DragChecklist, DragTask, checklist_ghost};
+use super::drag::{
+    DragChecklist, DragInspectorScroll, DragTask, checklist_ghost, inspector_scroll_ghost,
+};
 use super::icons::Icon;
 use super::widgets::TipExt;
 use super::{ClockUnit, DateField, DatePickerStep, EditField, FlowlistApp, View, icons, widgets};
@@ -68,6 +70,29 @@ impl FlowlistApp {
                 ),
         );
 
+        panel = panel.on_drag_move::<DragInspectorScroll>(
+            cx.listener(|this, event: &gpui::DragMoveEvent<DragInspectorScroll>, _, cx| {
+                let Some(drag_offset) = this.inspector_scroll_drag_grab.get() else {
+                    return;
+                };
+                let bounds = this.inspector_scroll.bounds();
+                let viewport = f32::from(bounds.size.height);
+                let max_offset = f32::from(this.inspector_scroll.max_offset().height);
+                if viewport <= 0.0 || max_offset <= 0.0 {
+                    return;
+                }
+                let thumb_height =
+                    (viewport * viewport / (viewport + max_offset)).clamp(24.0, viewport);
+                let travel = (viewport - thumb_height).max(1.0);
+                let pointer = f32::from(event.event.position.y - bounds.origin.y);
+                let thumb_top = (pointer - drag_offset).clamp(0.0, travel);
+                let scroll = (thumb_top / travel) * max_offset;
+                this.inspector_scroll
+                    .set_offset(gpui::point(px(0.), px(-scroll)));
+                cx.notify();
+            }),
+        );
+
         let content = if let Some(id) = self.selected_one() {
             self.render_task_inspector(&id, window, cx)
                 .into_any_element()
@@ -89,7 +114,7 @@ impl FlowlistApp {
                     div()
                         .id("inspector-scroll")
                         .size_full()
-                        .pr(px(18.))
+                        .pr(px(22.))
                         .overflow_y_scroll()
                         .track_scroll(&self.inspector_scroll)
                         .child(content),
@@ -121,6 +146,7 @@ impl FlowlistApp {
         let travel = (viewport - thumb_height).max(1.0);
         let thumb_top = (scrolled / max_offset) * travel;
         let thumb_top_window = f32::from(bounds.origin.y) + thumb_top;
+        let grab = self.inspector_scroll_drag_grab.clone();
         let thumb = div()
             .id("inspector-scroll-thumb")
             .absolute()
@@ -130,8 +156,15 @@ impl FlowlistApp {
             .h(px(thumb_height))
             .rounded_full()
             .bg(theme.border)
-            .hover(|style| style.bg(theme.text_faint));
+            .hover(|style| style.bg(theme.text_faint))
+            .on_drag(DragInspectorScroll, move |payload, position, window, cx| {
+                let pointer = f32::from(position.y);
+                let drag_offset = (pointer - thumb_top_window).clamp(0.0, thumb_height);
+                grab.set(Some(drag_offset));
+                inspector_scroll_ghost(payload, position, window, cx)
+            });
         div()
+            .on_children_prepainted(self.theme_probe("inspector-scrollbar".to_string()))
             .id("inspector-scroll-track")
             .absolute()
             .top_0()
