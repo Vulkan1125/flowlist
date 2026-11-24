@@ -185,6 +185,9 @@ pub struct Session {
     /// Take over the screen with a due reminder while Flowlist is running.
     #[serde(default)]
     pub fullscreen_reminders: Option<bool>,
+    /// Pause system media while a full-screen reminder is on screen.
+    #[serde(default)]
+    pub pause_media_on_reminder: Option<bool>,
     /// Abstract style used by full-screen reminders, or `None`.
     #[serde(default)]
     pub reminder_background: Option<String>,

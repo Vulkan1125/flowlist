@@ -219,7 +219,8 @@ eight sections on the left (`⌘1`…`⌘8` jump between them):
 - **Appearance** — theme family, light/dark, Plain's accent presets and custom
   colour picker, screen eyedropper, six Dock icon colours, a background with a
   shared opacity, and the window controls. **Use custom background** reveals
-  the background controls; when it is off they stay out of the card.
+  the background controls; when it is off the pickers, thumbnails, opacity and
+  notes stay out of the card.
   **Use separate backgrounds for light and dark modes** reveals a second
   picker; otherwise one photo covers both.
 - **Sidebar** — a collapsible matrix of every rail item with **Hide** and **Hide count** boxes, indented under their heading. Every heading starts collapsed and opening one closes the rest. A ticked box hides the row and strikes its name through; hiding a row also greys out its count box, since a count on a hidden row makes no sense. Inbox, Today and Trash always stay and have no Hide box at all. Saved perspectives show their open count, or a bare tick when nothing matches. **Hide empty custom views** drops a saved view from the rail while its filter matches nothing and brings it back as soon as a task does.
@@ -237,16 +238,17 @@ eight sections on the left (`⌘1`…`⌘8` jump between them):
 **Settings → Reminders** (its own sidebar item) can schedule a macOS notification for every
 task due in the next 30 days. Timestamped tasks remind at their time; date-only
 tasks remind at 09:00 local. Toggling it on asks macOS for permission, and
-**Send test** checks that banners are working.
+**Send test** checks that banners are working. **Pause media on full-screen
+reminders** pauses system playback when a reminder opens and resumes it when the
+reminder closes.
 
 **Full-screen reminders** are opt-in per task, project or folder. Mark a task
 in the inspector, type `fsr:1h30m` in quick capture, or tick **Full-screen
 reminder** while creating a project or folder. A marked task, and every task inside a marked
 project or folder, opens a screen-sized reminder when it comes due while
-Flowlist is running. Complete, Snooze, Pause media, Open task and Dismiss are
-on that screen; Dismiss and Esc leave the task alone. **S** cycles the snooze
-length, **Enter** snoozes with it, **⌘Enter** completes the task, and **M**
-pauses or resumes playing media. When several
+Flowlist is running. Complete, Snooze, Open task and Dismiss are on that
+screen; Dismiss and Esc leave the task alone. **S** cycles the snooze length,
+**Enter** snoozes with it and **⌘Enter** completes the task. When several
 reminders share a time, **View all** (or **V**) opens the Full-screen view
 instead of stepping through them. A mark with neither a due nor an explicit
 reminder time is ignored.

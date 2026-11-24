@@ -521,6 +521,8 @@ pub struct FlowlistApp {
     due_notifications: bool,
     /// Show a full-screen reminder when a task comes due while the app runs.
     fullscreen_reminders: bool,
+    /// Pause system media while a full-screen reminder is on screen.
+    pause_media_on_reminder: bool,
     /// Due instants already shown, so a full-screen reminder fires once.
     reminder_seen: BTreeSet<String>,
     /// Tasks snoozed from the reminder, and when to show them again.
@@ -682,6 +684,7 @@ impl FlowlistApp {
         let vim_mode = session.vim_mode.unwrap_or(true);
         let due_notifications = session.notifications.unwrap_or(false);
         let fullscreen_reminders = session.fullscreen_reminders.unwrap_or(true);
+        let pause_media_on_reminder = session.pause_media_on_reminder.unwrap_or(false);
         let reminder_match_theme = session.reminder_match_theme.unwrap_or(true);
         let reminder_background = session
             .reminder_background
@@ -883,6 +886,7 @@ impl FlowlistApp {
             vim_mode,
             due_notifications,
             fullscreen_reminders,
+            pause_media_on_reminder,
             reminder_seen: BTreeSet::new(),
             reminder_snoozed: BTreeMap::new(),
             reminder_open: false,
@@ -1083,6 +1087,7 @@ impl FlowlistApp {
         &mut self,
         backdrop: reminder::ReminderBackdrop,
         snooze_minutes: u32,
+        pause_media: bool,
         cx: &mut Context<Self>,
     ) {
         self.last_reminder_backdrop = Some(match &backdrop {
@@ -1105,6 +1110,7 @@ impl FlowlistApp {
             self.theme,
             backdrop,
             snooze_minutes,
+            pause_media,
             vec![task],
             cx,
         )
@@ -1196,6 +1202,7 @@ impl FlowlistApp {
             self.theme,
             backdrop,
             self.reminder_snooze_minutes,
+            self.pause_media_on_reminder,
             due,
             cx,
         ) {
@@ -1279,6 +1286,7 @@ impl FlowlistApp {
             vim_mode: Some(self.vim_mode),
             notifications: Some(self.due_notifications),
             fullscreen_reminders: Some(self.fullscreen_reminders),
+            pause_media_on_reminder: Some(self.pause_media_on_reminder),
             reminder_background: Some(self.reminder_background.slug().to_string()),
             reminder_match_theme: Some(self.reminder_match_theme),
             reminder_wallpaper: None,
@@ -4228,6 +4236,7 @@ impl FlowlistApp {
                 vim_mode,
                 notifications,
                 fullscreen_reminders,
+                pause_media_on_reminder,
                 reminder_background,
                 reminder_match_theme,
                 reminder_wallpaper_light,
@@ -4292,6 +4301,7 @@ impl FlowlistApp {
                 self.vim_mode = *vim_mode;
                 self.due_notifications = *notifications;
                 self.fullscreen_reminders = *fullscreen_reminders;
+                self.pause_media_on_reminder = *pause_media_on_reminder;
                 self.reminder_background = *reminder_background;
                 self.reminder_match_theme = *reminder_match_theme;
                 self.reminder_wallpaper_light = reminder_wallpaper_light.clone();
@@ -6350,6 +6360,7 @@ impl FlowlistApp {
             "supported": notifications::supported(),
         });
         state["fullscreen_reminders"] = serde_json::json!(self.fullscreen_reminders);
+        state["pause_media_on_reminder"] = serde_json::json!(self.pause_media_on_reminder);
         state["reminder_open"] = serde_json::json!(self.reminder_open);
         state["inspector_scroll"] = serde_json::json!({
             "max": f32::from(self.inspector_scroll.max_offset().height),

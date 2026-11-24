@@ -186,6 +186,8 @@ pub enum Modal {
         notifications: bool,
         /// Take over the screen when a task comes due, per device.
         fullscreen_reminders: bool,
+        /// Pause system media while a full-screen reminder is on screen.
+        pause_media_on_reminder: bool,
         reminder_background: super::background::AbstractStyle,
         reminder_match_theme: bool,
         reminder_wallpaper_light: Option<std::path::PathBuf>,
@@ -527,6 +529,7 @@ impl Modal {
             vim_mode: app.vim_mode,
             notifications: app.due_notifications,
             fullscreen_reminders: app.fullscreen_reminders,
+            pause_media_on_reminder: app.pause_media_on_reminder,
             reminder_background: app.reminder_background,
             reminder_match_theme: app.reminder_match_theme,
             reminder_wallpaper_light: app.reminder_wallpaper_light.clone(),
@@ -4216,6 +4219,13 @@ impl FlowlistApp {
                 ..
             })
         );
+        let pause_media_on_reminder = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                pause_media_on_reminder: true,
+                ..
+            })
+        );
         let (
             reminder_style,
             reminder_match,
@@ -4335,6 +4345,7 @@ impl FlowlistApp {
                         this.send_fullscreen_test(
                             draft_backdrop.clone(),
                             snooze_minutes,
+                            pause_media_on_reminder,
                             cx,
                         );
                     })),
@@ -4449,6 +4460,54 @@ impl FlowlistApp {
                                     }) = &mut this.modal
                                     {
                                         *fullscreen_reminders = !*fullscreen_reminders;
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_0p5()
+                                .child(div().text_sm().child(
+                                    "Pause media on full-screen reminders",
+                                ))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .whitespace_normal()
+                                        .text_color(theme.text_faint)
+                                        .child(
+                                            "Uses the system play/pause key when the reminder opens and closes.",
+                                        ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .on_children_prepainted(
+                                    self.theme_probe(
+                                        "notify-fullscreen-media-toggle".to_string(),
+                                    ),
+                                )
+                                .id("notify-fullscreen-media-toggle")
+                                .child(widgets::switch(theme, pause_media_on_reminder))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Settings {
+                                        pause_media_on_reminder,
+                                        ..
+                                    }) = &mut this.modal
+                                    {
+                                        *pause_media_on_reminder =
+                                            !*pause_media_on_reminder;
                                     }
                                     cx.notify();
                                 })),

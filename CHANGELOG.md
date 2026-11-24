@@ -10,9 +10,10 @@
 - **Custom background controls.** “Use background” is now **Use custom
   background** in Appearance and on the reminder. When it is off, the picker,
   separate light/dark toggle, thumbnail, opacity and notes are hidden.
-- **Pause media from the reminder.** The full-screen reminder has a Pause
-  media / Resume media button (and the **M** key) that controls system
-  playback without leaving the screen.
+- **Pause media on full-screen reminders.** A new Reminders setting pauses
+  system playback when a full-screen reminder opens and resumes it when the
+  reminder closes. It only sends the media key when a known media app is
+  already running.
 
 ## 0.9.49 — 2026-11-24
 

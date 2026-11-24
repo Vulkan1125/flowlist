@@ -47,7 +47,8 @@ pub struct Reminder {
     /// after Complete, Snooze, Dismiss or Esc. Opening the task keeps Flowlist
     /// in front instead.
     previous_app: Option<i32>,
-    media_paused: bool,
+    /// Whether this reminder actually paused something, so closing resumes it.
+    paused_media: bool,
     focus_handle: FocusHandle,
 }
 
@@ -59,8 +60,12 @@ impl Reminder {
         snooze_minutes: u32,
         tasks: Vec<ReminderTask>,
         previous_app: Option<i32>,
+        pause_media: bool,
         cx: &mut Context<Self>,
     ) -> Self {
+        let paused_media = pause_media
+            && super::media::is_audio_playing()
+            && super::media::toggle_playback();
         Self {
             app,
             theme,
@@ -69,7 +74,7 @@ impl Reminder {
             tasks,
             index: 0,
             previous_app,
-            media_paused: false,
+            paused_media,
             focus_handle: cx.focus_handle(),
         }
     }
@@ -110,6 +115,12 @@ impl Reminder {
             let _ = app.update(cx, |app, _| app.reminder_closed());
         }
         window.remove_window();
+        if self.paused_media
+            && super::media::is_media_app_running()
+        {
+            let _ = super::media::toggle_playback();
+        }
+        self.paused_media = false;
         if restore_previous
             && let Some(pid) = self.previous_app.take()
         {
@@ -154,13 +165,6 @@ impl Reminder {
 
     /// `s` walks the three lengths the reminder offers, so the choice is made
     /// without leaving the full-screen view.
-    fn toggle_media(&mut self, cx: &mut Context<Self>) {
-        if super::media::toggle_playback() {
-            self.media_paused = !self.media_paused;
-        }
-        cx.notify();
-    }
-
     fn cycle_snooze(&mut self, cx: &mut Context<Self>) {
         const CHOICES: [u32; 3] = [15, 30, 60];
         let next = match CHOICES.iter().position(|minutes| *minutes == self.snooze_minutes) {
@@ -207,7 +211,6 @@ impl Reminder {
             "enter" | "return" if command => self.complete(window, cx),
             "enter" | "return" => self.snooze(window, cx),
             "s" if !command => self.cycle_snooze(cx),
-            "m" => self.toggle_media(cx),
             "v" => self.view_all(window, cx),
             "o" => self.open(window, cx),
             _ => {}
@@ -257,7 +260,6 @@ impl Reminder {
                 match id {
                     "reminder-complete" => this.complete(window, cx),
                     "reminder-snooze" => this.snooze(window, cx),
-                    "reminder-media" => this.toggle_media(cx),
                     "reminder-view" => this.view_all(window, cx),
                     "reminder-open" => this.open(window, cx),
                     _ => this.dismiss(window, cx),
@@ -359,9 +361,7 @@ impl Render for Reminder {
                             .child(
                                 div()
                                     .flex()
-                                    .flex_wrap()
                                     .items_center()
-                                    .justify_center()
                                     .gap_3()
                                     .child(self.action(
                                         "reminder-complete",
@@ -374,17 +374,6 @@ impl Render for Reminder {
                                         "reminder-snooze",
                                         snooze_label(self.snooze_minutes),
                                         Icon::Clock,
-                                        false,
-                                        cx,
-                                    ))
-                                    .child(self.action(
-                                        "reminder-media",
-                                        if self.media_paused {
-                                            "Resume media"
-                                        } else {
-                                            "Pause media"
-                                        },
-                                        Icon::Video,
                                         false,
                                         cx,
                                     ))
@@ -413,7 +402,7 @@ impl Render for Reminder {
                                     }),
                             )
                             .child(div().text_xs().text_color(theme.text_faint).child(format!(
-                                "{position} · Esc dismisses · S cycles snooze · Enter snoozes · ⌘Enter completes · M toggles media"
+                                "{position} · Esc dismisses · S cycles snooze · Enter snoozes · ⌘Enter completes"
                             ))),
                     ),
             )
@@ -434,6 +423,7 @@ pub fn show(
     theme: Theme,
     backdrop: ReminderBackdrop,
     snooze_minutes: u32,
+    pause_media: bool,
     tasks: Vec<ReminderTask>,
     cx: &mut App,
 ) -> Result<()> {
@@ -485,6 +475,7 @@ pub fn show(
                     snooze_minutes,
                     tasks,
                     previous_app,
+                    pause_media,
                     cx,
                 )
             });
