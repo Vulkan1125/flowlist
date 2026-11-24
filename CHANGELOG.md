@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Android full-screen counts.** Saved views using the full-screen reminder
+  filter now evaluate it on Android instead of ignoring it, and the count
+  includes matched subtasks just like the Mac sidebar badge.
 - **Quick capture polish.** The `⌃⌥Space` shortcut now toggles the panel: a
   second press puts it away without filing. Removed the outer keycap boxes but
   kept `esc`, `⏎` and `⌘⏎` as plain text beside Add / Add & open. The panel is opaque and its

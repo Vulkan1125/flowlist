@@ -65,7 +65,9 @@ import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.Snapshot
 import dev.flowlist.android.data.TagDto
 import dev.flowlist.android.data.TaskView
+import dev.flowlist.android.data.reminderStamp
 import dev.flowlist.android.data.taskViews
+import dev.flowlist.android.data.wantsFullscreenReminder
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -805,13 +807,12 @@ private fun perspectiveFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedTextColor = flow.ink,
 )
 
-/// Number of top-level rows a saved perspective would show right now.
+/// Number of tasks a saved perspective matches right now. Subtasks count too,
+/// matching the Mac sidebar badge, which counts every row the query returns.
 fun countPerspectiveTasks(db: Db?, perspective: PerspectiveDto): Int {
     db ?: return 0
     return db.taskViews(includeCompleted = perspective.showCompleted)
-        .count { task ->
-            task.parent == null && matchesFilter(db, task, perspective.filter)
-        }
+        .count { task -> matchesFilter(db, task, perspective.filter) }
 }
 
 @Composable
@@ -944,6 +945,16 @@ private fun matchesCondition(db: Db?, task: TaskView, condition: JsonObject): Bo
         "has_repeat" -> {
             val expected = condition.boolean("value") ?: true
             (db?.tasks?.get(task.id)?.repeat != null) == expected
+        }
+        "fullscreen_reminder" -> {
+            val expected = condition.boolean("value") ?: true
+            val data = db ?: return false
+            val dto = data.tasks[task.id] ?: return false
+            // Match the Mac rule: a mark only counts when it has a due or
+            // explicit reminder time to fire.
+            val effective = data.wantsFullscreenReminder(dto) &&
+                data.reminderStamp(dto) != null
+            effective == expected
         }
         "estimate" -> {
             val minutes = task.estimateMin ?: return true
