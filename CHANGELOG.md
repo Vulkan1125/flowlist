@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **No Full-screen sidebar row.** The Full-screen list is no longer offered as a
+  perspective; it remains a temporary destination for a reminder's **View all**
+  action.
 - **Reminder focus.** Completing, snoozing or dismissing a full-screen reminder
   restores the app that owned the screen instead of bringing Flowlist forward.
 - **Background terminology.** Wallpaper controls and picker text are now

@@ -26,7 +26,10 @@ pub enum BuiltinPerspective {
 }
 
 impl BuiltinPerspective {
-    pub const ALL: [BuiltinPerspective; 14] = [
+    /// The rows offered in the sidebar and Settings matrix. `Fullscreen` is
+    /// deliberately absent: it is a transient list opened by a reminder's
+    /// View all action, not a permanent perspective.
+    pub const ALL: [BuiltinPerspective; 13] = [
         BuiltinPerspective::Inbox,
         BuiltinPerspective::Today,
         BuiltinPerspective::Projects,
@@ -38,7 +41,6 @@ impl BuiltinPerspective {
         BuiltinPerspective::Archive,
         BuiltinPerspective::Changed,
         BuiltinPerspective::Attachments,
-        BuiltinPerspective::Fullscreen,
         BuiltinPerspective::Nearby,
         BuiltinPerspective::Trash,
     ];
@@ -82,6 +84,11 @@ impl BuiltinPerspective {
     }
 
     pub fn from_slug(value: &str) -> Option<Self> {
+        // The transient Full-screen list is valid in a saved session even
+        // though it never appears in the sidebar.
+        if value == "fullscreen" {
+            return Some(Self::Fullscreen);
+        }
         Self::ALL
             .into_iter()
             .find(|perspective| perspective.slug() == value)

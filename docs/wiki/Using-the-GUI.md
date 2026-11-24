@@ -250,7 +250,8 @@ project or folder, opens a screen-sized reminder when it comes due while
 Flowlist is running. Complete, Snooze, Open task and Dismiss are on that
 screen; Dismiss and Esc leave the task alone. **S** cycles the snooze length,
 **Enter** snoozes with it and **⌘Enter** completes the task. When several
-reminders share a time, **View all** (or **V**) opens the Full-screen view
+reminders share a time, **View all** (or **V**) opens a temporary Full-screen
+list
 instead of stepping through them. A mark with neither a due nor an explicit
 reminder time is ignored.
 

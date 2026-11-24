@@ -269,7 +269,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       requires Device control and data access for it. Quick capture accepts
       `fsr:1h30m` or `fsr:2d` (and bare `fsr` to follow due), and the
       project/folder sheets carry the mark at creation. Multiple reminders
-      due together offer **View all**, which opens the Full-screen view. A
+      due together offer **View all**, which opens a temporary Full-screen
+      list. It is not a sidebar perspective. A
       mark without a due or explicit reminder time is ignored.
 - [x] Mac backgrounds: a background sits behind the main window with one
       opacity choice; a Settings toggle reveals separate light and dark
