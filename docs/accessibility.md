@@ -38,11 +38,9 @@ filing. Inside the panel:
 | `Esc`, `⌘W` | Close without adding |
 | `⌘A`, `⌘C`, `⌘X`, `⌘V` | Select all, copy, cut and paste in the field |
 
-The panel shows a live read-out of the markers only — priority, project, tags,
-dates, estimate, repeat and full-screen reminder — with dates resolved and the
-text wrapping onto a second line when needed. The task title is not repeated in
-that read-out, and the panel is opaque so its controls never blend into the
-desktop behind it. A plain capture always files into the
+The panel names its destination in the footer and previews the parsed title,
+project, tags, dates, estimate and repeat rule as chips, so the result of a
+marker is visible before `Enter` files it. A plain capture always files into the
 Inbox; `::Project` files into that project, and `due:` / `defer:` schedules the
 task into Today or Forecast so it leaves the Inbox. The panel stays above normal
 windows when another app comes forward. Nothing in the main window moves while

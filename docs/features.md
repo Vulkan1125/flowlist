@@ -233,10 +233,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       creating the project
 - [x] Things 3-style quick capture (`⌃⌥Space`): a compact square-cornered
       floating panel opens in the middle of the screen over whatever is in
-      front, without moving the main window's view, selection or scroll. A
-      single plus icon and title field sit over an opaque panel, with a live
-      syntax read-out that resolves dates and wraps to a second line. It
-      files plain text into the
+      front, without moving the main window's view, selection or scroll. It
+      previews the parsed title and destination, files plain text into the
       Inbox, files an explicit `::Project` into that project, and schedules a
       `due:` / `defer:` capture into Today or Forecast. The panel stays above
       normal windows when another app comes forward, closes on `Enter`, stays

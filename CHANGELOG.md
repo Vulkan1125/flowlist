@@ -28,11 +28,6 @@
   before now, greys out past days in the calendar, and rejects past text.
 - **Fixed settings rail.** Scrolling a settings section no longer scrolls the
   section rail; only the pane moves.
-- **Quick capture rebuild.** The floating panel is now an opaque, square-cornered
-  surface with only a plus button and title field. Under it, a live read-out
-  interprets the markers instead of repeating the title, resolves `due:` and
-  `fsr:` to actual dates, and wraps to a second line instead of truncating. The
-  old chips, footer, drag handle and keycaps are gone.
 - **Quick-entry full-screen reminders.** Type `fsr:1h30m`, `fsr:2d`, or bare
   `fsr` to follow the due time instead of using a capture button. Compact
   offsets such as `due:3d` work too. A mark without a due or explicit reminder

@@ -5,9 +5,9 @@
 //! move. Capturing goes through the same `Store::execute` path as every other
 //! edit, which keeps the action undoable from the main window.
 //!
-//! The panel is intentionally quiet: a plus icon, one title line, and a live
-//! read-out of the markers (`@1`, `due:3d`, `fsr:2d`, `#tag`, `::Project`)
-//! with their dates resolved. Enter files it and closes; `⌘⏎` files it and
+//! The panel is intentionally quiet: one large title line, a live parse of the
+//! markers (`#tag`, `::Project`, `due:`, `repeat:`), and a footer that says
+//! where the task will land. Enter files it and closes; `⌘⏎` files it and
 //! reveals it in the main window; `⇧⏎` files it and stays open for the next
 //! thought.
 
@@ -24,12 +24,11 @@ use flowlist_core::ids::TaskId;
 use flowlist_core::parse::{QuickEntry, parse_quick};
 use flowlist_core::paths::DataPaths;
 use flowlist_core::store::Store;
-use flowlist_core::time::{Stamp, format_duration, human_date, now};
+use flowlist_core::time::{format_duration, human_date, now};
 use gpui::{
-    AnyElement, App, Bounds, ClipboardItem, Context, CursorStyle, FocusHandle, Font, FontWeight,
-    IntoElement, KeyDownEvent, MouseButton, Render, SharedString, TextRun, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div, font, prelude::*,
-    px, size,
+    App, Bounds, ClipboardItem, Context, CursorStyle, FocusHandle, Font, FontWeight, IntoElement,
+    KeyDownEvent, MouseButton, Render, SharedString, TextRun, Window, WindowBackgroundAppearance,
+    WindowBounds, WindowKind, WindowOptions, div, font, prelude::*, px, size,
 };
 
 use super::FlowlistApp;
@@ -40,7 +39,7 @@ use super::theme::{Appearance, Theme, ThemeKind};
 use super::{BufferKey, handle_buffer_key};
 
 const PANEL_WIDTH: f32 = 620.0;
-const PANEL_HEIGHT: f32 = 126.0;
+const PANEL_HEIGHT: f32 = 150.0;
 
 /// The outcome of trying to file the current text.
 enum Commit {
@@ -111,6 +110,9 @@ impl QuickCapture {
         if !self.buffer.is_empty() {
             self.buffer.select_all();
         }
+        if super::blur::sync(window, theme.appearance()).is_some() {
+            // The material follows the palette, exactly like the main window.
+        }
         window.defer(cx, |window, cx| {
             float_panel(window);
             activate_app();
@@ -138,6 +140,21 @@ impl QuickCapture {
             return format!("Defer {}", human_date(&defer, now()));
         }
         "Inbox".to_string()
+    }
+
+    fn destination_icon(&self, entry: Option<&QuickEntry>) -> Icon {
+        let Some(entry) = entry else {
+            return Icon::Inbox;
+        };
+        if entry.project_path.is_some() {
+            Icon::Project
+        } else if entry.due.is_some() {
+            Icon::Calendar
+        } else if entry.defer.is_some() {
+            Icon::Clock
+        } else {
+            Icon::Inbox
+        }
     }
 
     /// Parse and file the text. Errors stay on screen; a success is handed
@@ -234,21 +251,12 @@ impl QuickCapture {
             None => (String::new(), None),
         };
         let entry = parsed.as_ref().and_then(|parsed| parsed.as_ref().ok());
-        let syntax = entry
-            .map(|entry| {
-                interpretation_items(entry)
-                    .into_iter()
-                    .map(|(label, value)| format!("{label}:{value}"))
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
         let state = serde_json::json!({
             "open": open,
             "text": text,
             "title": title,
             "error": self.error.clone().or(parse_error),
             "destination": self.destination(entry),
-            "syntax": syntax,
             "last_captured": self.last_captured,
             "flash": self.flash,
             "window_active": self.window_active,
@@ -325,26 +333,23 @@ impl QuickCapture {
 
     fn render_input(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
+        let focused = true;
         div()
             .flex()
             .items_center()
             .gap_3()
             .px(px(22.))
-            .pt(px(16.))
-            .h(px(58.))
+            .mt(px(12.))
+            .h(px(34.))
             .child(
                 div()
-                    .id("capture-add")
                     .flex()
                     .items_center()
                     .justify_center()
-                    .w(px(22.))
-                    .cursor_pointer()
-                    .hover(|style| style.opacity(0.72))
-                    .child(icons::icon(Icon::Plus, 18.0, theme.accent))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.capture(false, window, cx);
-                    })),
+                    .size(px(30.))
+                    .rounded_full()
+                    .bg(theme.accent.opacity(0.14))
+                    .child(icons::icon(Icon::Plus, 15.0, theme.accent)),
             )
             .child(
                 div()
@@ -353,12 +358,13 @@ impl QuickCapture {
                     .child(field_text(
                         theme,
                         &self.buffer,
-                        "What's on your mind?  due:3d  fsr:2d  @1",
-                        true,
+                        "What's on your mind?",
+                        focused,
                         window,
                     ))
                     .cursor(CursorStyle::IBeam),
             )
+            .child(keycap(theme, "esc"))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
@@ -368,76 +374,215 @@ impl QuickCapture {
             )
     }
 
-    /// The syntax the parser actually understood, with dates resolved to the
-    /// day and time they will fire. The task title never appears here; this is
-    /// a read-out of the markers. It wraps onto a second line instead of
-    /// truncating.
-    fn render_interpretation(&self) -> AnyElement {
+    fn render_hints(&self) -> impl IntoElement {
+        let theme = self.theme;
+        let mut row = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .px(px(22.))
+            .mt(px(10.))
+            .h(px(24.))
+            .overflow_hidden();
+        for (token, color) in [
+            ("#tag", theme.accent),
+            ("::Project", theme.accent),
+            ("!", theme.warning),
+            ("@1 high", theme.warning),
+            ("due:tomorrow", theme.text_dim),
+            ("fsr:1h", theme.accent),
+            ("repeat:every week", theme.text_dim),
+        ] {
+            row = row.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .h(px(20.))
+                    .px(px(6.))
+                    .rounded_lg()
+                    .bg(color.opacity(0.08))
+                    .text_size(px(10.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(color)
+                    .child(token),
+            );
+        }
+        row
+    }
+
+    fn render_preview(&self) -> impl IntoElement {
         let theme = self.theme;
         let text = self.buffer.text().trim().to_string();
-        let area = div()
-            .id("capture-syntax")
-            .flex()
-            .flex_col()
-            .gap_1()
-            .px(px(22.))
-            .pt(px(9.))
-            .pb(px(14.))
-            .border_t_1()
-            .border_color(theme.border_soft);
         if text.is_empty() {
-            return match &self.flash {
-                Some(flash) => area
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(theme.success)
-                            .child(flash.clone()),
-                    )
-                    .into_any_element(),
-                None => div().into_any_element(),
-            };
+            return self.render_hints().into_any_element();
         }
-        let entry = match parse_quick(&text, now()) {
+        let parsed = parse_quick(&text, now());
+        let mut row = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .px(px(22.))
+            .mt(px(10.))
+            .h(px(24.))
+            .overflow_hidden();
+        let entry = match parsed {
             Ok(entry) => entry,
             Err(error) => {
-                return area
+                return row
                     .child(
                         div()
-                            .text_size(px(12.))
+                            .text_size(px(11.5))
                             .text_color(theme.warning)
-                            .child(format!("Couldn't read that: {error}")),
+                            .child(format!("Could not read that: {error}")),
                     )
                     .into_any_element();
             }
         };
-        let items = interpretation_items(&entry);
-        if items.is_empty() {
-            return div().into_any_element();
+
+        // The title already shows in the field above, so the row spends its
+        // width on what parsing decided. At most three chips fit beside the
+        // gutter at the widest chip; the rest collapse into a count rather
+        // than hanging over the panel edge half-drawn.
+        let mut items: Vec<(Icon, String, gpui::Hsla)> = Vec::new();
+        if let Some(project) = &entry.project_path {
+            items.push((Icon::Project, project.clone(), theme.accent));
         }
-        let mut line = div().flex().flex_wrap().items_center().gap_2();
-        for (label, value) in items {
-            line = line.child(
+        if let Some(due) = entry.due {
+            items.push((Icon::Calendar, human_date(&due, now()), theme.accent));
+        }
+        if entry.fullscreen_reminder {
+            let label = entry
+                .reminder_at
+                .map(|stamp| human_date(&stamp, now()))
+                .unwrap_or_else(|| "Follows due".to_string());
+            items.push((Icon::Clock, format!("FSR {label}"), theme.accent));
+        }
+        if let Some(defer) = entry.defer {
+            items.push((
+                Icon::Clock,
+                format!("Defer {}", human_date(&defer, now())),
+                theme.text_dim,
+            ));
+        }
+        if let Some(minutes) = entry.estimate_min {
+            items.push((Icon::Clock, format_duration(minutes), theme.text_dim));
+        }
+        if let Some(repeat) = &entry.repeat {
+            items.push((Icon::Repeat, repeat.description(), theme.success));
+        }
+        if entry.flagged {
+            items.push((Icon::Flagged, "Flagged".to_string(), theme.warning));
+        }
+        for tag in &entry.tag_paths {
+            items.push((Icon::Tag, format!("#{tag}"), theme.accent));
+        }
+        const SHOWN: usize = 3;
+        let total = items.len();
+        for (icon, label, color) in items.into_iter().take(SHOWN) {
+            row = row.child(chip(icon, label, color));
+        }
+        if total > SHOWN {
+            row = row.child(
+                div()
+                    .flex_shrink_0()
+                    .h(px(21.))
+                    .px(px(7.))
+                    .flex()
+                    .items_center()
+                    .rounded_lg()
+                    .bg(theme.raised)
+                    .text_size(px(10.5))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text_dim)
+                    .child(format!("+{}", total - SHOWN)),
+            );
+        }
+        let any = total > 0 || self.flash.is_some();
+        if !any {
+            return self.render_hints().into_any_element();
+        }
+        row.into_any_element()
+    }
+
+    fn render_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let text = self.buffer.text().trim().to_string();
+        let parsed = if text.is_empty() {
+            None
+        } else {
+            parse_quick(&text, now()).ok()
+        };
+        let destination = self.destination(parsed.as_ref());
+        let icon = self.destination_icon(parsed.as_ref());
+        let mut left = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .child(icons::icon(icon, 13.0, theme.text_faint))
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text_dim)
+                    .child(destination),
+            );
+        if let Some(flash) = &self.flash {
+            left = left
+                .child(
+                    div()
+                        .size(px(3.))
+                        .rounded_full()
+                        .bg(theme.text_faint.opacity(0.5)),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(theme.success)
+                        .child(flash.clone()),
+                );
+        } else {
+            left = left
+                .child(
+                    div()
+                        .size(px(3.))
+                        .rounded_full()
+                        .bg(theme.text_faint.opacity(0.5)),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(theme.text_faint)
+                        .child("Quick capture"),
+                );
+        }
+
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .mt(px(10.))
+            .h(px(38.))
+            .px(px(22.))
+            .border_t_1()
+            .border_color(theme.border_soft)
+            .child(left)
+            .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap_1()
+                    .gap_3()
                     .child(
                         div()
-                            .text_size(px(12.))
-                            .text_color(theme.text_faint)
-                            .child(format!("{label}:")),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.5))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme.text)
-                            .child(value),
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(keycap(theme, "⏎"))
+                    .child(label(theme, "Add"))
+                    .child(div().w(px(4.)))
+                            .child(keycap(theme, "⌘⏎"))
+                            .child(label(theme, "Add & open")),
                     ),
-            );
-        }
-        area.child(line).into_any_element()
+            )
     }
 }
 
@@ -449,12 +594,6 @@ impl Render for QuickCapture {
             self.write_state(true);
         }
         let theme = self.theme;
-        let text = self.buffer.text().trim().to_string();
-        let has_syntax = self.flash.is_some()
-            || (!text.is_empty()
-                && parse_quick(&text, now())
-                    .ok()
-                    .is_some_and(|entry| !interpretation_items(&entry).is_empty()));
         div()
             .relative()
             .flex()
@@ -462,12 +601,11 @@ impl Render for QuickCapture {
             .size_full()
             .rounded_none()
             .overflow_hidden()
-            .when(!has_syntax, |this| this.justify_center())
             .border_1()
             .border_color(theme.border)
-            // Opaque on purpose: a translucent panel over the desktop produced
-            // hard-edged corner artefacts on every rounded control inside it.
-            .bg(theme.bg)
+            // The same vertical glass wash as the sidebar and inspector, so the
+            // panel belongs to the window rather than floating on its own tint.
+            .bg(theme.glass_fill(180.))
             .text_color(theme.text)
             .font_family("SF Pro Text")
             .track_focus(&self.focus_handle)
@@ -480,8 +618,19 @@ impl Render for QuickCapture {
                     cx.notify();
                 }),
             )
+            // The grab handle also marks the window's drag band.
+            .child(
+                div().flex().justify_center().pt(px(8.)).child(
+                    div()
+                        .w(px(40.))
+                        .h(px(4.))
+                        .rounded_full()
+                        .bg(theme.text_faint.opacity(0.30)),
+                ),
+            )
             .child(self.render_input(window, cx))
-            .child(self.render_interpretation())
+            .child(self.render_preview())
+            .child(self.render_footer(cx))
     }
 }
 
@@ -517,9 +666,9 @@ pub fn show(
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
-            // No titlebar controls: the card itself is the whole window.
-            // The background is opaque so controls inside never pick up the
-            // desktop tint or its corner artefacts.
+            // No titlebar controls: the card itself is the whole window. With
+            // a transparent titlebar AppKit still gives the panel its native
+            // rounded corners and shadow.
             titlebar: None,
             focus: true,
             show: true,
@@ -527,13 +676,15 @@ pub fn show(
             is_movable: true,
             is_resizable: false,
             is_minimizable: false,
-            window_background: WindowBackgroundAppearance::Opaque,
+            window_background: WindowBackgroundAppearance::Blurred,
             window_min_size: Some(size(px(PANEL_WIDTH), px(PANEL_HEIGHT))),
             ..Default::default()
         },
         move |window, cx| {
+            let appearance = theme.appearance();
             let view = cx.new(|cx| QuickCapture::new(store, theme, previous_app, cx));
             let handle = view.read(cx).focus_handle.clone();
+            let _ = super::blur::sync(window, appearance);
             window.focus(&handle);
             // A global shortcut fires while another app owns the menu bar.
             // Activating on the next turn, after the window exists, is what
@@ -744,56 +895,9 @@ fn panel_bounds(cx: &App, anchor: Option<Bounds<gpui::Pixels>>) -> Bounds<gpui::
     }
 }
 
-/// Room for the title line inside the 620px panel, after the plus icon and the
-/// panel padding have taken theirs.
-const INPUT_ROOM: f32 = 540.0;
-
-fn stamp_display(stamp: Stamp) -> String {
-    if stamp.has_time {
-        stamp.local_naive().format("%Y-%m-%d %H:%M").to_string()
-    } else {
-        stamp.local_date().format("%Y-%m-%d").to_string()
-    }
-}
-
-/// The markers the parser understood, in the order the user usually reads
-/// them. Dates are resolved, so `due:3d` reads back as the actual day.
-fn interpretation_items(entry: &QuickEntry) -> Vec<(String, String)> {
-    let mut items = Vec::new();
-    if let Some(priority) = entry.priority {
-        items.push(("priority".to_string(), priority.label().to_lowercase()));
-    }
-    if let Some(due) = entry.due {
-        items.push(("due".to_string(), stamp_display(due)));
-    }
-    if entry.fullscreen_reminder {
-        let value = match entry.reminder_at {
-            Some(stamp) => stamp_display(stamp),
-            None if entry.due.is_some() => "follows due".to_string(),
-            None => "ignored (no time)".to_string(),
-        };
-        items.push(("fsr".to_string(), value));
-    }
-    if let Some(defer) = entry.defer {
-        items.push(("defer".to_string(), stamp_display(defer)));
-    }
-    if let Some(minutes) = entry.estimate_min {
-        items.push(("estimate".to_string(), format_duration(minutes)));
-    }
-    if let Some(repeat) = &entry.repeat {
-        items.push(("repeat".to_string(), repeat.description()));
-    }
-    if entry.flagged {
-        items.push(("flag".to_string(), "yes".to_string()));
-    }
-    if let Some(project) = &entry.project_path {
-        items.push(("project".to_string(), project.clone()));
-    }
-    for tag in &entry.tag_paths {
-        items.push(("tag".to_string(), format!("#{tag}")));
-    }
-    items
-}
+/// Room for the title line inside the 620px panel, after the plus badge, the
+/// `esc` cap and the panel padding have taken theirs.
+const INPUT_ROOM: f32 = 476.0;
 
 fn field_text(
     theme: Theme,
@@ -913,4 +1017,49 @@ fn run(text: String, selected: bool, theme: Theme) -> impl IntoElement {
     div()
         .when(selected, |this| this.bg(theme.selection))
         .child(text)
+}
+
+fn chip(icon: Icon, text: impl Into<SharedString>, color: gpui::Hsla) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .gap_1()
+        .max_w(px(170.))
+        .h(px(21.))
+        .px(px(7.))
+        .rounded_lg()
+        .border_1()
+        .border_color(color.opacity(0.22))
+        .bg(color.opacity(0.10))
+        .text_size(px(10.5))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(color)
+        .child(icons::icon(icon, 11.0, color))
+        .child(div().flex_1().min_w_0().truncate().child(text.into()))
+}
+
+fn keycap(theme: Theme, text: impl Into<SharedString>) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .h(px(20.))
+        .px(px(6.))
+        .rounded_lg()
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.field)
+        .text_size(px(10.))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(theme.text_faint)
+        .child(text.into())
+}
+
+fn label(theme: Theme, text: impl Into<SharedString>) -> impl IntoElement {
+    div()
+        .text_size(px(11.))
+        .text_color(theme.text_faint)
+        .child(text.into())
 }
