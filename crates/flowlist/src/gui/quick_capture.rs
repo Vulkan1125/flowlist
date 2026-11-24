@@ -110,9 +110,6 @@ impl QuickCapture {
         if !self.buffer.is_empty() {
             self.buffer.select_all();
         }
-        if super::blur::sync(window, theme.appearance()).is_some() {
-            // The material follows the palette, exactly like the main window.
-        }
         window.defer(cx, |window, cx| {
             float_panel(window);
             activate_app();
@@ -364,7 +361,6 @@ impl QuickCapture {
                     ))
                     .cursor(CursorStyle::IBeam),
             )
-            .child(keycap(theme, "esc"))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
@@ -504,7 +500,7 @@ impl QuickCapture {
         row.into_any_element()
     }
 
-    fn render_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_footer(&self, _cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let text = self.buffer.text().trim().to_string();
         let parsed = if text.is_empty() {
@@ -575,11 +571,8 @@ impl QuickCapture {
                         div()
                             .flex()
                             .items_center()
-                            .gap_2()
-                            .child(keycap(theme, "⏎"))
-                    .child(label(theme, "Add"))
-                    .child(div().w(px(4.)))
-                            .child(keycap(theme, "⌘⏎"))
+                            .gap_3()
+                            .child(label(theme, "Add"))
                             .child(label(theme, "Add & open")),
                     ),
             )
@@ -603,9 +596,9 @@ impl Render for QuickCapture {
             .overflow_hidden()
             .border_1()
             .border_color(theme.border)
-            // The same vertical glass wash as the sidebar and inspector, so the
-            // panel belongs to the window rather than floating on its own tint.
-            .bg(theme.glass_fill(180.))
+            // An opaque surface keeps glyph edges crisp; the old glass wash
+            // made small text look soft against the desktop behind it.
+            .bg(theme.bg)
             .text_color(theme.text)
             .font_family("SF Pro Text")
             .track_focus(&self.focus_handle)
@@ -676,15 +669,13 @@ pub fn show(
             is_movable: true,
             is_resizable: false,
             is_minimizable: false,
-            window_background: WindowBackgroundAppearance::Blurred,
+            window_background: WindowBackgroundAppearance::Opaque,
             window_min_size: Some(size(px(PANEL_WIDTH), px(PANEL_HEIGHT))),
             ..Default::default()
         },
         move |window, cx| {
-            let appearance = theme.appearance();
             let view = cx.new(|cx| QuickCapture::new(store, theme, previous_app, cx));
             let handle = view.read(cx).focus_handle.clone();
-            let _ = super::blur::sync(window, appearance);
             window.focus(&handle);
             // A global shortcut fires while another app owns the menu bar.
             // Activating on the next turn, after the window exists, is what
@@ -880,24 +871,41 @@ fn reveal_in_main(id: TaskId, cx: &mut Context<QuickCapture>) {
 
 fn panel_bounds(cx: &App, anchor: Option<Bounds<gpui::Pixels>>) -> Bounds<gpui::Pixels> {
     let panel = size(px(PANEL_WIDTH), px(PANEL_HEIGHT));
-    match anchor {
+    let (x, y) = match anchor {
         // The Add task button belongs to the window, so its panel opens over
         // the window. The global shortcut keeps the Spotlight habit of
         // landing in the middle of the display.
-        Some(anchor) => Bounds::new(
-            gpui::point(
-                anchor.origin.x + (anchor.size.width - panel.width) / 2.0,
-                anchor.origin.y + (anchor.size.height - panel.height) / 2.0,
-            ),
-            panel,
+        Some(anchor) => (
+            anchor.origin.x + (anchor.size.width - panel.width) / 2.0,
+            anchor.origin.y + (anchor.size.height - panel.height) / 2.0,
         ),
-        None => Bounds::centered(None, panel, cx),
-    }
+        None => {
+            let display = cx
+                .primary_display()
+                .or_else(|| cx.displays().into_iter().next());
+            let bounds = display.map(|display| display.bounds()).unwrap_or_else(|| {
+                Bounds::new(
+                    gpui::point(px(0.), px(0.)),
+                    size(px(1280.), px(800.)),
+                )
+            });
+            (
+                bounds.origin.x + (bounds.size.width - panel.width) / 2.0,
+                bounds.origin.y + (bounds.size.height - panel.height) / 2.0,
+            )
+        }
+    };
+    // Whole-pixel origins keep text on the pixel grid instead of landing on a
+    // half-pixel boundary and looking soft.
+    Bounds::new(
+        gpui::point(px(f32::from(x).round()), px(f32::from(y).round())),
+        panel,
+    )
 }
 
-/// Room for the title line inside the 620px panel, after the plus badge, the
-/// `esc` cap and the panel padding have taken theirs.
-const INPUT_ROOM: f32 = 476.0;
+/// Room for the title line inside the 620px panel, after the plus badge and
+/// the panel padding have taken theirs.
+const INPUT_ROOM: f32 = 524.0;
 
 fn field_text(
     theme: Theme,
@@ -929,7 +937,7 @@ fn field_text(
         .whitespace_nowrap()
         .text_size(px(17.))
         .line_height(px(22.))
-        .font_weight(FontWeight::MEDIUM)
+        .font_weight(FontWeight::NORMAL)
         .when(drop > 0, |this| {
             this.child(
                 div()
@@ -998,7 +1006,7 @@ fn text_width(text: &str, theme: Theme, window: &mut Window) -> f32 {
     let runs = [TextRun {
         len: text.len(),
         font: Font {
-            weight: FontWeight::MEDIUM,
+            weight: FontWeight::NORMAL,
             ..font("SF Pro Text")
         },
         color: theme.text,
@@ -1037,24 +1045,6 @@ fn chip(icon: Icon, text: impl Into<SharedString>, color: gpui::Hsla) -> impl In
         .text_color(color)
         .child(icons::icon(icon, 11.0, color))
         .child(div().flex_1().min_w_0().truncate().child(text.into()))
-}
-
-fn keycap(theme: Theme, text: impl Into<SharedString>) -> impl IntoElement {
-    div()
-        .flex()
-        .flex_shrink_0()
-        .items_center()
-        .justify_center()
-        .h(px(20.))
-        .px(px(6.))
-        .rounded_lg()
-        .border_1()
-        .border_color(theme.border)
-        .bg(theme.field)
-        .text_size(px(10.))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(theme.text_faint)
-        .child(text.into())
 }
 
 fn label(theme: Theme, text: impl Into<SharedString>) -> impl IntoElement {
