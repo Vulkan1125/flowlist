@@ -34,7 +34,10 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
-        let content_bg = if self.use_wallpaper {
+        // Only soften the content when the appearance on screen actually has
+        // a wallpaper. A dark-only wallpaper must not make the plain light
+        // background translucent.
+        let content_bg = if self.active_wallpaper().is_some() {
             theme.bg.opacity(0.80)
         } else {
             theme.bg

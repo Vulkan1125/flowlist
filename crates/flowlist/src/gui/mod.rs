@@ -1039,6 +1039,22 @@ impl FlowlistApp {
         }
     }
 
+    /// The wallpaper the current appearance should draw, if any. Kept in one
+    /// place so the content surface and the painted image never disagree.
+    fn active_wallpaper(&self) -> Option<PathBuf> {
+        if !self.use_wallpaper {
+            return None;
+        }
+        if self.wallpaper_separate {
+            match self.theme.appearance() {
+                Appearance::Light => self.wallpaper_light.clone(),
+                Appearance::Dark => self.wallpaper_dark.clone(),
+            }
+        } else {
+            self.wallpaper_light.clone()
+        }
+    }
+
     fn reminder_backdrop(&self) -> reminder::ReminderBackdrop {
         let wallpaper = if self.reminder_wallpaper_separate {
             match self.theme.appearance() {
@@ -6528,6 +6544,7 @@ impl FlowlistApp {
                 .map(|path| path.display().to_string())
         );
         state["use_wallpaper"] = serde_json::json!(self.use_wallpaper);
+        state["wallpaper_active"] = serde_json::json!(self.active_wallpaper().is_some());
         state["modal_wallpaper"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::Settings {
                 wallpaper_light,
@@ -7251,17 +7268,7 @@ impl Render for FlowlistApp {
                     cx.notify();
                 }),
             );
-        let wallpaper = if self.wallpaper_separate {
-            match self.theme.appearance() {
-                Appearance::Light => self.wallpaper_light.clone(),
-                Appearance::Dark => self.wallpaper_dark.clone(),
-            }
-        } else {
-            self.wallpaper_light.clone()
-        };
-        if self.use_wallpaper
-            && let Some(path) = wallpaper
-        {
+        if let Some(path) = self.active_wallpaper() {
             root = root.child(
                 div()
                     .absolute()
