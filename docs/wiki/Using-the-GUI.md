@@ -217,8 +217,8 @@ move. The section rail stays put while the chosen section scrolls. It has
 eight sections on the left (`⌘1`…`⌘8` jump between them):
 
 - **Appearance** — theme family, light/dark, Plain's accent presets and custom
-  colour picker, screen eyedropper, six Dock icon colours, a wallpaper with a
-  shared opacity, and the window controls. **Use separate wallpapers for light
+  colour picker, screen eyedropper, six Dock icon colours, a background with a
+  shared opacity, and the window controls. **Use separate backgrounds for light
   and dark modes** reveals a second picker; otherwise one photo covers both.
 - **Sidebar** — a collapsible matrix of every rail item with **Hide** and **Hide count** boxes, indented under their heading. Every heading starts collapsed and opening one closes the rest. A ticked box hides the row and strikes its name through; hiding a row also greys out its count box, since a count on a hidden row makes no sense. Inbox, Today and Trash always stay and have no Hide box at all. Saved perspectives show their open count, or a bare tick when nothing matches. **Hide empty custom views** drops a saved view from the rail while its filter matches nothing and brings it back as soon as a task does.
 - **Workflow** — Vim mode, macOS due reminders, and the review/changed/completed windows.
@@ -250,7 +250,7 @@ reminder time is ignored.
 
 The reminder sits on a theme-synced abstract backdrop by default. Pick another
 abstract style from its preview, follow the current theme, or choose a
-wallpaper from **Settings → Reminders → Reminder background**; the wallpaper has
+background from **Settings → Reminders → Reminder background**; the background has
 its own opacity, an optional separate light/dark pair, and a **Send full-screen
 test** button that opens the reminder screen directly.
 
@@ -259,7 +259,7 @@ due date & time**. Leave it on to follow the due stamp, or turn it off and set
 a separate reminder date and time. The date field is greyed out while it
 follows the due stamp, and a reminder cannot be saved in the past. **Snooze
 length** offers 15, 30 or 60 minutes. **Settings → Appearance → Background**
-sets the main-window wallpaper, with an optional split between light and dark,
+sets the main-window background, with an optional split between light and dark,
 sharing one opacity choice.
 
 macOS needs an Apple Development or Developer ID signature before it can grant

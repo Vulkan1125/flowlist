@@ -267,7 +267,7 @@ private fun WidgetConfigScreen(
                     onChange = { blur = it },
                 )
                 Text(
-                    text = "Blur adds a frosted veil; Android widgets cannot sample and blur the wallpaper itself.",
+                    text = "Blur adds a frosted veil; Android widgets cannot sample and blur the background itself.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.faint,
                     modifier = Modifier.padding(top = 4.dp),

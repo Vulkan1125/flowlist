@@ -226,7 +226,7 @@ the section on screen.
 - **Appearance** — theme family, light/dark, follow-system appearance. For
   Plain only: nine accent presets (`1`–`9` while the section is open), a
   saturation/brightness square and hue strip for a custom tone per appearance,
-  and a system eyedropper that samples any pixel, wallpaper included. The
+  and a system eyedropper that samples any pixel, background included. The
   picker edits the appearance on screen; presets set both tones together, and
   a custom tone carries into the other appearance until that side gets a tone
   of its own, clamped so it stays readable on that background. With no custom

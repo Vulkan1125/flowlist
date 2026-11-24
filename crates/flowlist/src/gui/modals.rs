@@ -2966,11 +2966,23 @@ impl FlowlistApp {
             Appearance::Light => "light",
             Appearance::Dark => "dark",
         };
+        let separate = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                wallpaper_separate: true,
+                ..
+            })
+        );
+        let prompt = if separate {
+            format!("Choose {slot} background")
+        } else {
+            "Choose background".to_string()
+        };
         let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some(format!("Choose {slot} wallpaper").into()),
+            prompt: Some(prompt.into()),
         });
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(paths))) = picked.await else {
@@ -3002,11 +3014,11 @@ impl FlowlistApp {
                             *use_wallpaper = true;
                             *wallpaper_note = Some(if *wallpaper_separate {
                                 format!(
-                                    "{} wallpaper selected · Save to apply",
+                                    "{} background selected · Save to apply",
                                     appearance.label()
                                 )
                             } else {
-                                "Wallpaper selected · Save to apply".to_string()
+                                "Background selected · Save to apply".to_string()
                             });
                         }
                     }
@@ -3029,11 +3041,23 @@ impl FlowlistApp {
             Appearance::Light => "light",
             Appearance::Dark => "dark",
         };
+        let separate = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                reminder_wallpaper_separate: true,
+                ..
+            })
+        );
+        let prompt = if separate {
+            format!("Choose {slot} reminder background")
+        } else {
+            "Choose reminder background".to_string()
+        };
         let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some(format!("Choose {slot} reminder wallpaper").into()),
+            prompt: Some(prompt.into()),
         });
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(paths))) = picked.await else {
@@ -3067,11 +3091,11 @@ impl FlowlistApp {
                             *reminder_match_theme = false;
                             *reminder_wallpaper_note = Some(if *reminder_wallpaper_separate {
                                 format!(
-                                    "{} reminder wallpaper selected · Save to apply",
+                                    "{} reminder background selected · Save to apply",
                                     appearance.label()
                                 )
                             } else {
-                                "Reminder wallpaper selected · Save to apply".to_string()
+                                "Reminder background selected · Save to apply".to_string()
                             });
                         }
                     }
@@ -3339,7 +3363,7 @@ impl FlowlistApp {
                             .flex_1()
                             .min_w_0()
                             .gap_0p5()
-                            .child(div().text_sm().child("Use wallpaper"))
+                            .child(div().text_sm().child("Use background"))
                             .child(
                                 div()
                                     .text_xs()
@@ -3378,7 +3402,7 @@ impl FlowlistApp {
                             .min_w_0()
                             .gap_0p5()
                             .child(div().text_sm().child(
-                                "Use separate wallpapers for light and dark modes",
+                                "Use separate backgrounds for light and dark modes",
                             ))
                             .child(
                                 div()
@@ -3386,7 +3410,7 @@ impl FlowlistApp {
                                     .whitespace_normal()
                                     .text_color(theme.text_faint)
                                     .child(
-                                        "Off keeps one wallpaper for both appearances. On shows a picker for each.",
+                                        "Off keeps one background for both appearances. On shows a picker for each.",
                                     ),
                             ),
                     )
@@ -3440,9 +3464,9 @@ impl FlowlistApp {
                 Appearance::Dark => "settings-remove-wallpaper-dark",
             };
             let title = if app_wallpaper_separate {
-                format!("{} wallpaper", mode.label())
+                format!("{} background", mode.label())
             } else {
-                "Wallpaper".to_string()
+                "Background".to_string()
             };
             let hint = if app_wallpaper_separate {
                 format!("Shown while the app is {}.", mode.label().to_lowercase())
@@ -3494,9 +3518,9 @@ impl FlowlistApp {
                                 .child(widgets::button(
                                     theme,
                                     if path.is_some() {
-                                        "Replace wallpaper"
+                                        "Replace background"
                                     } else {
-                                        "Choose wallpaper"
+                                        "Choose background"
                                     },
                                     false,
                                 ))
@@ -3536,7 +3560,7 @@ impl FlowlistApp {
                 let name = path
                     .file_name()
                     .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "Wallpaper".to_string());
+                    .unwrap_or_else(|| "Background".to_string());
                 section = section.child(
                     div()
                         .flex()
@@ -3583,7 +3607,7 @@ impl FlowlistApp {
                 );
             }
             background_body = background_body
-                .child(div().text_xs().text_color(theme.text_faint).child("Wallpaper opacity"))
+                .child(div().text_xs().text_color(theme.text_faint).child("Background opacity"))
                 .child(opacity_row);
         }
         if let Some(note) = &app_wallpaper_note {
@@ -3601,7 +3625,7 @@ impl FlowlistApp {
         }
         let app_background_card = self.settings_card(
             "Background",
-            Some("A custom wallpaper behind the main window, with its own opacity."),
+            Some("A custom background behind the main window, with its own opacity."),
             background_body,
         );
         let boxes = self.settings_toggle_boxes.clone();
@@ -3988,7 +4012,7 @@ impl FlowlistApp {
                                 "Pick from screen",
                                 false,
                             ))
-                            .flow_tip(self, cx, theme, "Sample any pixel — wallpaper included")
+                            .flow_tip(self, cx, theme, "Sample any pixel — background included")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.pick_accent_from_screen(cx);
                             })),
@@ -4035,7 +4059,7 @@ impl FlowlistApp {
                                         .text_xs()
                                         .text_color(theme.text_faint)
                                         .child(
-                                            "Drag the square for saturation and brightness, or the strip for hue. The eyedropper samples anything on screen, wallpaper included.",
+                                            "Drag the square for saturation and brightness, or the strip for hue. The eyedropper samples anything on screen, background included.",
                                         ),
                                 )
                                 .child(actions)
@@ -4596,7 +4620,7 @@ impl FlowlistApp {
                         .min_w_0()
                         .gap_0p5()
                         .child(div().text_sm().child(
-                            "Use separate reminder wallpapers for light and dark modes",
+                            "Use separate reminder backgrounds for light and dark modes",
                         ))
                         .child(
                             div()
@@ -4604,7 +4628,7 @@ impl FlowlistApp {
                                 .whitespace_normal()
                                 .text_color(theme.text_faint)
                                 .child(
-                                    "Off keeps one reminder wallpaper for both appearances. On shows a picker for each.",
+                                    "Off keeps one reminder background for both appearances. On shows a picker for each.",
                                 ),
                         ),
                 )
@@ -4657,13 +4681,13 @@ impl FlowlistApp {
                                 .flex_1()
                                 .min_w_0()
                                 .gap_0p5()
-                                .child(div().text_sm().child("Use my wallpaper"))
+                                .child(div().text_sm().child("Use my background"))
                                 .child(
                                     div()
                                         .text_xs()
                                         .whitespace_normal()
                                         .text_color(theme.text_faint)
-                                        .child("Show the reminder wallpaper chosen below."),
+                                        .child("Show the reminder background chosen below."),
                                 ),
                         )
                         .child(
@@ -4723,7 +4747,7 @@ impl FlowlistApp {
                                 div()
                                     .text_xs()
                                     .text_color(theme.text_faint)
-                                    .child("Wallpaper opacity"),
+                                    .child("Background opacity"),
                             )
                             .child(row),
                     )
@@ -4752,9 +4776,9 @@ impl FlowlistApp {
                 Appearance::Dark => "reminder-background-remove-dark",
             };
             let title = if reminder_wallpaper_separate {
-                format!("{} reminder wallpaper", mode.label())
+                format!("{} reminder background", mode.label())
             } else {
-                "Reminder wallpaper".to_string()
+                "Reminder background".to_string()
             };
             let hint = if reminder_wallpaper_separate {
                 format!("Shown while the app is {}.", mode.label().to_lowercase())
@@ -4808,9 +4832,9 @@ impl FlowlistApp {
                                 .child(widgets::button(
                                     theme,
                                     if path.is_some() {
-                                        "Replace wallpaper"
+                                        "Replace background"
                                     } else {
-                                        "Choose wallpaper"
+                                        "Choose background"
                                     },
                                     false,
                                 ))
@@ -4856,7 +4880,7 @@ impl FlowlistApp {
                 let name = path
                     .file_name()
                     .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "Wallpaper".to_string());
+                    .unwrap_or_else(|| "Background".to_string());
                 section = section.child(
                     div()
                         .flex()
@@ -4891,7 +4915,7 @@ impl FlowlistApp {
         let reminder_background_card = self.settings_card(
             "Reminder background",
             Some(
-                "Full-screen reminders can sit on a theme-synced abstract backdrop or your own wallpaper. The main window keeps its normal surfaces.",
+                "Full-screen reminders can sit on a theme-synced abstract backdrop or your own background. The main window keeps its normal surfaces.",
             ),
             background_body,
         );

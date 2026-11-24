@@ -270,7 +270,7 @@ private fun summary(
         append(
             when {
                 preferences.matchThemeBackground -> " · theme background"
-                preferences.customWallpaper != null -> " · wallpaper"
+                preferences.customWallpaper != null -> " · background"
                 else -> " · ambient"
             },
         )
@@ -362,7 +362,7 @@ private fun AppearanceSettings(
     SettingsCard("Background") {
         val wallpaper = preferences.customWallpaper
         ToggleRow(
-            title = "Use wallpaper",
+            title = "Use background",
             detail = when {
                 wallpaper == null -> "Choose a photo to show behind the app"
                 preferences.useWallpaper -> "Your photo is behind the app"
@@ -380,7 +380,7 @@ private fun AppearanceSettings(
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { wallpaperPicker.launch("image/*") }) {
                 Text(
-                    if (wallpaper == null) "Choose wallpaper" else "Replace wallpaper",
+                    if (wallpaper == null) "Choose background" else "Replace background",
                     color = colors.accent,
                 )
             }
@@ -409,7 +409,7 @@ private fun AppearanceSettings(
                     .border(1.dp, colors.hairline, RoundedCornerShape(10.dp)),
             )
             Spacer(modifier = Modifier.height(4.dp))
-            SmallLabel("Wallpaper opacity")
+            SmallLabel("Background opacity")
             Slider(
                 value = preferences.wallpaperOpacity.coerceIn(0.05f, 0.95f),
                 onValueChange = {
@@ -441,7 +441,7 @@ private fun AppearanceSettings(
             Pill("Theme", theme.accentMode == AccentMode.Theme) {
                 onThemeChange(theme.copy(accentMode = AccentMode.Theme))
             }
-            Pill("Wallpaper", theme.accentMode == AccentMode.Wallpaper && wallpaper, wallpaper) {
+            Pill("Background", theme.accentMode == AccentMode.Wallpaper && wallpaper, wallpaper) {
                 onThemeChange(theme.copy(accentMode = AccentMode.Wallpaper))
             }
             Pill("Custom", theme.accentMode == AccentMode.Custom) {
@@ -938,14 +938,14 @@ private fun NotificationSettings(
         if (preferences.customWallpaper != null) {
             Spacer(modifier = Modifier.height(10.dp))
             ToggleRow(
-                title = "Use my wallpaper",
+                title = "Use my background",
                 detail = "Show the photo chosen in Appearance",
                 checked = preferences.reminderUseWallpaper,
             ) {
                 onPreferencesChange(preferences.copy(reminderUseWallpaper = it))
             }
             if (preferences.reminderUseWallpaper) {
-                SmallLabel("Wallpaper opacity")
+                SmallLabel("Background opacity")
                 Slider(
                     value = preferences.reminderWallpaperOpacity.coerceIn(0.05f, 0.95f),
                     onValueChange = {
@@ -979,7 +979,7 @@ private fun NotificationSettings(
             )
         }
         Text(
-            text = "These backgrounds appear on the full-screen reminder. The app itself uses the wallpaper from Appearance.",
+            text = "These backgrounds appear on the full-screen reminder. The app itself uses the background from Appearance.",
             style = MaterialTheme.typography.labelSmall,
             color = flow.faint,
         )

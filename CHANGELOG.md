@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Reminder focus.** Completing, snoozing or dismissing a full-screen reminder
+  restores the app that owned the screen instead of bringing Flowlist forward.
+- **Background terminology.** Wallpaper controls and picker text are now
+  labelled Background throughout the app. A single background picker no longer
+  says “light” when the same image is used in both appearances.
+
 ## 0.9.49 — 2026-11-24
 
 - **Android full-screen counts.** Saved views using the full-screen reminder

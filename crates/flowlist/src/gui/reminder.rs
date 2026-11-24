@@ -43,6 +43,10 @@ pub struct Reminder {
     snooze_minutes: u32,
     tasks: Vec<ReminderTask>,
     index: usize,
+    /// The app that owned the screen before the reminder appeared, restored
+    /// after Complete, Snooze, Dismiss or Esc. Opening the task keeps Flowlist
+    /// in front instead.
+    previous_app: Option<i32>,
     focus_handle: FocusHandle,
 }
 
@@ -53,6 +57,7 @@ impl Reminder {
         backdrop: ReminderBackdrop,
         snooze_minutes: u32,
         tasks: Vec<ReminderTask>,
+        previous_app: Option<i32>,
         cx: &mut Context<Self>,
     ) -> Self {
         Self {
@@ -62,6 +67,7 @@ impl Reminder {
             snooze_minutes,
             tasks,
             index: 0,
+            previous_app,
             focus_handle: cx.focus_handle(),
         }
     }
@@ -97,17 +103,22 @@ impl Reminder {
         self.tasks.get(self.index)
     }
 
-    fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn close(&mut self, window: &mut Window, cx: &mut Context<Self>, restore_previous: bool) {
         if let Some(app) = self.app.upgrade() {
             let _ = app.update(cx, |app, _| app.reminder_closed());
         }
         window.remove_window();
+        if restore_previous
+            && let Some(pid) = self.previous_app.take()
+        {
+            super::quick_capture::restore_app(pid);
+        }
     }
 
-    fn advance(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn advance(&mut self, window: &mut Window, cx: &mut Context<Self>, restore_previous: bool) {
         self.index += 1;
         if self.index >= self.tasks.len() {
-            self.close(window, cx);
+            self.close(window, cx, restore_previous);
         } else {
             cx.notify();
         }
@@ -115,18 +126,18 @@ impl Reminder {
 
     fn complete(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(task) = self.current().cloned() else {
-            self.close(window, cx);
+            self.close(window, cx, true);
             return;
         };
         if let Some(app) = self.app.upgrade() {
             let _ = app.update(cx, |app, cx| app.complete_reminder_task(&task.id, cx));
         }
-        self.advance(window, cx);
+        self.advance(window, cx, true);
     }
 
     fn snooze(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(task) = self.current().cloned() else {
-            self.close(window, cx);
+            self.close(window, cx, true);
             return;
         };
         if let Some(app) = self.app.upgrade() {
@@ -136,7 +147,7 @@ impl Reminder {
                 app.set_reminder_snooze_minutes(minutes);
             });
         }
-        self.advance(window, cx);
+        self.advance(window, cx, true);
     }
 
     /// `s` walks the three lengths the reminder offers, so the choice is made
@@ -155,22 +166,22 @@ impl Reminder {
         if let Some(app) = self.app.upgrade() {
             let _ = app.update(cx, |app, cx| app.open_fullscreen_view(cx));
         }
-        self.close(window, cx);
+        self.close(window, cx, false);
     }
 
     fn open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(task) = self.current().cloned() else {
-            self.close(window, cx);
+            self.close(window, cx, false);
             return;
         };
         if let Some(app) = self.app.upgrade() {
             let _ = app.update(cx, |app, cx| app.open_reminder_task(&task.id, cx));
         }
-        self.close(window, cx);
+        self.close(window, cx, false);
     }
 
     fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.advance(window, cx);
+        self.advance(window, cx, true);
     }
 
     fn on_key_down(
@@ -402,6 +413,7 @@ pub fn show(
     tasks: Vec<ReminderTask>,
     cx: &mut App,
 ) -> Result<()> {
+    let previous_app = super::quick_capture::frontmost_app();
     for any in cx.windows() {
         if let Some(handle) = any.downcast::<Reminder>() {
             let updated = handle.update(cx, |view, window, cx| {
@@ -442,7 +454,15 @@ pub fn show(
         },
         move |window, cx| {
             let view = cx.new(|cx| {
-                Reminder::new(app.clone(), theme, backdrop, snooze_minutes, tasks, cx)
+                Reminder::new(
+                    app.clone(),
+                    theme,
+                    backdrop,
+                    snooze_minutes,
+                    tasks,
+                    previous_app,
+                    cx,
+                )
             });
             let handle = view.read(cx).focus_handle.clone();
             window.focus(&handle);

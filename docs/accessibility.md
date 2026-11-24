@@ -265,11 +265,11 @@ accent presets are the digits `1`–`9` while Appearance is open.
   the close icon and the tooltip carry the meaning.
 - The reading surface stays opaque in all eleven theme families, in both light and
   dark mode. Translucency is limited to the sidebar, inspector, header and
-  status bar, so wallpaper contrast never reaches task text. Light and dark
-  wallpapers are chosen separately, and each is held to the same contrast
+  status bar, so background contrast never reaches task text. Light and dark
+  backgrounds are chosen separately, and each is held to the same contrast
   floor as the rest of the chrome.
 - Chrome tint is checked at both gradient stops, and against the blur over a
-  pure black (light) or white (dark) wallpaper. The wash is decorative; it can
+  pure black (light) or white (dark) background. The wash is decorative; it can
   never lower text below the contrast floors.
 
 ## Known limitation: the accessibility tree

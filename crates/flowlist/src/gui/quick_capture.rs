@@ -784,7 +784,7 @@ fn activate_app() {}
 
 /// The process in front right now, unless it is Flowlist itself.
 #[cfg(target_os = "macos")]
-fn frontmost_app() -> Option<i32> {
+pub(super) fn frontmost_app() -> Option<i32> {
     use objc::runtime::Object;
     use objc::{class, msg_send, sel, sel_impl};
     unsafe {
@@ -816,7 +816,7 @@ fn frontmost_app() -> Option<i32> {
 /// Things-style exit: the floating panel disappears and the old window keeps
 /// its focus, so nothing in Flowlist's workspace moves.
 #[cfg(target_os = "macos")]
-fn restore_app(pid: i32) {
+pub(super) fn restore_app(pid: i32) {
     use objc::runtime::{BOOL, Object};
     use objc::{class, msg_send, sel, sel_impl};
     unsafe {

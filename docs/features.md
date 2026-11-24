@@ -77,7 +77,7 @@ working domain and GUI. This page tracks what is implemented and verified.
       Sort and Group chips
 - [x] First Available filter (only the next actionable row)
 - [x] Per-perspective sort, grouping, completed and availability memory
-- [x] Separate light and dark main-window wallpapers with a shared opacity
+- [x] Separate light and dark main-window backgrounds with a shared opacity
 
 ## CLI
 
@@ -269,12 +269,12 @@ working domain and GUI. This page tracks what is implemented and verified.
       project/folder sheets carry the mark at creation. Multiple reminders
       due together offer **View all**, which opens the Full-screen view. A
       mark without a due or explicit reminder time is ignored.
-- [x] Mac backgrounds: a wallpaper sits behind the main window with one
+- [x] Mac backgrounds: a background sits behind the main window with one
       opacity choice; a Settings toggle reveals separate light and dark
-      pickers. The reminder wallpaper has the same optional split. The
+      pickers. The reminder background has the same optional split. The
       full-screen reminder has its own backdrop: six
       theme-synced abstract styles (Aurora, Dunes, Halo, Mesh, Tide, Ember)
-      with visual previews, a Match-theme default, or a separate wallpaper with
+      with visual previews, a Match-theme default, or a separate background with
       its own opacity.
 - [x] Full-screen reminders can follow the due date and time or carry their
       own reminder date and time. The inspector (Mac) and task editor
@@ -320,7 +320,7 @@ working domain and GUI. This page tracks what is implemented and verified.
       pairs carry a light and a dark tone, so one choice keeps its character
       in both modes. A saturation/brightness square and hue strip edit the
       appearance on screen separately, keys `1`–`9` pick a preset, and a
-      system eyedropper samples any pixel on screen (the wallpaper included).
+      system eyedropper samples any pixel on screen (the background included).
       Every custom tone is luminance-clamped to preserve the 4.5:1 contract
       for accent text and primary-button labels. Cancel restores the accent
       pair the sheet opened with; Save persists both tones in the library
@@ -338,11 +338,11 @@ working domain and GUI. This page tracks what is implemented and verified.
       sheet opened with, and Save keeps the new one. Plain also carries the
       accent presets, custom picker and eyedropper; the other families keep
       their own accent as part of their identity.
-- [x] Android backgrounds: the main window can show a custom wallpaper with
+- [x] Android backgrounds: the main window can show a custom background with
       its own opacity. Twelve ambient gradients, one tuned for each theme
       family, live on the full-screen reminder instead, with **Match theme**
       and free choice regardless of theme. The reminder can also use the
-      wallpaper with a separate opacity.
+      background with a separate opacity.
 - [x] Follow-system appearance: keep the theme family, take light/dark from
       the macOS window appearance. A manual light/dark switch turns this off so
       the chosen mode is not reverted on the next frame.
