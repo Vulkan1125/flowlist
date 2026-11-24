@@ -1249,6 +1249,8 @@ fun MainScreen(
                         defer = task.defer,
                         flagged = task.flagged,
                         fullscreenReminder = task.fullscreenReminder,
+                        reminderAt = task.reminderAt,
+                        reminderMatchDue = task.reminderMatchDue,
                         priority = task.priority,
                         completed = task.completed,
                         pending = task.id in state.pending,

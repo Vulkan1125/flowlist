@@ -6,8 +6,8 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, Bounds, Context, CursorStyle, IntoElement, Window, div,
-    point, prelude::*, px, rgb, rgba, size,
+    Animation, AnimationExt, AnyElement, Bounds, Context, CursorStyle, IntoElement, ObjectFit,
+    Window, div, img, point, prelude::*, px, rgb, rgba, size,
 };
 
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TaskId};
@@ -194,6 +194,8 @@ pub enum Modal {
         wallpaper: Option<std::path::PathBuf>,
         use_wallpaper: bool,
         wallpaper_opacity: f32,
+        wallpaper_note: Option<String>,
+        reminder_wallpaper_note: Option<String>,
         /// Keep finished subtasks visible under their parent while the view
         /// hides completed work, per device.
         keep_completed_subtasks: bool,
@@ -517,6 +519,8 @@ impl Modal {
             wallpaper: app.wallpaper.clone(),
             use_wallpaper: app.use_wallpaper,
             wallpaper_opacity: app.wallpaper_opacity,
+            wallpaper_note: None,
+            reminder_wallpaper_note: None,
             keep_completed_subtasks: app.keep_completed_subtasks,
             follow_system: app.follow_system,
             theme: app.theme.kind(),
@@ -2894,14 +2898,21 @@ impl FlowlistApp {
                         if let Some(Modal::Settings {
                             wallpaper,
                             use_wallpaper,
+                            wallpaper_note,
                             ..
                         }) = &mut this.modal
                         {
                             *wallpaper = Some(copied);
                             *use_wallpaper = true;
+                            *wallpaper_note = Some("Wallpaper selected · Save to apply".to_string());
                         }
                     }
-                    Err(error) => this.toast = Some(error.to_string()),
+                    Err(error) => {
+                        if let Some(Modal::Settings { wallpaper_note, .. }) = &mut this.modal {
+                            *wallpaper_note = Some(error.to_string());
+                        }
+                        this.toast = Some(error.to_string());
+                    }
                 }
                 cx.notify();
             })
@@ -2935,15 +2946,22 @@ impl FlowlistApp {
                             reminder_wallpaper,
                             reminder_use_wallpaper,
                             reminder_match_theme,
+                            reminder_wallpaper_note,
                             ..
                         }) = &mut this.modal
                         {
                             *reminder_wallpaper = Some(copied);
                             *reminder_use_wallpaper = true;
                             *reminder_match_theme = false;
+                            *reminder_wallpaper_note = Some("Reminder wallpaper selected · Save to apply".to_string());
                         }
                     }
-                    Err(error) => this.toast = Some(error.to_string()),
+                    Err(error) => {
+                        if let Some(Modal::Settings { reminder_wallpaper_note, .. }) = &mut this.modal {
+                            *reminder_wallpaper_note = Some(error.to_string());
+                        }
+                        this.toast = Some(error.to_string());
+                    }
                 }
                 cx.notify();
             })
@@ -2974,15 +2992,22 @@ impl FlowlistApp {
                 ..
             })
         );
-        let (app_wallpaper, use_app_wallpaper, app_wallpaper_opacity) = match &self.modal {
-            Some(Modal::Settings {
-                wallpaper,
-                use_wallpaper,
-                wallpaper_opacity,
-                ..
-            }) => (wallpaper.clone(), *use_wallpaper, *wallpaper_opacity),
-            _ => (None, false, 0.35),
-        };
+        let (app_wallpaper, use_app_wallpaper, app_wallpaper_opacity, app_wallpaper_note) =
+            match &self.modal {
+                Some(Modal::Settings {
+                    wallpaper,
+                    use_wallpaper,
+                    wallpaper_opacity,
+                    wallpaper_note,
+                    ..
+                }) => (
+                    wallpaper.clone(),
+                    *use_wallpaper,
+                    *wallpaper_opacity,
+                    wallpaper_note.clone(),
+                ),
+                _ => (None, false, 0.35, None),
+            };
 
         let mut modes = div()
             .flex()
@@ -3266,6 +3291,44 @@ impl FlowlistApp {
             background_body = background_body
                 .child(div().text_xs().text_color(theme.text_faint).child("Wallpaper opacity"))
                 .child(opacity_row);
+        }
+        if let Some(path) = &app_wallpaper {
+            let name = path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Wallpaper".to_string());
+            background_body = background_body.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        img(path.clone())
+                            .object_fit(ObjectFit::Cover)
+                            .w(px(72.))
+                            .h(px(48.))
+                            .rounded_md()
+                            .opacity(app_wallpaper_opacity),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child(name),
+                    ),
+            );
+        }
+        if let Some(note) = &app_wallpaper_note {
+            let success = {
+                let lower = note.to_lowercase();
+                lower.contains("saved") || lower.contains("selected")
+            };
+            background_body = background_body.child(
+                div()
+                    .text_xs()
+                    .text_color(if success { theme.success } else { theme.danger })
+                    .child(note.clone()),
+            );
         }
         let app_background_card = self.settings_card(
             "Background",
@@ -3907,6 +3970,19 @@ impl FlowlistApp {
                     })),
             );
         }
+        if fullscreen_reminders {
+            actions = actions.child(
+                div()
+                    .on_children_prepainted(
+                        self.theme_probe("fullscreen-test".to_string()),
+                    )
+                    .id("fullscreen-test")
+                    .child(widgets::button(theme, "Send full-screen test", false))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.send_fullscreen_test(cx);
+                    })),
+            );
+        }
         if supported
             && reminders
             && !blocked
@@ -4003,6 +4079,7 @@ impl FlowlistApp {
             reminder_wallpaper,
             reminder_use_wallpaper,
             reminder_opacity,
+            reminder_wallpaper_note,
         ) = match &self.modal {
             Some(Modal::Settings {
                 reminder_background,
@@ -4010,6 +4087,7 @@ impl FlowlistApp {
                 reminder_wallpaper,
                 reminder_use_wallpaper,
                 reminder_wallpaper_opacity,
+                reminder_wallpaper_note,
                 ..
             }) => (
                 *reminder_background,
@@ -4017,6 +4095,7 @@ impl FlowlistApp {
                 reminder_wallpaper.clone(),
                 *reminder_use_wallpaper,
                 *reminder_wallpaper_opacity,
+                reminder_wallpaper_note.clone(),
             ),
             _ => (
                 super::background::AbstractStyle::Aurora,
@@ -4024,6 +4103,7 @@ impl FlowlistApp {
                 None,
                 false,
                 0.35,
+                None,
             ),
         };
         let mut background_body = div()
@@ -4063,12 +4143,38 @@ impl FlowlistApp {
         let mut styles = div().flex().flex_wrap().items_center().gap_1();
         for style in super::background::AbstractStyle::ALL {
             let active = !reminder_match && reminder_style == style;
+            let follows = reminder_match
+                && super::background::AbstractStyle::for_theme(theme.kind()) == style;
             let key = format!("reminder-background:{}", style.slug());
             styles = styles.child(
                 div()
                     .id(super::sid(key))
+                    .w(px(86.))
+                    .flex()
+                    .flex_col()
+                    .gap_1()
                     .cursor_pointer()
-                    .child(widgets::toggle_chip(theme, style.label(), active))
+                    .child(
+                        div()
+                            .rounded_md()
+                            .border_2()
+                            .border_color(if active || follows {
+                                theme.accent
+                            } else {
+                                theme.border_soft
+                            })
+                            .child(super::background::preview(style, theme)),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(if active || follows {
+                                theme.accent
+                            } else {
+                                theme.text_dim
+                            })
+                            .child(style.label()),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(Modal::Settings {
                             reminder_background,
@@ -4154,6 +4260,9 @@ impl FlowlistApp {
                 .gap_2()
                 .child(
                     div()
+                        .on_children_prepainted(
+                            self.theme_probe("settings-choose-reminder-wallpaper".to_string()),
+                        )
                         .id("reminder-background-choose")
                         .child(widgets::button(
                             theme,
@@ -4188,6 +4297,39 @@ impl FlowlistApp {
                     )
                 }),
         );
+        if let Some(path) = &reminder_wallpaper {
+            let name = path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Wallpaper".to_string());
+            background_body = background_body.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        img(path.clone())
+                            .object_fit(ObjectFit::Cover)
+                            .w(px(72.))
+                            .h(px(48.))
+                            .rounded_md()
+                            .opacity(reminder_opacity),
+                    )
+                    .child(div().text_xs().text_color(theme.text_faint).child(name)),
+            );
+        }
+        if let Some(note) = &reminder_wallpaper_note {
+            let success = {
+                let lower = note.to_lowercase();
+                lower.contains("saved") || lower.contains("selected")
+            };
+            background_body = background_body.child(
+                div()
+                    .text_xs()
+                    .text_color(if success { theme.success } else { theme.danger })
+                    .child(note.clone()),
+            );
+        }
         let reminder_background_card = self.settings_card(
             "Reminder background",
             Some(

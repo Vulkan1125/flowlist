@@ -47,8 +47,8 @@ class ReminderReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val text = when {
-            project.isNullOrBlank() -> "Due now · Inbox"
-            else -> "Due now · $project"
+            project.isNullOrBlank() -> "Reminder · Inbox"
+            else -> "Reminder · $project"
         }
         val notification = NotificationCompat.Builder(context, TaskReminders.CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_flowlist)

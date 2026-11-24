@@ -217,14 +217,10 @@ impl Render for Reminder {
         };
         let position = format!("{} of {}", self.index + 1, self.tasks.len());
         let detail = match &task.project {
-            Some(project) => format!("{project} · due {}", task.time),
-            None => format!("Inbox · due {}", task.time),
+            Some(project) => format!("{project} · at {}", task.time),
+            None => format!("Inbox · at {}", task.time),
         };
-        let due_label = if task.due_at <= flowlist_core::time::now() {
-            "Due now"
-        } else {
-            "Coming up"
-        };
+        let due_label = "Reminder";
         let backdrop = match &self.backdrop {
             ReminderBackdrop::Abstract(style) => background::render(*style, theme),
             ReminderBackdrop::Wallpaper(path, opacity) => div()

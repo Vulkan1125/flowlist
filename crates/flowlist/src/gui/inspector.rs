@@ -141,6 +141,12 @@ impl FlowlistApp {
         let completed = task.completed;
         let flagged = task.flagged;
         let fullscreen = task.fullscreen_reminder;
+        let marked_for_reminder = db.wants_fullscreen_reminder(&id);
+        let reminder_match_due = task.reminder_match_due;
+        let reminder_at = task
+            .reminder_at
+            .map(|stamp| human_date(&stamp, now()))
+            .unwrap_or_default();
         let priority = task.priority;
         let project = task
             .project
@@ -236,6 +242,15 @@ impl FlowlistApp {
             .child(self.inspector_text_field("Title", EditField::Title, &title, cx))
             .child(self.inspector_priority(&id, priority, cx))
             .child(self.inspector_fullscreen(&id, fullscreen, cx))
+            .when(marked_for_reminder, |this| {
+                this.child(self.inspector_reminder_schedule(
+                    &id,
+                    reminder_match_due,
+                    &due.clone().unwrap_or_default(),
+                    &reminder_at,
+                    cx,
+                ))
+            })
             .child(self.inspector_notes(&notes, cx))
             .child(self.inspector_task_type(&id, sequential, cx))
             .child(self.inspector_attachments(
@@ -445,6 +460,7 @@ impl FlowlistApp {
             EditField::Title => "Task title",
             EditField::Defer => "No defer date",
             EditField::Due => "No due date",
+            EditField::Reminder => "No reminder time",
             EditField::Estimate => "No estimate (e.g. 45m)",
             EditField::Repeat => "Does not repeat (e.g. every week)",
             EditField::Project => "Inbox",
@@ -1225,6 +1241,76 @@ impl FlowlistApp {
                         cx.notify();
                     })),
             )
+    }
+
+    fn inspector_reminder_schedule(
+        &self,
+        id: &TaskId,
+        match_due: bool,
+        due: &str,
+        reminder: &str,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let id = id.clone();
+        let detail = if match_due {
+            if due.is_empty() {
+                "Set a due date, or turn this off to choose a reminder time.".to_string()
+            } else {
+                format!("Uses the due time · {due}")
+            }
+        } else {
+            "Set the date and time this reminder should fire.".to_string()
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_2()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border_soft)
+            .bg(theme.field)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .child(div().text_sm().child("Match due date & time"))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.text_faint)
+                                    .child(detail),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id("inspector-reminder-match-due")
+                            .child(widgets::switch(theme, match_due))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.execute(Command::UpdateTask {
+                                    id: id.clone(),
+                                    patch: flowlist_core::command::TaskPatch {
+                                        reminder_match_due: Some(!match_due),
+                                        ..Default::default()
+                                    },
+                                });
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .when(!match_due, |this| {
+                this.child(
+                    self.inspector_date_field(DateField::Reminder, reminder, cx),
+                )
+            })
     }
 
     fn inspector_notes(&self, notes: &str, cx: &mut Context<Self>) -> impl IntoElement {

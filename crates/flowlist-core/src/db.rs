@@ -432,6 +432,17 @@ impl Db {
         false
     }
 
+    /// The stamp a full-screen reminder should use. A task can follow its due
+    /// date or carry an independent reminder time.
+    pub fn reminder_stamp(&self, task_id: &TaskId) -> Option<Stamp> {
+        let task = self.tasks.get(task_id)?;
+        if task.reminder_match_due {
+            task.due
+        } else {
+            task.reminder_at
+        }
+    }
+
     pub fn effective_project(&self, task_id: &TaskId) -> Option<ProjectId> {
         let mut current = self.tasks.get(task_id).and_then(|task| task.parent.clone());
         while let Some(id) = current {

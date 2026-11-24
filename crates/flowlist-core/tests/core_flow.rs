@@ -2489,3 +2489,43 @@ fn fullscreen_reminders_follow_task_project_and_folder_marks() {
         .unwrap();
     assert!(store.db().wants_fullscreen_reminder(&task));
 }
+
+#[test]
+fn fullscreen_reminder_can_follow_due_or_use_its_own_time() {
+    use chrono::{NaiveDate, NaiveTime};
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let due_day = NaiveDate::from_ymd_opt(2026, 12, 1).unwrap();
+    let reminder_day = NaiveDate::from_ymd_opt(2026, 11, 30).unwrap();
+    let task = add_task(&mut store, "Morning reminder");
+    store
+        .execute(Command::UpdateTask {
+            id: task.clone(),
+            patch: TaskPatch {
+                due: Some(Some(Stamp::on(due_day, NaiveTime::from_hms_opt(9, 0, 0).unwrap()))),
+                fullscreen_reminder: Some(true),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    let due = store.db().reminder_stamp(&task).unwrap();
+    assert_eq!(due.local_date(), due_day);
+
+    store
+        .execute(Command::UpdateTask {
+            id: task.clone(),
+            patch: TaskPatch {
+                reminder_match_due: Some(false),
+                reminder_at: Some(Some(Stamp::on(
+                    reminder_day,
+                    NaiveTime::from_hms_opt(7, 30, 0).unwrap(),
+                ))),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    let own = store.db().reminder_stamp(&task).unwrap();
+    assert_eq!(own.local_date(), reminder_day);
+    assert_eq!(own.local_time(), NaiveTime::from_hms_opt(7, 30, 0).unwrap());
+}

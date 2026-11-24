@@ -240,9 +240,14 @@ Flowlist is running. Complete, Snooze 10 minutes, Open task and Dismiss are on
 that screen; Dismiss and Esc leave the task alone.
 
 The reminder sits on a theme-synced abstract backdrop by default. Pick another
-abstract style, follow the current theme, or choose a wallpaper from
-**Settings → Workflow → Reminder background**; the wallpaper has its own
-opacity. **Settings → Appearance → Background** sets a separate wallpaper
+abstract style from its preview, follow the current theme, or choose a
+wallpaper from **Settings → Workflow → Reminder background**; the wallpaper has
+its own opacity and a **Send full-screen test** button opens the reminder
+screen directly.
+
+When a task is marked for full-screen reminders, its inspector shows **Match
+due date & time**. Leave it on to follow the due stamp, or turn it off and set
+a separate reminder date and time. **Settings → Appearance → Background** sets a separate wallpaper
 behind the main window, also with an opacity choice.
 
 macOS needs an Apple Development or Developer ID signature before it can grant

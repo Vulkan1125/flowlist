@@ -474,6 +474,8 @@ class Repository(context: Context) {
             priority = edit.priority,
             flagged = edit.flagged,
             fullscreenReminder = edit.fullscreenReminder,
+            reminderAt = edit.reminderAt,
+            reminderMatchDue = edit.reminderMatchDue,
             estimateMin = edit.estimateMin,
             tags = edit.tags.toList(),
             repeat = edit.repeat,
@@ -502,6 +504,11 @@ class Repository(context: Context) {
             put("priority", priorityJson)
             put("flagged", edit.flagged)
             put("fullscreen_reminder", edit.fullscreenReminder)
+            put(
+                "reminder_at",
+                if (edit.reminderAt != null) stampJson(edit.reminderAt) else JsonNull,
+            )
+            put("reminder_match_due", edit.reminderMatchDue)
             put("estimate_min", estimateJson)
             put("repeat", edit.repeat ?: JsonNull)
             if (task.stepsOneOff == edit.stepsOneOff) {

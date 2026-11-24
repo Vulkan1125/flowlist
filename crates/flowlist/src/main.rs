@@ -1,3 +1,5 @@
+#![recursion_limit = "512"]
+
 //! Flowlist binary entry point.
 //!
 //! The same executable is the GUI, the CLI and the MCP server:

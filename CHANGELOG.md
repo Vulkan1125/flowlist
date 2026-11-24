@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **Background polish.** The main app keeps a custom wallpaper with an
+  opacity slider. The twelve ambient gradients now belong to the full-screen
+  reminder, which can also use a wallpaper with its own opacity. Abstract
+  styles and wallpapers have visual previews, and the picker shows a
+  “selected · Save to apply” note. HEIC photos are converted with `sips`.
+- **Per-reminder timing.** A full-screen reminder can follow the task's due
+  date and time, or carry its own date and time. Mac's inspector and Android's
+  task editor expose the choice.
+- **Full-screen test button.** Mac opens the actual reminder window; Android
+  opens the alarm screen directly instead of posting a regular notification.
+- **Mac file-picker fix.** Choosing a wallpaper uses the asynchronous GPUI
+  prompt, so it no longer aborts the app.
+
 ## 0.9.48 — 2026-11-24
 
 - **Fix the Mac wallpaper picker.** Choosing a wallpaper from Settings no

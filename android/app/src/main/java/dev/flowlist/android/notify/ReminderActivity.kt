@@ -158,7 +158,7 @@ private fun ReminderScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "DUE NOW · $whenText",
+                text = "REMINDER · $whenText",
                 style = MaterialTheme.typography.labelLarge,
                 color = colors.accent,
                 fontWeight = FontWeight.SemiBold,

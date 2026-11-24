@@ -75,7 +75,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -94,6 +96,8 @@ import dev.flowlist.android.icon.AppIcon
 import dev.flowlist.android.icon.AppIcons
 import dev.flowlist.android.notify.DueNotifications
 import dev.flowlist.android.notify.TaskReminders
+import coil.compose.AsyncImage
+import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -393,6 +397,17 @@ private fun AppearanceSettings(
             }
         }
         if (wallpaper != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            AsyncImage(
+                model = File(wallpaper),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(width = 96.dp, height = 64.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .alpha(preferences.wallpaperOpacity.coerceIn(0.05f, 0.95f))
+                    .border(1.dp, colors.hairline, RoundedCornerShape(10.dp)),
+            )
             Spacer(modifier = Modifier.height(4.dp))
             SmallLabel("Wallpaper opacity")
             Slider(
@@ -882,8 +897,8 @@ private fun NotificationSettings(
                     Text("Allow exact alarms", color = flow.accent)
                 }
             }
-            TextButton(onClick = { TaskReminders.sendTest(context) }) {
-                Text("Send a test full-screen reminder", color = flow.accent)
+            TextButton(onClick = { TaskReminders.preview(context) }) {
+                Text("Preview a full-screen reminder", color = flow.accent)
             }
         }
     }
@@ -933,6 +948,19 @@ private fun NotificationSettings(
                     color = flow.faint,
                 )
             }
+        }
+        if (preferences.customWallpaper != null && preferences.reminderUseWallpaper) {
+            Spacer(modifier = Modifier.height(8.dp))
+            AsyncImage(
+                model = File(preferences.customWallpaper),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(width = 96.dp, height = 64.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .alpha(preferences.reminderWallpaperOpacity.coerceIn(0.05f, 0.95f))
+                    .border(1.dp, flow.hairline, RoundedCornerShape(10.dp)),
+            )
         }
         Text(
             text = "These backgrounds appear on the full-screen reminder. The app itself uses the wallpaper from Appearance.",

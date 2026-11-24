@@ -179,6 +179,7 @@ fn image_extension(path: &std::path::Path) -> Option<&'static str> {
         "gif" => Some("gif"),
         "bmp" => Some("bmp"),
         "tif" | "tiff" => Some("tiff"),
+        "heic" | "heif" => Some("heic"),
         _ => None,
     }
 }
@@ -193,7 +194,89 @@ pub fn install_wallpaper(
         .ok_or_else(|| anyhow::anyhow!("Choose a PNG, JPEG, WebP, GIF, BMP or TIFF image"))?;
     let directory = root.join("wallpapers");
     std::fs::create_dir_all(&directory)?;
+    if extension == "heic" {
+        // The image crate cannot decode HEIC. macOS can convert it natively.
+        let destination = directory.join(format!("{name}.png"));
+        let status = std::process::Command::new("/usr/bin/sips")
+            .args(["-s", "format", "png"])
+            .arg(source)
+            .arg("--out")
+            .arg(&destination)
+            .status()?;
+        if !status.success() {
+            anyhow::bail!("Could not convert that HEIC image. Try a JPEG or PNG.");
+        }
+        return Ok(destination);
+    }
     let destination = directory.join(format!("{name}.{extension}"));
     std::fs::copy(source, &destination)?;
     Ok(destination)
+}
+
+/// A small version of the backdrop for the style picker.
+pub fn preview(style: AbstractStyle, theme: Theme) -> AnyElement {
+    let base = div()
+        .relative()
+        .w(px(72.))
+        .h(px(48.))
+        .rounded_md()
+        .overflow_hidden()
+        .bg(theme.bg);
+    match style {
+        AbstractStyle::None => base.into_any_element(),
+        AbstractStyle::Aurora => base
+            .bg(linear_gradient(
+                130.0,
+                linear_color_stop(theme.bg, 0.0),
+                linear_color_stop(theme.accent.opacity(0.16), 1.0),
+            ))
+            .child(blob(theme.accent.opacity(0.45), -8.0, -10.0, 42.0))
+            .child(blob(theme.success.opacity(0.38), 34.0, 18.0, 34.0))
+            .into_any_element(),
+        AbstractStyle::Dunes => base
+            .bg(linear_gradient(
+                35.0,
+                linear_color_stop(theme.bg, 0.0),
+                linear_color_stop(theme.field, 1.0),
+            ))
+            .child(slab(theme.accent.opacity(0.34), -6.0, 8.0, 70.0, 10.0))
+            .child(slab(theme.warning.opacity(0.30), 8.0, 24.0, 62.0, 9.0))
+            .into_any_element(),
+        AbstractStyle::Halo => base
+            .child(
+                div()
+                    .absolute()
+                    .left(px(18.))
+                    .top(px(6.))
+                    .size(px(38.))
+                    .rounded_full()
+                    .border_4()
+                    .border_color(theme.accent.opacity(0.45)),
+            )
+            .child(blob(theme.success.opacity(0.28), 30.0, 24.0, 24.0))
+            .into_any_element(),
+        AbstractStyle::Mesh => base
+            .child(slab(theme.accent.opacity(0.34), -4.0, -6.0, 38.0, 34.0))
+            .child(slab(theme.success.opacity(0.30), 32.0, 8.0, 30.0, 28.0))
+            .child(slab(theme.warning.opacity(0.26), 14.0, 28.0, 34.0, 24.0))
+            .into_any_element(),
+        AbstractStyle::Tide => base
+            .bg(linear_gradient(
+                65.0,
+                linear_color_stop(theme.bg, 0.0),
+                linear_color_stop(theme.accent.opacity(0.16), 1.0),
+            ))
+            .child(slab(theme.accent.opacity(0.34), 4.0, 8.0, 76.0, 9.0))
+            .child(slab(theme.success.opacity(0.28), -6.0, 24.0, 64.0, 8.0))
+            .into_any_element(),
+        AbstractStyle::Ember => base
+            .bg(linear_gradient(
+                145.0,
+                linear_color_stop(theme.bg, 0.0),
+                linear_color_stop(theme.danger.opacity(0.16), 1.0),
+            ))
+            .child(blob(theme.danger.opacity(0.42), -6.0, 2.0, 38.0))
+            .child(blob(theme.warning.opacity(0.36), 34.0, 16.0, 32.0))
+            .into_any_element(),
+    }
 }

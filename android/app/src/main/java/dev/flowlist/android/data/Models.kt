@@ -68,6 +68,8 @@ data class TaskDto(
     @SerialName("estimate_min") val estimateMin: Int? = null,
     val flagged: Boolean = false,
     @SerialName("fullscreen_reminder") val fullscreenReminder: Boolean = false,
+    @SerialName("reminder_at") val reminderAt: StampDto? = null,
+    @SerialName("reminder_match_due") val reminderMatchDue: Boolean = true,
     val priority: String? = null,
     val completed: Boolean = false,
     @SerialName("completed_at") val completedAt: String? = null,
@@ -181,6 +183,8 @@ data class TaskEdit(
     val priority: String?,
     val flagged: Boolean,
     val fullscreenReminder: Boolean,
+    val reminderAt: StampDto?,
+    val reminderMatchDue: Boolean,
     val estimateMin: Int?,
     val tags: Set<String>,
     val repeat: JsonElement? = null,
@@ -202,6 +206,8 @@ data class TaskView(
     val defer: StampDto?,
     val flagged: Boolean,
     val fullscreenReminder: Boolean,
+    val reminderAt: StampDto?,
+    val reminderMatchDue: Boolean,
     val priority: String?,
     val completed: Boolean,
     val pending: Boolean,
@@ -222,6 +228,9 @@ val TaskDto.isActive: Boolean
 
 /// A task opts into full-screen reminders itself, through a parent task, or
 /// through its project or any folder above the project.
+fun Db.reminderStamp(task: TaskDto): StampDto? =
+    if (task.reminderMatchDue) task.due else task.reminderAt
+
 fun Db.wantsFullscreenReminder(task: TaskDto): Boolean {
     if (task.fullscreenReminder) return true
     var parent = task.parent
@@ -272,6 +281,8 @@ fun Db.taskViews(
                 defer = task.defer,
                 flagged = task.flagged,
                 fullscreenReminder = task.fullscreenReminder,
+                reminderAt = task.reminderAt,
+                reminderMatchDue = task.reminderMatchDue,
                 priority = task.priority,
                 completed = task.completed,
                 pending = task.id in pending,
@@ -394,6 +405,8 @@ private fun TaskDto.toView(db: Db) = TaskView(
     defer = defer,
     flagged = flagged,
     fullscreenReminder = fullscreenReminder,
+    reminderAt = reminderAt,
+    reminderMatchDue = reminderMatchDue,
     priority = priority,
     completed = completed,
     pending = false,

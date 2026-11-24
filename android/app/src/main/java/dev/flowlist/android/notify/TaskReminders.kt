@@ -13,8 +13,9 @@ import android.os.Handler
 import android.os.Looper
 import dev.flowlist.android.data.Db
 import dev.flowlist.android.data.FileStore
-import dev.flowlist.android.data.TaskDto
 import androidx.core.app.NotificationManagerCompat
+import dev.flowlist.android.data.StampDto
+import dev.flowlist.android.data.reminderStamp
 import dev.flowlist.android.data.wantsFullscreenReminder
 import java.time.LocalDate
 import java.time.LocalTime
@@ -81,7 +82,7 @@ object TaskReminders {
         for (task in db.tasks.values) {
             if (task.completed || task.trashedAt != null) continue
             if (!db.wantsFullscreenReminder(task)) continue
-            val at = reminderAt(task) ?: continue
+            val at = reminderAt(db.reminderStamp(task)) ?: continue
             if (at <= now || at > horizon) continue
             val project = task.project?.let { db.projects[it]?.name }
             schedule(context, task.id, task.title, project, at)
@@ -110,6 +111,19 @@ object TaskReminders {
         Handler(Looper.getMainLooper()).postDelayed({
             ReminderReceiver().onReceive(context, intent)
         }, 2_000)
+    }
+
+    /** Open the alarm screen directly, so the background can be previewed. */
+    fun preview(context: Context) {
+        context.startActivity(
+            Intent(context, ReminderActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("task_id", "test-reminder")
+                putExtra("title", "Full-screen reminder test")
+                putExtra("project", "Flowlist")
+                putExtra("due_at", System.currentTimeMillis())
+            },
+        )
     }
 
     fun markFired(context: Context, taskId: String) {
@@ -188,8 +202,8 @@ object TaskReminders {
         putExtra("due_at", dueAt)
     }
 
-    private fun reminderAt(task: TaskDto): Long? {
-        val stamp = task.due ?: return null
+    private fun reminderAt(stamp: StampDto?): Long? {
+        val stamp = stamp ?: return null
         val zoned = stamp.local() ?: return null
         return if (stamp.hasTime) {
             zoned.toInstant().toEpochMilli()

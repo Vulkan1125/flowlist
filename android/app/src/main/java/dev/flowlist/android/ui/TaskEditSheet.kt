@@ -173,6 +173,11 @@ fun TaskEditSheet(
     var priority by remember(task.id) { mutableStateOf(task.priority) }
     var flagged by remember(task.id) { mutableStateOf(task.flagged) }
     var fullscreenReminder by remember(task.id) { mutableStateOf(task.fullscreenReminder) }
+    var reminderAt by remember(task.id) { mutableStateOf(task.reminderAt) }
+    var reminderMatchDue by remember(task.id) { mutableStateOf(task.reminderMatchDue) }
+    val inheritedFullscreen = remember(task.id, task.project, projects) {
+        task.project?.let { id -> projects.firstOrNull { it.id == id }?.fullscreenReminder } == true
+    }
     var stepMode by remember(task.id) {
         mutableStateOf(
             when {
@@ -248,6 +253,7 @@ fun TaskEditSheet(
     var confirmDelete by remember { mutableStateOf(false) }
     var datePickerForDue by remember { mutableStateOf(true) }
     var showDueSheet by remember { mutableStateOf(false) }
+    var showReminderSheet by remember { mutableStateOf(false) }
     var dateError by remember { mutableStateOf<String?>(null) }
     var pendingSave by remember(task.id) { mutableStateOf<TaskEdit?>(null) }
 
@@ -1038,6 +1044,53 @@ fun TaskEditSheet(
                 )
             }
 
+            if (fullscreenReminder || inheritedFullscreen) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Label("Match due date & time")
+                        Text(
+                            text = if (reminderMatchDue) {
+                                if (due != null) "Uses the due date and time" else "Set a due date, or choose a reminder time"
+                            } else {
+                                "Use a separate date and time for this reminder"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.faint,
+                        )
+                    }
+                    Switch(
+                        checked = reminderMatchDue,
+                        onCheckedChange = { reminderMatchDue = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = colors.onAccent,
+                            checkedTrackColor = colors.accent,
+                            uncheckedThumbColor = colors.faint,
+                            uncheckedTrackColor = colors.field,
+                            uncheckedBorderColor = colors.hairline,
+                        ),
+                    )
+                }
+                if (!reminderMatchDue) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.field)
+                            .clickable { showReminderSheet = true }
+                            .padding(horizontal = 12.dp, vertical = 11.dp),
+                    ) {
+                        Text(
+                            text = reminderAt?.label()?.ifBlank { "Set reminder date & time" }
+                                ?: "Set reminder date & time",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (reminderAt == null) colors.faint else colors.ink,
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
             Label("Estimate")
             OutlinedTextField(
@@ -1139,6 +1192,8 @@ fun TaskEditSheet(
                         priority = priority,
                         flagged = flagged,
                         fullscreenReminder = fullscreenReminder,
+                        reminderAt = reminderAt,
+                        reminderMatchDue = reminderMatchDue,
                         estimateMin = estimate.toIntOrNull(),
                         tags = selectedTags,
                         repeat = repeat,
@@ -1253,6 +1308,24 @@ fun TaskEditSheet(
             onSet = { value ->
                 applyStamp(value)
                 showDueSheet = false
+            },
+        )
+    }
+
+    if (showReminderSheet) {
+        DueDateSheet(
+            title = "Reminder time",
+            initial = reminderAt,
+            weekStartsMonday = weekStartsMonday,
+            defaultTime = java.time.LocalTime.of(
+                defaultTimeMinutes / 60,
+                defaultTimeMinutes % 60,
+            ),
+            onDismiss = { showReminderSheet = false },
+            onSet = { value ->
+                reminderAt = value
+                reminderMatchDue = false
+                showReminderSheet = false
             },
         )
     }

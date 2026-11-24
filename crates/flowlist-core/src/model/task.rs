@@ -94,6 +94,13 @@ pub struct Task {
     /// project, folder or parent task also opt the task in.
     #[serde(default)]
     pub fullscreen_reminder: bool,
+    /// When the full-screen reminder should fire. Only used when
+    /// `reminder_match_due` is false.
+    #[serde(default)]
+    pub reminder_at: Option<Stamp>,
+    /// Use the due date and time instead of `reminder_at`.
+    #[serde(default = "default_true")]
+    pub reminder_match_due: bool,
     /// Optional importance, independent of the flag.
     #[serde(default)]
     pub priority: Option<Priority>,
@@ -147,6 +154,8 @@ impl Task {
             estimate_min: None,
             flagged: false,
             fullscreen_reminder: false,
+            reminder_at: None,
+            reminder_match_due: true,
             priority: None,
             completed: false,
             completed_at: None,
@@ -195,4 +204,8 @@ impl Task {
             .iter()
             .find(|item| item.id.matches_spec(spec))
     }
+}
+
+fn default_true() -> bool {
+    true
 }

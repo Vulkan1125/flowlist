@@ -55,6 +55,12 @@ pub struct NewTask {
     /// Opt this task into full-screen reminders.
     #[serde(default)]
     pub fullscreen_reminder: bool,
+    /// Independent reminder time; ignored while `reminder_match_due` is true.
+    #[serde(default)]
+    pub reminder_at: Option<Stamp>,
+    /// Follow the due date and time instead of `reminder_at`.
+    #[serde(default = "default_true")]
+    pub reminder_match_due: bool,
     pub priority: Option<Priority>,
     pub attachments: Vec<String>,
     pub repeat: Option<RepeatRule>,
@@ -78,6 +84,8 @@ impl NewTask {
             estimate_min: None,
             flagged: false,
             fullscreen_reminder: false,
+            reminder_at: None,
+            reminder_match_due: true,
             priority: None,
             attachments: Vec::new(),
             repeat: None,
@@ -129,6 +137,9 @@ pub struct TaskPatch {
     pub estimate_min: Option<Option<u32>>,
     pub flagged: Option<bool>,
     pub fullscreen_reminder: Option<bool>,
+    #[serde(deserialize_with = "deserialize_double_option")]
+    pub reminder_at: Option<Option<Stamp>>,
+    pub reminder_match_due: Option<bool>,
     #[serde(deserialize_with = "deserialize_double_option")]
     pub priority: Option<Option<Priority>>,
     pub attachments: Option<Vec<String>>,
@@ -624,6 +635,8 @@ impl Command {
                 task.estimate_min = new_task.estimate_min;
                 task.flagged = new_task.flagged;
                 task.fullscreen_reminder = new_task.fullscreen_reminder;
+                task.reminder_at = new_task.reminder_at;
+                task.reminder_match_due = new_task.reminder_match_due;
                 task.priority = new_task.priority;
                 task.attachments = new_task.attachments;
                 task.repeat = new_task.repeat;
@@ -683,6 +696,12 @@ impl Command {
                     }
                     if let Some(fullscreen) = patch.fullscreen_reminder {
                         task.fullscreen_reminder = fullscreen;
+                    }
+                    if let Some(reminder_at) = patch.reminder_at {
+                        task.reminder_at = reminder_at;
+                    }
+                    if let Some(match_due) = patch.reminder_match_due {
+                        task.reminder_match_due = match_due;
                     }
                     if let Some(priority) = patch.priority {
                         task.priority = priority;
@@ -799,6 +818,8 @@ impl Command {
                     let estimate = task.estimate_min;
                     let flagged = task.flagged;
                     let fullscreen_reminder = task.fullscreen_reminder;
+                    let reminder_at = task.reminder_at;
+                    let reminder_match_due = task.reminder_match_due;
                     let sequential = task.sequential;
                     {
                         let task = db.task_mut(&id)?;
@@ -827,6 +848,8 @@ impl Command {
                                 spawned.estimate_min = estimate;
                                 spawned.flagged = flagged;
                                 spawned.fullscreen_reminder = fullscreen_reminder;
+                                spawned.reminder_at = reminder_at;
+                                spawned.reminder_match_due = reminder_match_due;
                                 spawned.priority = series_priority;
                                 spawned.sequential = sequential;
                                 spawned.checklist = db
@@ -2330,4 +2353,8 @@ fn tag_count(count: usize) -> String {
         1 => "1 tag".to_string(),
         n => format!("{n} tags"),
     }
+}
+
+fn default_true() -> bool {
+    true
 }

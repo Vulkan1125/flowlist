@@ -264,8 +264,13 @@ working domain and GUI. This page tracks what is implemented and verified.
       inline add row and the project/folder sheets carry the mark at creation.
 - [x] Mac backgrounds: a custom wallpaper with an opacity choice sits behind
       the main window. The full-screen reminder has its own backdrop: six
-      theme-synced abstract styles (Aurora, Dunes, Halo, Mesh, Tide, Ember),
-      a Match-theme default, or a separate wallpaper with its own opacity.
+      theme-synced abstract styles (Aurora, Dunes, Halo, Mesh, Tide, Ember)
+      with visual previews, a Match-theme default, or a separate wallpaper with
+      its own opacity.
+- [x] Full-screen reminders can follow the due date and time or carry their
+      own reminder date and time. The inspector (Mac) and task editor
+      (Android) expose both choices, and “Send full-screen test” opens the
+      reminder screen directly.
 - [x] Releases ship a drag-to-Applications DMG beside the updater's zip.
 - [x] The plus opens the capture panel over the window (the global shortcut
       stays screen-centered), the toast follows the visible middle pane, and

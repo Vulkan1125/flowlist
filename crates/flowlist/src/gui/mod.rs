@@ -99,6 +99,7 @@ pub enum EditField {
     Project,
     Defer,
     Due,
+    Reminder,
     Estimate,
     Repeat,
 }
@@ -110,7 +111,8 @@ impl EditField {
             EditField::Notes => EditField::Project,
             EditField::Project => EditField::Defer,
             EditField::Defer => EditField::Due,
-            EditField::Due => EditField::Estimate,
+            EditField::Due => EditField::Reminder,
+            EditField::Reminder => EditField::Estimate,
             EditField::Estimate => EditField::Repeat,
             EditField::Repeat => EditField::Title,
         }
@@ -123,7 +125,8 @@ impl EditField {
             EditField::Project => EditField::Notes,
             EditField::Defer => EditField::Project,
             EditField::Due => EditField::Defer,
-            EditField::Estimate => EditField::Due,
+            EditField::Reminder => EditField::Due,
+            EditField::Estimate => EditField::Reminder,
             EditField::Repeat => EditField::Estimate,
         }
     }
@@ -136,6 +139,7 @@ impl EditField {
 pub(super) enum DateField {
     Defer,
     Due,
+    Reminder,
 }
 
 /// The date popover is a two-step surface: pick a day on the calendar, then
@@ -161,6 +165,7 @@ impl DateField {
         match self {
             DateField::Defer => EditField::Defer,
             DateField::Due => EditField::Due,
+            DateField::Reminder => EditField::Reminder,
         }
     }
 
@@ -168,6 +173,7 @@ impl DateField {
         match self {
             DateField::Defer => "defer",
             DateField::Due => "due",
+            DateField::Reminder => "reminder",
         }
     }
 
@@ -175,6 +181,7 @@ impl DateField {
         match self {
             DateField::Defer => "Defer",
             DateField::Due => "Due",
+            DateField::Reminder => "Reminder",
         }
     }
 
@@ -182,6 +189,7 @@ impl DateField {
         match self {
             DateField::Defer => "No defer date",
             DateField::Due => "No due date",
+            DateField::Reminder => "No reminder time",
         }
     }
 }
@@ -264,6 +272,7 @@ fn picker_default_time(
     match field {
         DateField::Due => due.unwrap_or(fallback),
         DateField::Defer => defer.unwrap_or(fallback),
+        DateField::Reminder => due.unwrap_or(fallback),
     }
 }
 
@@ -447,6 +456,7 @@ pub struct FlowlistApp {
     /// paint under the right field.
     due_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     defer_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    reminder_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// Which date field's calendar is open, the month on screen and the day
     /// the arrow keys point at. `date_picker_time` is the time that will be
     /// written with the day, or None for an all-day date.
@@ -786,6 +796,7 @@ impl FlowlistApp {
             checklist_add_anchor: Rc::new(Cell::new(None)),
             due_anchor: Rc::new(Cell::new(None)),
             defer_anchor: Rc::new(Cell::new(None)),
+            reminder_anchor: Rc::new(Cell::new(None)),
             date_picker: None,
             date_picker_month: forecast_month,
             date_picker_cursor: today,
@@ -968,6 +979,43 @@ impl FlowlistApp {
         }
     }
 
+    fn reminder_backdrop(&self) -> reminder::ReminderBackdrop {
+        if self.reminder_use_wallpaper
+            && let Some(path) = self.reminder_wallpaper.clone()
+        {
+            return reminder::ReminderBackdrop::Wallpaper(path, self.reminder_wallpaper_opacity);
+        }
+        reminder::ReminderBackdrop::Abstract(if self.reminder_match_theme {
+            AbstractStyle::for_theme(self.theme.kind())
+        } else {
+            self.reminder_background
+        })
+    }
+
+    /// Open the reminder window with a sample task so the backdrop can be
+    /// checked without waiting for a real due time.
+    pub(super) fn send_fullscreen_test(&mut self, cx: &mut Context<Self>) {
+        let task = reminder::ReminderTask {
+            id: TaskId::from_string("flowlist-test-reminder"),
+            title: "Full-screen reminder test".to_string(),
+            project: Some("Flowlist".to_string()),
+            time: "09:00".to_string(),
+            due_at: now(),
+        };
+        if reminder::show(
+            cx.weak_entity(),
+            self.theme,
+            self.reminder_backdrop(),
+            vec![task],
+            cx,
+        )
+        .is_ok()
+        {
+            self.reminder_open = true;
+        }
+        cx.notify();
+    }
+
     /// Open the full-screen reminder for anything that just came due. The
     /// check runs once a second from the same background tick that keeps
     /// notifications in step. Tasks that came due long before Flowlist opened
@@ -986,7 +1034,7 @@ impl FlowlistApp {
                 if task.completed || task.is_trashed() {
                     continue;
                 }
-                let Some(stamp) = task.due else {
+                let Some(stamp) = db.reminder_stamp(&task.id) else {
                     continue;
                 };
                 let due_at = notifications::reminder_at(stamp);
@@ -1043,29 +1091,7 @@ impl FlowlistApp {
         for task in &due {
             self.reminder_snoozed.remove(&task.id);
         }
-        let backdrop = if self.reminder_use_wallpaper {
-            self.reminder_wallpaper
-                .clone()
-                .map(|path| {
-                    reminder::ReminderBackdrop::Wallpaper(
-                        path,
-                        self.reminder_wallpaper_opacity,
-                    )
-                })
-                .unwrap_or_else(|| {
-                    reminder::ReminderBackdrop::Abstract(if self.reminder_match_theme {
-                        AbstractStyle::for_theme(self.theme.kind())
-                    } else {
-                        self.reminder_background
-                    })
-                })
-        } else {
-            reminder::ReminderBackdrop::Abstract(if self.reminder_match_theme {
-                AbstractStyle::for_theme(self.theme.kind())
-            } else {
-                self.reminder_background
-            })
-        };
+        let backdrop = self.reminder_backdrop();
         if let Err(error) = reminder::show(cx.weak_entity(), self.theme, backdrop, due, cx) {
             self.toast = Some(format!("Could not open the reminder: {error}"));
             self.reminder_open = false;
@@ -2504,6 +2530,7 @@ impl FlowlistApp {
         match field {
             DateField::Defer => self.defer_anchor.clone(),
             DateField::Due => self.due_anchor.clone(),
+            DateField::Reminder => self.reminder_anchor.clone(),
         }
     }
 
@@ -2514,6 +2541,7 @@ impl FlowlistApp {
         match field {
             DateField::Defer => task.defer,
             DateField::Due => task.due,
+            DateField::Reminder => task.reminder_at,
         }
     }
 
@@ -2748,6 +2776,10 @@ impl FlowlistApp {
         match field {
             DateField::Defer => patch.defer = Some(Some(stamp)),
             DateField::Due => patch.due = Some(Some(stamp)),
+            DateField::Reminder => {
+                patch.reminder_at = Some(Some(stamp));
+                patch.reminder_match_due = Some(false);
+            }
         }
         self.execute(Command::UpdateTask { id, patch });
         cx.notify();
@@ -2794,6 +2826,7 @@ impl FlowlistApp {
         match field {
             DateField::Defer => patch.defer = Some(None),
             DateField::Due => patch.due = Some(None),
+            DateField::Reminder => patch.reminder_at = Some(None),
         }
         self.execute(Command::UpdateTask { id, patch });
         cx.notify();
@@ -2825,6 +2858,11 @@ impl FlowlistApp {
                 .unwrap_or_default(),
             EditField::Due => task
                 .due
+                .as_ref()
+                .map(|stamp| stamp.to_input_string())
+                .unwrap_or_default(),
+            EditField::Reminder => task
+                .reminder_at
                 .as_ref()
                 .map(|stamp| stamp.to_input_string())
                 .unwrap_or_default(),
@@ -2923,6 +2961,24 @@ impl FlowlistApp {
                     patch.defer = Some(stamp);
                 } else {
                     patch.due = Some(stamp);
+                }
+            }
+            EditField::Reminder => {
+                let stamp = if value.is_empty() {
+                    None
+                } else {
+                    match parse_stamp(&value, now()) {
+                        Ok(stamp) => Some(stamp),
+                        Err(error) => {
+                            self.field_error = Some(error.to_string());
+                            cx.notify();
+                            return false;
+                        }
+                    }
+                };
+                patch.reminder_at = Some(stamp);
+                if stamp.is_some() {
+                    patch.reminder_match_due = Some(false);
                 }
             }
             EditField::Estimate => {
@@ -6052,6 +6108,7 @@ impl FlowlistApp {
             "priority_anchor": self.priority_anchor.get().is_some(),
             "due_anchor": anchor(self.due_anchor.get()),
             "defer_anchor": anchor(self.defer_anchor.get()),
+            "reminder_anchor": anchor(self.reminder_anchor.get()),
             "title_space": self.title_space.get(),
             "title_visible": self.title_visible.get(),
             "sidebar_menu": self.sidebar_menu.as_ref().map(|menu| menu.key()),
@@ -6291,6 +6348,22 @@ impl FlowlistApp {
         state["forecast_calendar_height"] = serde_json::json!(self.forecast_calendar_height);
         state["modal_project_icon"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::NewProject { icon, .. }) => Some(icon.slug()),
+            _ => None,
+        });
+        state["modal_wallpaper"] = serde_json::json!(match &self.modal {
+            Some(modals::Modal::Settings { wallpaper, use_wallpaper, wallpaper_note, .. }) => Some(serde_json::json!({
+                "path": wallpaper.as_ref().map(|path| path.display().to_string()),
+                "use": use_wallpaper,
+                "note": wallpaper_note,
+            })),
+            _ => None,
+        });
+        state["modal_reminder_wallpaper"] = serde_json::json!(match &self.modal {
+            Some(modals::Modal::Settings { reminder_wallpaper, reminder_use_wallpaper, reminder_wallpaper_note, .. }) => Some(serde_json::json!({
+                "path": reminder_wallpaper.as_ref().map(|path| path.display().to_string()),
+                "use": reminder_use_wallpaper,
+                "note": reminder_wallpaper_note,
+            })),
             _ => None,
         });
         state["modal_sidebar"] = serde_json::json!(match &self.modal {
