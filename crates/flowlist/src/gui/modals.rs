@@ -2907,21 +2907,12 @@ impl FlowlistApp {
                 return;
             };
             this.update(cx, |this, cx| {
-                let previous = match &this.modal {
-                    Some(Modal::Settings { wallpaper, .. }) => wallpaper.clone(),
-                    _ => None,
-                };
                 match super::background::install_wallpaper(
                     &path,
                     &this.store.paths().root,
                     "app",
                 ) {
                     Ok(copied) => {
-                        if let Some(old) = previous
-                            && old != copied
-                        {
-                            let _ = std::fs::remove_file(old);
-                        }
                         if let Some(Modal::Settings {
                             wallpaper,
                             use_wallpaper,
@@ -2963,21 +2954,12 @@ impl FlowlistApp {
                 return;
             };
             this.update(cx, |this, cx| {
-                let previous = match &this.modal {
-                    Some(Modal::Settings { reminder_wallpaper, .. }) => reminder_wallpaper.clone(),
-                    _ => None,
-                };
                 match super::background::install_wallpaper(
                     &path,
                     &this.store.paths().root,
                     "reminder",
                 ) {
                     Ok(copied) => {
-                        if let Some(old) = previous
-                            && old != copied
-                        {
-                            let _ = std::fs::remove_file(old);
-                        }
                         if let Some(Modal::Settings {
                             reminder_wallpaper,
                             reminder_use_wallpaper,
