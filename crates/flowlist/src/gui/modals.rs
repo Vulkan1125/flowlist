@@ -97,6 +97,7 @@ pub enum Modal {
         /// Review cadence for this project, in days. Starts at the library
         /// default and can be changed per project.
         review_days: TextBuffer,
+        planned: TextBuffer,
         kind: ProjectKind,
         icon: IconSpec,
         /// The icon card stays folded away until the current icon is clicked.
@@ -436,6 +437,7 @@ impl Modal {
             name: TextBuffer::empty(),
             notes: TextBuffer::empty(),
             review_days: TextBuffer::new(app.store.db().settings.default_review_days.to_string()),
+            planned: TextBuffer::empty(),
             kind: ProjectKind::Parallel,
             icon: IconSpec::default(),
             icon_open: false,
@@ -452,6 +454,12 @@ impl Modal {
             name: TextBuffer::new(project.name.clone()),
             notes: TextBuffer::new(project.notes.clone()),
             review_days: TextBuffer::new(project.review_interval_days.to_string()),
+            planned: TextBuffer::new(
+                project
+                    .planned
+                    .map(|stamp| stamp.to_input_string())
+                    .unwrap_or_default(),
+            ),
             kind: project.kind,
             icon: project.icon.clone(),
             icon_open: false,
@@ -812,9 +820,9 @@ impl Modal {
             Modal::ReviewInterval { .. } => 1,
             Modal::NewProject { icon_open, .. } => {
                 if *icon_open {
-                    4
+                    5
                 } else {
-                    3
+                    4
                 }
             }
             Modal::IconPicker { .. } => 1,
@@ -850,13 +858,15 @@ impl Modal {
                 name,
                 notes,
                 review_days,
+                planned,
                 icon_query,
                 ..
             } => match index {
                 0 => Some(name),
                 1 => Some(notes),
                 2 => Some(review_days),
-                3 => Some(icon_query),
+                3 => Some(planned),
+                4 => Some(icon_query),
                 _ => None,
             },
             Modal::IconPicker { query, .. } => (index == 0).then_some(query),
@@ -916,13 +926,15 @@ impl Modal {
                 name,
                 notes,
                 review_days,
+                planned,
                 icon_query,
                 ..
             } => match index {
                 0 => Some(name),
                 1 => Some(notes),
                 2 => Some(review_days),
-                3 => Some(icon_query),
+                3 => Some(planned),
+                4 => Some(icon_query),
                 _ => None,
             },
             Modal::IconPicker { query, .. } => (index == 0).then_some(query),
@@ -982,7 +994,8 @@ impl Modal {
                 0 => "Name",
                 1 => "Notes",
                 2 => "Review every (days)",
-                3 => "Search icons",
+                3 => "Planned date",
+                4 => "Search icons",
                 _ => "",
             },
             Modal::IconPicker { .. } => "Search icons",
@@ -1481,7 +1494,7 @@ impl FlowlistApp {
                             ),
                     );
                 } else if is_new_project {
-                    for index in 0..3 {
+                    for index in 0..4 {
                         body = body.child(self.render_modal_field(index, cx));
                     }
                 } else if is_icon_picker {
@@ -2306,7 +2319,7 @@ impl FlowlistApp {
                 Some((IconTarget::Perspective, 5))
             }
             Some(Modal::NewProject { icon_open: true, .. }) => {
-                Some((IconTarget::NewProject, 3))
+                Some((IconTarget::NewProject, 4))
             }
             Some(Modal::IconPicker { project, .. }) => {
                 Some((IconTarget::Project(project.clone()), 0))
@@ -3291,7 +3304,7 @@ impl FlowlistApp {
                                 if let Some(Modal::NewProject { icon_open, .. }) = &mut this.modal {
                                     *icon_open = !*icon_open;
                                     if *icon_open {
-                                        this.modal_focus = 3;
+                                        this.modal_focus = 4;
                                     }
                                 }
                                 cx.notify();
@@ -3309,7 +3322,7 @@ impl FlowlistApp {
             .when(icon_open, |this| {
                 this.child(self.render_icon_picker_card(
                     IconTarget::NewProject,
-                    3,
+                    4,
                     Some(&icon),
                     icon_tab,
                     cx,

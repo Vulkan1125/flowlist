@@ -344,7 +344,7 @@ pub fn today(db: &Db, include_past: bool, at: DateTime<Utc>) -> Vec<Group> {
         // Planned today counts even when a later due date exists; the retains
         // below drop anything already shown in another bucket. A plan that has
         // slipped is kept in its own group rather than rolled forward.
-        if let Some(planned) = task.planned {
+        if let Some(planned) = db.effective_planned(&id) {
             let date = planned.local_date();
             if date == today {
                 planned_today.push(id.clone());
@@ -372,7 +372,7 @@ pub fn today(db: &Db, include_past: bool, at: DateTime<Utc>) -> Vec<Group> {
             && !deferred.contains(id)
             && !planned_today.contains(id)
     });
-    past_planned.sort_by_key(|id| db.tasks[id].planned.map(|stamp| stamp.at));
+    past_planned.sort_by_key(|id| db.effective_planned(id).map(|stamp| stamp.at));
     planned_today
         .retain(|id| !overdue.contains(id) && !due_today.contains(id) && !deferred.contains(id));
     due_today.extend(planned_today);
@@ -380,7 +380,7 @@ pub fn today(db: &Db, include_past: bool, at: DateTime<Utc>) -> Vec<Group> {
         (
             db.tasks[id]
                 .due
-                .or(db.tasks[id].planned)
+                .or_else(|| db.effective_planned(id))
                 .map(|stamp| stamp.at),
             db.tasks[id].title.to_lowercase(),
         )
@@ -460,8 +460,8 @@ pub fn tasks_on_date(
             }
             task.due.is_some_and(|stamp| stamp.local_date() == date)
                 || (include_planned
-                    && task
-                        .planned
+                    && db
+                        .effective_planned(id)
                         .is_some_and(|stamp| stamp.local_date() == date))
                 || task.defer.is_some_and(|stamp| stamp.local_date() == date)
         })
@@ -469,7 +469,10 @@ pub fn tasks_on_date(
     ids.sort_by_cached_key(|id| {
         let task = &db.tasks[id];
         (
-            task.due.or(task.planned).or(task.defer).map(|stamp| stamp.at),
+            task.due
+                .or_else(|| db.effective_planned(id))
+                .or(task.defer)
+                .map(|stamp| stamp.at),
             task.title.to_lowercase(),
         )
     });
@@ -770,7 +773,7 @@ impl<'a> GroupContext<'a> {
                     i64::MAX,
                 ),
             },
-            GroupBy::PlannedDate => match task.planned {
+            GroupBy::PlannedDate => match db.effective_planned(&task.id) {
                 Some(stamp) => {
                     let today = crate::time::local_date(self.at);
                     let date = stamp.local_date();

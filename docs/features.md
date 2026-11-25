@@ -228,7 +228,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       accepts `planned:` / `plan:`, Forecast shows Planned Today and planned
       days, Today includes planned-today tasks, slipped plans persist in Past,
       saved views can filter by Planned window, and sorting, grouping, CLI and
-      MCP understand it.
+      MCP understand it. Projects carry a planned date and actions inherit it
+      through parent actions; a task or parent action overrides it.
 - [x] Date marks: Defer, Planned and Due carry distinct OmniFocus-style
       icons (turning arrow, signpost, clock-on-calendar) on task rows and
       inspector labels, with hover tooltips.
@@ -327,8 +328,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Delete folder/tag/perspective/project from the sidebar (`⌘⌫` or `dd`);
       projects and tags ask first, deleting a project moves its tasks to Trash,
       and every delete is undoable
-- [x] Edit project from the sidebar context menu (name, notes, review cadence,
-      type, icon) and edit a folder's name without leaving the rail
+- [x] Edit project from the sidebar context menu (name, notes, planned date,
+      review cadence, type, icon) and edit a folder's name without leaving the
+      rail
 - [x] Deleting a folder asks first: nested folders, their projects and every
       task inside move to Trash with it, the sheet names the folder and counts
       its projects, and one Undo restores the whole tree. The × button, the

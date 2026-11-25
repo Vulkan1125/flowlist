@@ -154,7 +154,7 @@ The rail is the map of the library:
 | View | Shows |
 | --- | --- |
 | **Inbox** | unscheduled tasks — no project, no due or defer date (a planned date does not count) |
-| **Today** | due or planned today, deferred to today, overdue, and slipped plans |
+| **Today** | due or planned today (including inherited plans), deferred to today, overdue, and slipped plans |
 | **Forecast** | the month calendar and upcoming due, deferred and planned work; the **Planned** chip hides planned-only rows, and work more than 30 days out sits under **Next month and later**, folded |
 | **Review** | projects whose review date has arrived |
 | **Projects** | every project at a glance |
@@ -190,7 +190,9 @@ titles itself **Search** and ranks the closest matches first.
   the first match. Projects and saved views share the same card. The card grows
   with the sheet rather than trapping the scroll wheel.
 - **Right-click a project** for Open, Rename, **Edit project…**, status and
-  Delete. The Edit sheet covers the name, notes, review cadence, type and icon.
+  Delete. The Edit sheet covers the name, notes, planned date, review cadence,
+  type and icon. Tasks inherit the project's planned date unless they or a
+  parent task carry their own.
 - **Right-click a folder** for Open, Rename, **Edit folder…**, New project here,
   New subfolder and Delete.
 - **Saved perspectives** share one editor with the phone: text, Inbox only,

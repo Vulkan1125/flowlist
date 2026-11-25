@@ -460,6 +460,30 @@ impl Db {
             .and_then(|task| task.project.clone())
     }
 
+    /// The planned date a task actually shows: its own, otherwise the nearest
+    /// parent action's, otherwise its project's. Planned dates never affect
+    /// availability.
+    pub fn effective_planned(&self, task_id: &TaskId) -> Option<Stamp> {
+        let mut current = Some(task_id.clone());
+        let mut guard = 0;
+        while let Some(id) = current {
+            guard += 1;
+            if guard > 64 {
+                break;
+            }
+            let Some(task) = self.tasks.get(&id) else {
+                break;
+            };
+            if let Some(planned) = task.planned {
+                return Some(planned);
+            }
+            current = task.parent.clone();
+        }
+        self.effective_project(task_id)
+            .and_then(|project| self.projects.get(&project))
+            .and_then(|project| project.planned)
+    }
+
     pub fn task_depth(&self, task_id: &TaskId) -> u32 {
         self.task_ancestors(task_id).len() as u32
     }

@@ -118,7 +118,7 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
             }
         }
 
-        if let Some(planned) = task.planned {
+        if let Some(planned) = db.effective_planned(&task.id) {
             let date = planned.local_date();
             if date < today {
                 result.past_planned.push(task.id.clone());
@@ -143,14 +143,14 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
     }
 
     let by_due = |db: &Db, id: &TaskId| db.tasks[id].due.map(|stamp| stamp.at);
-    let by_planned = |db: &Db, id: &TaskId| db.tasks[id].planned.map(|stamp| stamp.at);
+    let by_planned = |db: &Db, id: &TaskId| db.effective_planned(id).map(|stamp| stamp.at);
     result.overdue.sort_by_key(|id| by_due(db, id));
     result.today.sort_by_key(|id| by_due(db, id));
     result.tomorrow.sort_by_key(|id| by_due(db, id));
     result.later.sort_by_key(|id| {
         db.tasks[id]
             .due
-            .or(db.tasks[id].planned)
+            .or_else(|| db.effective_planned(id))
             .map(|stamp| stamp.at)
     });
     result.later.dedup();

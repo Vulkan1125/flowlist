@@ -391,6 +391,10 @@ pub struct Project {
     pub due: Option<Stamp>,
     #[serde(default)]
     pub defer: Option<Stamp>,
+    /// Planned date for the project. Actions inherit it unless they or a
+    /// parent action carry their own planned date.
+    #[serde(default)]
+    pub planned: Option<Stamp>,
     #[serde(default = "default_review_days")]
     pub review_interval_days: u32,
     #[serde(default = "today")]
@@ -437,6 +441,7 @@ impl Project {
             tags: BTreeSet::new(),
             due: None,
             defer: None,
+            planned: None,
             review_interval_days: default_review_days(),
             next_review: local_date(at) + chrono::Duration::days(default_review_days() as i64),
             sequential: false,

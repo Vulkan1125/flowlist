@@ -103,6 +103,7 @@ pub fn project_value(db: &Db, id: &ProjectId) -> Value {
         "tags": project.tags.iter().filter_map(|tag| tag_path(db, tag)).collect::<Vec<_>>(),
         "due": project.due.map(|stamp| stamp.to_input_string()),
         "defer": project.defer.map(|stamp| stamp.to_input_string()),
+        "planned": project.planned.map(|stamp| stamp.to_input_string()),
         "review_interval_days": project.review_interval_days,
         "next_review": project.next_review.format("%Y-%m-%d").to_string(),
         "review_due": project.is_due_for_review(flowlist_core::time::local_date(now())),

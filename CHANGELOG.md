@@ -7,7 +7,14 @@
   restores it.
 - **Forecast Planned chip.** Forecast can hide everything that is only there
   because of a planned date, leaving due and deferred work. The choice is
-  remembered per session.
+  remembered per session, and the chip now sits beside Calendar instead of
+  stacking under it.
+- **Planned dates inherit.** A project can carry a planned date; its actions
+  inherit it unless the action or a parent action has its own planned date.
+  The Edit Project sheet has a Planned date field, the project inspector shows
+  it, and the CLI/MCP accept `planned`. Today, Forecast, the Planned filter,
+  planned grouping/sorting and calendar dots all use the inherited date.
+  Planned dates still never change availability.
 - **Descriptions on saved views.** A saved view can carry a one-line
   description under its title, in the same place Today explains itself. An
   empty description falls back to “Saved perspective”.

@@ -296,6 +296,7 @@ impl Server {
         patch.due = stamp_patch(args, "due", reference)?;
         patch.defer = stamp_patch(args, "defer", reference)?;
         patch.planned = stamp_patch(args, "planned", reference)?;
+        patch.planned = stamp_patch(args, "planned", reference)?;
         patch.estimate_min = estimate_patch(args)?;
         if let Some(flagged) = bool_arg(args, "flagged") {
             patch.flagged = Some(flagged);
@@ -774,6 +775,7 @@ impl Server {
         project.notes = string_arg(args, "notes").unwrap_or_default();
         project.due = optional_stamp(args, "due", reference)?;
         project.defer = optional_stamp(args, "defer", reference)?;
+        project.planned = optional_stamp(args, "planned", reference)?;
         project.review_interval_days = args
             .get("review_interval_days")
             .and_then(Value::as_u64)

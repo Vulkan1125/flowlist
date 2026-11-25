@@ -170,9 +170,11 @@ eight-character suffix. Human-readable `list` output shows progress as `☑ n/m`
 
 ```sh
 flowlist project add <NAME> [--folder <PATH>] [--note ...] [--due ...] \
+  [--planned ...] \
   [--defer ...] [--review-days N] [--sequential] [--icon <ICON>]
 flowlist project list [--closed]
 flowlist project edit <ID> [--name ...] [--note ...] [--folder <PATH>|none] \
+  [--planned ...] \
   [--due ...] [--defer ...] [--review-days N] [--next-review DATE] \
   [--sequential] [--icon <ICON>]
 flowlist project status <ID> active|on-hold|done|dropped

@@ -279,7 +279,9 @@ impl FlowlistApp {
             })
             .collect();
         let defer = task.defer.map(|stamp| human_date(&stamp, now()));
-        let planned = task.planned.map(|stamp| human_date(&stamp, now()));
+        let planned = db
+            .effective_planned(&id)
+            .map(|stamp| human_date(&stamp, now()));
         let due = task.due.map(|stamp| human_date(&stamp, now()));
         let estimate = task.estimate_min.map(format_duration);
         let repeat = task.repeat.as_ref().map(|rule| rule.description());
@@ -1799,6 +1801,7 @@ impl FlowlistApp {
         let rename_id = id.clone();
         let due = project.due.map(|stamp| human_date(&stamp, now()));
         let defer = project.defer.map(|stamp| human_date(&stamp, now()));
+        let planned = project.planned.map(|stamp| human_date(&stamp, now()));
         div()
             .flex()
             .flex_col()
@@ -1940,6 +1943,9 @@ impl FlowlistApp {
             })
             .when_some(defer, |this, defer| {
                 this.child(self.inspector_readonly("Defer", &defer))
+            })
+            .when_some(planned, |this, planned| {
+                this.child(self.inspector_readonly("Planned", &planned))
             })
             .when_some(due, |this, due| {
                 this.child(self.inspector_readonly("Due", &due))

@@ -4356,6 +4356,7 @@ impl FlowlistApp {
                 name,
                 notes,
                 review_days,
+                planned,
                 kind,
                 icon,
                 fullscreen_reminder,
@@ -4377,6 +4378,16 @@ impl FlowlistApp {
                             .max(1),
                     )
                 };
+                let planned = {
+                    let text = planned.text().trim();
+                    if text.is_empty() {
+                        None
+                    } else {
+                        Some(flowlist_core::parse::parse_stamp(text, now()).map_err(
+                            |error| format!("Planned date: {error}"),
+                        )?)
+                    }
+                };
                 if let Some(id) = editing {
                     self.execute(Command::UpdateProject {
                         id: id.clone(),
@@ -4384,6 +4395,7 @@ impl FlowlistApp {
                             name: Some(name),
                             notes: Some(notes.text().to_string()),
                             review_interval_days,
+                            planned: Some(planned),
                             kind: Some(*kind),
                             icon: Some(icon.clone()),
                             fullscreen_reminder: Some(*fullscreen_reminder),
@@ -4406,6 +4418,7 @@ impl FlowlistApp {
                 new_project.kind = *kind;
                 new_project.icon = icon.clone();
                 new_project.review_interval_days = review_interval_days;
+                new_project.planned = planned;
                 new_project.sequential = *kind == ProjectKind::Sequential;
                 new_project.fullscreen_reminder = *fullscreen_reminder;
                 new_project.folder = folder;

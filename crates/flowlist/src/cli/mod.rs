@@ -531,6 +531,8 @@ pub struct ProjectAddArgs {
     #[arg(long)]
     pub defer: Option<String>,
     #[arg(long)]
+    pub planned: Option<String>,
+    #[arg(long)]
     pub review_days: Option<u32>,
     #[arg(long)]
     pub sequential: bool,
@@ -560,6 +562,8 @@ pub struct ProjectEditArgs {
     pub due: Option<String>,
     #[arg(long)]
     pub defer: Option<String>,
+    #[arg(long)]
+    pub planned: Option<String>,
     #[arg(long)]
     pub review_days: Option<u32>,
     #[arg(long)]
@@ -1967,6 +1971,7 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
             new_project.notes = args.note.unwrap_or_default();
             new_project.due = optional_stamp_value(&args.due, reference)?;
             new_project.defer = optional_stamp_value(&args.defer, reference)?;
+            new_project.planned = optional_stamp_value(&args.planned, reference)?;
             new_project.review_interval_days = args.review_days;
             new_project.kind = args
                 .kind
@@ -2102,6 +2107,7 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
             }
             patch.due = optional_stamp(&args.due, reference)?;
             patch.defer = optional_stamp(&args.defer, reference)?;
+            patch.planned = optional_stamp(&args.planned, reference)?;
             if let Some(days) = args.review_days {
                 patch.review_interval_days = Some(days);
             }

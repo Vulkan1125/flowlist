@@ -107,6 +107,10 @@ integrations are tracked separately and are not part of this phase.
       edited or deleted. Saved views carry an editable description, and
       projects and views share a tabbed, searchable icon card for named icons
       and emoji. Sidebar project and folder menus have Edit sheets.
+- [x] **Planned inheritance** — projects carry a planned date; actions inherit
+      it through parent actions, with task/parent overrides. Today, Forecast,
+      filters, grouping, sorting, calendar dots, the project inspector and the
+      Edit Project sheet all use the effective date. Availability is unchanged.
 - [ ] **Full notification model** — defer/available alerts, per-item custom
       notification schedules, and richer notification payloads beyond due
       reminders and full-screen reminders.

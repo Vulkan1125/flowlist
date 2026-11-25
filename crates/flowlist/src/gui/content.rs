@@ -136,7 +136,7 @@ impl FlowlistApp {
                 task.defer.map(|stamp| stamp.local_date()),
             ];
             if self.forecast_planned {
-                dates.push(task.planned.map(|stamp| stamp.local_date()));
+                dates.push(db.effective_planned(id).map(|stamp| stamp.local_date()));
             }
             for date in dates.into_iter().flatten() {
                 let ids = days.entry(date).or_default();
@@ -150,7 +150,7 @@ impl FlowlistApp {
                 let task = &db.tasks[id];
                 (
                     task.due
-                        .or(task.planned)
+                        .or_else(|| db.effective_planned(id))
                         .or(task.defer)
                         .map(|stamp| stamp.at),
                     task.title.to_lowercase(),
@@ -1033,14 +1033,17 @@ impl FlowlistApp {
                                                 if let Some(bounds) = bounds.first() {
                                                     anchor.set(Some(*bounds));
                                                 }
-                                            })
+                                            }),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex_shrink_0()
                                             .child(
                                                 div()
                                                     .on_children_prepainted(self.theme_probe(
                                                         "forecast-planned-toggle".to_string(),
                                                     ))
                                                     .id("forecast-planned-toggle")
-                                                    .flex_shrink_0()
                                                     .flow_tip(
                                                         self,
                                                         cx,
@@ -2160,7 +2163,7 @@ impl FlowlistApp {
                 .all(|value| flowlist_core::model::attachment::is_web_link(value));
         let due = task.due;
         let defer = task.defer;
-        let planned = task.planned;
+        let planned = db.effective_planned(&id);
         let tags: Vec<String> = task
             .tags
             .iter()

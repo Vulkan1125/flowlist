@@ -161,6 +161,7 @@ pub struct NewProject {
     pub tags: Vec<TagId>,
     pub due: Option<Stamp>,
     pub defer: Option<Stamp>,
+    pub planned: Option<Stamp>,
     pub review_interval_days: Option<u32>,
     pub next_review: Option<NaiveDate>,
     pub sequential: bool,
@@ -182,6 +183,7 @@ impl NewProject {
             tags: Vec::new(),
             due: None,
             defer: None,
+            planned: None,
             review_interval_days: None,
             next_review: None,
             sequential: false,
@@ -206,6 +208,8 @@ pub struct ProjectPatch {
     pub due: Option<Option<Stamp>>,
     #[serde(deserialize_with = "deserialize_double_option")]
     pub defer: Option<Option<Stamp>>,
+    #[serde(deserialize_with = "deserialize_double_option")]
+    pub planned: Option<Option<Stamp>>,
     pub review_interval_days: Option<u32>,
     pub next_review: Option<NaiveDate>,
     pub sequential: Option<bool>,
@@ -1285,6 +1289,7 @@ impl Command {
                 project.tags = new_project.tags.into_iter().collect();
                 project.due = new_project.due;
                 project.defer = new_project.defer;
+                project.planned = new_project.planned;
                 ensure_dates_in_order(project.due, project.defer)?;
                 project.review_interval_days = new_project
                     .review_interval_days
@@ -1344,6 +1349,9 @@ impl Command {
                     }
                     if let Some(defer) = patch.defer {
                         project.defer = defer;
+                    }
+                    if let Some(planned) = patch.planned {
+                        project.planned = planned;
                     }
                     ensure_dates_in_order(project.due, project.defer)?;
                     if let Some(interval) = patch.review_interval_days {

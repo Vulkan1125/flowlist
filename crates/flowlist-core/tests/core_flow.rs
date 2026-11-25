@@ -2021,6 +2021,124 @@ fn forecast_keeps_each_date_type_independent() {
     assert!(on_due.contains(&both));
 }
 
+
+#[test]
+fn planned_dates_inherit_from_project_and_parent_with_overrides() {
+    use chrono::Duration;
+    use flowlist_core::query;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let today = local_date(Utc::now());
+    let day = |offset: i64| Stamp::date_only(today + Duration::days(offset));
+
+    let mut project = NewProject::new("Inherited plan");
+    project.planned = Some(day(0));
+    let project_id = store
+        .execute(Command::CreateProject(project))
+        .unwrap()
+        .created[0]
+        .clone();
+    let project_id = store.db().resolve_project(&project_id).unwrap();
+
+    let mut from_project = NewTask::new("From project");
+    from_project.project = Some(project_id.clone());
+    let from_project_id = store
+        .execute(Command::CreateTask(from_project))
+        .unwrap()
+        .created[0]
+        .clone();
+    let from_project_id = store.db().resolve_task(&from_project_id).unwrap();
+    assert_eq!(
+        store.db().effective_planned(&from_project_id),
+        Some(day(0))
+    );
+
+    let mut own = NewTask::new("Own plan wins");
+    own.project = Some(project_id.clone());
+    own.planned = Some(day(2));
+    let own_id = store
+        .execute(Command::CreateTask(own))
+        .unwrap()
+        .created[0]
+        .clone();
+    let own_id = store.db().resolve_task(&own_id).unwrap();
+    assert_eq!(store.db().effective_planned(&own_id), Some(day(2)));
+
+    let mut parent = NewTask::new("Parent plan");
+    parent.project = Some(project_id.clone());
+    parent.planned = Some(day(1));
+    let parent_id = store
+        .execute(Command::CreateTask(parent))
+        .unwrap()
+        .created[0]
+        .clone();
+    let parent_id = store.db().resolve_task(&parent_id).unwrap();
+
+    let mut child = NewTask::new("Child inherits parent");
+    child.parent = Some(parent_id.clone());
+    let child_id = store
+        .execute(Command::CreateTask(child))
+        .unwrap()
+        .created[0]
+        .clone();
+    let child_id = store.db().resolve_task(&child_id).unwrap();
+    assert_eq!(store.db().effective_planned(&child_id), Some(day(1)));
+
+    let mut child_override = NewTask::new("Child overrides");
+    child_override.parent = Some(parent_id.clone());
+    child_override.planned = Some(day(3));
+    let child_override_id = store
+        .execute(Command::CreateTask(child_override))
+        .unwrap()
+        .created[0]
+        .clone();
+    let child_override_id = store.db().resolve_task(&child_override_id).unwrap();
+    assert_eq!(
+        store.db().effective_planned(&child_override_id),
+        Some(day(3))
+    );
+
+    // Inbox stays unscheduled-only: a planned date never files a task away.
+    let mut inbox_task = NewTask::new("Planned inbox task");
+    inbox_task.planned = Some(day(0));
+    let inbox_id = store
+        .execute(Command::CreateTask(inbox_task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let inbox_id = store.db().resolve_task(&inbox_id).unwrap();
+    assert!(store
+        .db()
+        .inbox_unscheduled_outline(false)
+        .iter()
+        .any(|row| row.task == inbox_id));
+
+    // Today sees the inherited plan.
+    let groups = query::today(store.db(), true, Utc::now());
+    let today_ids: Vec<TaskId> = groups
+        .iter()
+        .flat_map(|group| group.rows.iter().map(|row| row.id.clone()))
+        .collect();
+    assert!(today_ids.contains(&from_project_id));
+
+    let forecast = flowlist_core::query::forecast::forecast(store.db(), Utc::now());
+    assert!(forecast.planned_today.contains(&from_project_id));
+
+    // Clearing the project plan removes the inherited date.
+    store
+        .execute(Command::UpdateProject {
+            id: project_id.clone(),
+            patch: ProjectPatch {
+                planned: Some(None),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert_eq!(store.db().effective_planned(&from_project_id), None);
+    assert_eq!(store.db().effective_planned(&own_id), Some(day(2)));
+}
+
 #[test]
 fn attachment_links_sit_alongside_file_paths() {
     use flowlist_core::model::BuiltinPerspective;
