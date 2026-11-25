@@ -103,6 +103,9 @@ impl FlowlistApp {
             self.render_empty_inspector().into_any_element()
         };
 
+        // Only reserve the scrollbar gutter while the thumb can actually
+        // appear; a short inspector should use the full width.
+        let scrolls = f32::from(self.inspector_scroll.max_offset().height) > 1.0;
         panel.child(
             div()
                 .relative()
@@ -114,7 +117,7 @@ impl FlowlistApp {
                     div()
                         .id("inspector-scroll")
                         .size_full()
-                        .pr(px(22.))
+                        .pr(px(if scrolls { 22. } else { 0. }))
                         .overflow_y_scroll()
                         .track_scroll(&self.inspector_scroll)
                         .child(content),
@@ -276,6 +279,7 @@ impl FlowlistApp {
             })
             .collect();
         let defer = task.defer.map(|stamp| human_date(&stamp, now()));
+        let planned = task.planned.map(|stamp| human_date(&stamp, now()));
         let due = task.due.map(|stamp| human_date(&stamp, now()));
         let estimate = task.estimate_min.map(format_duration);
         let repeat = task.repeat.as_ref().map(|rule| rule.description());
@@ -375,6 +379,7 @@ impl FlowlistApp {
             .child(self.inspector_tag_section(&tags, cx))
             .child(self.inspector_project_row(project, project_id, cx))
             .child(self.inspector_date_field(DateField::Defer, &defer.unwrap_or_default(), cx))
+            .child(self.inspector_date_field(DateField::Planned, &planned.unwrap_or_default(), cx))
             .child(self.inspector_date_field(DateField::Due, &due.unwrap_or_default(), cx))
             .child(self.inspector_text_field(
                 "Estimate",
@@ -572,6 +577,7 @@ impl FlowlistApp {
         let placeholder = match field {
             EditField::Title => "Task title",
             EditField::Defer => "No defer date",
+            EditField::Planned => "No planned date",
             EditField::Due => "No due date",
             EditField::Reminder => "No reminder time",
             EditField::Estimate => "No estimate (e.g. 45m)",

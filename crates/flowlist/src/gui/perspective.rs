@@ -212,6 +212,7 @@ impl ViewChoice {
                 GroupBy::Tag => "tag",
                 GroupBy::DueDate => "due",
                 GroupBy::DeferDate => "defer",
+                GroupBy::PlannedDate => "planned",
                 GroupBy::Flagged => "flagged",
                 GroupBy::Estimate => "estimate",
             }
@@ -220,6 +221,7 @@ impl ViewChoice {
                 SortBy::Manual => "manual",
                 SortBy::Due => "due",
                 SortBy::Defer => "defer",
+                SortBy::Planned => "planned",
                 SortBy::Name => "name",
                 SortBy::Priority => "priority",
                 SortBy::Flagged => "flagged",
@@ -260,6 +262,7 @@ fn group_label(group: GroupBy) -> &'static str {
         GroupBy::Folder => "Folder",
         GroupBy::DueDate => "Due",
         GroupBy::DeferDate => "Defer",
+        GroupBy::PlannedDate => "Planned",
         GroupBy::Flagged => "Flagged",
         GroupBy::Estimate => "Estimate",
     }
@@ -270,6 +273,7 @@ fn sort_label(sort: SortBy) -> &'static str {
         SortBy::Manual => "Manual",
         SortBy::Due => "Due",
         SortBy::Defer => "Defer",
+        SortBy::Planned => "Planned",
         SortBy::Name => "Name",
         SortBy::Priority => "Priority",
         SortBy::Flagged => "Flagged",

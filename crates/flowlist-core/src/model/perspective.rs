@@ -104,6 +104,7 @@ pub enum GroupBy {
     Tag,
     DueDate,
     DeferDate,
+    PlannedDate,
     Flagged,
     Estimate,
 }
@@ -115,6 +116,7 @@ pub enum SortBy {
     Manual,
     Due,
     Defer,
+    Planned,
     Name,
     Priority,
     Flagged,
@@ -175,6 +177,9 @@ pub enum Condition {
         window: DueWindow,
     },
     Deferred {
+        window: DueWindow,
+    },
+    Planned {
         window: DueWindow,
     },
     HasRepeat {

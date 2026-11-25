@@ -211,6 +211,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Rename sheets select the whole name when they open, so typing replaces
       it and one Backspace clears it. Clicks and drags inside sheet fields
       place the caret or select a range with the mouse.
+- [x] Planned dates: a third date beside Due and Defer that never changes
+      availability. The inspector has a Planned calendar field, quick capture
+      accepts `planned:` / `plan:`, Forecast shows Planned Today and planned
+      days, and filters, sorting, grouping, CLI and MCP understand it.
 - [x] Calendar icons on the inspector's Due and Defer fields open a two-step
       picker. The first step is a month calendar: a clicked day is applied
       through the normal command layer (so it is undoable), an existing time
@@ -238,8 +242,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       floating panel opens in the middle of the screen over whatever is in
       front, without moving the main window's view, selection or scroll. It
       previews the parsed title and destination, files plain text into the
-      Inbox, files an explicit `::Project` into that project, and schedules a
-      `due:` / `defer:` capture into Today or Forecast. The panel stays above
+      Inbox, files an explicit `::Project` into that project, schedules a
+      `due:` / `defer:` capture into Today or Forecast, and records a
+      `planned:` date without changing availability. The panel stays above
       normal windows when another app comes forward, closes on `Enter`, stays
       open on `⇧⏎`, reveals the new task on `⌘⏎`, and every capture is undoable
       from the main window

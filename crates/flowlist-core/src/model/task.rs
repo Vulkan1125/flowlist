@@ -86,6 +86,9 @@ pub struct Task {
     pub due: Option<Stamp>,
     #[serde(default)]
     pub defer: Option<Stamp>,
+    /// A planning date that never changes availability.
+    #[serde(default)]
+    pub planned: Option<Stamp>,
     #[serde(default)]
     pub estimate_min: Option<u32>,
     #[serde(default)]
@@ -151,6 +154,7 @@ impl Task {
             checklist: Vec::new(),
             due: None,
             defer: None,
+            planned: None,
             estimate_min: None,
             flagged: false,
             fullscreen_reminder: false,

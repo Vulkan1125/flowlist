@@ -160,7 +160,8 @@ pub struct UninstallArgs {
 
 #[derive(Args, Debug, Clone, Default)]
 pub struct AddArgs {
-    /// Task text; supports `#tag`, `::Project`, `due:`, `est:`, `!` and `// note`.
+    /// Task text; supports `#tag`, `::Project`, `due:`, `planned:`, `est:`, `!`
+    /// and `// note`.
     #[arg(value_name = "TEXT")]
     pub text: Vec<String>,
     /// File into a project (a path like `Work/Website` is created if needed).
@@ -173,6 +174,9 @@ pub struct AddArgs {
     pub due: Option<String>,
     #[arg(long)]
     pub defer: Option<String>,
+    /// A planning date; it never changes availability.
+    #[arg(long)]
+    pub planned: Option<String>,
     #[arg(long)]
     pub estimate: Option<String>,
     #[arg(long)]
@@ -239,10 +243,13 @@ pub struct ListArgs {
     /// Filter by due window or date (`today`, `overdue`, `next7`, `2026-12-01`).
     #[arg(long)]
     pub due: Option<String>,
-    /// manual | due | defer | name | flagged | estimate | created | completed
+    /// Filter by planned window or date (`today`, `next7`, `2026-12-01`).
+    #[arg(long)]
+    pub planned: Option<String>,
+    /// manual | due | defer | planned | name | flagged | estimate | created | completed
     #[arg(long, default_value = "manual")]
     pub sort: String,
-    /// none | project | folder | tag | due | defer | flagged | estimate
+    /// none | project | folder | tag | due | defer | planned | flagged | estimate
     #[arg(long)]
     pub group: Option<String>,
     #[arg(long)]
@@ -273,6 +280,9 @@ pub struct EditArgs {
     pub due: Option<String>,
     #[arg(long)]
     pub defer: Option<String>,
+    /// A planning date, or `none` to clear.
+    #[arg(long)]
+    pub planned: Option<String>,
     /// `30m`, `1h30m`, or `none`.
     #[arg(long)]
     pub estimate: Option<String>,
@@ -954,6 +964,9 @@ fn cmd_add(cli: &Cli, args: AddArgs, paint: &Paint) -> Result<()> {
     if let Some(due) = args.due {
         entry.due = Some(parse_stamp(&due, reference)?);
     }
+    if let Some(planned) = args.planned {
+        entry.planned = Some(parse_stamp(&planned, reference)?);
+    }
     if let Some(defer) = args.defer {
         entry.defer = Some(parse_stamp(&defer, reference)?);
     }
@@ -1121,6 +1134,11 @@ fn cmd_list(cli: &Cli, args: ListArgs, paint: &Paint) -> Result<()> {
                 window: parse_due_window(due, at)?,
             });
         }
+        if let Some(planned) = &args.planned {
+            conditions.push(Condition::Planned {
+                window: parse_due_window(planned, at)?,
+            });
+        }
         if let Some(priority) = &args.priority {
             conditions.push(Condition::Priority {
                 value: parse_priority(priority)?,
@@ -1237,6 +1255,12 @@ fn format_task_line(
             paint.dim(&format!("defer {}", defer.label(at)))
         ));
     }
+    if let Some(planned) = task.planned {
+        line.push_str(&format!(
+            "  {}",
+            paint.dim(&format!("plan {}", planned.label(at)))
+        ));
+    }
     if let Some(estimate) = task.estimate_min {
         line.push_str(&format!(
             "  {}",
@@ -1343,6 +1367,7 @@ fn cmd_edit(cli: &Cli, args: EditArgs, paint: &Paint) -> Result<()> {
     }
     patch.due = optional_stamp(&args.due, reference)?;
     patch.defer = optional_stamp(&args.defer, reference)?;
+    patch.planned = optional_stamp(&args.planned, reference)?;
     if let Some(estimate) = &args.estimate {
         patch.estimate_min = if estimate.eq_ignore_ascii_case("none") {
             Some(None)
@@ -2645,6 +2670,7 @@ fn parse_sort(value: &str) -> Result<SortBy> {
         "manual" | "none" => Ok(SortBy::Manual),
         "due" => Ok(SortBy::Due),
         "defer" => Ok(SortBy::Defer),
+        "planned" => Ok(SortBy::Planned),
         "name" | "title" => Ok(SortBy::Name),
         "priority" => Ok(SortBy::Priority),
         "flagged" | "flag" => Ok(SortBy::Flagged),
@@ -2663,6 +2689,7 @@ fn parse_group(value: &str) -> Result<GroupBy> {
         "tag" | "context" => Ok(GroupBy::Tag),
         "due" | "due-date" => Ok(GroupBy::DueDate),
         "defer" | "defer-date" => Ok(GroupBy::DeferDate),
+        "planned" | "planned-date" => Ok(GroupBy::PlannedDate),
         "flagged" | "flag" => Ok(GroupBy::Flagged),
         "estimate" => Ok(GroupBy::Estimate),
         other => bail!("unknown group: {other}"),

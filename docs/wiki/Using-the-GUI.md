@@ -26,13 +26,14 @@ There are three ways to add a task:
 
 The line is parsed as you type, and the chips under it show where the task will
 land. A plain thought goes to the Inbox; `::Project` files it into a project;
-`due:` and `defer:` schedule it into Today or Forecast.
+`due:` and `defer:` schedule it into Today or Forecast; `planned:` records a
+planning date without changing availability.
 
 | Text | Meaning |
 | --- | --- |
 | `#writing`, `#work/website` | tag (nested tags are created as needed) |
 | `::Website`, `::Work/Website` | project (created if missing) |
-| `due:friday`, `defer:tomorrow`, `due:(next monday 9am)`, `due:3d` | dates |
+| `due:friday`, `defer:tomorrow`, `planned:(next monday)`, `due:3d` | dates |
 | `fsr:1h30m`, `fsr:2d`, or bare `fsr` | full-screen reminder time; bare `fsr` follows due |
 | `est:45m`, `est:2h30m` | estimate |
 | `repeat:every week` | repeat rule |
@@ -76,7 +77,7 @@ Every capture is undoable with `⌘Z`, even after the panel has closed.
   flag, move and delete work on the whole selection.
 
 The right edge of each row reads in one order: attachments, project, `#tag`
-chips, estimate, due date, deferred date and repeat.
+chips, estimate, planned date, due date, deferred date and repeat.
 
 ## The inspector
 
@@ -117,10 +118,10 @@ leaving the list.
   preview an image or PDF in the app; PDFs step with `←` / `→`. `open` hands the
   file to its default app. Removing an attachment asks first and leaves the
   file on disk; Undo restores the row.
-- **Tags**, **Project**, **Defer**, **Due**, **Estimate** and **Repeat** are
-  one click away. A date opens a calendar and a clock-face time picker. A
-  defer date after the due date is refused with a toast, so the picker stays
-  open for another choice.
+- **Tags**, **Project**, **Defer**, **Planned**, **Due**, **Estimate** and
+  **Repeat** are one click away. A date opens a calendar and a clock-face time
+  picker. A defer date after the due date is refused with a toast, so the
+  picker stays open for another choice. Planned never changes availability.
 - **To project** converts the task and its subtasks into a project. **Delete**
   and **Complete** finish the task.
 
@@ -148,9 +149,9 @@ The rail is the map of the library:
 
 | View | Shows |
 | --- | --- |
-| **Inbox** | unscheduled tasks — no project, no due or defer date |
+| **Inbox** | unscheduled tasks — no project, no due or defer date (a planned date does not count) |
 | **Today** | due today, deferred to today, and overdue |
-| **Forecast** | the month calendar and upcoming dated work |
+| **Forecast** | the month calendar and upcoming due, deferred and planned work |
 | **Review** | projects whose review date has arrived |
 | **Projects** | every project at a glance |
 | **Tags** | tasks grouped by context |
@@ -184,8 +185,9 @@ titles itself **Search** and ranks the closest matches first.
   Flagged only, Status, Projects, Tags with child tags, Priorities, Due and
   Defer windows, full-screen reminder marks (yes or no, including inherited
   marks), an estimate range, grouping and sorting, and completed tasks.
-  Both platforms offer project/folder/tag/due/defer/flagged/estimate grouping
-  and manual/due/defer/name/priority/flagged/estimate/created/completed sorting.
+  Both platforms offer project/folder/tag/due/defer/planned/flagged/estimate
+  grouping and manual/due/defer/planned/name/priority/flagged/estimate/created
+  sorting.
   Project grouping puts tasks with no project under **No project** instead of an
   Inbox heading.
 - Right-click a sidebar row for Open, Rename, Delete, New child, project status

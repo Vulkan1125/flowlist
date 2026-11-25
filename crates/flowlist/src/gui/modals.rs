@@ -2263,6 +2263,7 @@ impl FlowlistApp {
                 GroupBy::Tag,
                 GroupBy::DueDate,
                 GroupBy::DeferDate,
+                GroupBy::PlannedDate,
                 GroupBy::Flagged,
                 GroupBy::Estimate,
             ]
@@ -2273,6 +2274,7 @@ impl FlowlistApp {
                 SortBy::Manual,
                 SortBy::Due,
                 SortBy::Defer,
+                SortBy::Planned,
                 SortBy::Name,
                 SortBy::Priority,
                 SortBy::Flagged,

@@ -45,6 +45,8 @@ pub fn task_value(db: &Db, id: &TaskId) -> Value {
         "due_at": task.due.map(|stamp| stamp.at.to_rfc3339()),
         "defer": task.defer.map(|stamp| stamp.to_input_string()),
         "defer_at": task.defer.map(|stamp| stamp.at.to_rfc3339()),
+        "planned": task.planned.map(|stamp| stamp.to_input_string()),
+        "planned_at": task.planned.map(|stamp| stamp.at.to_rfc3339()),
         "estimate_min": task.estimate_min,
         "flagged": task.flagged,
         "priority": task.priority.map(|priority| priority.label()),

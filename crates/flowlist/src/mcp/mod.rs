@@ -243,6 +243,9 @@ impl Server {
         if let Some(defer) = string_arg(args, "defer") {
             new_task.defer = Some(parse_stamp(&defer, reference)?);
         }
+        if let Some(planned) = string_arg(args, "planned") {
+            new_task.planned = Some(parse_stamp(&planned, reference)?);
+        }
         if let Some(estimate) = args.get("estimate_min").and_then(Value::as_u64) {
             new_task.estimate_min = Some(estimate as u32);
         } else if let Some(estimate) = string_arg(args, "estimate") {
@@ -292,6 +295,7 @@ impl Server {
         }
         patch.due = stamp_patch(args, "due", reference)?;
         patch.defer = stamp_patch(args, "defer", reference)?;
+        patch.planned = stamp_patch(args, "planned", reference)?;
         patch.estimate_min = estimate_patch(args)?;
         if let Some(flagged) = bool_arg(args, "flagged") {
             patch.flagged = Some(flagged);
@@ -1255,13 +1259,14 @@ fn tool_definitions() -> Vec<Value> {
             "Add a task. Supports quick-entry text in `title`, or explicit project/tags/due/defer/estimate fields.",
             schema(
                 json!({
-                    "title": s("Task title (quick-entry syntax allowed: #tag ::Project @1 due:tomorrow est:30m !; @1/@2/@3 set priority)"),
+                    "title": s("Task title (quick-entry syntax allowed: #tag ::Project @1 due:tomorrow planned:(next monday) est:30m !; @1/@2/@3 set priority)"),
                     "notes": s("Notes"),
                     "project": s("Project or Folder/Project path; created when missing"),
                     "tags": arr("Tag paths such as [\"Errands\", \"Errands/Phone\"]"),
                     "parent": s("Parent task id"),
                     "due": s("Natural-language due date, e.g. tomorrow, next friday 5pm, 2026-12-01"),
                     "defer": s("Natural-language defer date"),
+                    "planned": s("Natural-language planned date (never changes availability)"),
                     "estimate_min": n("Estimated minutes"),
                     "flagged": b("Flag the task"),
                     "priority": s("low | medium | high, or null to clear"),
@@ -1284,6 +1289,7 @@ fn tool_definitions() -> Vec<Value> {
                     "parent": s("Parent task id"),
                     "due": s("Due date"),
                     "defer": s("Defer date"),
+                    "planned": s("Planned date"),
                     "estimate_min": n("Estimated minutes"),
                     "flagged": b("Flag the task"),
                     "priority": s("low | medium | high"),
@@ -1307,6 +1313,7 @@ fn tool_definitions() -> Vec<Value> {
                     "notes": s("New notes"),
                     "due": s("Due date, or null to clear"),
                     "defer": s("Defer date, or null to clear"),
+                    "planned": s("Planned date, or null to clear"),
                     "estimate_min": n("Estimated minutes, or null to clear"),
                     "estimate": s("Duration string such as 1h30m"),
                     "flagged": b("Flag state"),
@@ -1808,6 +1815,7 @@ fn parse_sort(value: &str) -> Result<SortBy> {
         "manual" | "none" => Ok(SortBy::Manual),
         "due" => Ok(SortBy::Due),
         "defer" => Ok(SortBy::Defer),
+        "planned" => Ok(SortBy::Planned),
         "name" | "title" => Ok(SortBy::Name),
         "priority" => Ok(SortBy::Priority),
         "flagged" | "flag" => Ok(SortBy::Flagged),
@@ -1826,6 +1834,7 @@ fn parse_group(value: &str) -> Result<GroupBy> {
         "tag" | "context" => Ok(GroupBy::Tag),
         "due" | "due-date" => Ok(GroupBy::DueDate),
         "defer" | "defer-date" => Ok(GroupBy::DeferDate),
+        "planned" | "planned-date" => Ok(GroupBy::PlannedDate),
         "flagged" | "flag" => Ok(GroupBy::Flagged),
         "estimate" => Ok(GroupBy::Estimate),
         other => bail!("unknown group: {other}"),

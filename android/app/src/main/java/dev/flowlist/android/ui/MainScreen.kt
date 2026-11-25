@@ -1247,6 +1247,7 @@ fun MainScreen(
                         tags = task.tags.mapNotNull { db?.tags?.get(it)?.name },
                         due = task.due,
                         defer = task.defer,
+                        planned = task.planned,
                         flagged = task.flagged,
                         fullscreenReminder = task.fullscreenReminder,
                         reminderAt = task.reminderAt,

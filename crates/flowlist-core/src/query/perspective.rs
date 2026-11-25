@@ -47,6 +47,7 @@ pub fn condition_matches(db: &Db, task: &Task, condition: &Condition, at: DateTi
         Condition::Status { value } => status_matches(db, task, *value, at),
         Condition::Due { window } => window_matches(task.due, *window, at),
         Condition::Deferred { window } => window_matches(task.defer, *window, at),
+        Condition::Planned { window } => window_matches(task.planned, *window, at),
         Condition::HasRepeat { value } => task.repeat.is_some() == *value,
         Condition::FullscreenReminder { value } => {
             // A mark without a due or explicit reminder has nothing to fire,

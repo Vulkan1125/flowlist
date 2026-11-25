@@ -13,6 +13,7 @@ pub struct ForecastDay {
     pub date: NaiveDate,
     pub due: Vec<TaskId>,
     pub deferred: Vec<TaskId>,
+    pub planned: Vec<TaskId>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -23,6 +24,7 @@ pub struct Forecast {
     pub days: BTreeMap<NaiveDate, ForecastDay>,
     pub later: Vec<TaskId>,
     pub deferred_today: Vec<TaskId>,
+    pub planned_today: Vec<TaskId>,
 }
 
 impl Forecast {
@@ -34,7 +36,9 @@ impl Forecast {
         for day in self.days.values() {
             out.extend(day.due.iter().cloned());
             out.extend(day.deferred.iter().cloned());
+            out.extend(day.planned.iter().cloned());
         }
+        out.extend(self.planned_today.iter().cloned());
         out.extend(self.later.iter().cloned());
         out
     }
@@ -85,6 +89,19 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
                 });
                 day.deferred.push(task.id.clone());
             }
+        } else if let Some(planned) = task.planned {
+            // Planned dates place an undated task on the Forecast without
+            // making it due or changing availability.
+            let date = planned.local_date();
+            if date == today {
+                result.planned_today.push(task.id.clone());
+            } else if (today..=today + chrono::Duration::days(7)).contains(&date) {
+                let day = result.days.entry(date).or_insert_with(|| ForecastDay {
+                    date,
+                    ..ForecastDay::default()
+                });
+                day.planned.push(task.id.clone());
+            }
         }
     }
 
@@ -96,10 +113,15 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
     for day in result.days.values_mut() {
         day.due.sort_by_key(|id| by_due(db, id));
         day.deferred.sort_by_key(|id| by_due(db, id));
+        day.planned
+            .sort_by_key(|id| db.tasks[id].planned.map(|stamp| stamp.at));
     }
     result
         .deferred_today
         .sort_by_key(|id| db.tasks[id].defer.map(|stamp| stamp.at));
+    result
+        .planned_today
+        .sort_by_key(|id| db.tasks[id].planned.map(|stamp| stamp.at));
     result
 }
 

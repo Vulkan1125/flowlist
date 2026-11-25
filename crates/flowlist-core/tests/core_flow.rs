@@ -2597,3 +2597,50 @@ fn fullscreen_reminder_can_follow_due_or_use_its_own_time() {
     assert_eq!(own.local_date(), reminder_day);
     assert_eq!(own.local_time(), NaiveTime::from_hms_opt(7, 30, 0).unwrap());
 }
+
+#[test]
+fn planned_dates_are_independent_of_availability() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let id = add_task(&mut store, "Plan the launch");
+    let today = local_date(Utc::now());
+    let stamp = Stamp::date_only(today);
+
+    store
+        .execute(Command::UpdateTask {
+            id: id.clone(),
+            patch: TaskPatch {
+                planned: Some(Some(stamp)),
+                ..TaskPatch::default()
+            },
+        })
+        .unwrap();
+
+    let db = store.db();
+    assert_eq!(db.tasks[&id].planned, Some(stamp));
+    // A planned date is informational: the task is still available.
+    assert!(flowlist_core::query::availability::availability(db, &id, Utc::now()).is_available());
+    let forecast = flowlist_core::query::forecast::forecast(db, Utc::now());
+    assert!(forecast.planned_today.contains(&id));
+
+    // Sorts and groups can read it.
+    let row = flowlist_core::query::row_for(db, &id, Utc::now());
+    let mut rows = vec![row];
+    flowlist_core::query::sort::sort_rows(db, &mut rows, SortBy::Planned);
+    let groups = flowlist_core::query::regroup(db, rows, GroupBy::PlannedDate, Utc::now());
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].rows.len(), 1);
+
+    // Clearing it removes the forecast entry.
+    store
+        .execute(Command::UpdateTask {
+            id: id.clone(),
+            patch: TaskPatch {
+                planned: Some(None),
+                ..TaskPatch::default()
+            },
+        })
+        .unwrap();
+    let forecast = flowlist_core::query::forecast::forecast(store.db(), Utc::now());
+    assert!(!forecast.planned_today.contains(&id));
+}

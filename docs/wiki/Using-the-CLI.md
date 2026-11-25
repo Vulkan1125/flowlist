@@ -67,7 +67,7 @@ flowlist add 'Draft the launch email #writing ::Website due:friday est:45m // as
 | --- | --- |
 | `#writing`, `#work/website` | tag (nested tags are created) |
 | `::Website`, `::Work/Website` | project (created if missing) |
-| `due:friday`, `defer:tomorrow`, `due:3d` | dates; compact offsets and parenthesised phrases |
+| `due:friday`, `defer:tomorrow`, `planned:(next monday)`, `due:3d` | dates; compact offsets and parenthesised phrases |
 | `fsr:1h30m`, `fsr:2d` | full-screen reminder time, or bare `fsr` to follow due |
 | `est:45m`, `est:2h30m` | estimate |
 | `repeat:every week` | repeat rule |
@@ -81,7 +81,7 @@ flowlist add "Draft the launch email" \
   -p "Website" -t writing --due tomorrow --estimate 45m --note "ask Sam"
 ```
 
-Useful options: `-p/--project`, `-t/--tag`, `--due`, `--defer`, `--estimate`,
+Useful options: `-p/--project`, `-t/--tag`, `--due`, `--defer`, `--planned`, `--estimate`,
 `--repeat`, `--note`, `--priority`, `--flag`, `--parent` (make it a subtask)
 and `--attach` (repeatable; a local path or `http(s)` link).
 

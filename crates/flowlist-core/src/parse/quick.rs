@@ -8,7 +8,8 @@
 //! * `::Project` or `::Folder/Project` — file the task, creating it when needed
 //! * `!` — flag the task
 //! * `@1`, `@2`, `@3` — priority high, medium, low
-//! * `due:`, `defer:` — natural-language dates (`due:(next friday 5pm)`)
+//! * `due:`, `defer:`, `planned:` — natural-language dates
+//!   (`due:(next friday 5pm)`)
 //! * `fsr:` — full-screen reminder time (`fsr:1h30m`, `fsr:2d`); bare `fsr`
 //!   follows the due time
 //! * `est:` / `estimate:` — duration (`est:1h30m`)
@@ -32,6 +33,7 @@ pub struct QuickEntry {
     pub tag_paths: Vec<String>,
     pub due: Option<Stamp>,
     pub defer: Option<Stamp>,
+    pub planned: Option<Stamp>,
     pub estimate_min: Option<u32>,
     pub flagged: bool,
     pub priority: Option<Priority>,
@@ -50,6 +52,7 @@ impl QuickEntry {
         task.tag_paths = self.tag_paths.clone();
         task.due = self.due;
         task.defer = self.defer;
+        task.planned = self.planned;
         task.estimate_min = self.estimate_min;
         task.flagged = self.flagged;
         task.priority = self.priority;
@@ -116,6 +119,7 @@ pub fn parse(input: &str, reference: DateTime<Utc>) -> Result<QuickEntry> {
             match key.as_str() {
                 "due" => entry.due = Some(parse_stamp(&value, reference)?),
                 "defer" => entry.defer = Some(parse_stamp(&value, reference)?),
+                "planned" | "plan" => entry.planned = Some(parse_stamp(&value, reference)?),
                 "fsr" => {
                     entry.fullscreen_reminder = true;
                     entry.reminder_at = Some(parse_stamp(&value, reference)?);
@@ -149,7 +153,16 @@ fn split_attribute(token: &str) -> Option<(String, String)> {
     let value = value.trim().trim_matches(|c| c == '(' || c == ')').trim();
     if !matches!(
         key.as_str(),
-        "due" | "defer" | "fsr" | "est" | "estimate" | "repeat" | "note" | "project"
+        "due"
+            | "defer"
+            | "planned"
+            | "plan"
+            | "fsr"
+            | "est"
+            | "estimate"
+            | "repeat"
+            | "note"
+            | "project"
     ) {
         return None;
     }
@@ -226,6 +239,16 @@ mod tests {
         assert_eq!(
             entry.due.unwrap().local_date(),
             NaiveDate::from_ymd_opt(2026, 11, 13).unwrap()
+        );
+    }
+
+    #[test]
+    fn parses_a_planned_date() {
+        let entry = parse("Draft the deck planned:(next friday)", reference()).unwrap();
+        assert_eq!(entry.title, "Draft the deck");
+        assert_eq!(
+            entry.planned.unwrap().local_date(),
+            NaiveDate::from_ymd_opt(2026, 11, 20).unwrap()
         );
     }
 

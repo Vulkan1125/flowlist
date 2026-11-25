@@ -28,6 +28,19 @@ pub fn sort_rows(db: &Db, rows: &mut [TaskRow], sort: SortBy) {
                 .map(|s| s.at);
             option_cmp(left, right)
         }),
+        SortBy::Planned => rows.sort_by(|a, b| {
+            let left = db
+                .tasks
+                .get(&a.id)
+                .and_then(|task| task.planned)
+                .map(|s| s.at);
+            let right = db
+                .tasks
+                .get(&b.id)
+                .and_then(|task| task.planned)
+                .map(|s| s.at);
+            option_cmp(left, right)
+        }),
         SortBy::Name => rows.sort_by_cached_key(|row| {
             db.tasks
                 .get(&row.id)

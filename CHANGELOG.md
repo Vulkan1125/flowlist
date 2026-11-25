@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Planned dates.** A third date beside Due and Defer that never changes
+  availability. The inspector gets a Planned calendar field, quick capture
+  accepts `planned:` / `plan:`, Forecast gains a Planned Today bucket and
+  planned days on the calendar, filters/sorts/groups understand it, the CLI
+  has `--planned`, and MCP reports `planned` / `planned_at`.
+- **Inspector gutter.** The scrollbar gutter only appears when the inspector
+  actually scrolls; short task sheets now use the full width.
 - **Folders drop the redundant prefix.** A task row inside a folder now shows
   the remaining project path (`Shopping`) instead of repeating the folder
   (`Personal / Shopping`). Other views still show the full path.

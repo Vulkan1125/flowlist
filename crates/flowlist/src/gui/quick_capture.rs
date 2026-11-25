@@ -468,6 +468,13 @@ impl QuickCapture {
                 theme.text_dim,
             ));
         }
+        if let Some(planned) = entry.planned {
+            items.push((
+                Icon::Calendar,
+                format!("Plan {}", human_date(&planned, now())),
+                theme.text_dim,
+            ));
+        }
         if let Some(minutes) = entry.estimate_min {
             items.push((Icon::Clock, format_duration(minutes), theme.text_dim));
         }

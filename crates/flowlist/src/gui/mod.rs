@@ -100,6 +100,7 @@ pub enum EditField {
     Notes,
     Project,
     Defer,
+    Planned,
     Due,
     Reminder,
     Estimate,
@@ -112,7 +113,8 @@ impl EditField {
             EditField::Title => EditField::Notes,
             EditField::Notes => EditField::Project,
             EditField::Project => EditField::Defer,
-            EditField::Defer => EditField::Due,
+            EditField::Defer => EditField::Planned,
+            EditField::Planned => EditField::Due,
             EditField::Due => EditField::Reminder,
             EditField::Reminder => EditField::Estimate,
             EditField::Estimate => EditField::Repeat,
@@ -125,8 +127,9 @@ impl EditField {
             EditField::Title => EditField::Repeat,
             EditField::Notes => EditField::Title,
             EditField::Project => EditField::Notes,
+            EditField::Planned => EditField::Defer,
             EditField::Defer => EditField::Project,
-            EditField::Due => EditField::Defer,
+            EditField::Due => EditField::Planned,
             EditField::Reminder => EditField::Due,
             EditField::Estimate => EditField::Reminder,
             EditField::Repeat => EditField::Estimate,
@@ -140,6 +143,7 @@ impl EditField {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum DateField {
     Defer,
+    Planned,
     Due,
     Reminder,
 }
@@ -166,6 +170,7 @@ impl DateField {
     pub(super) fn edit_field(self) -> EditField {
         match self {
             DateField::Defer => EditField::Defer,
+            DateField::Planned => EditField::Planned,
             DateField::Due => EditField::Due,
             DateField::Reminder => EditField::Reminder,
         }
@@ -174,6 +179,7 @@ impl DateField {
     pub(super) fn slug(self) -> &'static str {
         match self {
             DateField::Defer => "defer",
+            DateField::Planned => "planned",
             DateField::Due => "due",
             DateField::Reminder => "reminder",
         }
@@ -182,6 +188,7 @@ impl DateField {
     pub(super) fn label(self) -> &'static str {
         match self {
             DateField::Defer => "Defer",
+            DateField::Planned => "Planned",
             DateField::Due => "Due",
             DateField::Reminder => "Reminder",
         }
@@ -190,6 +197,7 @@ impl DateField {
     pub(super) fn placeholder(self) -> &'static str {
         match self {
             DateField::Defer => "No defer date",
+            DateField::Planned => "No planned date",
             DateField::Due => "No due date",
             DateField::Reminder => "No reminder time",
         }
@@ -272,7 +280,7 @@ fn picker_default_time(
 ) -> chrono::NaiveTime {
     let fallback = chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap_or_default();
     match field {
-        DateField::Due => due.unwrap_or(fallback),
+        DateField::Due | DateField::Planned => due.unwrap_or(fallback),
         DateField::Defer => defer.unwrap_or(fallback),
         DateField::Reminder => due.unwrap_or(fallback),
     }
@@ -471,6 +479,7 @@ pub struct FlowlistApp {
     /// paint under the right field.
     due_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     defer_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    planned_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     reminder_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// Which date field's calendar is open, the month on screen and the day
     /// the arrow keys point at. `date_picker_time` is the time that will be
@@ -870,6 +879,7 @@ impl FlowlistApp {
             checklist_add_anchor: Rc::new(Cell::new(None)),
             due_anchor: Rc::new(Cell::new(None)),
             defer_anchor: Rc::new(Cell::new(None)),
+            planned_anchor: Rc::new(Cell::new(None)),
             reminder_anchor: Rc::new(Cell::new(None)),
             date_picker: None,
             date_picker_month: forecast_month,
@@ -3080,6 +3090,7 @@ impl FlowlistApp {
     fn date_anchor(&self, field: DateField) -> Rc<Cell<Option<Bounds<gpui::Pixels>>>> {
         match field {
             DateField::Defer => self.defer_anchor.clone(),
+            DateField::Planned => self.planned_anchor.clone(),
             DateField::Due => self.due_anchor.clone(),
             DateField::Reminder => self.reminder_anchor.clone(),
         }
@@ -3091,6 +3102,7 @@ impl FlowlistApp {
         let task = self.store.db().tasks.get(&id)?;
         match field {
             DateField::Defer => task.defer,
+            DateField::Planned => task.planned,
             DateField::Due => task.due,
             DateField::Reminder => task.reminder_at,
         }
@@ -3326,6 +3338,7 @@ impl FlowlistApp {
         let mut patch = TaskPatch::default();
         match field {
             DateField::Defer => patch.defer = Some(Some(stamp)),
+            DateField::Planned => patch.planned = Some(Some(stamp)),
             DateField::Due => patch.due = Some(Some(stamp)),
             DateField::Reminder => {
                 patch.reminder_at = Some(Some(stamp));
@@ -3381,6 +3394,7 @@ impl FlowlistApp {
         let mut patch = TaskPatch::default();
         match field {
             DateField::Defer => patch.defer = Some(None),
+            DateField::Planned => patch.planned = Some(None),
             DateField::Due => patch.due = Some(None),
             DateField::Reminder => patch.reminder_at = Some(None),
         }
@@ -3409,6 +3423,11 @@ impl FlowlistApp {
                 .unwrap_or_default(),
             EditField::Defer => task
                 .defer
+                .as_ref()
+                .map(|stamp| stamp.to_input_string())
+                .unwrap_or_default(),
+            EditField::Planned => task
+                .planned
                 .as_ref()
                 .map(|stamp| stamp.to_input_string())
                 .unwrap_or_default(),
@@ -3500,7 +3519,7 @@ impl FlowlistApp {
                     patch.project_path = Some(Some(value));
                 }
             }
-            EditField::Defer | EditField::Due => {
+            EditField::Defer | EditField::Planned | EditField::Due => {
                 let stamp = if value.is_empty() {
                     None
                 } else {
@@ -3513,10 +3532,10 @@ impl FlowlistApp {
                         }
                     }
                 };
-                if field == EditField::Defer {
-                    patch.defer = Some(stamp);
-                } else {
-                    patch.due = Some(stamp);
+                match field {
+                    EditField::Defer => patch.defer = Some(stamp),
+                    EditField::Planned => patch.planned = Some(stamp),
+                    _ => patch.due = Some(stamp),
                 }
             }
             EditField::Reminder => {
@@ -6449,6 +6468,7 @@ fn sort_slug(sort: SortBy) -> &'static str {
         SortBy::Manual => "manual",
         SortBy::Due => "due",
         SortBy::Defer => "defer",
+        SortBy::Planned => "planned",
         SortBy::Name => "name",
         SortBy::Priority => "priority",
         SortBy::Flagged => "flagged",
@@ -6463,6 +6483,7 @@ fn sort_from_slug(value: &str) -> Option<SortBy> {
         "manual" => Some(SortBy::Manual),
         "due" => Some(SortBy::Due),
         "defer" => Some(SortBy::Defer),
+        "planned" => Some(SortBy::Planned),
         "name" => Some(SortBy::Name),
         "priority" => Some(SortBy::Priority),
         "flagged" => Some(SortBy::Flagged),
@@ -6479,6 +6500,7 @@ fn sort_label(sort: Option<SortBy>) -> &'static str {
         Some(SortBy::Manual) => "Manual",
         Some(SortBy::Due) => "Due",
         Some(SortBy::Defer) => "Defer",
+        Some(SortBy::Planned) => "Planned",
         Some(SortBy::Name) => "Name",
         Some(SortBy::Priority) => "Priority",
         Some(SortBy::Flagged) => "Flagged",
@@ -6496,6 +6518,7 @@ fn group_slug(group: GroupBy) -> &'static str {
         GroupBy::Tag => "tag",
         GroupBy::DueDate => "due",
         GroupBy::DeferDate => "defer",
+        GroupBy::PlannedDate => "planned",
         GroupBy::Flagged => "flagged",
         GroupBy::Estimate => "estimate",
     }
@@ -6509,6 +6532,7 @@ fn group_from_slug(value: &str) -> Option<GroupBy> {
         "tag" => Some(GroupBy::Tag),
         "due" => Some(GroupBy::DueDate),
         "defer" => Some(GroupBy::DeferDate),
+        "planned" => Some(GroupBy::PlannedDate),
         "flagged" => Some(GroupBy::Flagged),
         "estimate" => Some(GroupBy::Estimate),
         _ => None,
@@ -6524,6 +6548,7 @@ fn group_label(group: Option<GroupBy>) -> &'static str {
         Some(GroupBy::Tag) => "Tag",
         Some(GroupBy::DueDate) => "Due",
         Some(GroupBy::DeferDate) => "Defer",
+        Some(GroupBy::PlannedDate) => "Planned",
         Some(GroupBy::Flagged) => "Flagged",
         Some(GroupBy::Estimate) => "Estimate",
     }
@@ -6716,6 +6741,7 @@ impl FlowlistApp {
             "priority_anchor": self.priority_anchor.get().is_some(),
             "due_anchor": anchor(self.due_anchor.get()),
             "defer_anchor": anchor(self.defer_anchor.get()),
+            "planned_anchor": anchor(self.planned_anchor.get()),
             "reminder_anchor": anchor(self.reminder_anchor.get()),
             "title_space": self.title_space.get(),
             "title_visible": self.title_visible.get(),
@@ -6832,6 +6858,7 @@ impl FlowlistApp {
         );
         state["date_picker_open"] = serde_json::json!(self.date_picker.map(|field| match field {
             DateField::Defer => "defer",
+            DateField::Planned => "planned",
             DateField::Due => "due",
             DateField::Reminder => "reminder",
         }));

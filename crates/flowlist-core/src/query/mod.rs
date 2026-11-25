@@ -453,10 +453,17 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>) -> Vec<Group> {
         &data.deferred_today,
     );
     push("forecast:today", "Today", -1, &data.today);
-    push("forecast:tomorrow", "Tomorrow", 0, &data.tomorrow);
+    push(
+        "forecast:planned-today",
+        "Planned Today",
+        0,
+        &data.planned_today,
+    );
+    push("forecast:tomorrow", "Tomorrow", 1, &data.tomorrow);
     for (date, day) in &data.days {
         let mut ids = day.due.clone();
         ids.extend(day.deferred.iter().cloned());
+        ids.extend(day.planned.iter().cloned());
         let position = (*date - today).num_days();
         let title = forecast::day_label(*date, today);
         push(
@@ -667,6 +674,22 @@ impl<'a> GroupContext<'a> {
                 None => (
                     "defer:none".to_string(),
                     "No Defer Date".to_string(),
+                    i64::MAX,
+                ),
+            },
+            GroupBy::PlannedDate => match task.planned {
+                Some(stamp) => {
+                    let today = crate::time::local_date(self.at);
+                    let date = stamp.local_date();
+                    (
+                        format!("planned:{}", date.format("%Y-%m-%d")),
+                        human_date(&Stamp::date_only(date), self.at),
+                        (date - today).num_days(),
+                    )
+                }
+                None => (
+                    "planned:none".to_string(),
+                    "No Planned Date".to_string(),
                     i64::MAX,
                 ),
             },

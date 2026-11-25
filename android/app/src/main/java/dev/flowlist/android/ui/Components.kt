@@ -292,6 +292,7 @@ fun TaskRow(
                     add("Blocked by #${task.blockedByTag}" to colors.warning)
                 }
                 task.due?.let { add(it.label() to dueColor) }
+                task.planned?.let { add("Plan ${it.label()}" to colors.faint) }
                 if (task.checklistTotal > 0) add("${task.checklistDone}/${task.checklistTotal}" to colors.faint)
                 if (task.estimateMin != null) add("${task.estimateMin}m" to colors.faint)
                 if (task.tags.isNotEmpty()) add(task.tags.joinToString(" ") { "#$it" } to colors.faint)

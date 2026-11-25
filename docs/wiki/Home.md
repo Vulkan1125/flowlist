@@ -83,7 +83,7 @@ forward.
 Draft the launch email #work/website ::Website due:friday est:45m // ask Sam
 ```
 
-`#tag`, `::project`, `due:` / `defer:`, `est:`, `repeat:` and `!` all work in
+`#tag`, `::project`, `due:` / `defer:` / `planned:`, `est:`, `repeat:` and `!` all work in
 the same line. Press `Enter` to file and return to the previous app.
 
 ## Updates

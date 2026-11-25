@@ -131,14 +131,21 @@ impl FlowlistApp {
                     _ => continue,
                 }
             }
-            if let Some(due) = task.due {
-                days.entry(due.local_date()).or_default().push(id.clone());
+            if let Some(date) = task
+                .due
+                .map(|stamp| stamp.local_date())
+                .or_else(|| task.planned.map(|stamp| stamp.local_date()))
+            {
+                days.entry(date).or_default().push(id.clone());
             }
         }
         for ids in days.values_mut() {
             ids.sort_by_cached_key(|id| {
                 let task = &db.tasks[id];
-                (task.due.map(|stamp| stamp.at), task.title.to_lowercase())
+                (
+                    task.due.or(task.planned).map(|stamp| stamp.at),
+                    task.title.to_lowercase(),
+                )
             });
         }
         days
@@ -1289,11 +1296,12 @@ impl FlowlistApp {
             .border_color(theme.border)
             .bg(theme.raised)
             .shadow_lg();
-        let options: [Option<SortBy>; 9] = [
+        let options: [Option<SortBy>; 10] = [
             None,
             Some(SortBy::Manual),
             Some(SortBy::Due),
             Some(SortBy::Defer),
+            Some(SortBy::Planned),
             Some(SortBy::Name),
             Some(SortBy::Flagged),
             Some(SortBy::Estimate),
@@ -1349,13 +1357,14 @@ impl FlowlistApp {
             .border_color(theme.border)
             .bg(theme.raised)
             .shadow_lg();
-        let options: [Option<GroupBy>; 9] = [
+        let options: [Option<GroupBy>; 10] = [
             None,
             Some(GroupBy::Project),
             Some(GroupBy::Folder),
             Some(GroupBy::Tag),
             Some(GroupBy::DueDate),
             Some(GroupBy::DeferDate),
+            Some(GroupBy::PlannedDate),
             Some(GroupBy::Flagged),
             Some(GroupBy::Estimate),
             Some(GroupBy::None),
@@ -2102,6 +2111,7 @@ impl FlowlistApp {
                 .all(|value| flowlist_core::model::attachment::is_web_link(value));
         let due = task.due;
         let defer = task.defer;
+        let planned = task.planned;
         let tags: Vec<String> = task
             .tags
             .iter()
@@ -2207,6 +2217,18 @@ impl FlowlistApp {
                             format_duration(minutes),
                             theme.text_faint,
                         ))
+                    })
+                    .when_some(planned, |this, stamp| {
+                        this.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child(icons::icon(Icon::Calendar, 11.0, theme.text_faint))
+                                .child(human_date(&stamp, now())),
+                        )
                     })
                     .when_some(due, |this, stamp| {
                         this.child(

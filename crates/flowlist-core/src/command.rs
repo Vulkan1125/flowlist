@@ -50,6 +50,7 @@ pub struct NewTask {
     pub tag_paths: Vec<String>,
     pub due: Option<Stamp>,
     pub defer: Option<Stamp>,
+    pub planned: Option<Stamp>,
     pub estimate_min: Option<u32>,
     pub flagged: bool,
     /// Opt this task into full-screen reminders.
@@ -81,6 +82,7 @@ impl NewTask {
             tag_paths: Vec::new(),
             due: None,
             defer: None,
+            planned: None,
             estimate_min: None,
             flagged: false,
             fullscreen_reminder: false,
@@ -133,6 +135,8 @@ pub struct TaskPatch {
     pub due: Option<Option<Stamp>>,
     #[serde(deserialize_with = "deserialize_double_option")]
     pub defer: Option<Option<Stamp>>,
+    #[serde(deserialize_with = "deserialize_double_option")]
+    pub planned: Option<Option<Stamp>>,
     #[serde(deserialize_with = "deserialize_double_option")]
     pub estimate_min: Option<Option<u32>>,
     pub flagged: Option<bool>,
@@ -631,6 +635,7 @@ impl Command {
                 task.tags = new_task.tags.into_iter().collect();
                 task.due = new_task.due;
                 task.defer = new_task.defer;
+                task.planned = new_task.planned;
                 ensure_dates_in_order(task.due, task.defer)?;
                 task.estimate_min = new_task.estimate_min;
                 task.flagged = new_task.flagged;
@@ -687,6 +692,9 @@ impl Command {
                     }
                     if let Some(defer) = patch.defer {
                         task.defer = defer;
+                    }
+                    if let Some(planned) = patch.planned {
+                        task.planned = planned;
                     }
                     if let Some(estimate) = patch.estimate_min {
                         task.estimate_min = estimate;
@@ -799,6 +807,7 @@ impl Command {
                     let repeat = task.repeat.clone();
                     let due = task.due;
                     let defer = task.defer;
+                    let planned = task.planned;
                     let key = db.order_key_for(&id);
                     let project = task.project.clone();
                     let parent = task.parent.clone();
@@ -845,6 +854,20 @@ impl Command {
                                 spawned.tags = tags;
                                 spawned.due = next.due;
                                 spawned.defer = next.defer;
+                                spawned.planned = match (planned, due, next.due) {
+                                    (Some(planned), Some(old_due), Some(new_due)) => {
+                                        let days = (new_due.local_date() - old_due.local_date())
+                                            .num_days();
+                                        let date =
+                                            planned.local_date() + chrono::Duration::days(days);
+                                        Some(if planned.has_time {
+                                            Stamp::on(date, planned.local_time())
+                                        } else {
+                                            Stamp::date_only(date)
+                                        })
+                                    }
+                                    (planned, _, _) => planned,
+                                };
                                 spawned.estimate_min = estimate;
                                 spawned.flagged = flagged;
                                 spawned.fullscreen_reminder = fullscreen_reminder;
