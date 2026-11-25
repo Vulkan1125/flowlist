@@ -2108,13 +2108,7 @@ impl FlowlistApp {
             .filter_map(|tag| db.tags.get(tag).map(|tag| db.tag_path(&tag.id)))
             .take(3)
             .collect();
-        let project = match &self.view {
-            View::Builtin(BuiltinPerspective::Projects) | View::Project(_) => None,
-            _ => task
-                .project
-                .as_ref()
-                .map(|project| db.project_path(project)),
-        };
+        let project = row_project_label(db, &self.view, task.project.as_ref());
         let availability = row.availability.clone();
         let title_id = id.clone();
         let checkbox_id = id.clone();
@@ -2956,9 +2950,49 @@ fn repeat_label(db: &flowlist_core::db::Db, id: &TaskId) -> Option<String> {
     Some(rule.description())
 }
 
+/// The project label a row shows. A project view already names its project,
+/// and a folder view already names its folder, so only the remaining path is
+/// worth repeating there.
+fn row_project_label(db: &Db, view: &View, project: Option<&ProjectId>) -> Option<String> {
+    let project = project?;
+    match view {
+        View::Builtin(BuiltinPerspective::Projects) | View::Project(_) => None,
+        View::Folder(folder) => {
+            let path = db.project_path(project);
+            let prefix = format!("{} / ", db.folder_path(folder));
+            Some(path.strip_prefix(&prefix).unwrap_or(&path).to_string())
+        }
+        _ => Some(db.project_path(project)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn folder_rows_drop_the_folder_prefix() {
+        let mut db = Db::new();
+        let project = db.ensure_project_path("Personal/Shopping").unwrap();
+        let folder = db.ensure_folder_path("Personal").unwrap();
+        assert_eq!(
+            row_project_label(&db, &View::Folder(folder), Some(&project)).as_deref(),
+            Some("Shopping")
+        );
+        assert_eq!(
+            row_project_label(
+                &db,
+                &View::Builtin(BuiltinPerspective::Today),
+                Some(&project)
+            )
+            .as_deref(),
+            Some("Personal / Shopping")
+        );
+        assert_eq!(
+            row_project_label(&db, &View::Project(project.clone()), Some(&project)),
+            None
+        );
+    }
 
     #[test]
     fn month_grid_starts_on_monday_and_covers_the_month() {

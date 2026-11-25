@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Folders drop the redundant prefix.** A task row inside a folder now shows
+  the remaining project path (`Shopping`) instead of repeating the folder
+  (`Personal / Shopping`). Other views still show the full path.
 - **Quick Open.** `⌘O` opens a keyboard-first palette for perspectives,
   folders, projects, tags and priorities. It starts empty, lists matches as you
   type, scrolls its results inside the panel instead of growing past the frame,
