@@ -2,6 +2,28 @@
 
 ## 0.9.50 — 2026-11-25
 
+- **Projects in Forecast.** A project now appears on its own due, defer and
+  planned dates, above that day's tasks. The row shows the project icon, name,
+  status, which dates it carries and its completion progress; clicking it opens
+  the project. Completed and dropped projects stay out, the Planned chip hides
+  planned-only project rows, and the calendar pills, counts, Past and Future
+  tiles all include projects.
+- **Project date constraints.** The Edit Project sheet now has **Defer**,
+  **Planned** and **Due** fields. Actions inherit those dates: a project defer
+  is a start-no-earlier gate, a project due is a finish-no-later deadline, and
+  the task/parent can only make them later or earlier respectively. Today,
+  Forecast, overdue, filters, grouping, sorting, badges and the task inspector
+  use the effective dates. Planned remains constraint-free.
+- **Strict project dates.** A task can no longer be saved with a due date later
+  than its project/parent due, or a defer date earlier than its container
+  defer. Dragging such a task into a project opens an **Adjust dates?** sheet;
+  confirming changes the stored dates and moves in one undoable step. Cancel
+  moves nothing. CLI/MCP writes that would create a contradiction are rejected.
+  Existing contradictory libraries are clamped once on open.
+- **Strict dates everywhere.** Typing a project into the task inspector now
+  shows the same Adjust dates sheet; editing a task date outside the limits
+  keeps the field open with an error; changing a project’s due/defer asks
+  before clamping its existing tasks.
 - **Clearer date warnings.** Refusals now stay inside the inspector or edit sheet
   instead of opening a separate error box. They read directly, for example
   “Due date cannot be later than the project’s due date”, and use a yellow
@@ -10,58 +32,56 @@
   calendar day matches the container. Forecast also puts tasks belonging to
   that day’s project rows first and labels the action section **Tasks**, so a
   nearby task is not mistaken for a child.
-- **Projects in Forecast.** A project now appears on its own due, defer and
-  planned dates, above that day's tasks. The row shows the project icon, name,
-  status, which dates it carries and its completion progress; clicking it opens
-  the project. Completed and dropped projects stay out, the Planned chip hides
-  planned-only project rows, and the calendar pills, counts, Past and Future
-  tiles all include projects.
-- **Strict dates everywhere.** Typing a project into the task inspector now
-  shows the same Adjust dates sheet; editing a task date outside the limits
-  keeps the field open with an error; changing a project’s due/defer asks
-  before clamping its existing tasks.
 - **Inherited date labels.** The task inspector now says “Defer with project”,
   “Planned with project” or “Due with project” (and “with parent” for an action
   group) when the shown date comes from a container instead of the task.
-- **Strict project dates.** A task can no longer be saved with a due date later
-  than its project/parent due, or a defer date earlier than its container
-  defer. Dragging such a task into a project opens an **Adjust dates?** sheet;
-  confirming changes the stored dates and moves in one undoable step. Cancel
-  moves nothing. CLI/MCP writes that would create a contradiction are rejected.
-  Existing contradictory libraries are clamped once on open.
-- **Default wording.** Sort and Group now say **Default** where they used to
-  say View: “use this screen’s natural order or grouping”. Manual still means
-  your drag order, and None still means one flat list.
-- **Project date constraints.** The Edit Project sheet now has **Defer**,
-  **Planned** and **Due** fields. Actions inherit those dates: a project defer
-  is a start-no-earlier gate, a project due is a finish-no-later deadline, and
-  the task/parent can only make them later or earlier respectively. Today,
-  Forecast, overdue, filters, grouping, sorting, badges and the task inspector
-  use the effective dates. Planned remains constraint-free.
-- **Piano-key Forecast strip.** The collapsed Forecast calendar is now a
-  linear date strip with fixed **Past** and **Future** end tiles and a paged
-  week of days between them. Past shows overdue work and slipped plans; Future
-  shows due, deferred and planned work after the visible week. Both respect the
-  Planned chip.
-- **Delete confirmations.** Removing a project or tag from the sidebar now
-  opens a confirmation sheet instead of deleting immediately. Undo still
-  restores it.
-- **Forecast Planned chip.** Forecast can hide everything that is only there
-  because of a planned date, leaving due and deferred work. The choice is
-  remembered per session, and the chip now sits beside Calendar instead of
-  stacking under it.
-- **Only count due items.** A Workflow setting makes the Forecast badge count
-  due work alone, ignoring planned and deferred items.
+- **Planned dates.** A third date beside Due and Defer that never changes
+  availability. The inspector gets a Planned calendar field, quick capture
+  accepts `planned:` / `plan:`, Forecast gains a Planned Today bucket and
+  planned days on the calendar, filters/sorts/groups understand it, the CLI
+  has `--planned`, and MCP reports `planned` / `planned_at`.
 - **Planned dates inherit.** A project can carry a planned date; its actions
   inherit it unless the action or a parent action has its own planned date.
   The Edit Project sheet has a Planned date field, the project inspector shows
   it, and the CLI/MCP accept `planned`. Today, Forecast, the Planned filter,
   planned grouping/sorting and calendar dots all use the inherited date.
   Planned dates still never change availability.
-- **Descriptions on saved views.** A saved view can carry a one-line
-  description under its title, in the same place Today explains itself. An
-  empty description falls back to “Saved perspective”.
-  `perspective add --description` sets it from the CLI (`--note` still works).
+- **Past plans stay visible.** A planned date that slips no longer disappears.
+  Today lists carried-over plans in a **Past plans** group above Overdue, and
+  Forecast gains a **Past** section. One **Hide past** chip hides both. Forecast
+  now treats Due, Defer and Planned as independent dates, so a task planned
+  today and due next week appears in both places, and clicking a planned day
+  lists it.
+- **Three dates at a glance.** Rows and inspector labels now carry OmniFocus-
+  style marks — a turning arrow for Defer, a signpost for Planned and a clock
+  on a calendar for Due — so the dates never read as the same thing. Today now
+  includes tasks planned for today and its subtitle says so. Saved views gain
+  a Planned dates filter (Any, Overdue, Today, Tomorrow, Next 7/30 days, No
+  planned date).
+- **Quick Open.** `⌘O` opens a keyboard-first palette for perspectives,
+  folders, projects, tags and priorities. It starts empty, lists matches as you
+  type, scrolls its results inside the panel instead of growing past the frame,
+  and keeps the highlighted row in view. Use the arrows to move and Return to
+  open. Import moves to `⇧⌘O`.
+- **Piano-key Forecast strip.** The collapsed Forecast calendar is now a
+  linear date strip with fixed **Past** and **Future** end tiles and a paged
+  week of days between them. Past shows overdue work and slipped plans; Future
+  shows due, deferred and planned work after the visible week. Both respect the
+  Planned chip.
+- **Next month and later.** Forecast moves due or planned work more than 30
+  days out into a **Next month and later** group, folded by default so the
+  coming week stays at the top.
+- **Forecast Planned chip.** Forecast can hide everything that is only there
+  because of a planned date, leaving due and deferred work. The choice is
+  remembered per session, and the chip now sits beside Calendar instead of
+  stacking under it.
+- **Running and pinned views.** New and existing libraries get a pinned
+  **Running** saved view for work that has started and is not due yet; it is an
+  ordinary saved view and can be edited or deleted. Any saved view can be
+  pinned to the top of **SAVED** from its context menu or the editor
+  (`perspective add --pinned`), and any saved view can take a custom rail icon
+  from the editor or `perspective add --icon`. Filters gain a **Later / none**
+  window.
 - **Searchable icon card with emoji.** Projects and saved views can use any
   named icon or an emoji. The old wrapped icon row is now a card with a search
   field, **Icons** and **Emoji** tabs, and Return to pick the first match. The
@@ -72,43 +92,23 @@
 - **Edit project and folder.** The sidebar context menus now open an Edit sheet:
   projects can change name, notes, review cadence, type and icon; folders can
   be renamed without leaving the rail.
-- **Past plans stay visible.** A planned date that slips no longer disappears.
-  Today lists carried-over plans in a **Past plans** group above Overdue, and
-  Forecast gains a **Past** section. One **Hide past** chip hides both. Forecast
-  now treats Due, Defer and Planned as independent dates, so a task planned
-  today and due next week appears in both places, and clicking a planned day
-  lists it.
-- **Running and pinned views.** New and existing libraries get a pinned
-  **Running** saved view for work that has started and is not due yet; it is an
-  ordinary saved view and can be edited or deleted. Any saved view can be
-  pinned to the top of **SAVED** from its context menu or the editor
-  (`perspective add --pinned`), and any saved view can take a custom rail icon
-  from the editor or `perspective add --icon`. Filters gain a **Later / none**
-  window.
-- **Next month and later.** Forecast moves due or planned work more than 30
-  days out into a **Next month and later** group, folded by default so the
-  coming week stays at the top.
-- **Three dates at a glance.** Rows and inspector labels now carry OmniFocus-
-  style marks — a turning arrow for Defer, a signpost for Planned and a clock
-  on a calendar for Due — so the dates never read as the same thing. Today now
-  includes tasks planned for today and its subtitle says so. Saved views gain
-  a Planned dates filter (Any, Overdue, Today, Tomorrow, Next 7/30 days, No
-  planned date).
-- **Planned dates.** A third date beside Due and Defer that never changes
-  availability. The inspector gets a Planned calendar field, quick capture
-  accepts `planned:` / `plan:`, Forecast gains a Planned Today bucket and
-  planned days on the calendar, filters/sorts/groups understand it, the CLI
-  has `--planned`, and MCP reports `planned` / `planned_at`.
-- **Inspector gutter.** The scrollbar gutter only appears when the inspector
-  actually scrolls; short task sheets now use the full width.
+- **Descriptions on saved views.** A saved view can carry a one-line
+  description under its title, in the same place Today explains itself. An
+  empty description falls back to “Saved perspective”.
+  `perspective add --description` sets it from the CLI (`--note` still works).
+- **Delete confirmations.** Removing a project or tag from the sidebar now
+  opens a confirmation sheet instead of deleting immediately. Undo still
+  restores it.
+- **Default wording.** Sort and Group now say **Default** where they used to
+  say View: “use this screen’s natural order or grouping”. Manual still means
+  your drag order, and None still means one flat list.
+- **Only count due items.** A Workflow setting makes the Forecast badge count
+  due work alone, ignoring planned and deferred items.
 - **Folders drop the redundant prefix.** A task row inside a folder now shows
   the remaining project path (`Shopping`) instead of repeating the folder
   (`Personal / Shopping`). Other views still show the full path.
-- **Quick Open.** `⌘O` opens a keyboard-first palette for perspectives,
-  folders, projects, tags and priorities. It starts empty, lists matches as you
-  type, scrolls its results inside the panel instead of growing past the frame,
-  and keeps the highlighted row in view. Use the arrows to move and Return to
-  open. Import moves to `⇧⌘O`.
+- **Inspector gutter.** The scrollbar gutter only appears when the inspector
+  actually scrolls; short task sheets now use the full width.
 - **No Full-screen sidebar row.** The Full-screen list is no longer offered as a
   perspective; it remains a temporary destination for a reminder's **View all**
   action.
