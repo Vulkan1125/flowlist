@@ -869,7 +869,7 @@ impl FlowlistApp {
             row = row.child(
                 div()
                     .text_xs()
-                    .text_color(theme.danger)
+                    .text_color(theme.warning)
                     .whitespace_normal()
                     .child(message.clone()),
             );

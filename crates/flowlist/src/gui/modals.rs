@@ -767,13 +767,13 @@ impl Modal {
             }
             Modal::AdjustDates { command, .. } => match command {
                 Command::UpdateTaskAdjusted { .. } => {
-                    "This assignment would break the project's date limits. Nothing has changed yet."
+                    "If you continue, the task date will be adjusted to fit the project."
                 }
                 Command::UpdateProjectAdjusted { .. } => {
-                    "These tasks would fall outside the project's new date limits. Nothing has changed yet."
+                    "If you continue, these task dates will be adjusted to fit the project’s new dates."
                 }
                 _ => {
-                    "These tasks would break the date limits of the project or parent they are moving into. Nothing has moved yet."
+                    "If you continue, these task dates will be adjusted to fit the project or parent."
                 }
             },
             Modal::CreateProject { .. } => {
@@ -1223,10 +1223,10 @@ impl FlowlistApp {
                     .p_3()
                     .rounded_md()
                     .border_1()
-                    .border_color(theme.danger)
+                    .border_color(theme.warning)
                     .bg(theme.field)
                     .text_sm()
-                    .text_color(theme.danger)
+                    .text_color(theme.warning)
                     .whitespace_normal()
                     .child(error.clone()),
             );
@@ -1337,62 +1337,80 @@ impl FlowlistApp {
             if let Modal::AdjustDates { conflicts, .. } = modal {
                 let mut list = div().flex().flex_col().gap_2();
                 for conflict in conflicts {
-                    let container = conflict
-                        .container
-                        .as_ref()
-                        .map(|(name, parent)| {
-                            if *parent {
-                                format!("parent action “{name}”")
-                            } else {
-                                format!("project “{name}”")
-                            }
-                        })
-                        .unwrap_or_else(|| "project or parent".to_string());
-                    let mut reasons = div().flex().flex_col().gap_1();
-                    let mut changes = Vec::new();
+                    let mut changes = div().flex().flex_col().gap_1();
                     if let Some((from, to)) = conflict.due {
-                        reasons = reasons.child(
+                        changes = changes.child(
                             div()
-                                .text_xs()
-                                .text_color(theme.text_dim)
-                                .whitespace_normal()
-                                .child(format!(
-                                    "The task is due {}, but the {container} is due {}. A task cannot be due after its project or parent.",
-                                    from.local_date().format("%a %b %-d"),
-                                    to.local_date().format("%a %b %-d")
-                                )),
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .w(px(62.))
+                                        .text_xs()
+                                        .text_color(theme.text_faint)
+                                        .child("Due date"),
+                                )
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(theme.text)
+                                        .child(from.local_date().format("%a %b %-d").to_string()),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.text_faint)
+                                        .child("→"),
+                                )
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(theme.warning)
+                                        .child(to.local_date().format("%a %b %-d").to_string()),
+                                ),
                         );
-                        changes.push(format!(
-                            "set its due date to {}",
-                            to.local_date().format("%a %b %-d")
-                        ));
                     }
                     if let Some((from, to)) = conflict.defer {
-                        reasons = reasons.child(
+                        changes = changes.child(
                             div()
-                                .text_xs()
-                                .text_color(theme.text_dim)
-                                .whitespace_normal()
-                                .child(format!(
-                                    "The task’s defer date is {}, but the {container} has a defer date of {}. A task cannot defer before its project or parent.",
-                                    from.local_date().format("%a %b %-d"),
-                                    to.local_date().format("%a %b %-d")
-                                )),
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .w(px(62.))
+                                        .text_xs()
+                                        .text_color(theme.text_faint)
+                                        .child("Defer date"),
+                                )
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(theme.text)
+                                        .child(from.local_date().format("%a %b %-d").to_string()),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.text_faint)
+                                        .child("→"),
+                                )
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(theme.warning)
+                                        .child(to.local_date().format("%a %b %-d").to_string()),
+                                ),
                         );
-                        changes.push(format!(
-                            "move its defer date to {}",
-                            to.local_date().format("%a %b %-d")
-                        ));
                     }
-                    let change_line = format!(
-                        "Continuing will {}.",
-                        changes.join(" and ")
-                    );
                     list = list.child(
                         div()
                             .flex()
                             .flex_col()
-                            .gap_2()
+                            .gap_1()
                             .p_3()
                             .rounded_md()
                             .border_1()
@@ -1405,49 +1423,10 @@ impl FlowlistApp {
                                     .text_color(theme.text)
                                     .child(conflict.title.clone()),
                             )
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .text_color(theme.danger)
-                                            .child("Why this is invalid"),
-                                    )
-                                    .child(reasons),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .text_color(theme.text_faint)
-                                            .child("If you continue"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(theme.text_dim)
-                                            .whitespace_normal()
-                                            .child(change_line),
-                                    ),
-                            ),
+                            .child(changes),
                     );
                 }
                 body = body.child(list);
-                body = body.child(
-                    div()
-                        .text_xs()
-                        .text_color(theme.text_faint)
-                        .child("The date changes and the move or edit are saved together as one undo step."),
-                );
             }
             if let Modal::DeleteTag { name, .. } = modal {
                 body = body.child(

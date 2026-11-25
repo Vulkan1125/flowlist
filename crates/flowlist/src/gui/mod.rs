@@ -2267,10 +2267,6 @@ impl FlowlistApp {
             }
             Err(error) => {
                 let message = error.to_string();
-                let message = message
-                    .strip_prefix("invalid operation: ")
-                    .unwrap_or(&message)
-                    .to_string();
                 self.command_error = Some(message.clone());
                 // A form clears this when it shows the message inline. Lists
                 // and drag targets have no inline spot, so the toast remains
@@ -8294,32 +8290,28 @@ fn date_conflict_message(conflict: &DateConflict) -> String {
     let container = conflict
         .container
         .as_ref()
-        .map(|(name, parent)| {
+        .map(|(_, parent)| {
             if *parent {
-                format!("parent action “{name}”")
+                "parent action"
             } else {
-                format!("project “{name}”")
+                "project"
             }
         })
-        .unwrap_or_else(|| "project or parent".to_string());
+        .unwrap_or("project or parent");
     let mut parts = Vec::new();
-    if let Some((from, to)) = conflict.due {
+    if let Some((_, to)) = conflict.due {
         parts.push(format!(
-            "The task is due {}, but the {container} is due {}. Choose a due date on or before {}.",
-            from.local_date().format("%a %b %-d"),
-            to.local_date().format("%a %b %-d"),
+            "the new due date cannot be later than the {container}’s due date ({})",
             to.local_date().format("%a %b %-d")
         ));
     }
-    if let Some((from, to)) = conflict.defer {
+    if let Some((_, to)) = conflict.defer {
         parts.push(format!(
-            "The task’s defer date is {}, but the {container} has a defer date of {}. Choose a defer date on or after {}.",
-            from.local_date().format("%a %b %-d"),
-            to.local_date().format("%a %b %-d"),
+            "the new defer date cannot be earlier than the {container}’s defer date ({})",
             to.local_date().format("%a %b %-d")
         ));
     }
-    parts.join(" ")
+    format!("Invalid operation: {}.", parts.join("; "))
 }
 
 pub fn run(paths: DataPaths) -> Result<()> {

@@ -1974,7 +1974,7 @@ fn ensure_dates_in_order(due: Option<Stamp>, defer: Option<Stamp>) -> Result<()>
     if let (Some(due), Some(defer)) = (due, defer) {
         if defer.local_date() > due.local_date() {
             return Err(Error::invalid(
-                "The defer date is later than the due date. A task or project cannot become available after it is due.",
+                "the new defer date cannot be later than the due date",
             ));
         }
     }

@@ -16,7 +16,7 @@ pub enum Error {
     #[error("{kind} not found: {id}")]
     NotFound { kind: &'static str, id: String },
 
-    #[error("invalid operation: {0}")]
+    #[error("Invalid operation: {0}")]
     Invalid(String),
 
     #[error("id prefix '{prefix}' is ambiguous ({matches} matches)")]
