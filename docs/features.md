@@ -194,11 +194,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       repeat glyph for a recurrence, so the metadata matches the rest of the
       chrome.
 - [x] Content list with grouped rows, progress indicators and inline status
-- [x] One search card: clicking the **Search** box opens a two-tab overlay
-      (input, then **Search tasks** and **Quick Open** tabs, then results).
-      `⇥` switches tabs and each keeps its own query. `⌘F` opens just Search
-      tasks and `⌘O` just Quick Open, with no tab row. Both lists filter live,
-      scroll inside the panel and keep the highlighted row in view
+- [x] Quick Open (`⌘O`): one navigation palette for perspectives, folders,
+      projects, tags and priorities, with live filtering, keyboard selection
+      and a scrolling result list that stays inside the panel
 - [x] Task capture with quick-entry syntax
 - [x] Multi-select, range select, keyboard navigation
 - [x] Complete/reopen, flag/unflag, delete, undo/redo and post-delete focus

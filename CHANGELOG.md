@@ -2,13 +2,11 @@
 
 ## Unreleased
 
-- **One search card.** Clicking the title-bar **Search** box opens a card with
-  the search field first, then two tabs — **Search tasks** and **Quick Open** —
-  then results. `⇥` switches tabs, each keeps its own query, and the tabs show
-  their own `⌘F` and `⌘O` hints. `⌘F` opens just Search tasks and `⌘O` just
-  Quick Open, without the tab row. Both faces start empty, scroll inside the
-  panel and keep the highlighted row in view; `↑`/`↓` move and Return opens.
-  Import moves to `⇧⌘O`.
+- **Quick Open.** `⌘O` opens a keyboard-first palette for perspectives,
+  folders, projects, tags and priorities. It starts empty, lists matches as you
+  type, scrolls its results inside the panel instead of growing past the frame,
+  and keeps the highlighted row in view. Use the arrows to move and Return to
+  open. Import moves to `⇧⌘O`.
 - **No Full-screen sidebar row.** The Full-screen list is no longer offered as a
   perspective; it remains a temporary destination for a reminder's **View all**
   action.

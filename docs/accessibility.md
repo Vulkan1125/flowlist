@@ -26,14 +26,9 @@ reach them without the mouse.
 
 ### Quick capture panel
 
-`⌘F` opens **Search tasks**, which matches every task in the library. `⌘O`
-opens **Quick Open**, which reaches perspectives, folders, projects and tags
-without walking the sidebar. Both are bare faces: no tab row, no clutter.
-
-Clicking the title-bar **Search** box with a mouse opens the same card with a
-tab row between the field and the results. `⇥` and `⇧⇥` then switch between
-Search tasks and Quick Open, and each tab keeps its own query. In every face,
-`↑`/`↓` move, `Return` opens and `Esc` closes.
+`⌘O` opens Quick Open, a keyboard-first navigation palette for perspectives,
+folders, projects, tags and priorities. It is also the fastest route for a
+keyboard user to reach an entity without walking the sidebar.
 
 `⌃⌥Space` opens the floating capture panel from any app; the same chord closes
 it again without filing. The title field has keyboard focus as soon as the

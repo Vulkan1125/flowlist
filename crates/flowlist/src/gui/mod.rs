@@ -336,58 +336,9 @@ pub(super) type PaintedTaskRow = (String, u32, String, bool);
 pub(super) const SIDEBAR_WIDTH: f32 = 240.0;
 pub(super) const INSPECTOR_WIDTH: f32 = 320.0;
 
-/// The two faces of the ⌘F card. Tab cycles, and both buffers are kept so
-/// switching back does not lose what was typed.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum PaletteTab {
-    Search,
-    Jump,
-}
-
-impl PaletteTab {
-    fn label(self) -> &'static str {
-        match self {
-            PaletteTab::Search => "Search tasks",
-            PaletteTab::Jump => "Quick Open",
-        }
-    }
-
-    fn next(self) -> Self {
-        match self {
-            PaletteTab::Search => PaletteTab::Jump,
-            PaletteTab::Jump => PaletteTab::Search,
-        }
-    }
-
-    fn previous(self) -> Self {
-        self.next()
-    }
-}
-
 struct QuickOpenState {
-    tab: PaletteTab,
-    /// Manual clicks on the title-bar search show both tabs; ⌘F and ⌘O open a
-    /// bare face with no tab row.
-    show_tabs: bool,
-    search: text::TextBuffer,
-    jump: text::TextBuffer,
+    query: text::TextBuffer,
     cursor: usize,
-}
-
-impl QuickOpenState {
-    fn query(&self) -> &text::TextBuffer {
-        match self.tab {
-            PaletteTab::Search => &self.search,
-            PaletteTab::Jump => &self.jump,
-        }
-    }
-
-    fn query_mut(&mut self) -> &mut text::TextBuffer {
-        match self.tab {
-            PaletteTab::Search => &mut self.search,
-            PaletteTab::Jump => &mut self.jump,
-        }
-    }
 }
 
 struct QuickOpenEntry {
@@ -396,13 +347,6 @@ struct QuickOpenEntry {
     icon: Icon,
     target: sidebar::SidebarTarget,
     rank: u8,
-}
-
-/// One task result in the card's Search tab.
-struct PaletteTask {
-    id: TaskId,
-    title: String,
-    detail: String,
 }
 
 pub struct FlowlistApp {
@@ -1664,13 +1608,7 @@ impl FlowlistApp {
         cx.notify();
     }
 
-    fn open_palette(
-        &mut self,
-        tab: PaletteTab,
-        show_tabs: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn open_quick_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.modal.is_some() {
             return;
         }
@@ -1680,10 +1618,7 @@ impl FlowlistApp {
         self.sidebar_menu = None;
         self.date_picker = None;
         self.quick_open = Some(QuickOpenState {
-            tab,
-            show_tabs,
-            search: text::TextBuffer::empty(),
-            jump: text::TextBuffer::empty(),
+            query: text::TextBuffer::empty(),
             cursor: 0,
         });
         self.quick_open_scroll.set_offset(point(px(0.), px(0.)));
@@ -1698,89 +1633,11 @@ impl FlowlistApp {
         }
     }
 
-    /// Switch the card between its two faces without dropping either buffer.
-    fn set_palette_tab(&mut self, tab: PaletteTab) {
-        let Some(state) = &mut self.quick_open else {
-            return;
-        };
-        if state.tab == tab {
-            return;
-        }
-        state.tab = tab;
-        state.cursor = 0;
-        self.quick_open_scroll.set_offset(point(px(0.), px(0.)));
-    }
-
-    /// A shortcut shows one face only, hiding the tab row that a mouse click
-    /// opens. Both buffers survive, so switching back is lossless.
-    fn show_palette_face(&mut self, tab: PaletteTab) {
-        let Some(state) = &mut self.quick_open else {
-            return;
-        };
-        state.tab = tab;
-        state.show_tabs = false;
-        state.cursor = 0;
-        self.quick_open_scroll.set_offset(point(px(0.), px(0.)));
-    }
-
-    fn palette_len(&self) -> usize {
-        let Some(state) = &self.quick_open else {
-            return 0;
-        };
-        match state.tab {
-            PaletteTab::Search => self.palette_tasks().len(),
-            PaletteTab::Jump => self.quick_open_entries().len(),
-        }
-    }
-
-    /// Task matches for the card's Search face. Trash is never included and a
-    /// blank query lists nothing, matching Quick Open.
-    fn palette_tasks(&self) -> Vec<PaletteTask> {
-        let query = self
-            .quick_open
-            .as_ref()
-            .map(|state| state.search.text().trim().to_lowercase())
-            .unwrap_or_default();
-        if query.is_empty() {
-            return Vec::new();
-        }
-        let db = self.store.db();
-        let mut scored: Vec<(i64, String, TaskId)> = db
-            .tasks
-            .values()
-            .filter(|task| !task.is_trashed())
-            .filter_map(|task| {
-                let score = flowlist_core::search::task_score_normalized(db, task, &query);
-                (score > 0).then_some((score, task.title.to_lowercase(), task.id.clone()))
-            })
-            .collect();
-        scored.sort_by(|(a_score, a_title, _), (b_score, b_title, _)| {
-            b_score.cmp(a_score).then_with(|| a_title.cmp(b_title))
-        });
-        scored.truncate(12);
-        scored
-            .into_iter()
-            .filter_map(|(_, _, id)| {
-                let task = db.tasks.get(&id)?;
-                let detail = task
-                    .project
-                    .as_ref()
-                    .map(|project| db.project_path(project))
-                    .unwrap_or_else(|| "Inbox".to_string());
-                Some(PaletteTask {
-                    id,
-                    title: task.title.clone(),
-                    detail,
-                })
-            })
-            .collect()
-    }
-
     fn quick_open_entries(&self) -> Vec<QuickOpenEntry> {
         let query = self
             .quick_open
             .as_ref()
-            .map(|state| state.jump.text().trim().to_lowercase())
+            .map(|state| state.query.text().trim().to_lowercase())
             .unwrap_or_default();
         // The palette opens empty on purpose: listing every entity before the
         // user has typed reads as noise, not as a result set.
@@ -1887,72 +1744,16 @@ impl FlowlistApp {
         self.sidebar_activate(target, cx);
     }
 
-    /// Open a search result: hand the query to the title-bar search, switch it
-    /// to the whole library and select the task, so the row is visible behind
-    /// the card instead of pointing at a task the current view cannot show.
-    fn choose_palette_task(&mut self, id: TaskId, query: text::TextBuffer, cx: &mut Context<Self>) {
-        self.quick_open = None;
-        self.search = query;
-        self.search_library = true;
-        self.focus = FocusArea::Content;
-        self.select_only(id);
-        cx.notify();
-    }
-
-    fn choose_palette(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = &self.quick_open else {
-            return;
-        };
-        let tab = state.tab;
-        let cursor = state.cursor;
-        let query = state.query().clone();
-        match tab {
-            PaletteTab::Jump => self.choose_quick_open(cx),
-            PaletteTab::Search => {
-                let tasks = self.palette_tasks();
-                let Some(task) = tasks.get(cursor) else {
-                    self.quick_open = None;
-                    cx.notify();
-                    return;
-                };
-                let id = task.id.clone();
-                self.choose_palette_task(id, query, cx);
-            }
-        }
-    }
-
     fn handle_quick_open_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
         let stroke = &event.keystroke;
         let mods = stroke.modifiers;
         if mods.platform && stroke.key == "o" {
-            self.show_palette_face(PaletteTab::Jump);
-            cx.notify();
-            return;
-        }
-        if mods.platform && stroke.key == "f" {
-            self.show_palette_face(PaletteTab::Search);
-            cx.notify();
+            self.close_quick_open(cx);
             return;
         }
         match stroke.key.as_str() {
             "escape" => {
                 self.close_quick_open(cx);
-                return;
-            }
-            "tab" => {
-                let tab = self.quick_open.as_ref().and_then(|state| {
-                    state.show_tabs.then(|| {
-                        if mods.shift {
-                            state.tab.previous()
-                        } else {
-                            state.tab.next()
-                        }
-                    })
-                });
-                if let Some(tab) = tab {
-                    self.set_palette_tab(tab);
-                }
-                cx.notify();
                 return;
             }
             "up" => {
@@ -1964,7 +1765,7 @@ impl FlowlistApp {
                 return;
             }
             "down" => {
-                let count = self.palette_len();
+                let count = self.quick_open_entries().len();
                 if let Some(state) = &mut self.quick_open
                     && count > 0
                 {
@@ -1975,7 +1776,7 @@ impl FlowlistApp {
                 return;
             }
             "enter" | "return" => {
-                self.choose_palette(cx);
+                self.choose_quick_open(cx);
                 return;
             }
             _ => {}
@@ -1987,17 +1788,17 @@ impl FlowlistApp {
         };
         if mods.platform && stroke.key == "a" {
             if let Some(state) = &mut self.quick_open {
-                state.query_mut().select_all();
+                state.query.select_all();
             }
             cx.notify();
             return;
         }
         if mods.platform && (stroke.key == "c" || stroke.key == "x") {
             if let Some(state) = &mut self.quick_open {
-                let text = state.query().selected_text();
+                let text = state.query.selected_text();
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
                 if stroke.key == "x" {
-                    state.query_mut().delete_selection();
+                    state.query.delete_selection();
                 }
             }
             cx.notify();
@@ -2005,7 +1806,7 @@ impl FlowlistApp {
         }
         if let Some(state) = &mut self.quick_open
             && let BufferKey::Changed =
-                handle_buffer_key(state.query_mut(), stroke, paste.as_deref())
+                handle_buffer_key(&mut state.query, stroke, paste.as_deref())
         {
             state.cursor = 0;
             self.reveal_quick_open_cursor();
@@ -2018,7 +1819,7 @@ impl FlowlistApp {
     /// on the next frame.
     fn reveal_quick_open_cursor(&self) {
         if let Some(state) = &self.quick_open
-            && self.palette_len() > 0
+            && !self.quick_open_entries().is_empty()
         {
             self.quick_open_scroll.scroll_to_item(state.cursor);
         }
@@ -2030,20 +1831,15 @@ impl FlowlistApp {
             return div().into_any_element();
         };
         let entries = self.quick_open_entries();
-        let tasks = self.palette_tasks();
-        let (count, typed) = match state.tab {
-            PaletteTab::Search => (tasks.len(), !state.search.text().trim().is_empty()),
-            PaletteTab::Jump => (entries.len(), !state.jump.text().trim().is_empty()),
-        };
-        let cursor = state.cursor.min(count.saturating_sub(1));
-        let query = state.query().clone();
+        let cursor = state.cursor.min(entries.len().saturating_sub(1));
+        let query = state.query.clone();
+        let typed = !state.query.text().trim().is_empty();
         // The palette hangs 110px from the top and never grows past the window,
         // so a short display scrolls its results instead of bleeding them over
         // the background.
         let viewport_height = f32::from(window.viewport_size().height);
         let panel_max_height = (viewport_height - 134.0).clamp(220.0, 420.0);
-        let list_max_height =
-            (panel_max_height - if state.show_tabs { 126.0 } else { 100.0 }).max(80.0);
+        let list_max_height = (panel_max_height - 96.0).max(96.0);
         let mut list = div()
             .id("quick-open-scroll")
             .flex()
@@ -2052,8 +1848,8 @@ impl FlowlistApp {
             .max_h(px(list_max_height))
             .overflow_y_scroll()
             .track_scroll(&self.quick_open_scroll);
-        // Keep the results quiet until the first keystroke.
-        if typed && count == 0 {
+        // Keep the panel quiet until the first keystroke.
+        if typed && entries.is_empty() {
             list = list.child(
                 div()
                     .px_2()
@@ -2063,212 +1859,101 @@ impl FlowlistApp {
                     .child("No matches"),
             );
         } else if typed {
-            match state.tab {
-                PaletteTab::Jump => {
-                    for (index, entry) in entries.iter().enumerate() {
-                        let selected = index == cursor;
-                        let target = entry.target.clone();
-                        list = list.child(
+            for (index, entry) in entries.iter().enumerate() {
+                let selected = index == cursor;
+                let target = entry.target.clone();
+                list = list.child(
+                    div()
+                        .id(sid(format!("quick-open:{}", entry.target.key())))
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .px_2()
+                        .py_1()
+                        .rounded_md()
+                        .bg(if selected {
+                            theme.selection
+                        } else {
+                            theme.clear
+                        })
+                        .cursor_pointer()
+                        .hover(|style| style.bg(theme.hover))
+                        .child(icons::icon(
+                            entry.icon,
+                            14.0,
+                            if selected {
+                                theme.accent
+                            } else {
+                                theme.text_faint
+                            },
+                        ))
+                        .child(
                             div()
-                                .id(sid(format!("quick-open:{}", entry.target.key())))
+                                .flex_1()
+                                .min_w_0()
                                 .flex()
-                                .items_center()
-                                .gap_2()
-                                .px_2()
-                                .py_1()
-                                .rounded_md()
-                                .bg(if selected {
-                                    theme.selection
-                                } else {
-                                    theme.clear
-                                })
-                                .cursor_pointer()
-                                .hover(|style| style.bg(theme.hover))
-                                .child(icons::icon(
-                                    entry.icon,
-                                    14.0,
-                                    if selected {
-                                        theme.accent
-                                    } else {
-                                        theme.text_faint
-                                    },
-                                ))
+                                .flex_col()
+                                .gap_0p5()
                                 .child(
                                     div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .flex()
-                                        .flex_col()
-                                        .gap_0p5()
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .text_color(if selected {
-                                                    theme.accent
-                                                } else {
-                                                    theme.text
-                                                })
-                                                .child(entry.label.clone()),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(theme.text_faint)
-                                                .child(entry.detail.clone()),
-                                        ),
+                                        .text_sm()
+                                        .text_color(if selected {
+                                            theme.accent
+                                        } else {
+                                            theme.text
+                                        })
+                                        .child(entry.label.clone()),
                                 )
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.quick_open = None;
-                                    this.focus = FocusArea::Content;
-                                    this.sidebar_activate(target.clone(), cx);
-                                })),
-                        );
-                    }
-                }
-                PaletteTab::Search => {
-                    for (index, task) in tasks.iter().enumerate() {
-                        let selected = index == cursor;
-                        let id = task.id.clone();
-                        let query = state.search.clone();
-                        list = list.child(
-                            div()
-                                .id(sid(format!("palette-task:{}", task.id)))
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .px_2()
-                                .py_1()
-                                .rounded_md()
-                                .bg(if selected {
-                                    theme.selection
-                                } else {
-                                    theme.clear
-                                })
-                                .cursor_pointer()
-                                .hover(|style| style.bg(theme.hover))
-                                .child(icons::icon(
-                                    Icon::CircleDashed,
-                                    14.0,
-                                    if selected {
-                                        theme.accent
-                                    } else {
-                                        theme.text_faint
-                                    },
-                                ))
                                 .child(
                                     div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .flex()
-                                        .flex_col()
-                                        .gap_0p5()
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .text_color(if selected {
-                                                    theme.accent
-                                                } else {
-                                                    theme.text
-                                                })
-                                                .child(task.title.clone()),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(theme.text_faint)
-                                                .child(task.detail.clone()),
-                                        ),
-                                )
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.choose_palette_task(id.clone(), query.clone(), cx);
-                                })),
-                        );
-                    }
-                }
+                                        .text_xs()
+                                        .text_color(theme.text_faint)
+                                        .child(entry.detail.clone()),
+                                ),
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.quick_open = None;
+                            this.focus = FocusArea::Content;
+                            this.sidebar_activate(target.clone(), cx);
+                        })),
+                );
             }
         }
-        let mut tabs = div().flex().items_center().gap_1().px_1();
-        // The ⇥ glyph names the key that cycles the two faces.
-        tabs = tabs.child(
-            div()
-                .id("palette-tab-key")
-                .flow_tip(self, cx, theme, "Tab switches tabs")
-                .px_1()
-                .text_xs()
-                .text_color(theme.text_faint)
-                .child("⇥"),
-        );
-        for tab in [PaletteTab::Search, PaletteTab::Jump] {
-            let active = state.tab == tab;
-            tabs = tabs.child(
+        let panel = div()
+            .w(px(560.))
+            .max_h(px(panel_max_height))
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_2()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg()
+            .overflow_hidden()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|_, _, _, cx| cx.stop_propagation()),
+            )
+            .child(
                 div()
-                    .id(sid(format!("palette-tab:{}", tab.label())))
-                    .px_2()
-                    .py_0p5()
-                    .rounded_sm()
-                    .cursor_pointer()
+                    .px_1()
+                    .child(widgets::text_field(
+                        theme,
+                        &query,
+                        "Jump to a perspective, folder, project or tag…",
+                        true,
+                    )),
+            )
+            .child(list)
+            .child(
+                div()
+                    .px_1()
                     .text_xs()
-                    .text_color(if active {
-                        theme.accent
-                    } else {
-                        theme.text_faint
-                    })
-                    .bg(if active { theme.selection } else { theme.clear })
-                    .hover(|style| style.bg(theme.hover))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(tab.label())
-                            .child(div().text_color(theme.text_faint).child(match tab {
-                                PaletteTab::Search => "⌘F",
-                                PaletteTab::Jump => "⌘O",
-                            })),
-                    )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.set_palette_tab(tab);
-                        this.focus = FocusArea::Content;
-                        cx.notify();
-                    })),
+                    .text_color(theme.text_faint)
+                    .child("↑↓ navigate · ↵ open · esc close"),
             );
-        }
-        let placeholder = match state.tab {
-            PaletteTab::Search => "Search",
-            PaletteTab::Jump => "Jump to a perspective, folder, project or tag…",
-        };
-        let panel =
-            div()
-                .w(px(560.))
-                .max_h(px(panel_max_height))
-                .flex()
-                .flex_col()
-                .gap_2()
-                .p_2()
-                .rounded_lg()
-                .border_1()
-                .border_color(theme.border)
-                .bg(theme.raised)
-                .shadow_lg()
-                .overflow_hidden()
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|_, _, _, cx| cx.stop_propagation()),
-                )
-                .child(
-                    div()
-                        .px_1()
-                        .child(widgets::text_field(theme, &query, placeholder, true)),
-                )
-                .when(state.show_tabs, |this| this.child(tabs))
-                .child(list)
-                .child(div().px_1().text_xs().text_color(theme.text_faint).child(
-                    if state.show_tabs {
-                        "⇥ switch · ↑↓ move · ↵ open · esc close"
-                    } else {
-                        "↑↓ move · ↵ open · esc close"
-                    },
-                ));
         div()
             .id("quick-open-layer")
             .absolute()
@@ -5113,7 +4798,7 @@ impl FlowlistApp {
                     cx,
                 );
             } else {
-                self.open_palette(PaletteTab::Jump, false, window, cx);
+                self.open_quick_open(window, cx);
             }
             return;
         }
@@ -5665,25 +5350,21 @@ impl FlowlistApp {
                     self.open_modal(modals::Modal::new_perspective(self), cx);
                 }
                 "f" => {
-                    // ⇧⌘F still flips the inline search scope; plain ⌘F opens
-                    // the two-tab card on its Search face.
-                    if mods.shift {
-                        if self.view.searches_tasks() {
-                            self.search_library = !self.search_library;
-                            self.toast = Some(
-                                if self.search_library {
-                                    "Searching the whole library"
-                                } else {
-                                    "Searching this view"
-                                }
-                                .to_string(),
-                            );
-                        }
-                        self.focus = FocusArea::Search;
-                        self.search.select_all();
-                    } else {
-                        self.open_palette(PaletteTab::Search, false, window, cx);
+                    // ⌘⇧F flips search between this view and the whole
+                    // library; the scope chip in the content header mirrors it.
+                    if mods.shift && self.view.searches_tasks() {
+                        self.search_library = !self.search_library;
+                        self.toast = Some(
+                            if self.search_library {
+                                "Searching the whole library"
+                            } else {
+                                "Searching this view"
+                            }
+                            .to_string(),
+                        );
                     }
+                    self.focus = FocusArea::Search;
+                    self.search.select_all();
                 }
                 "i" => {
                     self.show_inspector = !self.show_inspector;
@@ -7013,9 +6694,6 @@ impl FlowlistApp {
             "focus": format!("{:?}", self.focus),
             "field": self.editing.map(|field| format!("{field:?}")),
             "selected": self.selected.len(),
-            "selected_ids": self.selected.iter().map(|id| id.to_string()).collect::<Vec<_>>(),
-            "search_text": self.search.text(),
-            "search_library": self.search_library,
             "draft": self.draft_task.is_some(),
             "suggestions": self.project_suggestions().len(),
             "window": self.window_size,
@@ -7277,13 +6955,9 @@ impl FlowlistApp {
             serde_json::json!(self.sidebar_count_values.borrow().clone());
         state["quick_open"] = serde_json::json!(self.quick_open.as_ref().map(|state| {
             serde_json::json!({
-                "tab": state.tab.label(),
-                "show_tabs": state.show_tabs,
-                "query": state.query().text(),
-                "search": state.search.text(),
-                "jump": state.jump.text(),
+                "query": state.query.text(),
                 "cursor": state.cursor,
-                "results": self.palette_len(),
+                "results": self.quick_open_entries().len(),
             })
         }));
         state["sidebar_visible"] = serde_json::json!(
@@ -7586,7 +7260,11 @@ impl FlowlistApp {
                             .child(widgets::text_field_with_trailer(
                                 theme,
                                 &self.search,
-                                "Search",
+                                if self.search_library {
+                                    "Search library"
+                                } else {
+                                    "Search tasks"
+                                },
                                 self.focus == FocusArea::Search,
                                 if self.search.is_empty() { 0.0 } else { 26.0 },
                             ))
@@ -7619,11 +7297,10 @@ impl FlowlistApp {
                                         })),
                                 )
                             })
-                            // A manual click opens the tabbed card. The
-                            // shortcuts open a bare face, so the tabs only
-                            // appear when someone discovers search by mouse.
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_palette(PaletteTab::Search, true, window, cx);
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.focus = FocusArea::Search;
+                                this.search.select_all();
+                                cx.notify();
                             })),
                     ),
             )

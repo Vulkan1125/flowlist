@@ -87,13 +87,9 @@ intentionally outside Phase 5.
 Gap audit against OmniFocus 4.10.1 (November 2026). Platform/ecosystem
 integrations are tracked separately and are not part of this phase.
 
-- [x] **Search card and Quick Open** — clicking the title-bar **Search** box
-      opens a card ordered field → tabs → results. The tabs are **Search
-      tasks** over the whole library and **Quick Open** for perspectives,
-      folders, projects, tags and priorities, each labelled with its shortcut.
-      `⇥` and `⇧⇥` switch tabs while each keeps its own query. `⌘F` opens just
-      Search tasks and `⌘O` just Quick Open, without the tab row; `↑`/`↓` move,
-      `Return` opens and `Esc` closes.
+- [x] **Quick Open** — `⌘O` opens one navigation palette for perspectives,
+      folders, projects, tags and priorities. `↑`/`↓` move, `Return` opens,
+      `Esc` closes, and typing filters without opening a second search UI.
 - [ ] **Planned dates** — add a third date field beside Due and Defer, with
       Inspector, quick capture, Forecast, filters, sorting/grouping, CLI and
       MCP support. Planned dates do not change availability.
