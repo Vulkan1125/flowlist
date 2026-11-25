@@ -15,6 +15,9 @@ There are three ways to add a task:
 - **`⌃⌥Space`** from any app opens the floating capture panel over what you are
   doing; press it again to put the panel away. The main window stays where it
   is.
+- **`⌘O`** opens Quick Open, one palette for perspectives, folders, projects,
+  tags and priorities. Type to filter; `↑`/`↓` move, `Return` opens and `Esc`
+  closes.
 - **Add task** in the title bar opens the same panel over the Flowlist window.
 - **`n`** puts the caret in the capture bar at the top of the list, when the
   view has one.
@@ -299,7 +302,8 @@ Press **`?`** for the full keyboard and mouse help. The essentials:
 | `⌘L` | add a subtask |
 | `⌘T` | toggle light / dark |
 | `⇧⌘T` / `⌥⌘T` | next / previous theme |
-| `⌘O` | import TaskPaper or JSON |
+| `⌘O` | Quick Open |
+| `⇧⌘O` | import TaskPaper or JSON |
 | `⌘,` | settings |
 
 Vim mode is on by default and covers the list, sidebar and subtask field: `j`/`k`,

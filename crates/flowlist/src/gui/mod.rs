@@ -44,10 +44,11 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use chrono::{Datelike, Timelike};
 use gpui::{
-    Animation, AnimationExt, App, Application, Bounds, ClipboardItem, Context, CursorStyle,
-    FocusHandle, Focusable, IntoElement, KeyDownEvent, Keystroke, MouseButton, ObjectFit, Render,
-    ScrollHandle, SharedString, Window, WindowBackgroundAppearance, WindowBounds, WindowKind,
-    WindowOptions, div, ease_out_quint, img, point, prelude::*, px, size,
+    Animation, AnimationExt, AnyElement, App, Application, Bounds, ClipboardItem, Context,
+    CursorStyle, FocusHandle, Focusable, IntoElement, KeyDownEvent, Keystroke, MouseButton,
+    ObjectFit, Render, ScrollHandle, SharedString, Window, WindowBackgroundAppearance,
+    WindowBounds, WindowKind, WindowOptions, div, ease_out_quint, img, point, prelude::*, px,
+    size,
 };
 
 use flowlist_core::command::{
@@ -335,6 +336,19 @@ pub(super) type PaintedTaskRow = (String, u32, String, bool);
 pub(super) const SIDEBAR_WIDTH: f32 = 240.0;
 pub(super) const INSPECTOR_WIDTH: f32 = 320.0;
 
+struct QuickOpenState {
+    query: text::TextBuffer,
+    cursor: usize,
+}
+
+struct QuickOpenEntry {
+    label: String,
+    detail: String,
+    icon: Icon,
+    target: sidebar::SidebarTarget,
+    rank: u8,
+}
+
 pub struct FlowlistApp {
     store: Store,
     theme: Theme,
@@ -559,6 +573,8 @@ pub struct FlowlistApp {
     notification_requested: bool,
     vim: vim::VimState,
     sidebar_cursor: Option<sidebar::SidebarTarget>,
+    /// The ⌘O navigation palette. `None` when it is closed.
+    quick_open: Option<QuickOpenState>,
     /// The sidebar row under the pointer, if any. Hover-only row actions
     /// render only for this row so an idle row spends no width on them.
     checklist_cursor: Option<usize>,
@@ -910,6 +926,7 @@ impl FlowlistApp {
             notification_requested: false,
             vim: vim::VimState::default(),
             sidebar_cursor: None,
+            quick_open: None,
             checklist_cursor: None,
             focus: FocusArea::Content,
             focus_handle,
@@ -1586,6 +1603,350 @@ impl FlowlistApp {
     fn open_view(&mut self, view: View, cx: &mut Context<Self>) {
         self.set_view(view);
         cx.notify();
+    }
+
+    fn open_quick_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.modal.is_some() {
+            return;
+        }
+        self.sort_menu_open = false;
+        self.group_menu_open = false;
+        self.priority_menu_open = false;
+        self.sidebar_menu = None;
+        self.date_picker = None;
+        self.quick_open = Some(QuickOpenState {
+            query: text::TextBuffer::empty(),
+            cursor: 0,
+        });
+        self.focus = FocusArea::Content;
+        window.focus(&self.focus_handle);
+        cx.notify();
+    }
+
+    fn close_quick_open(&mut self, cx: &mut Context<Self>) {
+        if self.quick_open.take().is_some() {
+            cx.notify();
+        }
+    }
+
+    fn quick_open_entries(&self) -> Vec<QuickOpenEntry> {
+        let db = self.store.db();
+        let mut entries = Vec::new();
+        for perspective in BuiltinPerspective::ALL {
+            entries.push(QuickOpenEntry {
+                label: perspective.label().to_string(),
+                detail: "Perspective".to_string(),
+                icon: Icon::Perspective,
+                target: sidebar::SidebarTarget::Builtin(perspective),
+                rank: 0,
+            });
+        }
+        for perspective in db.perspectives.values() {
+            entries.push(QuickOpenEntry {
+                label: perspective.name.clone(),
+                detail: "Saved perspective".to_string(),
+                icon: Icon::Perspective,
+                target: sidebar::SidebarTarget::Custom(perspective.id.clone()),
+                rank: 1,
+            });
+        }
+        for row in db.flatten_containers() {
+            match row.container {
+                ContainerId::Folder(id) => entries.push(QuickOpenEntry {
+                    label: db.folder_path(&id),
+                    detail: "Folder".to_string(),
+                    icon: Icon::Folder,
+                    target: sidebar::SidebarTarget::Folder(id),
+                    rank: 2,
+                }),
+                ContainerId::Project(id) => entries.push(QuickOpenEntry {
+                    label: db.project_path(&id),
+                    detail: "Project".to_string(),
+                    icon: Icon::Project,
+                    target: sidebar::SidebarTarget::Project(id),
+                    rank: 3,
+                }),
+            }
+        }
+        for row in db.flatten_tags() {
+            entries.push(QuickOpenEntry {
+                label: db.tag_path(&row.tag),
+                detail: "Tag".to_string(),
+                icon: Icon::Tag,
+                target: sidebar::SidebarTarget::Tag(row.tag),
+                rank: 4,
+            });
+        }
+        for priority in Priority::ALL {
+            entries.push(QuickOpenEntry {
+                label: format!("{} priority", priority.label()),
+                detail: "Priority".to_string(),
+                icon: Icon::Flagged,
+                target: sidebar::SidebarTarget::Priority(priority),
+                rank: 5,
+            });
+        }
+
+        let query = self
+            .quick_open
+            .as_ref()
+            .map(|state| state.query.text().trim().to_lowercase())
+            .unwrap_or_default();
+        if !query.is_empty() {
+            let words: Vec<&str> = query.split_whitespace().collect();
+            entries.retain(|entry| {
+                let haystack = format!("{} {}", entry.label, entry.detail).to_lowercase();
+                words.iter().all(|word| haystack.contains(word))
+            });
+        }
+        entries.sort_by(|left, right| {
+            let left_lower = left.label.to_lowercase();
+            let right_lower = right.label.to_lowercase();
+            (
+                left.rank,
+                !left_lower.starts_with(&query),
+                left_lower,
+                left.detail.clone(),
+            )
+                .cmp(&(
+                    right.rank,
+                    !right_lower.starts_with(&query),
+                    right_lower,
+                    right.detail.clone(),
+                ))
+        });
+        entries.truncate(12);
+        entries
+    }
+
+    fn choose_quick_open(&mut self, cx: &mut Context<Self>) {
+        let entries = self.quick_open_entries();
+        let cursor = self
+            .quick_open
+            .as_ref()
+            .map(|state| state.cursor)
+            .unwrap_or(0);
+        let Some(entry) = entries.get(cursor) else {
+            self.quick_open = None;
+            cx.notify();
+            return;
+        };
+        let target = entry.target.clone();
+        self.quick_open = None;
+        self.focus = FocusArea::Content;
+        self.sidebar_activate(target, cx);
+    }
+
+    fn handle_quick_open_key(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        let stroke = &event.keystroke;
+        let mods = stroke.modifiers;
+        if mods.platform && stroke.key == "o" {
+            self.close_quick_open(cx);
+            return;
+        }
+        match stroke.key.as_str() {
+            "escape" => {
+                self.close_quick_open(cx);
+                return;
+            }
+            "up" => {
+                if let Some(state) = &mut self.quick_open {
+                    state.cursor = state.cursor.saturating_sub(1);
+                }
+                cx.notify();
+                return;
+            }
+            "down" => {
+                let count = self.quick_open_entries().len();
+                if let Some(state) = &mut self.quick_open
+                    && count > 0
+                {
+                    state.cursor = (state.cursor + 1).min(count - 1);
+                }
+                cx.notify();
+                return;
+            }
+            "enter" | "return" => {
+                self.choose_quick_open(cx);
+                return;
+            }
+            _ => {}
+        }
+        let paste = if mods.platform && stroke.key == "v" {
+            cx.read_from_clipboard().and_then(|item| item.text())
+        } else {
+            None
+        };
+        if mods.platform && stroke.key == "a" {
+            if let Some(state) = &mut self.quick_open {
+                state.query.select_all();
+            }
+            cx.notify();
+            return;
+        }
+        if mods.platform && (stroke.key == "c" || stroke.key == "x") {
+            if let Some(state) = &mut self.quick_open {
+                let text = state.query.selected_text();
+                cx.write_to_clipboard(ClipboardItem::new_string(text));
+                if stroke.key == "x" {
+                    state.query.delete_selection();
+                }
+            }
+            cx.notify();
+            return;
+        }
+        if let Some(state) = &mut self.quick_open
+            && let BufferKey::Changed =
+                handle_buffer_key(&mut state.query, stroke, paste.as_deref())
+        {
+            state.cursor = 0;
+        }
+        cx.notify();
+    }
+
+    fn render_quick_open(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let Some(state) = &self.quick_open else {
+            return div().into_any_element();
+        };
+        let entries = self.quick_open_entries();
+        let cursor = state.cursor.min(entries.len().saturating_sub(1));
+        let query = state.query.clone();
+        let mut list = div().flex().flex_col().gap_1();
+        if entries.is_empty() {
+            list = list.child(
+                div()
+                    .px_2()
+                    .py_3()
+                    .text_sm()
+                    .text_color(theme.text_faint)
+                    .child("No matches"),
+            );
+        } else {
+            for (index, entry) in entries.iter().enumerate() {
+                let selected = index == cursor;
+                let target = entry.target.clone();
+                list = list.child(
+                    div()
+                        .id(sid(format!("quick-open:{}", entry.target.key())))
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .px_2()
+                        .py_1()
+                        .rounded_md()
+                        .bg(if selected {
+                            theme.selection
+                        } else {
+                            theme.clear
+                        })
+                        .cursor_pointer()
+                        .hover(|style| style.bg(theme.hover))
+                        .child(icons::icon(
+                            entry.icon,
+                            14.0,
+                            if selected {
+                                theme.accent
+                            } else {
+                                theme.text_faint
+                            },
+                        ))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(if selected {
+                                            theme.accent
+                                        } else {
+                                            theme.text
+                                        })
+                                        .child(entry.label.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.text_faint)
+                                        .child(entry.detail.clone()),
+                                ),
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.quick_open = None;
+                            this.focus = FocusArea::Content;
+                            this.sidebar_activate(target.clone(), cx);
+                        })),
+                );
+            }
+        }
+        let panel = div()
+            .w(px(560.))
+            .max_h(px(420.))
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_2()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|_, _, _, cx| cx.stop_propagation()),
+            )
+            .child(
+                div()
+                    .px_1()
+                    .child(widgets::text_field(
+                        theme,
+                        &query,
+                        "Jump to a perspective, folder, project or tag…",
+                        true,
+                    )),
+            )
+            .child(list)
+            .child(
+                div()
+                    .px_1()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("↑↓ navigate · ↵ open · esc close"),
+            );
+        div()
+            .id("quick-open-layer")
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .occlude()
+            .bg(theme.bg.opacity(0.42))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.quick_open = None;
+                    cx.notify();
+                }),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .top(px(110.))
+                    .left_0()
+                    .right_0()
+                    .flex()
+                    .justify_center()
+                    .child(panel),
+            )
+            .into_any_element()
     }
 
     /// Switch views without notifying. Callers that already repaint use this
@@ -4390,6 +4751,25 @@ impl FlowlistApp {
             return;
         }
 
+        if self.quick_open.is_some() {
+            self.handle_quick_open_key(event, cx);
+            return;
+        }
+        if mods.platform && stroke.key == "o" && self.modal.is_none() {
+            if mods.shift {
+                self.open_modal(
+                    modals::Modal::Import {
+                        text: text::TextBuffer::empty(),
+                        merge: true,
+                    },
+                    cx,
+                );
+            } else {
+                self.open_quick_open(window, cx);
+            }
+            return;
+        }
+
         // The Carbon shortcut normally opens the floating panel before this
         // handler runs. Keeping the same chord here means the panel still opens
         // when global registration is unavailable.
@@ -6540,6 +6920,12 @@ impl FlowlistApp {
         state["sidebar_counts"] = serde_json::json!(self.sidebar_count_boxes.borrow().clone());
         state["sidebar_count_values"] =
             serde_json::json!(self.sidebar_count_values.borrow().clone());
+        state["quick_open"] = serde_json::json!(self.quick_open.as_ref().map(|state| {
+            serde_json::json!({
+                "query": state.query.text(),
+                "cursor": state.cursor,
+            })
+        }));
         state["sidebar_visible"] = serde_json::json!(
             self.sidebar_targets()
                 .iter()
@@ -7436,6 +7822,9 @@ impl Render for FlowlistApp {
         }
         if self.modal.is_some() {
             root = root.child(self.render_modal(window, cx));
+        }
+        if self.quick_open.is_some() {
+            root = root.child(self.render_quick_open(cx));
         }
         if let Some(layer) = self.render_view_menu_layer(cx) {
             root = root.child(layer);

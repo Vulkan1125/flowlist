@@ -26,6 +26,10 @@ reach them without the mouse.
 
 ### Quick capture panel
 
+`⌘O` opens Quick Open, a keyboard-first navigation palette for perspectives,
+folders, projects, tags and priorities. It is also the fastest route for a
+keyboard user to reach an entity without walking the sidebar.
+
 `⌃⌥Space` opens the floating capture panel from any app; the same chord closes
 it again without filing. The title field has keyboard focus as soon as the
 panel opens, and `Esc` always closes it without filing. Inside the panel:

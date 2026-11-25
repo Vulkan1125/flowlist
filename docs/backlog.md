@@ -13,8 +13,11 @@ landed and verified.
 
 ## Roadmap
 
-The four phases are worked in order. Detail for each item lives in the sections
-below; this list is the current map.
+The phases are worked in order. Detail for each item lives in the sections
+below; this list is the current map. Platform/ecosystem gaps (cloud sync, web,
+Watch/Vision, widgets, Siri/Shortcuts/Spotlight, AppleScript/Omni Automation,
+multiple windows, localisation, VoiceOver and alternate icon artwork) are
+intentionally outside Phase 5.
 
 ### Phase 1 — Friction fixes
 
@@ -78,6 +81,50 @@ below; this list is the current map.
       the glass edges, verified live in every theme. Hover-only row actions,
       one illustrated empty state, prose counts, 120 ms overlay fades,
       miniature-window theme swatches and a quieter status bar.
+
+### Phase 5 — OmniFocus parity (non-platform)
+
+Gap audit against OmniFocus 4.10.1 (November 2026). Platform/ecosystem
+integrations are tracked separately and are not part of this phase.
+
+- [x] **Quick Open** — `⌘O` opens one navigation palette for perspectives,
+      folders, projects, tags and priorities. `↑`/`↓` move, `Return` opens,
+      `Esc` closes, and typing filters without opening a second search UI.
+- [ ] **Planned dates** — add a third date field beside Due and Defer, with
+      Inspector, quick capture, Forecast, filters, sorting/grouping, CLI and
+      MCP support. Planned dates do not change availability.
+- [ ] **Full notification model** — defer/available alerts, per-item custom
+      notification schedules, and richer notification payloads beyond due
+      reminders and full-screen reminders.
+- [ ] **Batch editing** — select several tasks and edit tags, project, dates,
+      priority, flag and estimate together in the inspector as one undo step.
+- [ ] **Focus mode** — temporarily scope every perspective to one folder or
+      project, with an obvious way to clear focus.
+- [ ] **Forecast tag and extra Forecast contents** — a designated tag that
+      enters Forecast without a date, plus flagged items, on-hold projects and
+      custom notification dates.
+- [ ] **Calendar events in Forecast** — read upcoming events from macOS
+      Calendar and interleave them with due, planned and deferred tasks.
+- [ ] **Nested perspective rules** — an All / Any / None rule builder with
+      nesting, date-range rules, tag/project-status rules, and comments.
+- [ ] **Project-level custom perspectives** — an “Entire Projects” structure
+      that lists and groups projects instead of individual actions.
+- [ ] **Perspective favourites and navigation** — favourites bar, reorder,
+      custom icons/colours, copy-as-link and a per-perspective shortcut.
+- [ ] **Configurable row layout** — per-perspective density, columns and
+      visible fields, without fragmenting the shared visual language.
+- [ ] **Rich-text notes** — bold, italics, lists, links and inline images
+      alongside the existing plain-text fallback.
+- [ ] **Advanced repeat schedules** — multiple weekdays, nth weekday of a
+      month, last weekend day and other calendar-pattern repeats.
+- [ ] **Capture integrations** — Mail Drop, Mac clippings, Mac share, and
+      OmniOutliner or plain-text outline paste with hierarchy preserved.
+- [ ] **Nearby map** — map view alongside the distance-sorted list.
+- [ ] **Review calendar** — a calendar of upcoming review dates beside the
+      review list.
+- [ ] **Archive and resolved-item cleanup** — a true compacted archive
+      database, a clean-up policy for completed rows, and warnings before
+      deleting containers that hide completed children.
 
 ## Interaction polish
 
