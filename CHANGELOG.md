@@ -3,8 +3,10 @@
 ## Unreleased
 
 - **Quick Open.** `⌘O` opens a keyboard-first palette for perspectives,
-  folders, projects, tags and priorities. Type to filter, use the arrows to
-  move and Return to open. Import moves to `⇧⌘O`.
+  folders, projects, tags and priorities. It starts empty, lists matches as you
+  type, scrolls its results inside the panel instead of growing past the frame,
+  and keeps the highlighted row in view. Use the arrows to move and Return to
+  open. Import moves to `⇧⌘O`.
 - **No Full-screen sidebar row.** The Full-screen list is no longer offered as a
   perspective; it remains a temporary destination for a reminder's **View all**
   action.

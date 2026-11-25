@@ -195,7 +195,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       chrome.
 - [x] Content list with grouped rows, progress indicators and inline status
 - [x] Quick Open (`⌘O`): one navigation palette for perspectives, folders,
-      projects, tags and priorities, with live filtering and keyboard selection
+      projects, tags and priorities, with live filtering, keyboard selection
+      and a scrolling result list that stays inside the panel
 - [x] Task capture with quick-entry syntax
 - [x] Multi-select, range select, keyboard navigation
 - [x] Complete/reopen, flag/unflag, delete, undo/redo and post-delete focus

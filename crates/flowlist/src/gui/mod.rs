@@ -575,6 +575,8 @@ pub struct FlowlistApp {
     sidebar_cursor: Option<sidebar::SidebarTarget>,
     /// The ⌘O navigation palette. `None` when it is closed.
     quick_open: Option<QuickOpenState>,
+    /// Keeps the highlighted Quick Open row inside the palette viewport.
+    quick_open_scroll: ScrollHandle,
     /// The sidebar row under the pointer, if any. Hover-only row actions
     /// render only for this row so an idle row spends no width on them.
     checklist_cursor: Option<usize>,
@@ -927,6 +929,7 @@ impl FlowlistApp {
             vim: vim::VimState::default(),
             sidebar_cursor: None,
             quick_open: None,
+            quick_open_scroll: ScrollHandle::new(),
             checklist_cursor: None,
             focus: FocusArea::Content,
             focus_handle,
@@ -1618,6 +1621,7 @@ impl FlowlistApp {
             query: text::TextBuffer::empty(),
             cursor: 0,
         });
+        self.quick_open_scroll.set_offset(point(px(0.), px(0.)));
         self.focus = FocusArea::Content;
         window.focus(&self.focus_handle);
         cx.notify();
@@ -1756,6 +1760,7 @@ impl FlowlistApp {
                 if let Some(state) = &mut self.quick_open {
                     state.cursor = state.cursor.saturating_sub(1);
                 }
+                self.reveal_quick_open_cursor();
                 cx.notify();
                 return;
             }
@@ -1766,6 +1771,7 @@ impl FlowlistApp {
                 {
                     state.cursor = (state.cursor + 1).min(count - 1);
                 }
+                self.reveal_quick_open_cursor();
                 cx.notify();
                 return;
             }
@@ -1803,11 +1809,23 @@ impl FlowlistApp {
                 handle_buffer_key(&mut state.query, stroke, paste.as_deref())
         {
             state.cursor = 0;
+            self.reveal_quick_open_cursor();
         }
         cx.notify();
     }
 
-    fn render_quick_open(&self, cx: &mut Context<Self>) -> AnyElement {
+    /// Scroll the palette just enough to show the highlighted row. Called from
+    /// key handling rather than render, so a mouse-wheel scroll is not undone
+    /// on the next frame.
+    fn reveal_quick_open_cursor(&self) {
+        if let Some(state) = &self.quick_open
+            && !self.quick_open_entries().is_empty()
+        {
+            self.quick_open_scroll.scroll_to_item(state.cursor);
+        }
+    }
+
+    fn render_quick_open(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
         let Some(state) = &self.quick_open else {
             return div().into_any_element();
@@ -1816,7 +1834,20 @@ impl FlowlistApp {
         let cursor = state.cursor.min(entries.len().saturating_sub(1));
         let query = state.query.clone();
         let typed = !state.query.text().trim().is_empty();
-        let mut list = div().flex().flex_col().gap_1();
+        // The palette hangs 110px from the top and never grows past the window,
+        // so a short display scrolls its results instead of bleeding them over
+        // the background.
+        let viewport_height = f32::from(window.viewport_size().height);
+        let panel_max_height = (viewport_height - 134.0).clamp(220.0, 420.0);
+        let list_max_height = (panel_max_height - 96.0).max(96.0);
+        let mut list = div()
+            .id("quick-open-scroll")
+            .flex()
+            .flex_col()
+            .gap_1()
+            .max_h(px(list_max_height))
+            .overflow_y_scroll()
+            .track_scroll(&self.quick_open_scroll);
         // Keep the panel quiet until the first keystroke.
         if typed && entries.is_empty() {
             list = list.child(
@@ -1890,7 +1921,7 @@ impl FlowlistApp {
         }
         let panel = div()
             .w(px(560.))
-            .max_h(px(420.))
+            .max_h(px(panel_max_height))
             .flex()
             .flex_col()
             .gap_2()
@@ -1900,6 +1931,7 @@ impl FlowlistApp {
             .border_color(theme.border)
             .bg(theme.raised)
             .shadow_lg()
+            .overflow_hidden()
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|_, _, _, cx| cx.stop_propagation()),
@@ -7826,7 +7858,7 @@ impl Render for FlowlistApp {
             root = root.child(self.render_modal(window, cx));
         }
         if self.quick_open.is_some() {
-            root = root.child(self.render_quick_open(cx));
+            root = root.child(self.render_quick_open(window, cx));
         }
         if let Some(layer) = self.render_view_menu_layer(cx) {
             root = root.child(layer);
