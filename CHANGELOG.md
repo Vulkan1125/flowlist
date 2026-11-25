@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.50 — 2026-11-25
 
 - **Clearer date warnings.** Refusals now stay inside the inspector or edit sheet
   instead of opening a separate error box. They read directly, for example
