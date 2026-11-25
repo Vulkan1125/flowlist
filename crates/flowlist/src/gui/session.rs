@@ -257,6 +257,9 @@ pub struct Session {
     /// Whether the Forecast calendar is showing at all.
     #[serde(default)]
     pub forecast_calendar_open: Option<bool>,
+    /// Whether Forecast lists items on their planned date. Absent means yes.
+    #[serde(default)]
+    pub forecast_planned: Option<bool>,
     /// Whether the open Forecast calendar is the full month grid rather than
     /// the week strip. Absent means expanded.
     #[serde(default)]

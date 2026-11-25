@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Delete confirmations.** Removing a project or tag from the sidebar now
+  opens a confirmation sheet instead of deleting immediately. Undo still
+  restores it.
+- **Forecast Planned chip.** Forecast can hide everything that is only there
+  because of a planned date, leaving due and deferred work. The choice is
+  remembered per session.
 - **Descriptions on saved views.** A saved view can carry a one-line
   description under its title, in the same place Today explains itself. An
   empty description falls back to “Saved perspective”.

@@ -1371,7 +1371,7 @@ fn tasks_on_date_uses_the_local_due_date() {
     later.defer = Some(Stamp::date_only(today + Duration::days(3)));
     let later_id = store.execute(Command::CreateTask(later)).unwrap().created[0].clone();
 
-    let ids: Vec<String> = query::tasks_on_date(store.db(), today, Utc::now())
+    let ids: Vec<String> = query::tasks_on_date(store.db(), today, Utc::now(), true)
         .into_iter()
         .map(|id| id.to_string())
         .collect();
@@ -2015,9 +2015,9 @@ fn forecast_keeps_each_date_type_independent() {
     assert!(!data.later.contains(&far_future));
     assert!(data.next_month.contains(&far_future));
 
-    let on_planned = query::tasks_on_date(store.db(), today, Utc::now());
+    let on_planned = query::tasks_on_date(store.db(), today, Utc::now(), true);
     assert!(on_planned.contains(&both));
-    let on_due = query::tasks_on_date(store.db(), today + Duration::days(5), Utc::now());
+    let on_due = query::tasks_on_date(store.db(), today + Duration::days(5), Utc::now(), true);
     assert!(on_due.contains(&both));
 }
 

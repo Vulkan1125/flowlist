@@ -183,7 +183,7 @@ record `perspective-icon-row`, `new-project-icon-toggle`,
 `project-icon-toggle`, `picker-tab-icons`, `picker-tab-emoji`,
 `picker-icon:<slug>` and `picker-emoji:<glyph>` in `theme_boxes`.
 `sidebar_menu_boxes` maps the open context menu's item ids (for example
-`menu-edit-project`) to their boxes. `forecast_calendar_open`,
+`menu-edit-project`) to their boxes. `forecast_planned` is the Forecast header's Planned chip. `forecast_calendar_open`,
 `forecast_calendar`, `forecast_calendar_height`, `forecast_days`,
 `forecast_chips`, `forecast_toggle_anchor` and `forecast_grip_anchor` describe
 the Forecast month grid: whether it is folded, the block and grip boxes, the

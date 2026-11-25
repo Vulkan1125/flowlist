@@ -382,6 +382,8 @@ pub struct FlowlistApp {
     forecast_date: Option<chrono::NaiveDate>,
     /// Whether any Forecast calendar is showing.
     forecast_calendar_open: bool,
+    /// Whether Forecast lists items on their planned date.
+    forecast_planned: bool,
     /// Whether the open calendar is the full month grid; otherwise it is the
     /// compact week strip.
     forecast_calendar_expanded: bool,
@@ -829,6 +831,7 @@ impl FlowlistApp {
         let forecast_month =
             chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
         let forecast_calendar_open = session.forecast_calendar_open.unwrap_or(true);
+        let forecast_planned = session.forecast_planned.unwrap_or(true);
         let forecast_calendar_expanded = session.forecast_calendar_expanded.unwrap_or(true);
         let forecast_calendar_height = session.forecast_calendar_height;
 
@@ -845,6 +848,7 @@ impl FlowlistApp {
             },
             forecast_date: None,
             forecast_calendar_open,
+            forecast_planned,
             forecast_calendar_expanded,
             forecast_calendar_height,
             forecast_height_dirty: false,
@@ -1364,6 +1368,7 @@ impl FlowlistApp {
             follow_system: Some(self.follow_system),
             traffic_lights: Some(self.traffic_lights_visible),
             forecast_calendar_open: Some(self.forecast_calendar_open),
+            forecast_planned: Some(self.forecast_planned),
             forecast_calendar_expanded: Some(self.forecast_calendar_expanded),
             forecast_calendar_height: self.forecast_calendar_height,
             view_options: {
@@ -1444,7 +1449,7 @@ impl FlowlistApp {
                 if self.forecast_calendar_open && self.forecast_date.is_some() =>
             {
                 let date = self.forecast_date.expect("guard checked");
-                let ids = query::tasks_on_date(db, date, at);
+                let ids = query::tasks_on_date(db, date, at, self.forecast_planned);
                 let title = query::forecast::day_label(date, local_date(at));
                 vec![Group {
                     key: format!("forecast-day:{date}"),
@@ -1454,6 +1459,9 @@ impl FlowlistApp {
                 }]
             }
             View::Builtin(BuiltinPerspective::Today) => query::today(db, !self.hide_past, at),
+            View::Builtin(BuiltinPerspective::Forecast) => {
+                query::forecast_view(db, at, self.forecast_planned)
+            }
             View::Builtin(perspective) => query::view(db, *perspective, at),
             View::Priority(priority) => query::priority(db, *priority, at),
             View::Project(id) => self.project_groups(id),
@@ -7049,6 +7057,7 @@ impl FlowlistApp {
         state["hide_past"] = serde_json::json!(self.hide_past);
         state["hide_past_anchor"] = serde_json::json!(anchor(self.hide_past_anchor.get()));
         state["forecast_calendar_open"] = serde_json::json!(self.forecast_calendar_open);
+        state["forecast_planned"] = serde_json::json!(self.forecast_planned);
         state["forecast_calendar_expanded"] = serde_json::json!(self.forecast_calendar_expanded);
         state["forecast_week"] = serde_json::json!(self.forecast_week.to_string());
         state["forecast_strip"] = serde_json::json!(self.forecast_strip_boxes.borrow().clone());

@@ -179,7 +179,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
             }
             groups
         }
-        BuiltinPerspective::Forecast => forecast_groups(db, at),
+        BuiltinPerspective::Forecast => forecast_groups(db, at, true),
         BuiltinPerspective::Flagged => run(
             db,
             &FilterNode::condition(Condition::Flagged { value: true }),
@@ -437,7 +437,12 @@ pub fn priority(db: &Db, priority: crate::model::Priority, at: DateTime<Utc>) ->
 
 /// Tasks due, planned or deferred on a specific local date. Used when a
 /// Forecast calendar date is clicked.
-pub fn tasks_on_date(db: &Db, date: chrono::NaiveDate, _at: DateTime<Utc>) -> Vec<TaskId> {
+pub fn tasks_on_date(
+    db: &Db,
+    date: chrono::NaiveDate,
+    _at: DateTime<Utc>,
+    include_planned: bool,
+) -> Vec<TaskId> {
     let mut ids: Vec<TaskId> = manual_order(db)
         .into_iter()
         .filter(|id| {
@@ -454,7 +459,10 @@ pub fn tasks_on_date(db: &Db, date: chrono::NaiveDate, _at: DateTime<Utc>) -> Ve
                 }
             }
             task.due.is_some_and(|stamp| stamp.local_date() == date)
-                || task.planned.is_some_and(|stamp| stamp.local_date() == date)
+                || (include_planned
+                    && task
+                        .planned
+                        .is_some_and(|stamp| stamp.local_date() == date))
                 || task.defer.is_some_and(|stamp| stamp.local_date() == date)
         })
         .collect();
@@ -468,7 +476,13 @@ pub fn tasks_on_date(db: &Db, date: chrono::NaiveDate, _at: DateTime<Utc>) -> Ve
     ids
 }
 
-fn forecast_groups(db: &Db, at: DateTime<Utc>) -> Vec<Group> {
+/// The Forecast list. `show_planned` mirrors the Forecast header's Planned
+/// toggle; the calendar and day lists use the same flag.
+pub fn forecast_view(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group> {
+    forecast_groups(db, at, show_planned)
+}
+
+fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group> {
     let data = forecast::forecast(db, at);
     let today = crate::time::local_date(at);
     let mut groups = Vec::new();
@@ -485,26 +499,32 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>) -> Vec<Group> {
     };
 
     let mut past = data.overdue.clone();
-    past.extend(data.past_planned.iter().cloned());
-    dedupe(&mut past);
+    if show_planned {
+        past.extend(data.past_planned.iter().cloned());
+        dedupe(&mut past);
+    }
     push("forecast:past", "Past", -4, &past);
     let mut deferred_today = data.deferred_today.clone();
     deferred_today.retain(|id| !data.today.contains(id));
     push("forecast:deferred", "Deferred Today", -3, &deferred_today);
     push("forecast:today", "Today", -2, &data.today);
-    let mut planned_today = data.planned_today.clone();
-    planned_today.retain(|id| !data.today.contains(id) && !deferred_today.contains(id));
-    push(
-        "forecast:planned-today",
-        "Planned Today",
-        -1,
-        &planned_today,
-    );
+    if show_planned {
+        let mut planned_today = data.planned_today.clone();
+        planned_today.retain(|id| !data.today.contains(id) && !deferred_today.contains(id));
+        push(
+            "forecast:planned-today",
+            "Planned Today",
+            -1,
+            &planned_today,
+        );
+    }
     push("forecast:tomorrow", "Tomorrow", 0, &data.tomorrow);
     for (date, day) in &data.days {
         let mut ids = day.due.clone();
         ids.extend(day.deferred.iter().cloned());
-        ids.extend(day.planned.iter().cloned());
+        if show_planned {
+            ids.extend(day.planned.iter().cloned());
+        }
         dedupe(&mut ids);
         let position = (*date - today).num_days();
         let title = forecast::day_label(*date, today);
@@ -515,12 +535,30 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>) -> Vec<Group> {
             &ids,
         );
     }
-    push("forecast:later", "Later", i64::MAX - 1, &data.later);
+    let later: Vec<TaskId> = if show_planned {
+        data.later.clone()
+    } else {
+        data.later
+            .iter()
+            .filter(|id| db.tasks[*id].due.is_some())
+            .cloned()
+            .collect()
+    };
+    push("forecast:later", "Later", i64::MAX - 1, &later);
+    let next_month: Vec<TaskId> = if show_planned {
+        data.next_month.clone()
+    } else {
+        data.next_month
+            .iter()
+            .filter(|id| db.tasks[*id].due.is_some())
+            .cloned()
+            .collect()
+    };
     push(
         "forecast:next-month",
         "Next month and later",
         i64::MAX,
-        &data.next_month,
+        &next_month,
     );
     groups.sort_by(|a, b| a.position.cmp(&b.position));
     groups

@@ -131,14 +131,14 @@ impl FlowlistApp {
                     _ => continue,
                 }
             }
-            for date in [
+            let mut dates = vec![
                 task.due.map(|stamp| stamp.local_date()),
-                task.planned.map(|stamp| stamp.local_date()),
                 task.defer.map(|stamp| stamp.local_date()),
-            ]
-            .into_iter()
-            .flatten()
-            {
+            ];
+            if self.forecast_planned {
+                dates.push(task.planned.map(|stamp| stamp.local_date()));
+            }
+            for date in dates.into_iter().flatten() {
                 let ids = days.entry(date).or_default();
                 if !ids.contains(id) {
                     ids.push(id.clone());
@@ -1033,7 +1033,32 @@ impl FlowlistApp {
                                                 if let Some(bounds) = bounds.first() {
                                                     anchor.set(Some(*bounds));
                                                 }
-                                            }),
+                                            })
+                                            .child(
+                                                div()
+                                                    .on_children_prepainted(self.theme_probe(
+                                                        "forecast-planned-toggle".to_string(),
+                                                    ))
+                                                    .id("forecast-planned-toggle")
+                                                    .flex_shrink_0()
+                                                    .flow_tip(
+                                                        self,
+                                                        cx,
+                                                        theme,
+                                                        "Show or hide items on their planned date",
+                                                    )
+                                                    .child(widgets::toggle_chip(
+                                                        theme,
+                                                        "Planned",
+                                                        self.forecast_planned,
+                                                    ))
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.forecast_planned =
+                                                            !this.forecast_planned;
+                                                        this.save_session();
+                                                        cx.notify();
+                                                    })),
+                                            ),
                                     )
                                 },
                             )

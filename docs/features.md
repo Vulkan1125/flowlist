@@ -56,7 +56,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Projects
 - [x] Forecast (Past / overdue / today / tomorrow / later / next month and
       later; Due, Defer and Planned are independent, so one task can appear on
-      several days. The far horizon starts folded)
+      several days. The far horizon starts folded, and a Planned chip hides
+      planned-only rows)
 - [x] Flagged
 - [x] Review
 - [x] Tags
@@ -324,7 +325,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Tag locations from the sidebar (`⌖`) or `⇧L`, with validation and clear
 - [x] Nearby ranks tasks by the distance between the library and tag locations
 - [x] Delete folder/tag/perspective/project from the sidebar (`⌘⌫` or `dd`);
-      deleting a project moves its tasks to Trash and is undoable
+      projects and tags ask first, deleting a project moves its tasks to Trash,
+      and every delete is undoable
 - [x] Edit project from the sidebar context menu (name, notes, review cadence,
       type, icon) and edit a folder's name without leaving the rail
 - [x] Deleting a folder asks first: nested folders, their projects and every
