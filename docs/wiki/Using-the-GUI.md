@@ -196,15 +196,16 @@ titles itself **Search** and ranks the closest matches first.
 - **Saved perspectives** share one editor with the phone: text, Inbox only,
   Flagged only, Status, Projects, Tags with child tags, Priorities, Due,
   Planned and Defer windows (including **Later / none**), full-screen reminder
-  marks (yes or no, including inherited marks), an estimate range, grouping and
-  sorting, completed tasks, **Pinned** and **Icon**. Pinned views sort to the
-  top of SAVED; pin or unpin from the editor or the row's context menu
-  (`perspective add --pinned` for the CLI). Each pinned view keeps the pin mark
-  by default, or takes a custom rail icon from the editor's icon grid
-  (`perspective add --icon` for the CLI); a shipped **Running** view lists
-  started work that is not due yet. It can be edited or deleted like any other
-  saved view. Folding SAVED hides every saved view,
-  pinned or not.
+  marks (yes or no, including inherited marks), an estimate range, grouping,
+  sorting, completed tasks, **Icon** and **Description**. Pinned views sort to
+  the top of SAVED; pin or unpin from the row's context menu
+  (`perspective add --pinned` for the CLI). The description appears under the
+  view title; leave it empty and the view says “Saved perspective”.
+  `perspective add --description` sets it from the CLI. Each view can take a
+  named icon or emoji from a searchable card with **Icons** and **Emoji** tabs
+  (`perspective add --icon`, including `--icon 🏃`). A shipped **Running** view
+  lists started work that is not due yet. It can be edited or deleted like any
+  other saved view. Folding SAVED hides every saved view, pinned or not.
   Both platforms offer project/folder/tag/due/defer/flagged/estimate
   grouping and manual/due/defer/name/priority/flagged/estimate/created
   sorting; the Mac editor also offers Planned grouping, sorting and a Planned
