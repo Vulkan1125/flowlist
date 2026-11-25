@@ -24,6 +24,7 @@ pub enum DueChoice {
     Tomorrow,
     Next7Days,
     Next30Days,
+    Later,
     NoDate,
 }
 
@@ -36,6 +37,7 @@ impl DueChoice {
             DueChoice::Tomorrow => "Tomorrow",
             DueChoice::Next7Days => "Next 7 days",
             DueChoice::Next30Days => "Next 30 days",
+            DueChoice::Later => "Later / none",
             DueChoice::NoDate => "No date",
         }
     }
@@ -48,6 +50,7 @@ impl DueChoice {
             DueChoice::Tomorrow => Some(DueWindow::Tomorrow),
             DueChoice::Next7Days => Some(DueWindow::Next7Days),
             DueChoice::Next30Days => Some(DueWindow::Next30Days),
+            DueChoice::Later => Some(DueWindow::Later),
             DueChoice::NoDate => Some(DueWindow::NoDate),
         }
     }
@@ -59,6 +62,7 @@ impl DueChoice {
             DueWindow::Tomorrow => Some(DueChoice::Tomorrow),
             DueWindow::Next7Days => Some(DueChoice::Next7Days),
             DueWindow::Next30Days => Some(DueChoice::Next30Days),
+            DueWindow::Later => Some(DueChoice::Later),
             DueWindow::NoDate => Some(DueChoice::NoDate),
             _ => None,
         }
@@ -198,6 +202,7 @@ impl ViewChoice {
                 DueChoice::Tomorrow => "tomorrow",
                 DueChoice::Next7Days => "next7",
                 DueChoice::Next30Days => "next30",
+                DueChoice::Later => "later",
                 DueChoice::NoDate => "none",
             }
             .to_string(),
@@ -211,6 +216,7 @@ impl ViewChoice {
                 DueChoice::Tomorrow => "tomorrow",
                 DueChoice::Next7Days => "next7",
                 DueChoice::Next30Days => "next30",
+                DueChoice::Later => "later",
                 DueChoice::NoDate => "none",
             }
             .to_string(),
@@ -308,6 +314,7 @@ pub struct PerspectiveForm {
     pub name: TextBuffer,
     pub text: TextBuffer,
     pub position: u32,
+    pub pinned: bool,
     pub group: GroupBy,
     pub sort: SortBy,
     pub show_completed: bool,
@@ -337,6 +344,7 @@ impl Default for PerspectiveForm {
             name: TextBuffer::empty(),
             text: TextBuffer::empty(),
             position: 0,
+            pinned: false,
             group: GroupBy::Project,
             sort: SortBy::Due,
             show_completed: false,
@@ -369,6 +377,7 @@ impl PerspectiveForm {
             id: Some(perspective.id.clone()),
             name: TextBuffer::new(perspective.name.clone()),
             position: perspective.position,
+            pinned: perspective.pinned,
             group: perspective.group_by,
             sort: perspective.sort,
             show_completed: perspective.show_completed,
@@ -594,6 +603,7 @@ impl PerspectiveForm {
             perspective.id = id.clone();
         }
         perspective.position = self.position;
+        perspective.pinned = self.pinned;
         perspective.group_by = self.group;
         perspective.sort = self.sort;
         perspective.show_completed = self.show_completed;
@@ -952,5 +962,15 @@ mod tests {
         ));
         let rebuilt = PerspectiveForm::edit(&perspective);
         assert!(rebuilt.planned.contains(&DueChoice::Today));
+    }
+
+    #[test]
+    fn editing_a_pinned_view_keeps_it_pinned() {
+        let mut original = Perspective::new("Running");
+        original.pinned = true;
+
+        let form = PerspectiveForm::edit(&original);
+        assert!(form.pinned);
+        assert!(form.to_perspective().pinned);
     }
 }

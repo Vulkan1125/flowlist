@@ -40,6 +40,11 @@ pub struct Settings {
     /// Which sidebar sections appear, and where counts are shown.
     #[serde(default)]
     pub sidebar: SidebarOptions,
+    /// Whether the shipped Running saved view has been offered to this
+    /// library. Once true it stays true, so renaming or deleting the view is
+    /// permanent.
+    #[serde(default)]
+    pub seeded_running_view: bool,
 }
 
 /// Sidebar presentation, kept in the library so every client agrees on what
@@ -182,6 +187,7 @@ impl Default for Settings {
             nearby_radius_km: default_nearby_radius(),
             trash_retention_days: default_trash_days(),
             sidebar: SidebarOptions::default(),
+            seeded_running_view: false,
         }
     }
 }

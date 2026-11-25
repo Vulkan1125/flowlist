@@ -635,6 +635,9 @@ pub struct PerspectiveAddArgs {
     pub sort: Option<String>,
     #[arg(long)]
     pub show_completed: bool,
+    /// Keep this view above the saved views.
+    #[arg(long)]
+    pub pinned: bool,
 }
 
 #[derive(Args, Debug, Clone, Default)]
@@ -2249,6 +2252,7 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
                 perspective.sort = parse_sort(&sort)?;
             }
             perspective.show_completed = args.show_completed;
+            perspective.pinned = args.pinned;
             let outcome = store.execute(CoreCommand::SavePerspective {
                 perspective: perspective.clone(),
             })?;
@@ -2296,6 +2300,7 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
                                 "group_by": format!("{:?}", perspective.group_by),
                                 "sort": format!("{:?}", perspective.sort),
                                 "show_completed": perspective.show_completed,
+                                "pinned": perspective.pinned,
                             }))
                             .collect::<Vec<_>>()
                     ))?
@@ -2305,9 +2310,10 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
             } else {
                 for perspective in perspectives {
                     println!(
-                        "{}  {}",
+                        "{}  {}{}",
                         paint.cyan(perspective.id.short()),
-                        perspective.name
+                        perspective.name,
+                        if perspective.pinned { "  (pinned)" } else { "" }
                     );
                 }
             }

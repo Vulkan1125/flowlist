@@ -97,6 +97,12 @@ integrations are tracked separately and are not part of this phase.
       editor, Planned sorting and grouping, CLI `--planned`, MCP
       `planned` / `planned_at`, Android display, and distinct OmniFocus-style
       marks for Defer, Planned and Due.
+- [x] **Past plans and Running** — a planned date that slips stays in
+      Forecast's Past section and in Today's Past plans group; one Hide past
+      chip folds both carried-over groups. Forecast treats Due, Defer and
+      Planned independently, calendar clicks include planned days, and saved
+      views can be pinned. A shipped, pinned **Running** view lists started work
+      that is not due yet and can be edited or deleted.
 - [ ] **Full notification model** — defer/available alerts, per-item custom
       notification schedules, and richer notification payloads beyond due
       reminders and full-screen reminders.

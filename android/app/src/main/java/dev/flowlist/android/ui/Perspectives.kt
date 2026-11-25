@@ -974,6 +974,7 @@ private fun windowMatches(date: LocalDate?, window: String?, today: LocalDate): 
         "tomorrow" -> date == today.plusDays(1)
         "next_7_days" -> date != null && !date.isBefore(today) && !date.isAfter(today.plusDays(7))
         "next_30_days" -> date != null && !date.isBefore(today) && !date.isAfter(today.plusDays(30))
+        "later" -> date == null || date.isAfter(today)
         "no_date" -> date == null
         else -> true
     }

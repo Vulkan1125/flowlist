@@ -1918,6 +1918,16 @@ impl FlowlistApp {
                 )),
             )
             .child(
+                toggle("Pinned", form.pinned, "modal-pinned")
+                    .flow_tip(self, cx, theme, "Keep this view above the saved views")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.pinned = !form.pinned;
+                        }
+                        cx.notify();
+                    })),
+            )
+            .child(
                 toggle("Completed", form.show_completed, "modal-completed")
                     .flow_tip(self, cx, theme, "Include completed tasks")
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -2264,6 +2274,7 @@ impl FlowlistApp {
                 super::perspective::DueChoice::Tomorrow,
                 super::perspective::DueChoice::Next7Days,
                 super::perspective::DueChoice::Next30Days,
+                super::perspective::DueChoice::Later,
                 super::perspective::DueChoice::NoDate,
             ]
             .into_iter()
@@ -2276,6 +2287,7 @@ impl FlowlistApp {
                 super::perspective::DueChoice::Tomorrow,
                 super::perspective::DueChoice::Next7Days,
                 super::perspective::DueChoice::Next30Days,
+                super::perspective::DueChoice::Later,
                 super::perspective::DueChoice::NoDate,
             ]
             .into_iter()

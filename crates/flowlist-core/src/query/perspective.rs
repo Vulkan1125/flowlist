@@ -115,6 +115,7 @@ fn window_matches(stamp: Option<Stamp>, window: DueWindow, at: DateTime<Utc>) ->
         DueWindow::Next30Days => {
             date.is_some_and(|date| date >= today && date <= today + Duration::days(30))
         }
+        DueWindow::Later => date.map_or(true, |date| date > today),
         DueWindow::NoDate => date.is_none(),
         DueWindow::On(target) => date == Some(target),
         DueWindow::Before(target) => date.is_some_and(|date| date < target),
@@ -130,6 +131,7 @@ pub fn window_from_keyword(value: &str, today: NaiveDate) -> Option<DueWindow> {
         "tomorrow" => Some(DueWindow::Tomorrow),
         "next7" | "next-7" | "week" => Some(DueWindow::Next7Days),
         "next30" | "next-30" | "month" => Some(DueWindow::Next30Days),
+        "later" | "not-yet" | "future" => Some(DueWindow::Later),
         "none" | "nodate" | "no-date" => Some(DueWindow::NoDate),
         "before" => Some(DueWindow::Before(today)),
         "after" => Some(DueWindow::After(today)),

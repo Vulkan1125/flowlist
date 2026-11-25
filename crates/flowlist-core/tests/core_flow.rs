@@ -1925,6 +1925,97 @@ fn today_gathers_overdue_and_the_current_day() {
 }
 
 #[test]
+fn today_keeps_slipped_plans_separate_from_planned_today() {
+    use chrono::Duration;
+    use flowlist_core::query;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let today = local_date(Utc::now());
+    let day = |offset: i64| Stamp::date_only(today + Duration::days(offset));
+    let make = |store: &mut Store, title: &str, planned: Option<Stamp>, due: Option<Stamp>| {
+        let mut task = NewTask::new(title);
+        task.planned = planned;
+        task.due = due;
+        let id = store
+            .execute(Command::CreateTask(task))
+            .unwrap()
+            .created[0]
+            .clone();
+        store.db().resolve_task(&id).unwrap()
+    };
+
+    let slipped = make(&mut store, "Slipped plan", Some(day(-2)), None);
+    let planned_today = make(&mut store, "Plan today", Some(day(0)), Some(day(5)));
+    let overdue = make(
+        &mut store,
+        "Overdue and planned",
+        Some(day(-1)),
+        Some(day(-1)),
+    );
+
+    let groups = query::today(store.db(), true, Utc::now());
+    let titles: Vec<&str> = groups.iter().map(|group| group.title.as_str()).collect();
+    assert_eq!(titles, ["Past plans", "Overdue", "Today"]);
+    let past: Vec<TaskId> = groups[0].rows.iter().map(|row| row.id.clone()).collect();
+    assert_eq!(past, [slipped]);
+    let today_ids: Vec<TaskId> = groups[2].rows.iter().map(|row| row.id.clone()).collect();
+    assert!(today_ids.contains(&planned_today));
+    assert!(!today_ids.contains(&overdue));
+
+    // One chip hides both carried-over groups.
+    let hidden = query::today(store.db(), false, Utc::now());
+    assert_eq!(hidden.len(), 1);
+    assert_eq!(hidden[0].title, "Today");
+}
+
+#[test]
+fn forecast_keeps_each_date_type_independent() {
+    use chrono::Duration;
+    use flowlist_core::query;
+    use flowlist_core::query::forecast;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let today = local_date(Utc::now());
+    let day = |offset: i64| Stamp::date_only(today + Duration::days(offset));
+    let make = |store: &mut Store, title: &str, planned: Option<Stamp>, due: Option<Stamp>| {
+        let mut task = NewTask::new(title);
+        task.planned = planned;
+        task.due = due;
+        let id = store
+            .execute(Command::CreateTask(task))
+            .unwrap()
+            .created[0]
+            .clone();
+        store.db().resolve_task(&id).unwrap()
+    };
+
+    let both = make(
+        &mut store,
+        "Planned today, due later",
+        Some(day(0)),
+        Some(day(5)),
+    );
+    let slipped = make(&mut store, "Slipped plan", Some(day(-1)), None);
+    let future = make(&mut store, "Far plan", Some(day(9)), None);
+
+    let data = forecast::forecast(store.db(), Utc::now());
+    assert!(data.planned_today.contains(&both));
+    assert!(data
+        .days
+        .get(&(today + Duration::days(5)))
+        .is_some_and(|day| day.due.contains(&both)));
+    assert!(data.past_planned.contains(&slipped));
+    assert!(data.later.contains(&future));
+
+    let on_planned = query::tasks_on_date(store.db(), today, Utc::now());
+    assert!(on_planned.contains(&both));
+    let on_due = query::tasks_on_date(store.db(), today + Duration::days(5), Utc::now());
+    assert!(on_due.contains(&both));
+}
+
+#[test]
 fn attachment_links_sit_alongside_file_paths() {
     use flowlist_core::model::BuiltinPerspective;
     use flowlist_core::model::attachment;

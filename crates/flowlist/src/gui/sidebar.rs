@@ -5,6 +5,7 @@ use gpui::{
     AnyElement, Context, DragMoveEvent, IntoElement, MouseButton, Window, div, prelude::*, px,
 };
 
+use flowlist_core::db::Db;
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId};
 use flowlist_core::model::{
     BuiltinPerspective, Perspective, Priority, ProjectStatus, SidebarOptions,
@@ -243,8 +244,15 @@ impl FlowlistApp {
                 }
             }
         }
+        let saved = ordered_perspectives(db);
+        for perspective in saved.iter().filter(|perspective| perspective.pinned) {
+            let target = SidebarTarget::Custom(perspective.id.clone());
+            if !options.is_hidden(&target.key()) {
+                out.push(target);
+            }
+        }
         if self.is_open("section:saved", true) {
-            for perspective in db.perspectives.values() {
+            for perspective in saved.iter().filter(|perspective| !perspective.pinned) {
                 let target = SidebarTarget::Custom(perspective.id.clone());
                 if options.is_hidden(&target.key()) {
                     continue;
@@ -647,6 +655,39 @@ impl FlowlistApp {
                         }
                     },
                 ));
+                let pin_id = id.clone();
+                let pinned = db
+                    .perspectives
+                    .get(&id)
+                    .is_some_and(|perspective| perspective.pinned);
+                items.push(self.sidebar_menu_item(
+                    "menu-pin-view".to_string(),
+                    if pinned {
+                        "Unpin from top"
+                    } else {
+                        "Pin to top"
+                    },
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        let Some(mut perspective) =
+                            this.store.db().perspectives.get(&pin_id).cloned()
+                        else {
+                            return;
+                        };
+                        perspective.pinned = !perspective.pinned;
+                        if this
+                            .store
+                            .execute(flowlist_core::command::Command::SavePerspective {
+                                perspective,
+                            })
+                            .is_ok()
+                        {
+                            cx.notify();
+                        }
+                    },
+                ));
                 items.push(self.sidebar_menu_divider());
                 items.push(self.sidebar_menu_item(
                     "menu-delete-view".to_string(),
@@ -1003,20 +1044,37 @@ impl FlowlistApp {
                 this.drop_folder_on_library(payload, cx)
             }));
 
-        let custom: Vec<PerspectiveRow> = self
-            .store
-            .db()
-            .perspectives
-            .values()
+        let saved = ordered_perspectives(self.store.db());
+        let hidden = |perspective: &&Perspective| {
+            options.is_hidden(&format!("custom:{}", perspective.id))
+        };
+        let pinned: Vec<PerspectiveRow> = saved
+            .iter()
+            .filter(|perspective| perspective.pinned)
+            .filter(|perspective| !hidden(perspective))
+            .map(|perspective| PerspectiveRow {
+                id: perspective.id.clone(),
+                name: perspective.name.clone(),
+                pinned: true,
+            })
+            .collect();
+        let custom: Vec<PerspectiveRow> = saved
+            .iter()
+            .filter(|perspective| !perspective.pinned)
+            .filter(|perspective| !hidden(perspective))
             .filter(|perspective| {
-                !options.is_hidden(&format!("custom:{}", perspective.id))
-                    && (!self.hide_empty_views || self.perspective_has_tasks(perspective))
+                !self.hide_empty_views || self.perspective_has_tasks(perspective)
             })
             .map(|perspective| PerspectiveRow {
                 id: perspective.id.clone(),
                 name: perspective.name.clone(),
+                pinned: false,
             })
             .collect();
+        // Pinned rows stay visible even when SAVED is collapsed or empty.
+        for row in pinned {
+            lower = lower.child(self.custom_perspective_row(row, cx));
+        }
         if !custom.is_empty() {
             lower = lower.child(self.sidebar_section("saved", "SAVED", cx));
             if self.is_open("section:saved", true) {
@@ -1424,6 +1482,7 @@ impl FlowlistApp {
             .sidebar
             .is_count_hidden(&count_key);
         let id = row.id.clone();
+        let pinned = row.pinned;
         let target_id = row.id.clone();
         let cursor = self.sidebar_cursor_is(&SidebarTarget::Custom(target_id.clone()));
         let row_boxes = self.sidebar_row_boxes.clone();
@@ -1451,6 +1510,9 @@ impl FlowlistApp {
                     .child(icons::icon(Icon::Perspective, 14.0, icon_color)),
             )
             .child(self.row_name(row.name))
+            .when(pinned, |this| {
+                this.child(icons::icon(Icon::Pin, 11.0, theme.text_faint))
+            })
             .when(show_count && count > 0, |this| {
                 this.child(self.count_box(
                     count_key,
@@ -2041,9 +2103,22 @@ fn tag_group_label(label: &'static str, theme: super::theme::Theme) -> gpui::Div
         .child(label)
 }
 
+/// Saved views in rail order: pinned first, then creation order, then name.
+fn ordered_perspectives(db: &Db) -> Vec<Perspective> {
+    let mut views: Vec<Perspective> = db.perspectives.values().cloned().collect();
+    views.sort_by(|a, b| {
+        b.pinned
+            .cmp(&a.pinned)
+            .then(a.position.cmp(&b.position))
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    views
+}
+
 struct PerspectiveRow {
     id: flowlist_core::ids::PerspectiveId,
     name: String,
+    pinned: bool,
 }
 
 trait ReviewBadge {

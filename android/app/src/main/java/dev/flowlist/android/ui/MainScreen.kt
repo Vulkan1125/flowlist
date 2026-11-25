@@ -1406,6 +1406,8 @@ fun MainScreen(
                         groupBy = draft.group,
                         sort = draft.sort,
                         showCompleted = draft.showCompleted,
+                        pinned = editing?.pinned ?: false,
+                        position = editing?.position ?: 0,
                     )
                 }
             },

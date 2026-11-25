@@ -25,6 +25,9 @@ pub struct Forecast {
     pub later: Vec<TaskId>,
     pub deferred_today: Vec<TaskId>,
     pub planned_today: Vec<TaskId>,
+    /// Planned dates that have slipped: still open, still informative, and
+    /// deliberately not rolled forward. Forecast keeps them in Past.
+    pub past_planned: Vec<TaskId>,
 }
 
 impl Forecast {
@@ -39,15 +42,20 @@ impl Forecast {
             out.extend(day.planned.iter().cloned());
         }
         out.extend(self.planned_today.iter().cloned());
+        out.extend(self.past_planned.iter().cloned());
         out.extend(self.later.iter().cloned());
         out
     }
 }
 
 /// Build the Forecast view. Completed tasks and tasks in done/dropped/on-hold
-/// projects are excluded; deferred items appear on their defer date.
+/// projects are excluded. Each date type is independent: a task planned for
+/// today and due next week appears in both places, and a planned date that has
+/// slipped stays in Past rather than moving forward.
 pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
     let today = local_date(at);
+    let tomorrow = today + chrono::Duration::days(1);
+    let horizon = today + chrono::Duration::days(7);
     let mut result = Forecast::default();
 
     for task in db.tasks.values() {
@@ -67,61 +75,91 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
                 result.overdue.push(task.id.clone());
             } else if date == today {
                 result.today.push(task.id.clone());
-            } else if date == today + chrono::Duration::days(1) {
+            } else if date == tomorrow {
                 result.tomorrow.push(task.id.clone());
-            } else if date <= today + chrono::Duration::days(7) {
-                let day = result.days.entry(date).or_insert_with(|| ForecastDay {
-                    date,
-                    ..ForecastDay::default()
-                });
-                day.due.push(task.id.clone());
+            } else if date <= horizon {
+                result
+                    .days
+                    .entry(date)
+                    .or_insert_with(|| ForecastDay {
+                        date,
+                        ..ForecastDay::default()
+                    })
+                    .due
+                    .push(task.id.clone());
             } else {
                 result.later.push(task.id.clone());
             }
-        } else if let Some(defer) = task.defer {
+        }
+
+        // Defer dates place work on the day it becomes available; a defer date
+        // in the past is simply available, not a Forecast entry.
+        if let Some(defer) = task.defer {
             let date = defer.local_date();
             if date == today {
                 result.deferred_today.push(task.id.clone());
-            } else if (today..=today + chrono::Duration::days(7)).contains(&date) {
-                let day = result.days.entry(date).or_insert_with(|| ForecastDay {
-                    date,
-                    ..ForecastDay::default()
-                });
-                day.deferred.push(task.id.clone());
+            } else if (today..=horizon).contains(&date) {
+                result
+                    .days
+                    .entry(date)
+                    .or_insert_with(|| ForecastDay {
+                        date,
+                        ..ForecastDay::default()
+                    })
+                    .deferred
+                    .push(task.id.clone());
             }
-        } else if let Some(planned) = task.planned {
-            // Planned dates place an undated task on the Forecast without
-            // making it due or changing availability.
+        }
+
+        if let Some(planned) = task.planned {
             let date = planned.local_date();
-            if date == today {
+            if date < today {
+                result.past_planned.push(task.id.clone());
+            } else if date == today {
                 result.planned_today.push(task.id.clone());
-            } else if (today..=today + chrono::Duration::days(7)).contains(&date) {
-                let day = result.days.entry(date).or_insert_with(|| ForecastDay {
-                    date,
-                    ..ForecastDay::default()
-                });
-                day.planned.push(task.id.clone());
+            } else if date <= horizon {
+                result
+                    .days
+                    .entry(date)
+                    .or_insert_with(|| ForecastDay {
+                        date,
+                        ..ForecastDay::default()
+                    })
+                    .planned
+                    .push(task.id.clone());
+            } else {
+                result.later.push(task.id.clone());
             }
         }
     }
 
     let by_due = |db: &Db, id: &TaskId| db.tasks[id].due.map(|stamp| stamp.at);
+    let by_planned = |db: &Db, id: &TaskId| db.tasks[id].planned.map(|stamp| stamp.at);
     result.overdue.sort_by_key(|id| by_due(db, id));
     result.today.sort_by_key(|id| by_due(db, id));
     result.tomorrow.sort_by_key(|id| by_due(db, id));
-    result.later.sort_by_key(|id| by_due(db, id));
+    result.later.sort_by_key(|id| {
+        db.tasks[id]
+            .due
+            .or(db.tasks[id].planned)
+            .map(|stamp| stamp.at)
+    });
+    result.later.dedup();
     for day in result.days.values_mut() {
         day.due.sort_by_key(|id| by_due(db, id));
-        day.deferred.sort_by_key(|id| by_due(db, id));
-        day.planned
-            .sort_by_key(|id| db.tasks[id].planned.map(|stamp| stamp.at));
+        day.deferred
+            .sort_by_key(|id| db.tasks[id].defer.map(|stamp| stamp.at));
+        day.planned.sort_by_key(|id| by_planned(db, id));
     }
     result
         .deferred_today
         .sort_by_key(|id| db.tasks[id].defer.map(|stamp| stamp.at));
     result
         .planned_today
-        .sort_by_key(|id| db.tasks[id].planned.map(|stamp| stamp.at));
+        .sort_by_key(|id| by_planned(db, id));
+    result
+        .past_planned
+        .sort_by_key(|id| by_planned(db, id));
     result
 }
 

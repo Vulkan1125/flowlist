@@ -50,10 +50,12 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Inbox (tasks with no project and no schedule; a due or defer date
       files the task into Today or Forecast instead)
 - [x] Today (due or planned today plus overdue; deferred-to-today work joins
-      the day, and a Hide overdue chip drops the overdue group. A clear day
-      shows a calm “Nothing due today” message)
+      the day, a Past plans group carries slipped plans, and one Hide past chip
+      drops both carried-over groups. A clear day shows a calm “Nothing planned
+      or due today” message)
 - [x] Projects
-- [x] Forecast (overdue / today / tomorrow / later)
+- [x] Forecast (Past / overdue / today / tomorrow / later; Due, Defer and
+      Planned are independent, so one task can appear on several days)
 - [x] Flagged
 - [x] Review
 - [x] Tags
@@ -67,6 +69,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Priority rows and a global priority filter
 - [x] Custom saved perspectives with JSON filter trees, including a
       full-screen reminder filter that follows project and folder marks
+- [x] Pinned saved views: pinned views sit above the SAVED section, stay
+      visible when it is folded and show a pin mark. A shipped **Running** view
+      collects started work that is not due yet; it is editable and deletable
+      like any other saved view
 - [x] Hide empty custom views option: a saved view leaves the sidebar until
       its filter matches again
 - [x] Availability: available, deferred, blocked, completed
@@ -214,8 +220,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Planned dates: a third date beside Due and Defer that never changes
       availability. The inspector has a Planned calendar field, quick capture
       accepts `planned:` / `plan:`, Forecast shows Planned Today and planned
-      days, Today includes planned-today tasks, saved views can filter by
-      Planned window, and sorting, grouping, CLI and MCP understand it.
+      days, Today includes planned-today tasks, slipped plans persist in Past,
+      saved views can filter by Planned window, and sorting, grouping, CLI and
+      MCP understand it.
 - [x] Date marks: Defer, Planned and Due carry distinct OmniFocus-style
       icons (turning arrow, signpost, clock-on-calendar) on task rows and
       inspector labels, with hover tooltips.

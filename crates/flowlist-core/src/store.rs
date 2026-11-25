@@ -11,6 +11,7 @@ use chrono::{DateTime, Utc};
 use crate::command::{Command, Outcome};
 use crate::db::Db;
 use crate::error::{Error, Result};
+use crate::model::{Condition, DueWindow, FilterNode, GroupBy, Perspective, SortBy, TaskStatus};
 use crate::paths::DataPaths;
 use crate::persist::lock::StoreGuard;
 use crate::persist::{self, DataFile, HistoryEntry, HistoryFile, SCHEMA_VERSION};
@@ -83,11 +84,65 @@ impl Store {
             last_mtime,
             warning,
         };
+        // Offer the shipped views once. The marker makes deletion and
+        // renaming permanent instead of re-seeding on every launch.
+        store.seed_shipped_views()?;
         // Trash that outlived the retention setting is permanently removed on
         // open. The purge is a normal command, so it stays in history and can
         // be undone.
         store.sweep_trash()?;
         Ok(store)
+    }
+
+    /// Add the saved views Flowlist ships with. They are ordinary records, so
+    /// the user can edit, rename or delete them; the settings marker only
+    /// stops them from coming back.
+    fn seed_shipped_views(&mut self) -> Result<()> {
+        if self.data.db.settings.seeded_running_view {
+            return Ok(());
+        }
+        self.mutate(|db, _at| {
+            db.settings.seeded_running_view = true;
+            if !db
+                .perspectives
+                .values()
+                .any(|perspective| perspective.name.eq_ignore_ascii_case("Running"))
+            {
+                let mut perspective = Perspective::new("Running");
+                perspective.filter = FilterNode::All(vec![
+                    FilterNode::Condition(Condition::Status {
+                        value: TaskStatus::Available,
+                    }),
+                    FilterNode::Condition(Condition::Due {
+                        window: DueWindow::Later,
+                    }),
+                    FilterNode::Any(vec![
+                        FilterNode::Condition(Condition::Planned {
+                            window: DueWindow::Overdue,
+                        }),
+                        FilterNode::Condition(Condition::Planned {
+                            window: DueWindow::Today,
+                        }),
+                    ]),
+                ]);
+                perspective.group_by = GroupBy::Project;
+                perspective.sort = SortBy::Planned;
+                perspective.pinned = true;
+                perspective.position = db
+                    .perspectives
+                    .values()
+                    .map(|existing| existing.position)
+                    .max()
+                    .unwrap_or(0)
+                    + 1;
+                db.perspectives
+                    .insert(perspective.id.clone(), perspective);
+            }
+            let mut outcome = Outcome::new("Seed shipped views");
+            outcome.message = Some("Added the Running saved view".to_string());
+            Ok(outcome)
+        })?;
+        Ok(())
     }
 
     /// Permanently remove Trash older than `settings.trash_retention_days`.

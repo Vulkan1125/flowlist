@@ -131,19 +131,28 @@ impl FlowlistApp {
                     _ => continue,
                 }
             }
-            if let Some(date) = task
-                .due
-                .map(|stamp| stamp.local_date())
-                .or_else(|| task.planned.map(|stamp| stamp.local_date()))
+            for date in [
+                task.due.map(|stamp| stamp.local_date()),
+                task.planned.map(|stamp| stamp.local_date()),
+                task.defer.map(|stamp| stamp.local_date()),
+            ]
+            .into_iter()
+            .flatten()
             {
-                days.entry(date).or_default().push(id.clone());
+                let ids = days.entry(date).or_default();
+                if !ids.contains(id) {
+                    ids.push(id.clone());
+                }
             }
         }
         for ids in days.values_mut() {
             ids.sort_by_cached_key(|id| {
                 let task = &db.tasks[id];
                 (
-                    task.due.or(task.planned).map(|stamp| stamp.at),
+                    task.due
+                        .or(task.planned)
+                        .or(task.defer)
+                        .map(|stamp| stamp.at),
                     task.title.to_lowercase(),
                 )
             });
@@ -961,26 +970,26 @@ impl FlowlistApp {
                             .when(
                                 matches!(self.view, View::Builtin(BuiltinPerspective::Today)),
                                 |this| {
-                                    let anchor = self.hide_overdue_anchor.clone();
+                                    let anchor = self.hide_past_anchor.clone();
                                     this.child(
                                         div()
                                             .flex_shrink_0()
                                             .child(
                                                 div()
-                                                    .id("hide-overdue")
+                                                    .id("hide-past")
                                                     .flow_tip(
                                                         self,
                                                         cx,
                                                         theme,
-                                                        "Show or hide overdue tasks in Today",
+                                                        "Show or hide past plans and overdue tasks in Today",
                                                     )
                                                     .child(widgets::toggle_chip(
                                                         theme,
-                                                        "Hide overdue",
-                                                        self.hide_overdue,
+                                                        "Hide past",
+                                                        self.hide_past,
                                                     ))
                                                     .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.hide_overdue = !this.hide_overdue;
+                                                        this.hide_past = !this.hide_past;
                                                         this.remember_view_options();
                                                         this.save_session();
                                                         cx.notify();
@@ -1537,9 +1546,9 @@ impl FlowlistApp {
                     "A clean slate. Capture something above and it lands here.",
                 ),
                 View::Builtin(BuiltinPerspective::Today) => (
-                    "Nothing due today",
-                    if self.hide_overdue {
-                        "Overdue tasks are hidden."
+                    "Nothing planned or due today",
+                    if self.hide_past {
+                        "Past plans and overdue tasks are hidden."
                     } else {
                         "A clear day. Capture something above when it comes up."
                     },

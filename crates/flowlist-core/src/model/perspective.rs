@@ -133,6 +133,9 @@ pub enum DueWindow {
     Tomorrow,
     Next7Days,
     Next30Days,
+    /// After today, or no date at all. Used by views such as Running that
+    /// want work that has not reached its deadline yet.
+    Later,
     NoDate,
     On(NaiveDate),
     Before(NaiveDate),
@@ -317,6 +320,11 @@ pub struct Perspective {
     pub show_completed: bool,
     #[serde(default)]
     pub position: u32,
+    /// Pinned views sit above the SAVED section and stay visible when it is
+    /// collapsed. The flag travels with the perspective, so every client sees
+    /// the same rail.
+    #[serde(default)]
+    pub pinned: bool,
 }
 
 fn default_group() -> GroupBy {
@@ -333,6 +341,7 @@ impl Perspective {
             sort: SortBy::Manual,
             show_completed: false,
             position: 0,
+            pinned: false,
         }
     }
 }

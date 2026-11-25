@@ -455,8 +455,8 @@ pub struct FlowlistApp {
     priority_filter: Option<Priority>,
     /// Hide everything blocked behind another task (First Available).
     only_available: bool,
-    /// Today's header toggle: leave overdue work out of the list.
-    hide_overdue: bool,
+    /// Today's header toggle: leave past plans and overdue work out.
+    hide_past: bool,
     /// The message the content pane painted for an empty list, so a probe can
     /// check the calm Today copy without reading pixels.
     empty_note: Rc<RefCell<Option<String>>>,
@@ -473,8 +473,8 @@ pub struct FlowlistApp {
     /// what is on screen (anchored/deferred paint offsets do not move
     /// hitboxes in GPUI 0.2).
     sort_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
-    /// Today's Hide overdue chip, measured so a GUI probe can click it.
-    hide_overdue_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// Today's Hide past chip, measured so a GUI probe can click it.
+    hide_past_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     group_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     priority_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// The first text field in the open sheet, measured so a GUI probe can
@@ -873,7 +873,7 @@ impl FlowlistApp {
             inspector_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             priority_filter,
             only_available,
-            hide_overdue: false,
+            hide_past: false,
             empty_note: Rc::new(RefCell::new(None)),
             follow_system,
             view_options,
@@ -881,7 +881,7 @@ impl FlowlistApp {
             group_menu_open: false,
             priority_menu_open: false,
             sort_anchor: Rc::new(Cell::new(None)),
-            hide_overdue_anchor: Rc::new(Cell::new(None)),
+            hide_past_anchor: Rc::new(Cell::new(None)),
             group_anchor: Rc::new(Cell::new(None)),
             priority_anchor: Rc::new(Cell::new(None)),
             modal_field_anchor: Rc::new(Cell::new(None)),
@@ -1387,7 +1387,7 @@ impl FlowlistApp {
             show_completed: Some(self.show_completed),
             only_available: Some(self.only_available),
             priority,
-            hide_overdue: Some(self.hide_overdue),
+            hide_past: Some(self.hide_past),
         }
     }
 
@@ -1409,7 +1409,7 @@ impl FlowlistApp {
         self.group = options.group.as_deref().and_then(group_from_slug);
         self.show_completed = options.show_completed.unwrap_or(false);
         self.only_available = options.only_available.unwrap_or(false);
-        self.hide_overdue = options.hide_overdue.unwrap_or(false);
+        self.hide_past = options.hide_past.unwrap_or(false);
         self.priority_filter = effective_priority_filter(
             &self.view,
             options.priority.as_deref().and_then(Priority::from_slug),
@@ -1449,7 +1449,7 @@ impl FlowlistApp {
                     rows: query::rows_for(db, &ids, at),
                 }]
             }
-            View::Builtin(BuiltinPerspective::Today) => query::today(db, !self.hide_overdue, at),
+            View::Builtin(BuiltinPerspective::Today) => query::today(db, !self.hide_past, at),
             View::Builtin(perspective) => query::view(db, *perspective, at),
             View::Priority(priority) => query::priority(db, *priority, at),
             View::Project(id) => self.project_groups(id),
@@ -6965,8 +6965,8 @@ impl FlowlistApp {
             }))
         }));
         state["field_editor"] = serde_json::json!(anchor(self.field_editor_anchor.get()));
-        state["hide_overdue"] = serde_json::json!(self.hide_overdue);
-        state["hide_overdue_anchor"] = serde_json::json!(anchor(self.hide_overdue_anchor.get()));
+        state["hide_past"] = serde_json::json!(self.hide_past);
+        state["hide_past_anchor"] = serde_json::json!(anchor(self.hide_past_anchor.get()));
         state["forecast_calendar_open"] = serde_json::json!(self.forecast_calendar_open);
         state["forecast_calendar_expanded"] = serde_json::json!(self.forecast_calendar_expanded);
         state["forecast_week"] = serde_json::json!(self.forecast_week.to_string());

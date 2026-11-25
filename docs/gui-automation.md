@@ -171,10 +171,10 @@ without guessing at the grid. If the sheet does not paint another frame on its o
 harmless Tab press forces one. Prepaint boxes land in the
 state file one frame after they are measured, so a probe that opens the picker
 should poll for the key (nudging the pointer forces the repaint). `due_anchor`
-and `defer_anchor` give the calendar icon boxes. `hide_overdue` is Today's
-header toggle and `hide_overdue_anchor` its chip box. `empty_note` is the title
-the content pane painted for an empty list (for example `Nothing due today`),
-so a probe can check the calm Today copy. `forecast_calendar_open`,
+and `defer_anchor` give the calendar icon boxes. `hide_past` is Today's header
+toggle and `hide_past_anchor` its chip box. `empty_note` is the title the
+content pane painted for an empty list (for example `Nothing planned or due
+today`), so a probe can check the calm Today copy. `forecast_calendar_open`,
 `forecast_calendar`, `forecast_calendar_height`, `forecast_days`,
 `forecast_chips`, `forecast_toggle_anchor` and `forecast_grip_anchor` describe
 the Forecast month grid: whether it is folded, the block and grip boxes, the

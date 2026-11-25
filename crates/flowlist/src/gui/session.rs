@@ -141,9 +141,10 @@ pub struct ViewOptions {
     /// sidebar does not leave its filter on the next perspective.
     #[serde(default)]
     pub priority: Option<String>,
-    /// Today's header toggle: leave overdue work out of the list.
-    #[serde(default)]
-    pub hide_overdue: Option<bool>,
+    /// Today's header toggle: leave past plans and overdue work out of the
+    /// list.
+    #[serde(default, alias = "hide_overdue")]
+    pub hide_past: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -394,7 +395,7 @@ mod tests {
                     show_completed: Some(false),
                     only_available: Some(true),
                     priority: Some("high".to_string()),
-                    hide_overdue: Some(true),
+                    hide_past: Some(true),
                 },
             )]),
             ..Session::default()
@@ -408,7 +409,7 @@ mod tests {
             Some("due")
         );
         assert_eq!(restored.view_options["flagged"].only_available, Some(true));
-        assert_eq!(restored.view_options["flagged"].hide_overdue, Some(true));
+        assert_eq!(restored.view_options["flagged"].hide_past, Some(true));
         assert_eq!(
             restored.view_options["flagged"].priority.as_deref(),
             Some("high")

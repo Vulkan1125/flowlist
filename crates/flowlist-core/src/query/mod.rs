@@ -318,14 +318,15 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
 
 /// Tasks that want attention today: due today, planned today, deferred to
 /// today or earlier, and — unless hidden — everything with an overdue due
-/// date. Completed tasks, trashed tasks and tasks in closed projects are left
-/// out, matching Forecast.
-pub fn today(db: &Db, include_overdue: bool, at: DateTime<Utc>) -> Vec<Group> {
+/// date or a planned date that has slipped. Completed tasks, trashed tasks and
+/// tasks in closed projects are left out, matching Forecast.
+pub fn today(db: &Db, include_past: bool, at: DateTime<Utc>) -> Vec<Group> {
     let today = crate::time::local_date(at);
     let mut overdue: Vec<TaskId> = Vec::new();
     let mut due_today: Vec<TaskId> = Vec::new();
     let mut deferred: Vec<TaskId> = Vec::new();
     let mut planned_today: Vec<TaskId> = Vec::new();
+    let mut past_planned: Vec<TaskId> = Vec::new();
 
     for id in manual_order(db) {
         let Some(task) = db.tasks.get(&id) else {
@@ -340,13 +341,16 @@ pub fn today(db: &Db, include_overdue: bool, at: DateTime<Utc>) -> Vec<Group> {
                 _ => continue,
             }
         }
-        // Planned today counts even when a later due date exists; the retain
-        // below drops anything already shown in another bucket.
-        if task
-            .planned
-            .is_some_and(|stamp| stamp.local_date() == today)
-        {
-            planned_today.push(id.clone());
+        // Planned today counts even when a later due date exists; the retains
+        // below drop anything already shown in another bucket. A plan that has
+        // slipped is kept in its own group rather than rolled forward.
+        if let Some(planned) = task.planned {
+            let date = planned.local_date();
+            if date == today {
+                planned_today.push(id.clone());
+            } else if date < today {
+                past_planned.push(id.clone());
+            }
         }
         match task.due {
             Some(due) if due.local_date() < today => overdue.push(id),
@@ -362,6 +366,13 @@ pub fn today(db: &Db, include_overdue: bool, at: DateTime<Utc>) -> Vec<Group> {
     }
 
     overdue.sort_by_key(|id| db.tasks[id].due.map(|stamp| stamp.at));
+    past_planned.retain(|id| {
+        !overdue.contains(id)
+            && !due_today.contains(id)
+            && !deferred.contains(id)
+            && !planned_today.contains(id)
+    });
+    past_planned.sort_by_key(|id| db.tasks[id].planned.map(|stamp| stamp.at));
     planned_today
         .retain(|id| !overdue.contains(id) && !due_today.contains(id) && !deferred.contains(id));
     due_today.extend(planned_today);
@@ -378,7 +389,15 @@ pub fn today(db: &Db, include_overdue: bool, at: DateTime<Utc>) -> Vec<Group> {
     due_today.extend(deferred);
 
     let mut groups = Vec::new();
-    if include_overdue && !overdue.is_empty() {
+    if include_past && !past_planned.is_empty() {
+        groups.push(Group {
+            key: "today:past".to_string(),
+            title: "Past plans".to_string(),
+            position: -2,
+            rows: rows_for(db, &past_planned, at),
+        });
+    }
+    if include_past && !overdue.is_empty() {
         groups.push(Group {
             key: "today:overdue".to_string(),
             title: "Overdue".to_string(),
@@ -416,8 +435,8 @@ pub fn priority(db: &Db, priority: crate::model::Priority, at: DateTime<Utc>) ->
     }]
 }
 
-/// Tasks due or deferred on a specific local date. Used when a Forecast
-/// calendar date is clicked.
+/// Tasks due, planned or deferred on a specific local date. Used when a
+/// Forecast calendar date is clicked.
 pub fn tasks_on_date(db: &Db, date: chrono::NaiveDate, _at: DateTime<Utc>) -> Vec<TaskId> {
     let mut ids: Vec<TaskId> = manual_order(db)
         .into_iter()
@@ -435,12 +454,16 @@ pub fn tasks_on_date(db: &Db, date: chrono::NaiveDate, _at: DateTime<Utc>) -> Ve
                 }
             }
             task.due.is_some_and(|stamp| stamp.local_date() == date)
+                || task.planned.is_some_and(|stamp| stamp.local_date() == date)
                 || task.defer.is_some_and(|stamp| stamp.local_date() == date)
         })
         .collect();
     ids.sort_by_cached_key(|id| {
         let task = &db.tasks[id];
-        (task.due.map(|stamp| stamp.at), task.title.to_lowercase())
+        (
+            task.due.or(task.planned).or(task.defer).map(|stamp| stamp.at),
+            task.title.to_lowercase(),
+        )
     });
     ids
 }
@@ -461,25 +484,28 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>) -> Vec<Group> {
         });
     };
 
-    push("forecast:overdue", "Overdue", -3, &data.overdue);
-    push(
-        "forecast:deferred",
-        "Deferred Today",
-        -2,
-        &data.deferred_today,
-    );
-    push("forecast:today", "Today", -1, &data.today);
+    let mut past = data.overdue.clone();
+    past.extend(data.past_planned.iter().cloned());
+    dedupe(&mut past);
+    push("forecast:past", "Past", -4, &past);
+    let mut deferred_today = data.deferred_today.clone();
+    deferred_today.retain(|id| !data.today.contains(id));
+    push("forecast:deferred", "Deferred Today", -3, &deferred_today);
+    push("forecast:today", "Today", -2, &data.today);
+    let mut planned_today = data.planned_today.clone();
+    planned_today.retain(|id| !data.today.contains(id) && !deferred_today.contains(id));
     push(
         "forecast:planned-today",
         "Planned Today",
-        0,
-        &data.planned_today,
+        -1,
+        &planned_today,
     );
-    push("forecast:tomorrow", "Tomorrow", 1, &data.tomorrow);
+    push("forecast:tomorrow", "Tomorrow", 0, &data.tomorrow);
     for (date, day) in &data.days {
         let mut ids = day.due.clone();
         ids.extend(day.deferred.iter().cloned());
         ids.extend(day.planned.iter().cloned());
+        dedupe(&mut ids);
         let position = (*date - today).num_days();
         let title = forecast::day_label(*date, today);
         push(
@@ -492,6 +518,13 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>) -> Vec<Group> {
     push("forecast:later", "Later", i64::MAX - 1, &data.later);
     groups.sort_by(|a, b| a.position.cmp(&b.position));
     groups
+}
+
+/// Drop repeated ids while keeping the first occurrence's order. A task can
+/// carry several dates on the same day; the outline should still show it once.
+fn dedupe(ids: &mut Vec<TaskId>) {
+    let mut seen = std::collections::BTreeSet::new();
+    ids.retain(|id| seen.insert(id.clone()));
 }
 
 /// Projects that are due for review, soonest first.

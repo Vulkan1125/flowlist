@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Past plans stay visible.** A planned date that slips no longer disappears.
+  Today lists carried-over plans in a **Past plans** group above Overdue, and
+  Forecast gains a **Past** section. One **Hide past** chip hides both. Forecast
+  now treats Due, Defer and Planned as independent dates, so a task planned
+  today and due next week appears in both places, and clicking a planned day
+  lists it.
+- **Running and pinned views.** New and existing libraries get a pinned
+  **Running** saved view for work that has started and is not due yet; it is an
+  ordinary saved view and can be edited or deleted. Any saved view can be
+  pinned to the top of the rail from its context menu or the editor
+  (`perspective add --pinned`), and pinned views stay visible when SAVED is
+  collapsed. Filters gain a **Later / none** window.
 - **Three dates at a glance.** Rows and inspector labels now carry OmniFocus-
   style marks — a turning arrow for Defer, a signpost for Planned and a clock
   on a calendar for Due — so the dates never read as the same thing. Today now

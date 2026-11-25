@@ -639,6 +639,8 @@ fun savePerspectiveCommand(
     groupBy: String,
     sort: String,
     showCompleted: Boolean,
+    pinned: Boolean,
+    position: Int,
 ): JsonObject = buildJsonObject {
     put(
         "save_perspective",
@@ -652,7 +654,8 @@ fun savePerspectiveCommand(
                     put("group_by", groupBy)
                     put("sort", sort)
                     put("show_completed", showCompleted)
-                    put("position", 0)
+                    put("pinned", pinned)
+                    put("position", position)
                 },
             )
         },

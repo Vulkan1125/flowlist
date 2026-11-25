@@ -147,6 +147,7 @@ data class PerspectiveDto(
     val sort: String = "manual",
     @SerialName("show_completed") val showCompleted: Boolean = false,
     val position: Int = 0,
+    val pinned: Boolean = false,
 )
 
 @Serializable

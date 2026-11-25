@@ -1152,11 +1152,22 @@ class Repository(context: Context) {
         groupBy: String,
         sort: String,
         showCompleted: Boolean,
+        pinned: Boolean,
+        position: Int,
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         send(
-            savePerspectiveCommand(id, trimmed, filter, groupBy, sort, showCompleted),
+            savePerspectiveCommand(
+                id,
+                trimmed,
+                filter,
+                groupBy,
+                sort,
+                showCompleted,
+                pinned,
+                position,
+            ),
             "Save perspective “$trimmed”",
         )
     }

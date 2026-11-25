@@ -77,7 +77,9 @@ Every capture is undoable with `⌘Z`, even after the panel has closed.
   flag, move and delete work on the whole selection.
 
 The right edge of each row reads in one order: attachments, project, `#tag`
-chips, estimate, planned date, due date, deferred date and repeat. Each date
+chips, estimate, planned date, due date, deferred date and repeat. A plan that
+has slipped shows its original date in the Past plans group rather than moving
+forward. Each date
 carries its own mark, matching OmniFocus: a signpost for Planned, a clock on a
 calendar for Due and a turning arrow for Defer; hovering names the field.
 
@@ -152,7 +154,7 @@ The rail is the map of the library:
 | View | Shows |
 | --- | --- |
 | **Inbox** | unscheduled tasks — no project, no due or defer date (a planned date does not count) |
-| **Today** | due or planned today, deferred to today, and overdue |
+| **Today** | due or planned today, deferred to today, overdue, and slipped plans |
 | **Forecast** | the month calendar and upcoming due, deferred and planned work |
 | **Review** | projects whose review date has arrived |
 | **Projects** | every project at a glance |
@@ -185,9 +187,14 @@ titles itself **Search** and ranks the closest matches first.
 - **New project / folder / tag / perspective**: `⇧⌘N`, `⌥⌘N`, `⌃⌘N`, `⇧⌘P`.
 - **Saved perspectives** share one editor with the phone: text, Inbox only,
   Flagged only, Status, Projects, Tags with child tags, Priorities, Due,
-  Planned and Defer windows, full-screen reminder marks (yes or no, including
-  inherited marks), an estimate range, grouping and sorting, and completed
-  tasks. Both platforms offer project/folder/tag/due/defer/flagged/estimate
+  Planned and Defer windows (including **Later / none**), full-screen reminder
+  marks (yes or no, including inherited marks), an estimate range, grouping and
+  sorting, completed tasks, and **Pinned**. Pinned views sit above the SAVED
+  header, keep a pin mark and stay visible when SAVED is folded; pin or unpin
+  from the editor or the row's context menu (`perspective add --pinned` for the
+  CLI). A shipped **Running** view is pinned by default and lists started work
+  that is not due yet; it can be edited or deleted like any other saved view.
+  Both platforms offer project/folder/tag/due/defer/flagged/estimate
   grouping and manual/due/defer/name/priority/flagged/estimate/created
   sorting; the Mac editor also offers Planned grouping, sorting and a Planned
   dates filter.
