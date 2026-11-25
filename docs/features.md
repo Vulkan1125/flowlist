@@ -338,6 +338,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       caps action deadlines, and action/parent dates can only be later or
       earlier respectively. Effective dates drive Today, Forecast, overdue,
       filters, grouping, sorting, badges and the task inspector
+- [x] Strict date validation: contradictory task dates cannot be saved.
+      Moving one asks first and adjusts the stored dates in one undoable step
 - [x] Deleting a folder asks first: nested folders, their projects and every
       task inside move to Trash with it, the sheet names the folder and counts
       its projects, and one Undo restores the whole tree. The × button, the

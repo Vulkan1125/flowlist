@@ -196,7 +196,9 @@ titles itself **Search** and ranks the closest matches first.
   review cadence, type and icon. Tasks inherit the project's dates: defer gates
   when they become available, due caps their deadline, and planned is a
   constraint-free default. A task or parent task can defer later or fall due
-  earlier than the project, never the other way around.
+  earlier than the project, never the other way around. Dropping a task whose
+  dates break the rule opens an **Adjust dates?** sheet; confirming changes the
+  dates and completes the move together. Cancel leaves everything untouched.
 - **Right-click a folder** for Open, Rename, **Edit folder…**, New project here,
   New subfolder and Delete.
 - **Saved perspectives** share one editor with the phone: text, Inbox only,

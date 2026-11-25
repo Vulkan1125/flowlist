@@ -2184,8 +2184,8 @@ fn project_due_and_defer_constrain_tasks() {
     let early_id = store.db().resolve_task(&early_id).unwrap();
     assert_eq!(store.db().effective_due(&early_id), Some(day(2)));
 
+    // A task with a later due cannot be moved in silently.
     let mut late = NewTask::new("Later due");
-    late.project = Some(project_id.clone());
     late.due = Some(day(6));
     let late_id = store
         .execute(Command::CreateTask(late))
@@ -2193,7 +2193,27 @@ fn project_due_and_defer_constrain_tasks() {
         .created[0]
         .clone();
     let late_id = store.db().resolve_task(&late_id).unwrap();
-    assert_eq!(store.db().effective_due(&late_id), Some(day(4)));
+    let placement = flowlist_core::command::TaskPlacement::Project {
+        project: project_id.clone(),
+        position: flowlist_core::db::Position::End,
+    };
+    let conflicts =
+        flowlist_core::command::date_conflicts_for_move(store.db(), &[late_id.clone()], &placement);
+    assert_eq!(conflicts.len(), 1);
+    assert!(conflicts[0].due.is_some());
+    assert!(store
+        .execute(Command::MoveTasks {
+            ids: vec![late_id.clone()],
+            placement: placement.clone(),
+        })
+        .is_err());
+    store
+        .execute(Command::MoveTasksAdjusted {
+            ids: vec![late_id.clone()],
+            placement,
+        })
+        .unwrap();
+    assert_eq!(store.db().tasks[&late_id].due, Some(day(4)));
 
     let mut later_defer = NewTask::new("Later defer");
     later_defer.project = Some(project_id.clone());

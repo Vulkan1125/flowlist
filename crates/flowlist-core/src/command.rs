@@ -6,7 +6,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::db::{ContainerPosition, Db, OrderKey, Position};
+use crate::db::{ContainerPosition, DateConflict, Db, OrderKey, Position};
 use crate::error::{Error, Result};
 use crate::ids::{ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use crate::model::{
@@ -299,6 +299,12 @@ pub enum Command {
         ids: Vec<TaskId>,
         placement: TaskPlacement,
     },
+    /// Move tasks and explicitly clamp conflicting stored dates to the new
+    /// container. Used only after the user confirms the adjustment.
+    MoveTasksAdjusted {
+        ids: Vec<TaskId>,
+        placement: TaskPlacement,
+    },
     SetTaskTags {
         ids: Vec<TaskId>,
         add: Vec<TagId>,
@@ -491,7 +497,9 @@ impl Command {
             Command::DeleteTaskSeries { ids } => {
                 format!("Move {} in the series to Trash", task_count(ids.len()))
             }
-            Command::MoveTasks { ids, .. } => format!("Move {}", task_count(ids.len())),
+            Command::MoveTasks { ids, .. } | Command::MoveTasksAdjusted { ids, .. } => {
+                format!("Move {}", task_count(ids.len()))
+            }
             Command::SetTaskTags { ids, .. } => format!("Tag {}", task_count(ids.len())),
             Command::SetTaskFlag { ids, flagged } => {
                 format!(
@@ -1125,6 +1133,30 @@ impl Command {
                 outcome.affected.extend(ids.iter().map(|id| id.to_string()));
                 db.touch();
                 outcome.message = Some(format!("Moved {}", task_count(ids.len())));
+            }
+            Command::MoveTasksAdjusted { ids, placement } => {
+                let conflicts = date_conflicts_for_move(db, &ids, &placement);
+                for conflict in &conflicts {
+                    let task = db.task_mut(&conflict.task)?;
+                    if let Some((_, to)) = conflict.due {
+                        task.due = Some(to);
+                    }
+                    if let Some((_, to)) = conflict.defer {
+                        task.defer = Some(to);
+                    }
+                }
+                move_tasks(db, &ids, placement)?;
+                outcome.affected.extend(ids.iter().map(|id| id.to_string()));
+                db.touch();
+                outcome.message = Some(if conflicts.is_empty() {
+                    format!("Moved {}", task_count(ids.len()))
+                } else {
+                    format!(
+                        "Moved {}; adjusted {} date(s)",
+                        task_count(ids.len()),
+                        conflicts.len()
+                    )
+                });
             }
             Command::SetTaskTags { ids, add, remove } => {
                 for id in &ids {
@@ -1969,6 +2001,52 @@ fn clean_attachments(paths: Vec<String>) -> Vec<String> {
         .map(|path| path.trim().to_string())
         .filter(|path| !path.is_empty())
         .collect()
+}
+
+/// Stored task dates that the requested move would have to change.
+pub fn date_conflicts_for_move(
+    db: &Db,
+    ids: &[TaskId],
+    placement: &TaskPlacement,
+) -> Vec<DateConflict> {
+    let (container_due, container_defer) = match placement {
+        TaskPlacement::Inbox(_) => (None, None),
+        TaskPlacement::Project { project, .. } => db
+            .projects
+            .get(project)
+            .map(|project| (project.due, project.defer))
+            .unwrap_or((None, None)),
+        TaskPlacement::Parent { parent, .. } => (
+            db.effective_due(parent),
+            db.effective_defer(parent),
+        ),
+    };
+    let mut out = Vec::new();
+    for id in ids {
+        let Some(task) = db.tasks.get(id) else {
+            continue;
+        };
+        if task.completed || task.is_trashed() {
+            continue;
+        }
+        let due = match (task.due, container_due) {
+            (Some(from), Some(to)) if from.at > to.at => Some((from, to)),
+            _ => None,
+        };
+        let defer = match (task.defer, container_defer) {
+            (Some(from), Some(to)) if from.at < to.at => Some((from, to)),
+            _ => None,
+        };
+        if due.is_some() || defer.is_some() {
+            out.push(DateConflict {
+                task: id.clone(),
+                title: task.title.clone(),
+                due,
+                defer,
+            });
+        }
+    }
+    out
 }
 
 fn move_tasks(db: &mut Db, ids: &[TaskId], placement: TaskPlacement) -> Result<()> {

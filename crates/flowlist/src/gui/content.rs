@@ -2706,7 +2706,24 @@ impl FlowlistApp {
             painted_title,
             has_children,
         ));
-        base.into_any_element()
+        let boxes = self.content_row_boxes.clone();
+        let key = id.to_string();
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        key.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .child(base)
+            .into_any_element()
     }
 
     fn render_project_banner(&self, id: &ProjectId, cx: &mut Context<Self>) -> impl IntoElement {

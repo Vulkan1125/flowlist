@@ -10,6 +10,8 @@ use gpui::{
     Window, div, img, point, prelude::*, px, rgb, rgba, size,
 };
 
+use flowlist_core::command::Command;
+use flowlist_core::db::DateConflict;
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
     BuiltinPerspective, GroupBy, IconSpec, Priority, ProjectIcon, ProjectKind, SidebarOptions,
@@ -107,6 +109,11 @@ pub enum Modal {
         icon_tab: IconTab,
         icon_query: TextBuffer,
         fullscreen_reminder: bool,
+    },
+    /// A move that would change stored task dates. Nothing has moved yet.
+    AdjustDates {
+        command: Command,
+        conflicts: Vec<DateConflict>,
     },
     /// A small sheet for choosing one project glyph.
     IconPicker {
@@ -487,6 +494,10 @@ impl Modal {
         })
     }
 
+    pub fn adjust_dates(command: Command, conflicts: Vec<DateConflict>) -> Self {
+        Modal::AdjustDates { command, conflicts }
+    }
+
     pub fn icon_picker(project: ProjectId) -> Self {
         Modal::IconPicker {
             project,
@@ -711,6 +722,7 @@ impl Modal {
                 }
             }
             Modal::IconPicker { .. } => "Project icon",
+            Modal::AdjustDates { .. } => "Adjust dates?",
             Modal::CreateProject { .. } => "Create project",
             Modal::DeleteProject { .. } => "Delete project",
             Modal::DeleteFolder { .. } => "Delete folder",
@@ -752,6 +764,9 @@ impl Modal {
             }
             Modal::IconPicker { .. } => {
                 "Choose a named icon or an emoji for this project."
+            }
+            Modal::AdjustDates { .. } => {
+                "This move would put task dates outside their new project's limits."
             }
             Modal::CreateProject { .. } => {
                 "This path is not in the library yet. Create it and file the task there?"
@@ -827,6 +842,7 @@ impl Modal {
             Modal::RemoveAttachment { .. } => "Remove",
             Modal::Uninstall { .. } => "Uninstall",
             Modal::IconPicker { .. } => "Close",
+            Modal::AdjustDates { .. } => "Adjust and move",
             Modal::AttachLink { replace, .. } if replace.is_some() => "Rename",
             Modal::AttachLink { .. } => "Attach",
             _ => "Save",
@@ -845,6 +861,7 @@ impl Modal {
                 }
             }
             Modal::IconPicker { .. } => 1,
+            Modal::AdjustDates { .. } => 0,
             Modal::CreateProject { .. } => 0,
             Modal::DeleteProject { .. } => 0,
             Modal::DeleteFolder { .. } | Modal::DeleteTag { .. } => 0,
@@ -893,6 +910,7 @@ impl Modal {
                 _ => None,
             },
             Modal::IconPicker { query, .. } => (index == 0).then_some(query),
+            Modal::AdjustDates { .. } => None,
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } | Modal::DeleteTag { .. } => None,
@@ -965,6 +983,7 @@ impl Modal {
                 _ => None,
             },
             Modal::IconPicker { query, .. } => (index == 0).then_some(query),
+            Modal::AdjustDates { .. } => None,
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } | Modal::DeleteTag { .. } => None,
@@ -1028,6 +1047,7 @@ impl Modal {
                 _ => "",
             },
             Modal::IconPicker { .. } => "Search icons",
+            Modal::AdjustDates { .. } => "",
             Modal::CreateProject { .. } => "",
             Modal::DeleteProject { .. } => "",
             Modal::DeleteFolder { .. } | Modal::DeleteTag { .. } => "",
@@ -1085,6 +1105,7 @@ impl Modal {
             Modal::PriorityScope { .. } => 520.0,
             Modal::Perspective { .. } => 680.0,
             Modal::IconPicker { .. } => 540.0,
+            Modal::AdjustDates { .. } => 560.0,
             Modal::Settings { .. } => 880.0,
             Modal::Uninstall { .. } => 560.0,
             _ => 460.0,
@@ -1285,6 +1306,44 @@ impl FlowlistApp {
                         .text_color(theme.text)
                         .child(name.clone()),
                 );
+            }
+            if let Modal::AdjustDates { conflicts, .. } = modal {
+                let mut list = div().flex().flex_col().gap_2();
+                for conflict in conflicts {
+                    let mut lines = div().flex().flex_col().gap_0p5();
+                    if let Some((from, to)) = conflict.due {
+                        lines = lines.child(div().text_xs().text_color(theme.text_faint).child(
+                            format!(
+                                "Due: {} → {}",
+                                from.to_input_string(),
+                                to.to_input_string()
+                            ),
+                        ));
+                    }
+                    if let Some((from, to)) = conflict.defer {
+                        lines = lines.child(div().text_xs().text_color(theme.text_faint).child(
+                            format!(
+                                "Defer: {} → {}",
+                                from.to_input_string(),
+                                to.to_input_string()
+                            ),
+                        ));
+                    }
+                    list = list.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .p_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(theme.border)
+                            .bg(theme.field)
+                            .child(div().text_sm().text_color(theme.text).child(conflict.title.clone()))
+                            .child(lines),
+                    );
+                }
+                body = body.child(list);
             }
             if let Modal::DeleteTag { name, .. } = modal {
                 body = body.child(

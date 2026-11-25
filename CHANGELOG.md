@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Strict project dates.** A task can no longer be saved with a due date later
+  than its project/parent due, or a defer date earlier than its container
+  defer. Dragging such a task into a project opens an **Adjust dates?** sheet;
+  confirming changes the stored dates and moves in one undoable step. Cancel
+  moves nothing. CLI/MCP writes that would create a contradiction are rejected.
+  Existing contradictory libraries are clamped once on open.
 - **Default wording.** Sort and Group now say **Default** where they used to
   say View: “use this screen’s natural order or grouping”. Manual still means
   your drag order, and None still means one flat list.

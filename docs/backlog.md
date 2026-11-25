@@ -121,9 +121,11 @@ integrations are tracked separately and are not part of this phase.
       sheets; actions inherit defer (start no earlier) and due (finish no
       later), effective dates drive Today/Forecast/overdue/filters/groups/sorts,
       and planned stays constraint-free.
-- [ ] **Inherited date labels and validation** — show “Deferred with project”
-      / “Due with project” in the task inspector and reject a child defer
-      earlier than, or a child due later than, its container.
+- [x] **Strict date validation** — contradictory task dates are rejected on
+      save, moves show an Adjust dates sheet, and legacy libraries are clamped
+      once on open.
+- [ ] **Inherited date labels** — show “Deferred with project” / “Due with
+      project” in the task inspector.
 - [ ] **Projects in Forecast** — show project rows on their due/defer/planned
       dates. Start with a Projects section above the task rows for a day; later
       decide whether to unify task and project rows.

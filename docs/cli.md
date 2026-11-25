@@ -216,6 +216,10 @@ flowlist perspective list
 flowlist perspective remove <ID>
 ```
 
+Moves and edits that would put a task's due date after its project/parent due,
+or its defer date before the container defer, are rejected. Adjust the task or
+the project first; the GUI offers the same change as a confirmation sheet.
+
 The filter is a JSON `FilterNode` tree. A simple flagged filter:
 
 ```sh

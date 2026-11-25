@@ -450,6 +450,8 @@ pub struct FlowlistApp {
     content_rows: Rc<RefCell<Vec<PaintedTaskRow>>>,
     /// Group header boxes on the last frame, keyed by group key.
     content_group_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Task row boxes, keyed by task id.
+    content_row_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Site favicons keyed by host, fetched once per session.
     favicons: Rc<RefCell<BTreeMap<String, Arc<gpui::RenderImage>>>>,
     /// Hosts currently being fetched, so a row does not ask twice.
@@ -880,6 +882,7 @@ impl FlowlistApp {
             content_drop_target: None,
             content_rows: Rc::new(RefCell::new(Vec::new())),
             content_group_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            content_row_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             favicons: Rc::new(RefCell::new(BTreeMap::new())),
             favicon_requests: Rc::new(RefCell::new(BTreeSet::new())),
             favicon_misses: Rc::new(RefCell::new(BTreeSet::new())),
@@ -2793,13 +2796,14 @@ impl FlowlistApp {
             return;
         }
         let parent = siblings[index - 1].clone();
-        self.execute(Command::MoveTasks {
-            ids: vec![id],
-            placement: TaskPlacement::Parent {
+        self.move_tasks_checked(
+            vec![id],
+            TaskPlacement::Parent {
                 parent,
                 position: Position::End,
             },
-        });
+            cx,
+        );
         cx.notify();
     }
 
@@ -2836,11 +2840,7 @@ impl FlowlistApp {
                 None => TaskPlacement::Inbox(Position::After(parent_id.clone())),
             },
         };
-        self.execute(Command::MoveTasks {
-            ids: vec![id],
-            placement,
-        });
-        cx.notify();
+        self.move_tasks_checked(vec![id], placement, cx);
     }
 
     fn move_selected(&mut self, up: bool, cx: &mut Context<Self>) {
@@ -3978,18 +3978,48 @@ impl FlowlistApp {
         self.repaint_after_drop(cx);
     }
 
+    /// Move tasks, but preflight the container's dates first. If the move
+    /// would have to change stored dates, nothing moves until the user
+    /// confirms the adjustment.
+    fn move_tasks_checked(
+        &mut self,
+        ids: Vec<TaskId>,
+        placement: TaskPlacement,
+        cx: &mut Context<Self>,
+    ) {
+        let conflicts = flowlist_core::command::date_conflicts_for_move(
+            self.store.db(),
+            &ids,
+            &placement,
+        );
+        if conflicts.is_empty() {
+            self.execute(Command::MoveTasks { ids, placement });
+            cx.notify();
+            self.repaint_after_drop(cx);
+        } else {
+            self.open_modal(
+                modals::Modal::adjust_dates(
+                    Command::MoveTasksAdjusted { ids, placement },
+                    conflicts,
+                ),
+                cx,
+            );
+        }
+    }
+
     fn drop_on_project(&mut self, project: ProjectId, payload: &DragTask, cx: &mut Context<Self>) {
         let ids = self.drag_ids(payload);
         if payload.tag {
             return;
         }
-        self.execute(Command::MoveTasks {
+        self.move_tasks_checked(
             ids,
-            placement: TaskPlacement::Project {
+            TaskPlacement::Project {
                 project,
                 position: Position::End,
             },
-        });
+            cx,
+        );
         cx.notify();
         self.repaint_after_drop(cx);
     }
@@ -4005,13 +4035,14 @@ impl FlowlistApp {
             return;
         }
         let ids = self.drag_ids(payload);
-        self.execute(Command::MoveTasks {
+        self.move_tasks_checked(
             ids,
-            placement: TaskPlacement::Parent {
+            TaskPlacement::Parent {
                 parent: target,
                 position: Position::End,
             },
-        });
+            cx,
+        );
         cx.notify();
         self.repaint_after_drop(cx);
     }
@@ -4059,7 +4090,7 @@ impl FlowlistApp {
             },
         };
         let ids = self.drag_ids(payload);
-        self.execute(Command::MoveTasks { ids, placement });
+        self.move_tasks_checked(ids, placement, cx);
         self.content_drop_target = None;
         cx.notify();
         self.repaint_after_drop(cx);
@@ -4096,11 +4127,7 @@ impl FlowlistApp {
             (Some(from), Some(to)) if from > to => Position::Before(target),
             _ => Position::After(target),
         };
-        self.execute(Command::MoveTasks {
-            ids,
-            placement: TaskPlacement::Parent { parent, position },
-        });
-        cx.notify();
+        self.move_tasks_checked(ids, TaskPlacement::Parent { parent, position }, cx);
     }
 
     fn trash_subtask(&mut self, id: TaskId, cx: &mut Context<Self>) {
@@ -4147,10 +4174,7 @@ impl FlowlistApp {
             },
             None => TaskPlacement::Inbox(Position::End),
         };
-        self.execute(Command::MoveTasks {
-            ids: vec![id],
-            placement,
-        });
+        self.move_tasks_checked(vec![id], placement, cx);
         self.toast = Some("Moved out from under its parent".to_string());
         self.save_session();
         cx.notify();
@@ -4710,6 +4734,9 @@ impl FlowlistApp {
                 crate::uninstall::schedule(&plan)?;
             }
             modals::Modal::IconPicker { .. } => {}
+            modals::Modal::AdjustDates { command, .. } => {
+                self.execute(command.clone());
+            }
             modals::Modal::ReviewInterval { id, days, .. } => {
                 let value = days
                     .text()
@@ -7291,6 +7318,8 @@ impl FlowlistApp {
                 .collect::<Vec<_>>()
         );
         state["content_groups"] = serde_json::json!(self.content_group_boxes.borrow().clone());
+        state["content_row_boxes"] =
+            serde_json::json!(self.content_row_boxes.borrow().clone());
         state["task_disclosures"] = serde_json::json!(self.task_disclosures.borrow().clone());
         state["inspector_subtasks"] = serde_json::json!(self.inspector_boxes.borrow().clone());
         let text = state.to_string();

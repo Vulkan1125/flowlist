@@ -22,6 +22,17 @@ pub type FolderMap = BTreeMap<FolderId, Folder>;
 pub type TagMap = BTreeMap<TagId, Tag>;
 pub type PerspectiveMap = BTreeMap<PerspectiveId, Perspective>;
 
+/// One task whose stored dates violate its container's dates.
+#[derive(Clone, Debug)]
+pub struct DateConflict {
+    pub task: TaskId,
+    pub title: String,
+    /// (from, to)
+    pub due: Option<(Stamp, Stamp)>,
+    /// (from, to)
+    pub defer: Option<(Stamp, Stamp)>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Db {
     #[serde(default)]
@@ -482,6 +493,110 @@ impl Db {
         self.effective_project(task_id)
             .and_then(|project| self.projects.get(&project))
             .and_then(|project| project.planned)
+    }
+
+    /// The defer date imposed by the task's containers, excluding its own.
+    fn container_defer(&self, task_id: &TaskId) -> Option<Stamp> {
+        let task = self.tasks.get(task_id)?;
+        let mut latest: Option<Stamp> = None;
+        let mut ancestor = task.parent.clone();
+        let mut guard = 0;
+        while let Some(id) = ancestor {
+            guard += 1;
+            if guard > 64 {
+                break;
+            }
+            let Some(parent) = self.tasks.get(&id) else {
+                break;
+            };
+            if let Some(defer) = parent.defer {
+                latest = match latest {
+                    Some(current) if current.at >= defer.at => Some(current),
+                    _ => Some(defer),
+                };
+            }
+            ancestor = parent.parent.clone();
+        }
+        if let Some(project) = self
+            .effective_project(task_id)
+            .and_then(|project| self.projects.get(&project))
+        {
+            if let Some(defer) = project.defer {
+                latest = match latest {
+                    Some(current) if current.at >= defer.at => Some(current),
+                    _ => Some(defer),
+                };
+            }
+        }
+        latest
+    }
+
+    /// The due date imposed by the task's containers, excluding its own.
+    fn container_due(&self, task_id: &TaskId) -> Option<Stamp> {
+        let task = self.tasks.get(task_id)?;
+        let mut earliest: Option<Stamp> = None;
+        let mut ancestor = task.parent.clone();
+        let mut guard = 0;
+        while let Some(id) = ancestor {
+            guard += 1;
+            if guard > 64 {
+                break;
+            }
+            let Some(parent) = self.tasks.get(&id) else {
+                break;
+            };
+            if let Some(due) = parent.due {
+                earliest = match earliest {
+                    Some(current) if current.at <= due.at => Some(current),
+                    _ => Some(due),
+                };
+            }
+            ancestor = parent.parent.clone();
+        }
+        if let Some(project) = self
+            .effective_project(task_id)
+            .and_then(|project| self.projects.get(&project))
+        {
+            if let Some(due) = project.due {
+                earliest = match earliest {
+                    Some(current) if current.at <= due.at => Some(current),
+                    _ => Some(due),
+                };
+            }
+        }
+        earliest
+    }
+
+    /// Stored dates that a container would change. Used by moves and edits.
+    pub fn date_conflicts(&self, ids: &[TaskId]) -> Vec<DateConflict> {
+        let mut out = Vec::new();
+        for id in ids {
+            let Some(task) = self.tasks.get(id) else {
+                continue;
+            };
+            if task.completed || task.is_trashed() {
+                continue;
+            }
+            let container_due = self.container_due(id);
+            let container_defer = self.container_defer(id);
+            let due = match (task.due, container_due) {
+                (Some(from), Some(to)) if from.at > to.at => Some((from, to)),
+                _ => None,
+            };
+            let defer = match (task.defer, container_defer) {
+                (Some(from), Some(to)) if from.at < to.at => Some((from, to)),
+                _ => None,
+            };
+            if due.is_some() || defer.is_some() {
+                out.push(DateConflict {
+                    task: id.clone(),
+                    title: task.title.clone(),
+                    due,
+                    defer,
+                });
+            }
+        }
+        out
     }
 
     /// The latest defer date in the task's container chain. A project or
@@ -1528,6 +1643,36 @@ impl Db {
         for id in self.tags.keys() {
             if !tags_seen.contains(id) {
                 problems.push(format!("tag {id} is orphaned"));
+            }
+        }
+
+        let task_ids: Vec<TaskId> = self.tasks.keys().cloned().collect();
+        for conflict in self.date_conflicts(&task_ids) {
+            let mut parts = Vec::new();
+            if let Some((from, to)) = conflict.due {
+                parts.push(format!(
+                    "due {} is later than its container due {}",
+                    from.to_input_string(),
+                    to.to_input_string()
+                ));
+            }
+            if let Some((from, to)) = conflict.defer {
+                parts.push(format!(
+                    "defer {} is earlier than its container defer {}",
+                    from.to_input_string(),
+                    to.to_input_string()
+                ));
+            }
+            problems.push(format!("task “{}” {}", conflict.title, parts.join("; ")));
+        }
+        for project in self.projects.values() {
+            if let (Some(due), Some(defer)) = (project.due, project.defer) {
+                if due.at < defer.at {
+                    problems.push(format!(
+                        "project “{}” is due before it is deferred",
+                        project.name
+                    ));
+                }
             }
         }
 
