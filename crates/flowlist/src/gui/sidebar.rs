@@ -878,13 +878,8 @@ impl FlowlistApp {
                     false,
                     cx,
                     move |this, cx| {
-                        this.delete_sidebar_entity(
-                            flowlist_core::command::Command::DeleteProject {
-                                id: delete_id.clone(),
-                            },
-                            View::Project(delete_id.clone()),
-                            cx,
-                        )
+                        let modal = modals::Modal::delete_project(this, delete_id.clone());
+                        this.open_modal(modal, cx);
                     },
                 ));
             }
@@ -950,13 +945,8 @@ impl FlowlistApp {
                     false,
                     cx,
                     move |this, cx| {
-                        this.delete_sidebar_entity(
-                            flowlist_core::command::Command::DeleteTag {
-                                id: delete_id.clone(),
-                            },
-                            View::Tag(delete_id.clone()),
-                            cx,
-                        )
+                        let modal = modals::Modal::delete_tag(this, &delete_id);
+                        this.open_modal(modal, cx);
                     },
                 ));
             }

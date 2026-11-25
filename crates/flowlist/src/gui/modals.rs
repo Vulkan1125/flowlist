@@ -10,7 +10,7 @@ use gpui::{
     Window, div, img, point, prelude::*, px, rgb, rgba, size,
 };
 
-use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TaskId};
+use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
     BuiltinPerspective, GroupBy, IconSpec, Priority, ProjectIcon, ProjectKind, SidebarOptions,
     SortBy,
@@ -127,6 +127,11 @@ pub enum Modal {
     /// root). The sheet names the folder and asks first; Undo restores it.
     DeleteFolder {
         id: FolderId,
+        name: String,
+    },
+    /// Deleting a tag takes it off every task; the sheet names it first.
+    DeleteTag {
+        id: TagId,
         name: String,
     },
     /// Deleting a repeating task asks whether just this occurrence or the
@@ -464,6 +469,20 @@ impl Modal {
         }
     }
 
+    pub fn delete_tag(app: &FlowlistApp, id: &TagId) -> Self {
+        let name = app
+            .store
+            .db()
+            .tags
+            .get(id)
+            .map(|tag| tag.name.clone())
+            .unwrap_or_else(|| "tag".to_string());
+        Modal::DeleteTag {
+            id: id.clone(),
+            name,
+        }
+    }
+
     pub fn delete_task(app: &FlowlistApp, ids: Vec<TaskId>, title: String) -> Self {
         let occurrences = ids
             .iter()
@@ -668,6 +687,7 @@ impl Modal {
             Modal::CreateProject { .. } => "Create project",
             Modal::DeleteProject { .. } => "Delete project",
             Modal::DeleteFolder { .. } => "Delete folder",
+            Modal::DeleteTag { .. } => "Delete tag",
             Modal::DeleteTask { .. } => "Delete repeating task",
             Modal::HideSubtasks { .. } => "Convert to one-off steps?",
             Modal::PriorityScope { .. } => "Repeating task priority",
@@ -714,6 +734,9 @@ impl Modal {
             }
             Modal::DeleteFolder { .. } => {
                 "Its projects and their tasks move to Trash with it. Undo restores everything."
+            }
+            Modal::DeleteTag { .. } => {
+                "Tasks keep their other tags; this tag is removed from them."
             }
             Modal::DeleteTask { .. } => {
                 "This task repeats. Trash this occurrence, or the whole series; Undo restores everything."
@@ -769,7 +792,7 @@ impl Modal {
     pub fn confirm_label(&self) -> &'static str {
         match self {
             Modal::CreateProject { .. } => "Create",
-            Modal::DeleteProject { .. } => "Delete",
+            Modal::DeleteProject { .. } | Modal::DeleteTag { .. } => "Delete",
             Modal::DeleteFolder { .. } => "Delete",
             Modal::DeleteTask { .. } => "Delete",
             Modal::HideSubtasks { .. } => "Convert",
@@ -797,7 +820,7 @@ impl Modal {
             Modal::IconPicker { .. } => 1,
             Modal::CreateProject { .. } => 0,
             Modal::DeleteProject { .. } => 0,
-            Modal::DeleteFolder { .. } => 0,
+            Modal::DeleteFolder { .. } | Modal::DeleteTag { .. } => 0,
             Modal::DeleteTask { .. } => 0,
             Modal::HideSubtasks { .. } => 0,
             Modal::PriorityScope { .. } => 0,
@@ -839,7 +862,7 @@ impl Modal {
             Modal::IconPicker { query, .. } => (index == 0).then_some(query),
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
-            Modal::DeleteFolder { .. } => None,
+            Modal::DeleteFolder { .. } | Modal::DeleteTag { .. } => None,
             Modal::DeleteTask { .. } => None,
             Modal::HideSubtasks { .. } => None,
             Modal::PriorityScope { .. } => None,
@@ -905,7 +928,7 @@ impl Modal {
             Modal::IconPicker { query, .. } => (index == 0).then_some(query),
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
-            Modal::DeleteFolder { .. } => None,
+            Modal::DeleteFolder { .. } | Modal::DeleteTag { .. } => None,
             Modal::DeleteTask { .. } => None,
             Modal::HideSubtasks { .. } => None,
             Modal::PriorityScope { .. } => None,
@@ -965,7 +988,7 @@ impl Modal {
             Modal::IconPicker { .. } => "Search icons",
             Modal::CreateProject { .. } => "",
             Modal::DeleteProject { .. } => "",
-            Modal::DeleteFolder { .. } => "",
+            Modal::DeleteFolder { .. } | Modal::DeleteTag { .. } => "",
             Modal::DeleteTask { .. } => "",
             Modal::HideSubtasks { .. } => "",
             Modal::PriorityScope { .. } => "",
@@ -1219,6 +1242,20 @@ impl FlowlistApp {
                         .font_weight(gpui::FontWeight::SEMIBOLD)
                         .text_color(theme.text)
                         .child(name.clone()),
+                );
+            }
+            if let Modal::DeleteTag { name, .. } = modal {
+                body = body.child(
+                    div()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.danger)
+                        .bg(theme.field)
+                        .text_sm()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.text)
+                        .child(format!("#{name}")),
                 );
             }
             if let Modal::DeleteFolder { id, name } = modal {

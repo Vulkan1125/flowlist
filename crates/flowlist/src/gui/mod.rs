@@ -2711,7 +2711,9 @@ impl FlowlistApp {
                 return;
             }
             sidebar::SidebarTarget::Tag(id) => {
-                (Command::DeleteTag { id: id.clone() }, View::Tag(id))
+                let modal = modals::Modal::delete_tag(self, &id);
+                self.open_modal(modal, cx);
+                return;
             }
             sidebar::SidebarTarget::Project(_) => {
                 self.toast = Some("Close a project from its dashboard".to_string());
@@ -4422,6 +4424,15 @@ impl FlowlistApp {
             modals::Modal::DeleteProject { id, .. } => {
                 self.execute(Command::DeleteProject { id: id.clone() });
                 if self.view == View::Project(id.clone()) {
+                    self.view = View::Builtin(BuiltinPerspective::Inbox);
+                    self.selected.clear();
+                    self.anchor = None;
+                }
+                self.save_session();
+            }
+            modals::Modal::DeleteTag { id, .. } => {
+                self.execute(Command::DeleteTag { id: id.clone() });
+                if self.view == View::Tag(id.clone()) {
                     self.view = View::Builtin(BuiltinPerspective::Inbox);
                     self.selected.clear();
                     self.anchor = None;
