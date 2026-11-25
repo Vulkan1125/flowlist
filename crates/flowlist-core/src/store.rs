@@ -11,7 +11,9 @@ use chrono::{DateTime, Utc};
 use crate::command::{Command, Outcome};
 use crate::db::Db;
 use crate::error::{Error, Result};
-use crate::model::{Condition, DueWindow, FilterNode, GroupBy, Perspective, SortBy, TaskStatus};
+use crate::model::{
+    Condition, DueWindow, FilterNode, GroupBy, Perspective, ProjectIcon, SortBy, TaskStatus,
+};
 use crate::paths::DataPaths;
 use crate::persist::lock::StoreGuard;
 use crate::persist::{self, DataFile, HistoryEntry, HistoryFile, SCHEMA_VERSION};
@@ -98,7 +100,9 @@ impl Store {
     /// the user can edit, rename or delete them; the settings marker only
     /// stops them from coming back.
     fn seed_shipped_views(&mut self) -> Result<()> {
-        if self.data.db.settings.seeded_running_view {
+        if self.data.db.settings.seeded_running_view
+            && self.data.db.settings.seeded_running_icon
+        {
             return Ok(());
         }
         self.mutate(|db, _at| {
@@ -128,6 +132,7 @@ impl Store {
                 perspective.group_by = GroupBy::Project;
                 perspective.sort = SortBy::Planned;
                 perspective.pinned = true;
+                perspective.icon = Some(ProjectIcon::Running);
                 perspective.position = db
                     .perspectives
                     .values()
@@ -137,6 +142,20 @@ impl Store {
                     + 1;
                 db.perspectives
                     .insert(perspective.id.clone(), perspective);
+            }
+            // Upgrade a library seeded before icons existed, without touching
+            // an icon the user already picked.
+            if !db.settings.seeded_running_icon {
+                if let Some(perspective) = db
+                    .perspectives
+                    .values_mut()
+                    .find(|perspective| perspective.name.eq_ignore_ascii_case("Running"))
+                {
+                    if perspective.icon.is_none() {
+                        perspective.icon = Some(ProjectIcon::Running);
+                    }
+                }
+                db.settings.seeded_running_icon = true;
             }
             let mut outcome = Outcome::new("Seed shipped views");
             outcome.message = Some("Added the Running saved view".to_string());

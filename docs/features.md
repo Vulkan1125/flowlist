@@ -54,8 +54,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       drops both carried-over groups. A clear day shows a calm “Nothing planned
       or due today” message)
 - [x] Projects
-- [x] Forecast (Past / overdue / today / tomorrow / later; Due, Defer and
-      Planned are independent, so one task can appear on several days)
+- [x] Forecast (Past / overdue / today / tomorrow / later / next month and
+      later; Due, Defer and Planned are independent, so one task can appear on
+      several days. The far horizon starts folded)
 - [x] Flagged
 - [x] Review
 - [x] Tags
@@ -69,10 +70,11 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Priority rows and a global priority filter
 - [x] Custom saved perspectives with JSON filter trees, including a
       full-screen reminder filter that follows project and folder marks
-- [x] Pinned saved views: pinned views sit above the SAVED section, stay
-      visible when it is folded and show a pin mark. A shipped **Running** view
-      collects started work that is not due yet; it is editable and deletable
-      like any other saved view
+- [x] Pinned saved views: pinned views sort to the top of the SAVED section
+      and can keep the pin mark or take a custom rail icon chosen in the
+      editor. A shipped **Running** view collects started work that is not due
+      yet and uses a running figure; it is editable and deletable like any
+      other saved view
 - [x] Hide empty custom views option: a saved view leaves the sidebar until
       its filter matches again
 - [x] Availability: available, deferred, blocked, completed

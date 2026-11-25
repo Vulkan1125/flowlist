@@ -160,6 +160,7 @@ pub enum ProjectIcon {
     Paintbrush,
     Palette,
     Person,
+    Running,
     Team,
     Pill,
     Pin,
@@ -176,7 +177,7 @@ pub enum ProjectIcon {
 }
 
 impl ProjectIcon {
-    pub const ALL: [ProjectIcon; 54] = [
+    pub const ALL: [ProjectIcon; 55] = [
         ProjectIcon::Project,
         ProjectIcon::Folder,
         ProjectIcon::Star,
@@ -218,6 +219,7 @@ impl ProjectIcon {
         ProjectIcon::Paintbrush,
         ProjectIcon::Palette,
         ProjectIcon::Person,
+        ProjectIcon::Running,
         ProjectIcon::Team,
         ProjectIcon::Pill,
         ProjectIcon::Pin,
@@ -276,6 +278,7 @@ impl ProjectIcon {
             ProjectIcon::Paintbrush => "paintbrush",
             ProjectIcon::Palette => "palette",
             ProjectIcon::Person => "person",
+            ProjectIcon::Running => "running",
             ProjectIcon::Team => "team",
             ProjectIcon::Pill => "pill",
             ProjectIcon::Pin => "pin",
@@ -335,6 +338,7 @@ impl ProjectIcon {
             ProjectIcon::Paintbrush => "Design",
             ProjectIcon::Palette => "Palette",
             ProjectIcon::Person => "Person",
+            ProjectIcon::Running => "Running",
             ProjectIcon::Team => "Team",
             ProjectIcon::Pill => "Health",
             ProjectIcon::Pin => "Pin",

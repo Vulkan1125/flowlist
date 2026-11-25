@@ -96,6 +96,7 @@ pub enum Icon {
     Paintbrush,
     User,
     Users,
+    Running,
     Pill,
     Pin,
     Pizza,
@@ -109,7 +110,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    pub const ALL: [Icon; 95] = [
+    pub const ALL: [Icon; 96] = [
         Icon::Inbox,
         Icon::Projects,
         Icon::Forecast,
@@ -195,6 +196,7 @@ impl Icon {
         Icon::Paintbrush,
         Icon::User,
         Icon::Users,
+        Icon::Running,
         Icon::Pill,
         Icon::Pin,
         Icon::Pizza,
@@ -294,6 +296,7 @@ impl Icon {
             Icon::Paintbrush => "icons/paintbrush.svg",
             Icon::User => "icons/person.svg",
             Icon::Users => "icons/team.svg",
+            Icon::Running => "icons/running.svg",
             Icon::Pill => "icons/health.svg",
             Icon::Pin => "icons/pin.svg",
             Icon::Pizza => "icons/pizza.svg",
@@ -535,6 +538,9 @@ impl Icon {
             Icon::User => {
                 r#"<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /> <circle cx="12" cy="7" r="4" />"#
             }
+            Icon::Running => {
+                r#"<circle cx="16" cy="4" r="2"/><path d="M15 7l-4 5"/><path d="M13 9 9 8"/><path d="M13 9l4 3"/><path d="M11 12l-3 3 1 4"/><path d="M11 12l4 4-1 4"/>"#
+            }
             Icon::Users => {
                 r#"<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /> <circle cx="9" cy="7" r="4" /> <path d="M22 21v-2a4 4 0 0 0-3-3.87" /> <path d="M16 3.13a4 4 0 0 1 0 7.75" />"#
             }
@@ -613,7 +619,7 @@ mod tests {
 
     #[test]
     fn icon_set_is_complete_and_unique() {
-        assert_eq!(Icon::ALL.len(), 95);
+        assert_eq!(Icon::ALL.len(), 96);
         let mut paths: Vec<&str> = Icon::ALL.iter().map(|icon| icon.path()).collect();
         paths.sort_unstable();
         paths.dedup();

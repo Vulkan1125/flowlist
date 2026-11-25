@@ -516,6 +516,12 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>) -> Vec<Group> {
         );
     }
     push("forecast:later", "Later", i64::MAX - 1, &data.later);
+    push(
+        "forecast:next-month",
+        "Next month and later",
+        i64::MAX,
+        &data.next_month,
+    );
     groups.sort_by(|a, b| a.position.cmp(&b.position));
     groups
 }

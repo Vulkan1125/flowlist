@@ -45,6 +45,11 @@ pub struct Settings {
     /// permanent.
     #[serde(default)]
     pub seeded_running_view: bool,
+    /// Whether the shipped Running view has been given its running figure.
+    /// Kept separate so upgrading an existing library does not overwrite an
+    /// icon the user chose.
+    #[serde(default)]
+    pub seeded_running_icon: bool,
 }
 
 /// Sidebar presentation, kept in the library so every client agrees on what
@@ -188,6 +193,7 @@ impl Default for Settings {
             trash_retention_days: default_trash_days(),
             sidebar: SidebarOptions::default(),
             seeded_running_view: false,
+            seeded_running_icon: false,
         }
     }
 }

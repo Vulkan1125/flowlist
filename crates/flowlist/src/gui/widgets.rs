@@ -976,6 +976,7 @@ pub fn icon_for_project(icon: ProjectIcon, size: f32, color: gpui::Hsla) -> impl
         ProjectIcon::Paintbrush => Icon::Paintbrush,
         ProjectIcon::Palette => Icon::Palette,
         ProjectIcon::Person => Icon::User,
+        ProjectIcon::Running => Icon::Running,
         ProjectIcon::Team => Icon::Users,
         ProjectIcon::Pill => Icon::Pill,
         ProjectIcon::Pin => Icon::Pin,

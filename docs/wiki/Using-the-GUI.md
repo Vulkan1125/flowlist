@@ -155,7 +155,7 @@ The rail is the map of the library:
 | --- | --- |
 | **Inbox** | unscheduled tasks — no project, no due or defer date (a planned date does not count) |
 | **Today** | due or planned today, deferred to today, overdue, and slipped plans |
-| **Forecast** | the month calendar and upcoming due, deferred and planned work |
+| **Forecast** | the month calendar and upcoming due, deferred and planned work; work more than 30 days out sits under **Next month and later**, folded |
 | **Review** | projects whose review date has arrived |
 | **Projects** | every project at a glance |
 | **Tags** | tasks grouped by context |
@@ -189,11 +189,14 @@ titles itself **Search** and ranks the closest matches first.
   Flagged only, Status, Projects, Tags with child tags, Priorities, Due,
   Planned and Defer windows (including **Later / none**), full-screen reminder
   marks (yes or no, including inherited marks), an estimate range, grouping and
-  sorting, completed tasks, and **Pinned**. Pinned views sit above the SAVED
-  header, keep a pin mark and stay visible when SAVED is folded; pin or unpin
-  from the editor or the row's context menu (`perspective add --pinned` for the
-  CLI). A shipped **Running** view is pinned by default and lists started work
-  that is not due yet; it can be edited or deleted like any other saved view.
+  sorting, completed tasks, **Pinned** and **Icon**. Pinned views sort to the
+  top of SAVED; pin or unpin from the editor or the row's context menu
+  (`perspective add --pinned` for the CLI). Each pinned view keeps the pin mark
+  by default, or takes a custom rail icon from the editor's icon grid
+  (`perspective add --icon` for the CLI); a shipped **Running** view uses a
+  running figure and lists started work that is not due yet. It can be edited
+  or deleted like any other saved view. Folding SAVED hides every saved view,
+  pinned or not.
   Both platforms offer project/folder/tag/due/defer/flagged/estimate
   grouping and manual/due/defer/name/priority/flagged/estimate/created
   sorting; the Mac editor also offers Planned grouping, sorting and a Planned

@@ -1154,6 +1154,7 @@ class Repository(context: Context) {
         showCompleted: Boolean,
         pinned: Boolean,
         position: Int,
+        icon: String?,
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
@@ -1167,6 +1168,7 @@ class Repository(context: Context) {
                 showCompleted,
                 pinned,
                 position,
+                icon,
             ),
             "Save perspective “$trimmed”",
         )

@@ -148,6 +148,7 @@ data class PerspectiveDto(
     @SerialName("show_completed") val showCompleted: Boolean = false,
     val position: Int = 0,
     val pinned: Boolean = false,
+    val icon: String? = null,
 )
 
 @Serializable

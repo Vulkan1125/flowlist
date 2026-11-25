@@ -11,9 +11,13 @@
 - **Running and pinned views.** New and existing libraries get a pinned
   **Running** saved view for work that has started and is not due yet; it is an
   ordinary saved view and can be edited or deleted. Any saved view can be
-  pinned to the top of the rail from its context menu or the editor
-  (`perspective add --pinned`), and pinned views stay visible when SAVED is
-  collapsed. Filters gain a **Later / none** window.
+  pinned to the top of **SAVED** from its context menu or the editor
+  (`perspective add --pinned`), and any saved view can take a custom rail icon
+  from the editor or `perspective add --icon`; Running ships with a running
+  figure. Filters gain a **Later / none** window.
+- **Next month and later.** Forecast moves due or planned work more than 30
+  days out into a **Next month and later** group, folded by default so the
+  coming week stays at the top.
 - **Three dates at a glance.** Rows and inspector labels now carry OmniFocus-
   style marks — a turning arrow for Defer, a signpost for Planned and a clock
   on a calendar for Due — so the dates never read as the same thing. Today now

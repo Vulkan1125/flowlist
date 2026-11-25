@@ -1999,6 +1999,8 @@ fn forecast_keeps_each_date_type_independent() {
     );
     let slipped = make(&mut store, "Slipped plan", Some(day(-1)), None);
     let future = make(&mut store, "Far plan", Some(day(9)), None);
+    let near_future = make(&mut store, "Later this month", None, Some(day(20)));
+    let far_future = make(&mut store, "Next month", None, Some(day(45)));
 
     let data = forecast::forecast(store.db(), Utc::now());
     assert!(data.planned_today.contains(&both));
@@ -2008,6 +2010,9 @@ fn forecast_keeps_each_date_type_independent() {
         .is_some_and(|day| day.due.contains(&both)));
     assert!(data.past_planned.contains(&slipped));
     assert!(data.later.contains(&future));
+    assert!(data.later.contains(&near_future));
+    assert!(!data.later.contains(&far_future));
+    assert!(data.next_month.contains(&far_future));
 
     let on_planned = query::tasks_on_date(store.db(), today, Utc::now());
     assert!(on_planned.contains(&both));
@@ -2523,7 +2528,7 @@ fn every_project_icon_round_trips_by_slug() {
         assert_eq!(ProjectIcon::from_slug(icon.slug()), Some(icon));
         assert!(slugs.insert(icon.slug()), "duplicate icon slug");
     }
-    assert_eq!(ProjectIcon::ALL.len(), 54);
+    assert_eq!(ProjectIcon::ALL.len(), 55);
 }
 
 #[test]

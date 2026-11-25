@@ -1834,6 +1834,16 @@ impl FlowlistApp {
         };
         let form = form.clone();
         let db = self.store.db();
+        let icon = form.icon;
+        let icon_open = form.icon_open;
+        let display_icon = icon.unwrap_or(if form.pinned {
+            ProjectIcon::Pin
+        } else {
+            ProjectIcon::Project
+        });
+        let icon_label = icon
+            .map(|icon| icon.label())
+            .unwrap_or(if form.pinned { "Pin" } else { "Default" });
         let project_label = match form.projects.len() {
             0 => "Any".to_string(),
             1 => db.project_path(form.projects.first().expect("length checked")),
@@ -1964,6 +1974,112 @@ impl FlowlistApp {
                     }))
             }));
 
+        let icon_row = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .child(div().text_xs().text_color(theme.text_faint).child("Icon"))
+            .child(
+                div()
+                    .on_children_prepainted(
+                        self.theme_probe("perspective-icon-row".to_string()),
+                    )
+                    .id("modal-perspective-icon")
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .px_2()
+                    .py_1()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(if icon_open {
+                        theme.accent
+                    } else {
+                        theme.border_soft
+                    })
+                    .bg(if icon_open {
+                        theme.selection
+                    } else {
+                        theme.clear
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(widgets::icon_for_project(
+                        display_icon,
+                        14.0,
+                        theme.text_dim,
+                    ))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child(icon_label),
+                    )
+                    .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.icon_open = !form.icon_open;
+                        }
+                        cx.notify();
+                    })),
+            );
+        let mut icon_grid = div().flex().flex_wrap().items_center().gap_1();
+        icon_grid = icon_grid.child(
+            div()
+                .on_children_prepainted(
+                    self.theme_probe("perspective-icon:default".to_string()),
+                )
+                .id("perspective-icon:default")
+                .child(widgets::toggle_chip(theme, "Default", icon.is_none()))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        form.icon = None;
+                        form.icon_open = false;
+                    }
+                    cx.notify();
+                })),
+        );
+        for candidate in ProjectIcon::ALL {
+            let active = icon == Some(candidate);
+            icon_grid = icon_grid.child(
+                div()
+                    .on_children_prepainted(self.theme_probe(format!(
+                        "perspective-icon:{}",
+                        candidate.slug()
+                    )))
+                    .id(super::sid(format!(
+                        "perspective-icon:{}",
+                        candidate.slug()
+                    )))
+                    .size(px(26.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(if active {
+                        theme.accent
+                    } else {
+                        theme.border_soft
+                    })
+                    .bg(if active { theme.selection } else { theme.clear })
+                    .cursor_pointer()
+                    .flow_tip(self, cx, theme, candidate.label())
+                    .hover(|style| style.bg(theme.hover))
+                    .child(widgets::icon_for_project(
+                        candidate,
+                        14.0,
+                        theme.text_dim,
+                    ))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.icon = Some(candidate);
+                            form.icon_open = false;
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
         let project_tag_row = div()
             .flex()
             .items_start()
@@ -2134,6 +2250,9 @@ impl FlowlistApp {
             .flex()
             .flex_col()
             .gap_2()
+            .child(icon_row)
+            .when(icon_open, |this| this.child(icon_grid))
+            .child(widgets::divider(theme))
             .child(heading("FILTERS"))
             .child(toggles)
             .child(priority_toggles)

@@ -1408,6 +1408,7 @@ fun MainScreen(
                         showCompleted = draft.showCompleted,
                         pinned = editing?.pinned ?: false,
                         position = editing?.position ?: 0,
+                        icon = editing?.icon,
                     )
                 }
             },

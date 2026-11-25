@@ -9,7 +9,8 @@ use std::collections::BTreeSet;
 
 use flowlist_core::ids::{PerspectiveId, ProjectId, TagId};
 use flowlist_core::model::{
-    Condition, DueWindow, FilterNode, GroupBy, Perspective, Priority, SortBy, TaskStatus,
+    Condition, DueWindow, FilterNode, GroupBy, Perspective, Priority, ProjectIcon, SortBy,
+    TaskStatus,
 };
 
 use super::text::TextBuffer;
@@ -315,6 +316,8 @@ pub struct PerspectiveForm {
     pub text: TextBuffer,
     pub position: u32,
     pub pinned: bool,
+    pub icon: Option<ProjectIcon>,
+    pub icon_open: bool,
     pub group: GroupBy,
     pub sort: SortBy,
     pub show_completed: bool,
@@ -345,6 +348,8 @@ impl Default for PerspectiveForm {
             text: TextBuffer::empty(),
             position: 0,
             pinned: false,
+            icon: None,
+            icon_open: false,
             group: GroupBy::Project,
             sort: SortBy::Due,
             show_completed: false,
@@ -378,6 +383,8 @@ impl PerspectiveForm {
             name: TextBuffer::new(perspective.name.clone()),
             position: perspective.position,
             pinned: perspective.pinned,
+            icon: perspective.icon,
+            icon_open: false,
             group: perspective.group_by,
             sort: perspective.sort,
             show_completed: perspective.show_completed,
@@ -604,6 +611,7 @@ impl PerspectiveForm {
         }
         perspective.position = self.position;
         perspective.pinned = self.pinned;
+        perspective.icon = self.icon;
         perspective.group_by = self.group;
         perspective.sort = self.sort;
         perspective.show_completed = self.show_completed;
@@ -965,12 +973,15 @@ mod tests {
     }
 
     #[test]
-    fn editing_a_pinned_view_keeps_it_pinned() {
+    fn editing_a_pinned_view_keeps_it_pinned_and_keeps_its_icon() {
         let mut original = Perspective::new("Running");
         original.pinned = true;
+        original.icon = Some(ProjectIcon::Running);
 
         let form = PerspectiveForm::edit(&original);
         assert!(form.pinned);
-        assert!(form.to_perspective().pinned);
+        let saved = form.to_perspective();
+        assert!(saved.pinned);
+        assert_eq!(saved.icon, Some(ProjectIcon::Running));
     }
 }

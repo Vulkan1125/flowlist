@@ -441,6 +441,8 @@ pub struct FlowlistApp {
     /// list reflects which subtasks are visible, not just what the query
     /// matched.
     content_rows: Rc<RefCell<Vec<PaintedTaskRow>>>,
+    /// Group header boxes on the last frame, keyed by group key.
+    content_group_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Site favicons keyed by host, fetched once per session.
     favicons: Rc<RefCell<BTreeMap<String, Arc<gpui::RenderImage>>>>,
     /// Hosts currently being fetched, so a row does not ask twice.
@@ -866,6 +868,7 @@ impl FlowlistApp {
             sidebar_drag_target: None,
             content_drop_target: None,
             content_rows: Rc::new(RefCell::new(Vec::new())),
+            content_group_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             favicons: Rc::new(RefCell::new(BTreeMap::new())),
             favicon_requests: Rc::new(RefCell::new(BTreeSet::new())),
             favicon_misses: Rc::new(RefCell::new(BTreeSet::new())),
@@ -3765,7 +3768,8 @@ impl FlowlistApp {
     }
 
     fn toggle_group_collapsed(&mut self, key: String, cx: &mut Context<Self>) {
-        self.toggle_open(key, true);
+        let default = group_default_open(&key);
+        self.toggle_open(key, default);
         cx.notify();
     }
 
@@ -6520,6 +6524,12 @@ fn sort_label(sort: Option<SortBy>) -> &'static str {
     }
 }
 
+/// Most groups start open. Forecast's far horizon starts folded so a task
+/// months away does not push the coming week down the list.
+fn group_default_open(key: &str) -> bool {
+    key != "forecast:next-month"
+}
+
 fn group_slug(group: GroupBy) -> &'static str {
     match group {
         GroupBy::None => "none",
@@ -7124,6 +7134,7 @@ impl FlowlistApp {
                 }))
                 .collect::<Vec<_>>()
         );
+        state["content_groups"] = serde_json::json!(self.content_group_boxes.borrow().clone());
         state["task_disclosures"] = serde_json::json!(self.task_disclosures.borrow().clone());
         state["inspector_subtasks"] = serde_json::json!(self.inspector_boxes.borrow().clone());
         let text = state.to_string();

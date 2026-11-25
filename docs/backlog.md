@@ -100,9 +100,11 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Past plans and Running** — a planned date that slips stays in
       Forecast's Past section and in Today's Past plans group; one Hide past
       chip folds both carried-over groups. Forecast treats Due, Defer and
-      Planned independently, calendar clicks include planned days, and saved
-      views can be pinned. A shipped, pinned **Running** view lists started work
-      that is not due yet and can be edited or deleted.
+      Planned independently, calendar clicks include planned days, and work
+      more than 30 days out folds under **Next month and later**. Saved views
+      can be pinned to the top of SAVED and given a custom rail icon. A shipped,
+      pinned **Running** view with a running figure lists started work that is
+      not due yet and can be edited or deleted.
 - [ ] **Full notification model** — defer/available alerts, per-item custom
       notification schedules, and richer notification payloads beyond due
       reminders and full-screen reminders.

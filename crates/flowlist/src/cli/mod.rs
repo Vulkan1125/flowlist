@@ -638,6 +638,9 @@ pub struct PerspectiveAddArgs {
     /// Keep this view above the saved views.
     #[arg(long)]
     pub pinned: bool,
+    /// Rail icon slug (pin, running, star, rocket, …).
+    #[arg(long)]
+    pub icon: Option<String>,
 }
 
 #[derive(Args, Debug, Clone, Default)]
@@ -2253,6 +2256,12 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
             }
             perspective.show_completed = args.show_completed;
             perspective.pinned = args.pinned;
+            if let Some(icon) = args.icon {
+                perspective.icon = Some(
+                    ProjectIcon::from_slug(&icon)
+                        .ok_or_else(|| anyhow!("unknown icon “{icon}”"))?,
+                );
+            }
             let outcome = store.execute(CoreCommand::SavePerspective {
                 perspective: perspective.clone(),
             })?;
@@ -2301,6 +2310,7 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
                                 "sort": format!("{:?}", perspective.sort),
                                 "show_completed": perspective.show_completed,
                                 "pinned": perspective.pinned,
+                                "icon": perspective.icon.map(|icon| icon.slug()),
                             }))
                             .collect::<Vec<_>>()
                     ))?

@@ -23,6 +23,9 @@ pub struct Forecast {
     pub tomorrow: Vec<TaskId>,
     pub days: BTreeMap<NaiveDate, ForecastDay>,
     pub later: Vec<TaskId>,
+    /// Due or planned more than 30 days out. Kept separate so Forecast can
+    /// fold the far horizon away under Next month and later.
+    pub next_month: Vec<TaskId>,
     pub deferred_today: Vec<TaskId>,
     pub planned_today: Vec<TaskId>,
     /// Planned dates that have slipped: still open, still informative, and
@@ -44,6 +47,7 @@ impl Forecast {
         out.extend(self.planned_today.iter().cloned());
         out.extend(self.past_planned.iter().cloned());
         out.extend(self.later.iter().cloned());
+        out.extend(self.next_month.iter().cloned());
         out
     }
 }
@@ -56,6 +60,7 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
     let today = local_date(at);
     let tomorrow = today + chrono::Duration::days(1);
     let horizon = today + chrono::Duration::days(7);
+    let month_horizon = today + chrono::Duration::days(30);
     let mut result = Forecast::default();
 
     for task in db.tasks.values() {
@@ -87,8 +92,10 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
                     })
                     .due
                     .push(task.id.clone());
-            } else {
+            } else if date <= month_horizon {
                 result.later.push(task.id.clone());
+            } else {
+                result.next_month.push(task.id.clone());
             }
         }
 
@@ -127,8 +134,10 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
                     })
                     .planned
                     .push(task.id.clone());
-            } else {
+            } else if date <= month_horizon {
                 result.later.push(task.id.clone());
+            } else {
+                result.next_month.push(task.id.clone());
             }
         }
     }
@@ -145,6 +154,13 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
             .map(|stamp| stamp.at)
     });
     result.later.dedup();
+    result.next_month.sort_by_key(|id| {
+        db.tasks[id]
+            .due
+            .or(db.tasks[id].planned)
+            .map(|stamp| stamp.at)
+    });
+    result.next_month.dedup();
     for day in result.days.values_mut() {
         day.due.sort_by_key(|id| by_due(db, id));
         day.deferred

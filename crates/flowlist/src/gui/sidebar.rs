@@ -8,7 +8,7 @@ use gpui::{
 use flowlist_core::db::Db;
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId};
 use flowlist_core::model::{
-    BuiltinPerspective, Perspective, Priority, ProjectStatus, SidebarOptions,
+    BuiltinPerspective, Perspective, Priority, ProjectIcon, ProjectStatus, SidebarOptions,
 };
 use flowlist_core::query;
 use flowlist_core::time::now;
@@ -245,19 +245,17 @@ impl FlowlistApp {
             }
         }
         let saved = ordered_perspectives(db);
-        for perspective in saved.iter().filter(|perspective| perspective.pinned) {
-            let target = SidebarTarget::Custom(perspective.id.clone());
-            if !options.is_hidden(&target.key()) {
-                out.push(target);
-            }
-        }
         if self.is_open("section:saved", true) {
-            for perspective in saved.iter().filter(|perspective| !perspective.pinned) {
+            for perspective in &saved {
                 let target = SidebarTarget::Custom(perspective.id.clone());
                 if options.is_hidden(&target.key()) {
                     continue;
                 }
-                if self.hide_empty_views && !self.perspective_has_tasks(perspective) {
+                // A pinned view stays even when hide-empty would drop it.
+                if !perspective.pinned
+                    && self.hide_empty_views
+                    && !self.perspective_has_tasks(perspective)
+                {
                     continue;
                 }
                 out.push(target);
@@ -1045,36 +1043,23 @@ impl FlowlistApp {
             }));
 
         let saved = ordered_perspectives(self.store.db());
-        let hidden = |perspective: &&Perspective| {
-            options.is_hidden(&format!("custom:{}", perspective.id))
-        };
-        let pinned: Vec<PerspectiveRow> = saved
-            .iter()
-            .filter(|perspective| perspective.pinned)
-            .filter(|perspective| !hidden(perspective))
-            .map(|perspective| PerspectiveRow {
-                id: perspective.id.clone(),
-                name: perspective.name.clone(),
-                pinned: true,
-            })
-            .collect();
         let custom: Vec<PerspectiveRow> = saved
-            .iter()
-            .filter(|perspective| !perspective.pinned)
-            .filter(|perspective| !hidden(perspective))
+            .into_iter()
             .filter(|perspective| {
-                !self.hide_empty_views || self.perspective_has_tasks(perspective)
+                !options.is_hidden(&format!("custom:{}", perspective.id))
+            })
+            .filter(|perspective| {
+                perspective.pinned
+                    || !self.hide_empty_views
+                    || self.perspective_has_tasks(perspective)
             })
             .map(|perspective| PerspectiveRow {
                 id: perspective.id.clone(),
                 name: perspective.name.clone(),
-                pinned: false,
+                pinned: perspective.pinned,
+                icon: perspective.icon,
             })
             .collect();
-        // Pinned rows stay visible even when SAVED is collapsed or empty.
-        for row in pinned {
-            lower = lower.child(self.custom_perspective_row(row, cx));
-        }
         if !custom.is_empty() {
             lower = lower.child(self.sidebar_section("saved", "SAVED", cx));
             if self.is_open("section:saved", true) {
@@ -1507,12 +1492,17 @@ impl FlowlistApp {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(icons::icon(Icon::Perspective, 14.0, icon_color)),
+                    .child(match row.icon {
+                        Some(icon) => widgets::icon_for_project(icon, 14.0, icon_color)
+                            .into_any_element(),
+                        None if pinned => {
+                            icons::icon(Icon::Pin, 14.0, icon_color).into_any_element()
+                        }
+                        None => icons::icon(Icon::Perspective, 14.0, icon_color)
+                            .into_any_element(),
+                    }),
             )
             .child(self.row_name(row.name))
-            .when(pinned, |this| {
-                this.child(icons::icon(Icon::Pin, 11.0, theme.text_faint))
-            })
             .when(show_count && count > 0, |this| {
                 this.child(self.count_box(
                     count_key,
@@ -2119,6 +2109,7 @@ struct PerspectiveRow {
     id: flowlist_core::ids::PerspectiveId,
     name: String,
     pinned: bool,
+    icon: Option<ProjectIcon>,
 }
 
 trait ReviewBadge {

@@ -641,6 +641,7 @@ fun savePerspectiveCommand(
     showCompleted: Boolean,
     pinned: Boolean,
     position: Int,
+    icon: String?,
 ): JsonObject = buildJsonObject {
     put(
         "save_perspective",
@@ -656,6 +657,7 @@ fun savePerspectiveCommand(
                     put("show_completed", showCompleted)
                     put("pinned", pinned)
                     put("position", position)
+                    icon?.let { put("icon", it) }
                 },
             )
         },

@@ -1593,7 +1593,7 @@ impl FlowlistApp {
             return self.render_empty(title, detail).into_any_element();
         }
         for group in groups {
-            let open = self.is_open(&group.key, true);
+            let open = self.is_open(&group.key, super::group_default_open(&group.key));
             if show_headers {
                 list = list.child(self.render_group_header(group, open, cx));
             }
@@ -1980,8 +1980,23 @@ impl FlowlistApp {
         let key = group.key.clone();
         let open_key = key.clone();
         let project = project_id_from_key(&key);
+        let group_boxes = self.content_group_boxes.clone();
+        let group_key = group.key.clone();
         let mut row =
             div()
+                .on_children_prepainted(move |bounds, _, _| {
+                    if let Some(bounds) = bounds.first() {
+                        group_boxes.borrow_mut().insert(
+                            group_key.clone(),
+                            [
+                                f32::from(bounds.origin.x),
+                                f32::from(bounds.origin.y),
+                                f32::from(bounds.size.width),
+                                f32::from(bounds.size.height),
+                            ],
+                        );
+                    }
+                })
                 .id(super::sid(format!("group:{}", group.key)))
                 .flex()
                 .items_center()
