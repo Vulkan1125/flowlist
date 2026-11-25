@@ -2340,10 +2340,12 @@ impl FlowlistApp {
                 ProjectIcon::Project
             })
         });
-        let icon_label = icon
-            .as_ref()
-            .map(|icon| icon.label())
-            .unwrap_or_else(|| if form.pinned { "Pin" } else { "Default" }.to_string());
+        let icon_label = match &icon {
+            Some(spec @ IconSpec::Builtin(_)) => spec.label(),
+            Some(IconSpec::Emoji(_)) => String::new(),
+            None => if form.pinned { "Pin" } else { "Default" }.to_string(),
+        };
+        let has_icon_label = !icon_label.is_empty();
         let project_label = match form.projects.len() {
             0 => "Any".to_string(),
             1 => db.project_path(form.projects.first().expect("length checked")),
@@ -2432,16 +2434,6 @@ impl FlowlistApp {
                 )),
             )
             .child(
-                toggle("Pinned", form.pinned, "modal-pinned")
-                    .flow_tip(self, cx, theme, "Keep this view above the saved views")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(Modal::Perspective { form }) = &mut this.modal {
-                            form.pinned = !form.pinned;
-                        }
-                        cx.notify();
-                    })),
-            )
-            .child(
                 toggle("Completed", form.show_completed, "modal-completed")
                     .flow_tip(self, cx, theme, "Include completed tasks")
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -2509,12 +2501,14 @@ impl FlowlistApp {
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover))
                     .child(widgets::icon_spec(&display_icon, 14.0, theme.text_dim))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child(icon_label),
-                    )
+                    .when(has_icon_label, |this| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child(icon_label),
+                        )
+                    })
                     .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(Modal::Perspective { form }) = &mut this.modal {
@@ -3178,6 +3172,14 @@ impl FlowlistApp {
                 false,
             ),
         };
+        let icon_label = match &icon {
+            IconSpec::Builtin(spec) => spec.label().to_string(),
+            IconSpec::Emoji(_) => String::new(),
+        };
+        let icon_tip = match &icon {
+            IconSpec::Builtin(spec) => format!("Icon · {}", spec.label()),
+            IconSpec::Emoji(_) => "Change the icon".to_string(),
+        };
         let mut row = div().flex().flex_col().gap_1().child(
             div()
                 .text_xs()
@@ -3240,7 +3242,7 @@ impl FlowlistApp {
                                 theme.clear
                             })
                             .cursor_pointer()
-                            .flow_tip(self, cx, theme, format!("Icon · {}", icon.label()))
+                            .flow_tip(self, cx, theme, icon_tip.clone())
                             .hover(|style| style.bg(theme.hover))
                             .child(widgets::icon_spec(&icon, 14.0, theme.text_dim))
                             .child(icons::icon(
@@ -3258,12 +3260,14 @@ impl FlowlistApp {
                                 cx.notify();
                             })),
                     )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child(icon.label()),
-                    ),
+                    .when(!icon_label.is_empty(), |this| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child(icon_label),
+                        )
+                    }),
             )
             .when(icon_open, |this| {
                 this.child(self.render_icon_picker_card(

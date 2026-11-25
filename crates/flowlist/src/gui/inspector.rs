@@ -8,7 +8,7 @@ use gpui::{
 
 use flowlist_core::command::Command;
 use flowlist_core::ids::{ChecklistId, TaskId};
-use flowlist_core::model::{Priority, ProjectStatus};
+use flowlist_core::model::{IconSpec, Priority, ProjectStatus};
 use flowlist_core::time::{format_duration, human_date, local_date, now};
 
 use super::content::month_grid;
@@ -1856,12 +1856,14 @@ impl FlowlistApp {
                                 );
                             })),
                     )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child(icon.label()),
-                    ),
+                    .when(!matches!(icon, IconSpec::Emoji(_)), |this| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child(icon.label()),
+                        )
+                    }),
             )
             .child(
                 div()
