@@ -1409,7 +1409,7 @@ fun MainScreen(
                         pinned = editing?.pinned ?: false,
                         position = editing?.position ?: 0,
                         icon = editing?.icon,
-                        note = editing?.note ?: "",
+                        description = editing?.description ?: "",
                     )
                 }
             },

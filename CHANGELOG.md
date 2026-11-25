@@ -2,17 +2,20 @@
 
 ## Unreleased
 
-- **Notes on saved views.** A saved view can carry a one-line note under its
-  title, in the same place Today explains itself. The editor suggests a note
-  from the filters you pick (`Available · planned today · #Work`) and keeps it
-  in sync until you edit it, then leaves it alone. `perspective add --note`
-  sets it from the CLI.
+- **Descriptions on saved views.** A saved view can carry a one-line
+  description under its title, in the same place Today explains itself. An
+  empty description falls back to “Saved perspective”.
+  `perspective add --description` sets it from the CLI (`--note` still works).
 - **Searchable icon card with emoji.** Projects and saved views can use any
   named icon or an emoji. The old wrapped icon row is now a card with a search
-  field, separate **Icons** and **Emoji** sections, and Return to pick the
-  first match. Emojis are stored as plain strings in `icon`, and the CLI
-  accepts `--icon 🏃`. The retired running figure is gone; existing libraries
-  are cleaned on open.
+  field, **Icons** and **Emoji** tabs, and Return to pick the first match. The
+  card scrolls with the sheet instead of trapping the wheel, and opening it no
+  longer jumps the sheet to the bottom. Emojis are stored as plain strings in
+  `icon`, and the CLI accepts `--icon 🏃`. The retired running figure is gone;
+  existing libraries are cleaned on open.
+- **Edit project and folder.** The sidebar context menus now open an Edit sheet:
+  projects can change name, notes, review cadence, type and icon; folders can
+  be renamed without leaving the rail.
 - **Past plans stay visible.** A planned date that slips no longer disappears.
   Today lists carried-over plans in a **Past plans** group above Overdue, and
   Forecast gains a **Past** section. One **Hide past** chip hides both. Forecast

@@ -331,8 +331,8 @@ pub struct Perspective {
     pub icon: Option<IconSpec>,
     /// One-line description shown under the view title. Empty falls back to
     /// the generic Saved perspective subtitle.
-    #[serde(default)]
-    pub note: String,
+    #[serde(default, alias = "note")]
+    pub description: String,
 }
 
 fn default_group() -> GroupBy {
@@ -351,7 +351,7 @@ impl Perspective {
             position: 0,
             pinned: false,
             icon: None,
-            note: String::new(),
+            description: String::new(),
         }
     }
 }

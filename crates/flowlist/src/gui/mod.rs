@@ -527,6 +527,8 @@ pub struct FlowlistApp {
     title_visible: Rc<Cell<bool>>,
     /// The right-click menu on a sidebar row, opened at the mouse position.
     sidebar_menu: Option<sidebar::SidebarMenu>,
+    /// Boxes for the items in the open sidebar menu, keyed by item id.
+    sidebar_menu_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// A click's mouse-up closed the sort or group menu. The chip under the
     /// same click must not immediately reopen it.
     sort_closed_on_up: bool,
@@ -909,6 +911,7 @@ impl FlowlistApp {
             title_space: Rc::new(Cell::new(None)),
             title_visible: Rc::new(Cell::new(true)),
             sidebar_menu: None,
+            sidebar_menu_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             sort_closed_on_up: false,
             group_closed_on_up: false,
             priority_closed_on_up: false,
@@ -2082,9 +2085,9 @@ impl FlowlistApp {
     fn view_subtitle(&self) -> String {
         if let View::Custom(id) = &self.view {
             if let Some(perspective) = self.store.db().perspectives.get(id) {
-                let note = perspective.note.trim();
-                if !note.is_empty() {
-                    return note.to_string();
+                let description = perspective.description.trim();
+                if !description.is_empty() {
+                    return description.to_string();
                 }
             }
         }
@@ -4339,6 +4342,7 @@ impl FlowlistApp {
                 }
             }
             modals::Modal::NewProject {
+                editing,
                 name,
                 notes,
                 review_days,
@@ -4363,6 +4367,21 @@ impl FlowlistApp {
                             .max(1),
                     )
                 };
+                if let Some(id) = editing {
+                    self.execute(Command::UpdateProject {
+                        id: id.clone(),
+                        patch: ProjectPatch {
+                            name: Some(name),
+                            notes: Some(notes.text().to_string()),
+                            review_interval_days,
+                            kind: Some(*kind),
+                            icon: Some(icon.clone()),
+                            fullscreen_reminder: Some(*fullscreen_reminder),
+                            ..Default::default()
+                        },
+                    });
+                    return Ok(());
+                }
                 let db = self.store.db();
                 let folder = match &self.view {
                     View::Folder(id) => Some(id.clone()),
@@ -4459,12 +4478,20 @@ impl FlowlistApp {
                 }
             }
             modals::Modal::NewFolder {
+                editing,
                 name,
                 fullscreen_reminder,
             } => {
                 let name = name.text().trim().to_string();
                 if name.is_empty() {
                     return Err("A folder needs a name".to_string());
+                }
+                if let Some(id) = editing {
+                    self.execute(Command::RenameFolder {
+                        id: id.clone(),
+                        name,
+                    });
+                    return Ok(());
                 }
                 let parent = match &self.view {
                     View::Folder(id) => Some(id.clone()),
@@ -6936,7 +6963,7 @@ impl FlowlistApp {
         state["view_form"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::Perspective { form }) => Some(serde_json::json!({
                 "name": form.name.text(),
-                "note": form.note.text(),
+                "description": form.description.text(),
                 "text": form.text.text(),
                 "icon": form.icon.as_ref().map(|icon| icon.stored()),
                 "icon_open": form.icon_open,
@@ -7152,6 +7179,8 @@ impl FlowlistApp {
             _ => None,
         });
         state["sidebar_rows"] = serde_json::json!(self.sidebar_row_boxes.borrow().clone());
+        state["sidebar_menu_boxes"] =
+            serde_json::json!(self.sidebar_menu_boxes.borrow().clone());
         state["sidebar_drag_target"] = serde_json::json!(self.sidebar_drag_target);
         state["content_drop_target"] = serde_json::json!(self.content_drop_target);
         state["sidebar_names"] = serde_json::json!(self.sidebar_name_boxes.borrow().clone());

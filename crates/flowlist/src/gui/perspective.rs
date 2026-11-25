@@ -7,7 +7,6 @@
 
 use std::collections::BTreeSet;
 
-use flowlist_core::db::Db;
 use flowlist_core::ids::{PerspectiveId, ProjectId, TagId};
 use flowlist_core::model::{
     Condition, DueWindow, FilterNode, GroupBy, IconSpec, Perspective, Priority, SortBy,
@@ -115,6 +114,14 @@ impl DeferChoice {
             _ => None,
         }
     }
+}
+
+/// Which half of the icon card is showing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum IconTab {
+    #[default]
+    Icons,
+    Emoji,
 }
 
 /// A control in the perspective editor. Each one owns a menu of every value,
@@ -309,59 +316,18 @@ fn sort_label(sort: SortBy) -> &'static str {
     }
 }
 
-/// A short phrase for the due or planned windows selected in the editor.
-fn due_summary(choices: &BTreeSet<DueChoice>, prefix: &str) -> String {
-    if choices.len() > 1 {
-        return format!("{} {prefix} filters", choices.len());
-    }
-    let Some(choice) = choices.first() else {
-        return String::new();
-    };
-    match (prefix, choice) {
-        (_, DueChoice::Overdue) if prefix == "planned" => "planned earlier".to_string(),
-        (_, DueChoice::Overdue) => "overdue".to_string(),
-        (_, DueChoice::NoDate) if prefix == "planned" => "no planned date".to_string(),
-        (_, DueChoice::NoDate) => "no due date".to_string(),
-        (_, DueChoice::Today) => format!("{prefix} today"),
-        (_, DueChoice::Tomorrow) => format!("{prefix} tomorrow"),
-        (_, DueChoice::Next7Days) => format!("{prefix} in the next 7 days"),
-        (_, DueChoice::Next30Days) => format!("{prefix} in the next 30 days"),
-        (_, DueChoice::Later) => format!("{prefix} later"),
-        (_, DueChoice::Any) => String::new(),
-    }
-}
-
-fn defer_summary(choices: &BTreeSet<DeferChoice>) -> String {
-    if choices.len() > 1 {
-        return format!("{} defer filters", choices.len());
-    }
-    let Some(choice) = choices.first() else {
-        return String::new();
-    };
-    match choice {
-        DeferChoice::Any => String::new(),
-        DeferChoice::Today => "deferred until today".to_string(),
-        DeferChoice::Tomorrow => "deferred until tomorrow".to_string(),
-        DeferChoice::Next7Days => "deferred in the next 7 days".to_string(),
-        DeferChoice::Next30Days => "deferred in the next 30 days".to_string(),
-        DeferChoice::NoDate => "no defer date".to_string(),
-    }
-}
-
 /// Everything the editor shows for one perspective.
 #[derive(Clone, Debug)]
 pub struct PerspectiveForm {
     pub id: Option<PerspectiveId>,
     pub name: TextBuffer,
-    pub note: TextBuffer,
-    /// True while the note still follows the generated suggestion.
-    pub note_auto: bool,
-    pub note_last_suggestion: String,
+    pub description: TextBuffer,
     pub text: TextBuffer,
     pub position: u32,
     pub pinned: bool,
     pub icon: Option<IconSpec>,
     pub icon_open: bool,
+    pub icon_tab: IconTab,
     pub icon_query: TextBuffer,
     pub group: GroupBy,
     pub sort: SortBy,
@@ -390,14 +356,13 @@ impl Default for PerspectiveForm {
         Self {
             id: None,
             name: TextBuffer::empty(),
-            note: TextBuffer::empty(),
-            note_auto: true,
-            note_last_suggestion: String::new(),
+            description: TextBuffer::empty(),
             text: TextBuffer::empty(),
             position: 0,
             pinned: false,
             icon: None,
             icon_open: false,
+            icon_tab: IconTab::Icons,
             icon_query: TextBuffer::empty(),
             group: GroupBy::Project,
             sort: SortBy::Due,
@@ -430,17 +395,12 @@ impl PerspectiveForm {
         let mut form = Self {
             id: Some(perspective.id.clone()),
             name: TextBuffer::new(perspective.name.clone()),
-            note: TextBuffer::new(perspective.note.clone()),
-            note_auto: perspective.note.trim().is_empty(),
-            note_last_suggestion: if perspective.note.trim().is_empty() {
-                String::new()
-            } else {
-                perspective.note.clone()
-            },
+            description: TextBuffer::new(perspective.description.clone()),
             position: perspective.position,
             pinned: perspective.pinned,
             icon: perspective.icon.clone(),
             icon_open: false,
+            icon_tab: IconTab::Icons,
             icon_query: TextBuffer::empty(),
             group: perspective.group_by,
             sort: perspective.sort,
@@ -669,112 +629,12 @@ impl PerspectiveForm {
         perspective.position = self.position;
         perspective.pinned = self.pinned;
         perspective.icon = self.icon.clone();
-        perspective.note = self.note.text().trim().to_string();
+        perspective.description = self.description.text().trim().to_string();
         perspective.group_by = self.group;
         perspective.sort = self.sort;
         perspective.show_completed = self.show_completed;
         perspective.filter = self.filter();
         perspective
-    }
-
-    /// A short description of the current filter, used to seed the note.
-    /// Empty when the view has no narrowing conditions.
-    pub fn note_suggestion(&self, db: &Db) -> String {
-        let mut parts: Vec<String> = Vec::new();
-        if self.inbox_only {
-            parts.push("Inbox".to_string());
-        }
-        if self.flagged_only {
-            parts.push("Flagged".to_string());
-        }
-        if self.status != TaskStatus::Any {
-            parts.push(self.status_label().to_string());
-        }
-        if !self.priorities.is_empty() {
-            let mut priorities: Vec<&str> =
-                self.priorities.iter().map(|priority| priority.label()).collect();
-            priorities.sort();
-            if priorities.len() == 1 {
-                parts.push(format!("{} priority", priorities[0]));
-            } else {
-                parts.push(format!("{} priorities", priorities.len()));
-            }
-        }
-        if !self.projects.is_empty() {
-            if self.projects.len() == 1 {
-                if let Some(id) = self.projects.first() {
-                    parts.push(format!("in {}", db.project_path(id)));
-                }
-            } else {
-                parts.push(format!("in {} projects", self.projects.len()));
-            }
-        }
-        if !self.tags.is_empty() {
-            if self.tags.len() == 1 {
-                if let Some(id) = self.tags.first() {
-                    if let Some(tag) = db.tags.get(id) {
-                        parts.push(format!("#{}", tag.name));
-                    } else {
-                        parts.push("tagged".to_string());
-                    }
-                }
-            } else {
-                parts.push(format!("{} tags", self.tags.len()));
-            }
-        }
-        if !self.dues.is_empty() {
-            parts.push(due_summary(&self.dues, "due"));
-        }
-        if !self.planned.is_empty() {
-            parts.push(due_summary(&self.planned, "planned"));
-        }
-        if !self.defers.is_empty() {
-            parts.push(defer_summary(&self.defers));
-        }
-        if let Some(value) = self.fullscreen {
-            parts.push(if value {
-                "with a full-screen reminder".to_string()
-            } else {
-                "without a full-screen reminder".to_string()
-            });
-        }
-        let text = self.text.text().trim();
-        if !text.is_empty() {
-            let mut short: String = text.chars().take(40).collect();
-            if text.chars().count() > 40 {
-                short.push('…');
-            }
-            parts.push(format!("matching “{short}”"));
-        }
-        let min = self.estimate_min.text().trim().parse::<u32>().ok();
-        let max = self.estimate_max.text().trim().parse::<u32>().ok();
-        if min.is_some() || max.is_some() {
-            parts.push(match (min, max) {
-                (Some(min), Some(max)) => format!("{min}–{max} min"),
-                (Some(min), None) => format!("at least {min} min"),
-                (None, Some(max)) => format!("under {max} min"),
-                (None, None) => String::new(),
-            });
-        }
-        parts.retain(|part| !part.is_empty());
-        parts.join(" · ")
-    }
-
-    /// Keep the note in sync with the suggestion until the user edits it.
-    pub fn sync_note(&mut self, suggestion: &str) {
-        if !self.note_auto {
-            return;
-        }
-        let current = self.note.text().to_string();
-        let initial = current.is_empty() && self.note_last_suggestion.is_empty();
-        if current == self.note_last_suggestion || initial {
-            if current != suggestion {
-                self.note.set(suggestion.to_string());
-            }
-            self.note_last_suggestion = suggestion.to_string();
-        } else {
-            self.note_auto = false;
-        }
     }
 
     // ------------------------------------------------------------ controls
@@ -1128,29 +988,6 @@ mod tests {
         ));
         let rebuilt = PerspectiveForm::edit(&perspective);
         assert!(rebuilt.planned.contains(&DueChoice::Today));
-    }
-
-    #[test]
-    fn note_suggestion_follows_filters_until_edited() {
-        let db = flowlist_core::db::Db::new();
-        let mut form = PerspectiveForm::new();
-        form.toggle_planned(DueChoice::Today);
-        let suggestion = form.note_suggestion(&db);
-        assert!(suggestion.contains("planned today"), "{suggestion}");
-        form.sync_note(&suggestion);
-        assert_eq!(form.note.text(), suggestion);
-
-        form.toggle_inbox();
-        let suggestion = form.note_suggestion(&db);
-        form.sync_note(&suggestion);
-        assert!(form.note.text().contains("Inbox"), "{}", form.note.text());
-
-        form.note.set("My own note");
-        form.flagged_only = true;
-        let suggestion = form.note_suggestion(&db);
-        form.sync_note(&suggestion);
-        assert_eq!(form.note.text(), "My own note");
-        assert_eq!(form.to_perspective().note, "My own note");
     }
 
     #[test]

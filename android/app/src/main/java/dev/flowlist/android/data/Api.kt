@@ -642,7 +642,7 @@ fun savePerspectiveCommand(
     pinned: Boolean,
     position: Int,
     icon: String?,
-    note: String,
+    description: String,
 ): JsonObject = buildJsonObject {
     put(
         "save_perspective",

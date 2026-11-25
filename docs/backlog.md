@@ -104,8 +104,9 @@ integrations are tracked separately and are not part of this phase.
       more than 30 days out folds under **Next month and later**. Saved views
       can be pinned to the top of SAVED and given a custom rail icon. A shipped,
       pinned **Running** view lists started work that is not due yet and can be
-      edited or deleted. Saved views carry a filter-derived note, and projects
-      and views share a searchable icon card for named icons and emoji.
+      edited or deleted. Saved views carry an editable description, and
+      projects and views share a tabbed, searchable icon card for named icons
+      and emoji. Sidebar project and folder menus have Edit sheets.
 - [ ] **Full notification model** — defer/available alerts, per-item custom
       notification schedules, and richer notification payloads beyond due
       reminders and full-screen reminders.

@@ -23,7 +23,9 @@ use super::drag::{
     DragSettingsResize, DragSettingsScroll, settings_resize_ghost, settings_scroll_ghost,
 };
 use super::icons::Icon;
-use super::perspective::{DeferChoice, DueChoice, PerspectiveForm, ViewChoice, ViewField};
+use super::perspective::{
+    DeferChoice, DueChoice, IconTab, PerspectiveForm, ViewChoice, ViewField,
+};
 use super::screen_picker;
 use super::text::TextBuffer;
 use super::theme::{self, Appearance, PLAIN_ACCENTS, Theme, ThemeKind};
@@ -88,6 +90,8 @@ pub enum Modal {
         days: TextBuffer,
     },
     NewProject {
+        /// None creates a project; Some edits that project in place.
+        editing: Option<ProjectId>,
         name: TextBuffer,
         notes: TextBuffer,
         /// Review cadence for this project, in days. Starts at the library
@@ -97,6 +101,7 @@ pub enum Modal {
         icon: IconSpec,
         /// The icon card stays folded away until the current icon is clicked.
         icon_open: bool,
+        icon_tab: IconTab,
         icon_query: TextBuffer,
         fullscreen_reminder: bool,
     },
@@ -104,6 +109,7 @@ pub enum Modal {
     IconPicker {
         project: ProjectId,
         query: TextBuffer,
+        tab: IconTab,
     },
     /// Typing a project path that does not exist yet asks before creating it,
     /// so a typo cannot silently fill the sidebar with projects.
@@ -169,6 +175,8 @@ pub enum Modal {
         replace: Option<String>,
     },
     NewFolder {
+        /// None creates a folder; Some edits that folder in place.
+        editing: Option<FolderId>,
         name: TextBuffer,
         fullscreen_reminder: bool,
     },
@@ -419,21 +427,40 @@ impl Modal {
 
     pub fn new_project(app: &FlowlistApp) -> Self {
         Modal::NewProject {
+            editing: None,
             name: TextBuffer::empty(),
             notes: TextBuffer::empty(),
             review_days: TextBuffer::new(app.store.db().settings.default_review_days.to_string()),
             kind: ProjectKind::Parallel,
             icon: IconSpec::default(),
             icon_open: false,
+            icon_tab: IconTab::Icons,
             icon_query: TextBuffer::empty(),
             fullscreen_reminder: false,
         }
+    }
+
+    pub fn edit_project(app: &FlowlistApp, id: &ProjectId) -> Option<Self> {
+        let project = app.store.db().projects.get(id)?;
+        Some(Modal::NewProject {
+            editing: Some(id.clone()),
+            name: TextBuffer::new(project.name.clone()),
+            notes: TextBuffer::new(project.notes.clone()),
+            review_days: TextBuffer::new(project.review_interval_days.to_string()),
+            kind: project.kind,
+            icon: project.icon.clone(),
+            icon_open: false,
+            icon_tab: IconTab::Icons,
+            icon_query: TextBuffer::empty(),
+            fullscreen_reminder: project.fullscreen_reminder,
+        })
     }
 
     pub fn icon_picker(project: ProjectId) -> Self {
         Modal::IconPicker {
             project,
             query: TextBuffer::empty(),
+            tab: IconTab::Icons,
         }
     }
 
@@ -504,9 +531,19 @@ impl Modal {
 
     pub fn new_folder(_app: &FlowlistApp) -> Self {
         Modal::NewFolder {
+            editing: None,
             name: TextBuffer::empty(),
             fullscreen_reminder: false,
         }
+    }
+
+    pub fn edit_folder(app: &FlowlistApp, id: &FolderId) -> Option<Self> {
+        let folder = app.store.db().folders.get(id)?;
+        Some(Modal::NewFolder {
+            editing: Some(id.clone()),
+            name: TextBuffer::new(folder.name.clone()),
+            fullscreen_reminder: folder.fullscreen_reminder,
+        })
     }
 
     pub fn new_tag(_app: &FlowlistApp) -> Self {
@@ -620,7 +657,13 @@ impl Modal {
         match self {
             Modal::Rename { .. } => "Rename",
             Modal::ReviewInterval { .. } => "Review interval",
-            Modal::NewProject { .. } => "New project",
+            Modal::NewProject { editing, .. } => {
+                if editing.is_some() {
+                    "Edit project"
+                } else {
+                    "New project"
+                }
+            }
             Modal::IconPicker { .. } => "Project icon",
             Modal::CreateProject { .. } => "Create project",
             Modal::DeleteProject { .. } => "Delete project",
@@ -632,7 +675,13 @@ impl Modal {
             Modal::Uninstall { .. } => "Uninstall Flowlist",
             Modal::AttachLink { replace, .. } if replace.is_some() => "Rename link",
             Modal::AttachLink { .. } => "Attach link",
-            Modal::NewFolder { .. } => "New folder",
+            Modal::NewFolder { editing, .. } => {
+                if editing.is_some() {
+                    "Edit folder"
+                } else {
+                    "New folder"
+                }
+            }
             Modal::NewTag { .. } => "New tag",
             Modal::Perspective { .. } => "Perspective",
             Modal::Import { .. } => "Import library",
@@ -647,8 +696,12 @@ impl Modal {
         match self {
             Modal::Rename { .. } => "Names are shared by the sidebar, CLI and MCP server.",
             Modal::ReviewInterval { .. } => "How often this project comes back for a review.",
-            Modal::NewProject { .. } => {
-                "Projects hold an outline of tasks; folders keep projects together."
+            Modal::NewProject { editing, .. } => {
+                if editing.is_some() {
+                    "Change the project's name, notes, review cadence, type or icon."
+                } else {
+                    "Projects hold an outline of tasks; folders keep projects together."
+                }
             }
             Modal::IconPicker { .. } => {
                 "Choose a named icon or an emoji for this project."
@@ -683,7 +736,13 @@ impl Modal {
             Modal::AttachLink { .. } => {
                 "Paste an http(s) address; it opens in your browser. Undo removes it."
             }
-            Modal::NewFolder { .. } => "Folders group projects. They can be nested.",
+            Modal::NewFolder { editing, .. } => {
+                if editing.is_some() {
+                    "Rename the folder. Its projects and nested folders stay put."
+                } else {
+                    "Folders group projects. They can be nested."
+                }
+            }
             Modal::NewTag { .. } => "Tags are contexts: places, tools or people.",
             Modal::Perspective { .. } => {
                 "Saved filters with their own conditions, grouping and sort order."
@@ -793,7 +852,7 @@ impl Modal {
             Modal::NewFolder { name, .. } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => match index {
                 0 => Some(&form.name),
-                1 => Some(&form.note),
+                1 => Some(&form.description),
                 2 => Some(&form.text),
                 3 => Some(&form.estimate_min),
                 4 => Some(&form.estimate_max),
@@ -859,7 +918,7 @@ impl Modal {
             Modal::NewFolder { name, .. } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => match index {
                 0 => Some(&mut form.name),
-                1 => Some(&mut form.note),
+                1 => Some(&mut form.description),
                 2 => Some(&mut form.text),
                 3 => Some(&mut form.estimate_min),
                 4 => Some(&mut form.estimate_max),
@@ -919,7 +978,7 @@ impl Modal {
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
             Modal::Perspective { .. } => match index {
                 0 => "Name",
-                1 => "Note",
+                1 => "Description",
                 2 => "Contains text",
                 3 => "Minimum estimate (minutes)",
                 4 => "Maximum estimate (minutes)",
@@ -996,14 +1055,6 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = self.theme;
-        // Keep a new view's note following its filters until the user edits it.
-        let suggestion = match &self.modal {
-            Some(Modal::Perspective { form }) => form.note_suggestion(self.store.db()),
-            _ => String::new(),
-        };
-        if let Some(Modal::Perspective { form }) = &mut self.modal {
-            form.sync_note(&suggestion);
-        }
         let Some(modal) = self.modal.as_ref() else {
             return div().into_any_element();
         };
@@ -1405,7 +1456,7 @@ impl FlowlistApp {
                 }
             }
             if is_icon_picker {
-                if let Modal::IconPicker { project, .. } = modal {
+                if let Modal::IconPicker { project, tab, .. } = modal {
                     let current = self
                         .store
                         .db()
@@ -1416,6 +1467,7 @@ impl FlowlistApp {
                         IconTarget::Project(project.clone()),
                         0,
                         current.as_ref(),
+                        *tab,
                         cx,
                     ));
                 }
@@ -1920,6 +1972,7 @@ impl FlowlistApp {
         target: IconTarget,
         search_index: usize,
         current: Option<&IconSpec>,
+        tab: IconTab,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = self.theme;
@@ -1931,130 +1984,140 @@ impl FlowlistApp {
             .unwrap_or_default();
         let query = raw_query.to_lowercase();
 
-        let mut icons = div().flex().flex_wrap().items_center().gap_1();
-        let mut icon_count = 0;
-        for candidate in ProjectIcon::ALL {
-            if !query.is_empty()
-                && !candidate.slug().contains(&query)
-                && !candidate.label().to_lowercase().contains(&query)
-            {
-                continue;
+        let mut grid = div().flex().flex_wrap().items_center().gap_1();
+        let mut count = 0;
+        match tab {
+            IconTab::Icons => {
+                for candidate in ProjectIcon::ALL {
+                    if !query.is_empty()
+                        && !candidate.slug().contains(&query)
+                        && !candidate.label().to_lowercase().contains(&query)
+                    {
+                        continue;
+                    }
+                    count += 1;
+                    let active = current == Some(&IconSpec::builtin(candidate));
+                    grid = grid.child(self.icon_choice_cell(
+                        format!("picker-icon:{}", candidate.slug()),
+                        active,
+                        widgets::icon_for_project(candidate, 14.0, theme.text_dim)
+                            .into_any_element(),
+                        candidate.label(),
+                        target.clone(),
+                        IconSpec::builtin(candidate),
+                        cx,
+                    ));
+                }
             }
-            icon_count += 1;
-            let active = current == Some(&IconSpec::builtin(candidate));
-            icons = icons.child(self.icon_choice_cell(
-                format!("picker-icon:{}", candidate.slug()),
-                active,
-                widgets::icon_for_project(candidate, 14.0, theme.text_dim).into_any_element(),
-                candidate.label(),
-                target.clone(),
-                IconSpec::builtin(candidate),
-                cx,
-            ));
+            IconTab::Emoji => {
+                if flowlist_core::model::icon::is_single_emoji(&raw_query)
+                    && !super::emoji::ALL
+                        .iter()
+                        .any(|candidate| candidate.glyph == raw_query)
+                {
+                    count += 1;
+                    let active = current == Some(&IconSpec::Emoji(raw_query.clone()));
+                    grid = grid.child(self.icon_choice_cell(
+                        format!("picker-emoji:{}", raw_query),
+                        active,
+                        div()
+                            .text_size(px(17.))
+                            .child(raw_query.clone())
+                            .into_any_element(),
+                        "Use this emoji",
+                        target.clone(),
+                        IconSpec::Emoji(raw_query.clone()),
+                        cx,
+                    ));
+                }
+                for item in super::emoji::ALL {
+                    if query.is_empty() && count >= 48 {
+                        break;
+                    }
+                    if !query.is_empty()
+                        && item.glyph != raw_query
+                        && !item.name.to_lowercase().contains(&query)
+                        && !item.keywords.contains(&query)
+                    {
+                        continue;
+                    }
+                    count += 1;
+                    let spec = IconSpec::Emoji(item.glyph.to_string());
+                    let active = current == Some(&spec);
+                    grid = grid.child(self.icon_choice_cell(
+                        format!("picker-emoji:{}", item.glyph),
+                        active,
+                        div()
+                            .text_size(px(17.))
+                            .child(item.glyph)
+                            .into_any_element(),
+                        item.name,
+                        target.clone(),
+                        spec,
+                        cx,
+                    ));
+                }
+            }
         }
 
-        let mut emojis = div().flex().flex_wrap().items_center().gap_1();
-        let mut emoji_count = 0;
-        if flowlist_core::model::icon::is_single_emoji(&raw_query)
-            && !super::emoji::ALL
-                .iter()
-                .any(|candidate| candidate.glyph == raw_query)
-        {
-            emoji_count += 1;
-            let active = current == Some(&IconSpec::Emoji(raw_query.clone()));
-            emojis = emojis.child(self.icon_choice_cell(
-                "picker-emoji:custom".to_string(),
-                active,
-                div()
-                    .text_size(px(17.))
-                    .child(raw_query.clone())
-                    .into_any_element(),
-                "Use this emoji",
-                target.clone(),
-                IconSpec::Emoji(raw_query.clone()),
-                cx,
-            ));
-        }
-        for item in super::emoji::ALL {
-            if !query.is_empty()
-                && item.glyph != raw_query
-                && !item.name.to_lowercase().contains(&query)
-                && !item.keywords.contains(&query)
-            {
-                continue;
-            }
-            emoji_count += 1;
-            let spec = IconSpec::Emoji(item.glyph.to_string());
-            let active = current == Some(&spec);
-            emojis = emojis.child(self.icon_choice_cell(
-                format!("picker-emoji:{}", item.glyph),
-                active,
-                div()
-                    .text_size(px(17.))
-                    .child(item.glyph)
-                    .into_any_element(),
-                item.name,
-                target.clone(),
-                spec,
-                cx,
-            ));
-        }
-
-        let mut results = div()
+        let icons_target = target.clone();
+        let emoji_target = target.clone();
+        let icons_tab = div()
             .on_children_prepainted(
-                self.theme_probe("icon-picker-results".to_string()),
+                self.theme_probe("picker-tab-icons".to_string()),
             )
-            .id("icon-picker-results")
-            .flex()
-            .flex_col()
-            .gap_2()
-            .max_h(px(240.))
-            .overflow_y_scroll();
-        if icon_count > 0 {
-            results = results.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(theme.text_faint)
-                            .child("ICONS"),
-                    )
-                    .child(icons),
-            );
-        }
-        if emoji_count > 0 {
-            results = results.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(theme.text_faint)
-                            .child("EMOJI"),
-                    )
-                    .child(emojis),
-            );
-        }
-        if icon_count == 0 && emoji_count == 0 {
+            .id("picker-tab-icons")
+            .child(widgets::toggle_chip(
+                theme,
+                "Icons",
+                tab == IconTab::Icons,
+            ))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.set_icon_tab(icons_target.clone(), IconTab::Icons, cx);
+            }));
+        let emoji_tab = div()
+            .on_children_prepainted(
+                self.theme_probe("picker-tab-emoji".to_string()),
+            )
+            .id("picker-tab-emoji")
+            .child(widgets::toggle_chip(
+                theme,
+                "Emoji",
+                tab == IconTab::Emoji,
+            ))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.set_icon_tab(emoji_target.clone(), IconTab::Emoji, cx);
+            }));
+
+        let mut results = div().flex().flex_col().gap_2();
+        if count == 0 {
             results = results.child(
                 div()
                     .text_sm()
                     .text_color(theme.text_faint)
-                    .child("No icons or emoji match."),
+                    .child(if query.is_empty() {
+                        "Nothing here yet."
+                    } else {
+                        "No matches in this tab."
+                    }),
             );
+        } else {
+            results = results.child(grid);
+            if tab == IconTab::Emoji && query.is_empty() && super::emoji::ALL.len() > 48 {
+                results = results.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .child("Type to search all emoji."),
+                );
+            }
         }
 
         let default_active = match &target {
             IconTarget::Perspective => current.is_none(),
             _ => current == Some(&IconSpec::default()),
         };
+        let default_target = target.clone();
         div()
             .on_children_prepainted(self.theme_probe("icon-picker-card".to_string()))
             .flex()
@@ -2068,10 +2131,18 @@ impl FlowlistApp {
             .child(self.render_modal_field(search_index, cx))
             .child(
                 div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(icons_tab)
+                    .child(emoji_tab),
+            )
+            .child(
+                div()
                     .id("icon-picker-default")
                     .child(widgets::toggle_chip(theme, "Default", default_active))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.choose_default_icon(target.clone(), cx);
+                        this.choose_default_icon(default_target.clone(), cx);
                     })),
             )
             .child(results)
@@ -2150,6 +2221,27 @@ impl FlowlistApp {
                     },
                 });
                 self.close_modal(cx);
+            }
+        }
+        cx.notify();
+    }
+
+    fn set_icon_tab(&mut self, target: IconTarget, tab: IconTab, cx: &mut Context<Self>) {
+        match target {
+            IconTarget::Perspective => {
+                if let Some(Modal::Perspective { form }) = &mut self.modal {
+                    form.icon_tab = tab;
+                }
+            }
+            IconTarget::NewProject => {
+                if let Some(Modal::NewProject { icon_tab, .. }) = &mut self.modal {
+                    *icon_tab = tab;
+                }
+            }
+            IconTarget::Project(_) => {
+                if let Some(Modal::IconPicker { tab: current, .. }) = &mut self.modal {
+                    *current = tab;
+                }
             }
         }
         cx.notify();
@@ -2429,8 +2521,6 @@ impl FlowlistApp {
                             form.icon_open = !form.icon_open;
                             if form.icon_open {
                                 this.modal_focus = 5;
-                                this.modal_scroll
-                                    .set_offset(point(px(0.), px(-3000.)));
                             }
                         }
                         cx.notify();
@@ -2612,6 +2702,7 @@ impl FlowlistApp {
                     IconTarget::Perspective,
                     5,
                     form.icon.as_ref(),
+                    form.icon_tab,
                     cx,
                 ))
             })
@@ -3064,18 +3155,26 @@ impl FlowlistApp {
 
     fn render_new_project_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
-        let (kind, icon, icon_open, fullscreen) = match &self.modal {
+        let (kind, icon, icon_open, icon_tab, fullscreen) = match &self.modal {
             Some(Modal::NewProject {
                 kind,
                 icon,
                 icon_open,
+                icon_tab,
                 fullscreen_reminder,
                 ..
-            }) => (kind.clone(), icon.clone(), *icon_open, *fullscreen_reminder),
+            }) => (
+                kind.clone(),
+                icon.clone(),
+                *icon_open,
+                *icon_tab,
+                *fullscreen_reminder,
+            ),
             _ => (
                 ProjectKind::Parallel,
                 IconSpec::default(),
                 false,
+                IconTab::Icons,
                 false,
             ),
         };
@@ -3154,8 +3253,6 @@ impl FlowlistApp {
                                     *icon_open = !*icon_open;
                                     if *icon_open {
                                         this.modal_focus = 3;
-                                        this.modal_scroll
-                                            .set_offset(point(px(0.), px(-3000.)));
                                     }
                                 }
                                 cx.notify();
@@ -3173,6 +3270,7 @@ impl FlowlistApp {
                     IconTarget::NewProject,
                     3,
                     Some(&icon),
+                    icon_tab,
                     cx,
                 ))
             });
@@ -3214,6 +3312,15 @@ impl FlowlistApp {
 
     fn render_new_folder_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
+        if matches!(
+            &self.modal,
+            Some(Modal::NewFolder {
+                editing: Some(_),
+                ..
+            })
+        ) {
+            return div();
+        }
         let fullscreen = matches!(
             &self.modal,
             Some(Modal::NewFolder {

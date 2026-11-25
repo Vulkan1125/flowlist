@@ -176,11 +176,14 @@ toggle and `hide_past_anchor` its chip box. `empty_note` is the title the
 content pane painted for an empty list (for example `Nothing planned or due
 today`), so a probe can check the calm Today copy. `content_groups` maps every painted group header to its box, so a probe can
 open a folded section such as Forecast's `forecast:next-month`. `view_subtitle`
-reports the line under the view title. `icon_picker` reports whether an icon
-card is open and its first Return match. The saved-view and project icon cards
+reports the line under the view title. `view_form.description` carries the
+saved-view description. `icon_picker` reports whether an icon card is open and
+its first Return match. The saved-view and project icon cards
 record `perspective-icon-row`, `new-project-icon-toggle`,
-`project-icon-toggle`, `picker-icon:<slug>` and `picker-emoji:<glyph>` in
-`theme_boxes`. `forecast_calendar_open`,
+`project-icon-toggle`, `picker-tab-icons`, `picker-tab-emoji`,
+`picker-icon:<slug>` and `picker-emoji:<glyph>` in `theme_boxes`.
+`sidebar_menu_boxes` maps the open context menu's item ids (for example
+`menu-edit-project`) to their boxes. `forecast_calendar_open`,
 `forecast_calendar`, `forecast_calendar_height`, `forecast_days`,
 `forecast_chips`, `forecast_toggle_anchor` and `forecast_grip_anchor` describe
 the Forecast month grid: whether it is folded, the block and grip boxes, the

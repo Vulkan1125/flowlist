@@ -70,12 +70,12 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Priority rows and a global priority filter
 - [x] Custom saved perspectives with JSON filter trees, including a
       full-screen reminder filter that follows project and folder marks
-- [x] Notes and glyphs for saved views: a filter-derived note under the title
-      and an icon card that searches named icons and emoji
+- [x] Descriptions and glyphs for saved views: an editable description under
+      the title and a tabbed icon card that searches named icons and emoji
 - [x] Pinned saved views: pinned views sort to the top of the SAVED section
       and can keep the pin mark, take a named icon, or use an emoji chosen from
-      a searchable icon card. Saved views also carry a one-line note, suggested
-      from their filters and editable in the editor. A shipped **Running** view
+      a tabbed, searchable icon card. Saved views also carry a one-line
+      description editable in the editor. A shipped **Running** view
       collects started work that is not due yet; it is editable and deletable
       like any other saved view
 - [x] Hide empty custom views option: a saved view leaves the sidebar until
@@ -325,6 +325,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Nearby ranks tasks by the distance between the library and tag locations
 - [x] Delete folder/tag/perspective/project from the sidebar (`⌘⌫` or `dd`);
       deleting a project moves its tasks to Trash and is undoable
+- [x] Edit project from the sidebar context menu (name, notes, review cadence,
+      type, icon) and edit a folder's name without leaving the rail
 - [x] Deleting a folder asks first: nested folders, their projects and every
       task inside move to Trash with it, the sheet names the folder and counts
       its projects, and one Undo restores the whole tree. The × button, the

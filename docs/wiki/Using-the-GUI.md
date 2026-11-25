@@ -185,9 +185,14 @@ titles itself **Search** and ranks the closest matches first.
 ## Organising
 
 - **New project / folder / tag / perspective**: `⇧⌘N`, `⌥⌘N`, `⌃⌘N`, `⇧⌘P`.
-- **Icons and emoji**: click the icon button to open a card. Type to search
-  named icons and emoji, or paste an emoji; Return picks the first match.
-  Projects and saved views share the same card.
+- **Icons and emoji**: click the icon button to open a card. Switch between the
+  **Icons** and **Emoji** tabs, type to search, or paste an emoji; Return picks
+  the first match. Projects and saved views share the same card. The card grows
+  with the sheet rather than trapping the scroll wheel.
+- **Right-click a project** for Open, Rename, **Edit project…**, status and
+  Delete. The Edit sheet covers the name, notes, review cadence, type and icon.
+- **Right-click a folder** for Open, Rename, **Edit folder…**, New project here,
+  New subfolder and Delete.
 - **Saved perspectives** share one editor with the phone: text, Inbox only,
   Flagged only, Status, Projects, Tags with child tags, Priorities, Due,
   Planned and Defer windows (including **Later / none**), full-screen reminder

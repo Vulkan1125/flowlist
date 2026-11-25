@@ -524,7 +524,22 @@ impl FlowlistApp {
         on_click: impl Fn(&mut FlowlistApp, &mut Context<FlowlistApp>) + 'static,
     ) -> AnyElement {
         let theme = self.theme;
+        let boxes = self.sidebar_menu_boxes.clone();
+        let box_key = id.clone();
         div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        box_key.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
             .id(super::sid(id))
             .flex()
             .items_center()
@@ -707,6 +722,7 @@ impl FlowlistApp {
             SidebarTarget::Folder(id) => {
                 let open_target = SidebarTarget::Folder(id.clone());
                 let rename_id = id.clone();
+                let edit_folder_id = id.clone();
                 let delete_id = id.clone();
                 let project_folder = id.clone();
                 let child_folder = id.clone();
@@ -735,6 +751,20 @@ impl FlowlistApp {
                             modals::EntityRef::Folder(rename_id.clone()),
                         );
                         this.open_modal(modal, cx);
+                    },
+                ));
+                items.push(self.sidebar_menu_item(
+                    "menu-edit-folder".to_string(),
+                    "Edit folder…",
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        if let Some(modal) =
+                            modals::Modal::edit_folder(this, &edit_folder_id)
+                        {
+                            this.open_modal(modal, cx);
+                        }
                     },
                 ));
                 items.push(self.sidebar_menu_divider());
@@ -778,6 +808,7 @@ impl FlowlistApp {
             SidebarTarget::Project(id) => {
                 let open_target = SidebarTarget::Project(id.clone());
                 let edit_id = id.clone();
+                let edit_project_id = id.clone();
                 let delete_id = id.clone();
                 let name = db
                     .projects
@@ -805,6 +836,20 @@ impl FlowlistApp {
                             modals::EntityRef::Project(edit_id.clone()),
                         );
                         this.open_modal(modal, cx);
+                    },
+                ));
+                items.push(self.sidebar_menu_item(
+                    "menu-edit-project".to_string(),
+                    "Edit project…",
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        if let Some(modal) =
+                            modals::Modal::edit_project(this, &edit_project_id)
+                        {
+                            this.open_modal(modal, cx);
+                        }
                     },
                 ));
                 items.push(self.sidebar_menu_divider());

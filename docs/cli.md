@@ -209,7 +209,7 @@ flowlist tag remove <ID>
 flowlist perspective add <NAME> [--filter '<JSON FILTER>'] \
   [--group-by none|project|folder|tag|due|defer|flagged|estimate] \
   [--sort <ORDER>] [--show-completed] [--pinned] [--icon <SLUG|EMOJI>] \
-  [--note <TEXT>]
+  [--description <TEXT>]        # --note still works
 flowlist perspective list
 flowlist perspective remove <ID>
 ```

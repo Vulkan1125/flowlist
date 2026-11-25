@@ -642,8 +642,8 @@ pub struct PerspectiveAddArgs {
     #[arg(long)]
     pub icon: Option<String>,
     /// One-line description shown under the view title.
-    #[arg(long)]
-    pub note: Option<String>,
+    #[arg(long, alias = "note")]
+    pub description: Option<String>,
 }
 
 #[derive(Args, Debug, Clone, Default)]
@@ -2259,8 +2259,8 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
             }
             perspective.show_completed = args.show_completed;
             perspective.pinned = args.pinned;
-            if let Some(note) = args.note {
-                perspective.note = note;
+            if let Some(description) = args.description {
+                perspective.description = description;
             }
             if let Some(icon) = args.icon {
                 perspective.icon = Some(
@@ -2316,7 +2316,7 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
                                 "show_completed": perspective.show_completed,
                                 "pinned": perspective.pinned,
                                 "icon": perspective.icon,
-                                "note": perspective.note,
+                                "description": perspective.description,
                             }))
                             .collect::<Vec<_>>()
                     ))?
