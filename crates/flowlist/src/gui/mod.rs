@@ -1630,6 +1630,16 @@ impl FlowlistApp {
     }
 
     fn quick_open_entries(&self) -> Vec<QuickOpenEntry> {
+        let query = self
+            .quick_open
+            .as_ref()
+            .map(|state| state.query.text().trim().to_lowercase())
+            .unwrap_or_default();
+        // The palette opens empty on purpose: listing every entity before the
+        // user has typed reads as noise, not as a result set.
+        if query.is_empty() {
+            return Vec::new();
+        }
         let db = self.store.db();
         let mut entries = Vec::new();
         for perspective in BuiltinPerspective::ALL {
@@ -1687,18 +1697,11 @@ impl FlowlistApp {
             });
         }
 
-        let query = self
-            .quick_open
-            .as_ref()
-            .map(|state| state.query.text().trim().to_lowercase())
-            .unwrap_or_default();
-        if !query.is_empty() {
-            let words: Vec<&str> = query.split_whitespace().collect();
-            entries.retain(|entry| {
-                let haystack = format!("{} {}", entry.label, entry.detail).to_lowercase();
-                words.iter().all(|word| haystack.contains(word))
-            });
-        }
+        let words: Vec<&str> = query.split_whitespace().collect();
+        entries.retain(|entry| {
+            let haystack = format!("{} {}", entry.label, entry.detail).to_lowercase();
+            words.iter().all(|word| haystack.contains(word))
+        });
         entries.sort_by(|left, right| {
             let left_lower = left.label.to_lowercase();
             let right_lower = right.label.to_lowercase();
@@ -1737,11 +1740,7 @@ impl FlowlistApp {
         self.sidebar_activate(target, cx);
     }
 
-    fn handle_quick_open_key(
-        &mut self,
-        event: &KeyDownEvent,
-        cx: &mut Context<Self>,
-    ) {
+    fn handle_quick_open_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
         let stroke = &event.keystroke;
         let mods = stroke.modifiers;
         if mods.platform && stroke.key == "o" {
@@ -1816,8 +1815,10 @@ impl FlowlistApp {
         let entries = self.quick_open_entries();
         let cursor = state.cursor.min(entries.len().saturating_sub(1));
         let query = state.query.clone();
+        let typed = !state.query.text().trim().is_empty();
         let mut list = div().flex().flex_col().gap_1();
-        if entries.is_empty() {
+        // Keep the panel quiet until the first keystroke.
+        if typed && entries.is_empty() {
             list = list.child(
                 div()
                     .px_2()
@@ -1826,7 +1827,7 @@ impl FlowlistApp {
                     .text_color(theme.text_faint)
                     .child("No matches"),
             );
-        } else {
+        } else if typed {
             for (index, entry) in entries.iter().enumerate() {
                 let selected = index == cursor;
                 let target = entry.target.clone();
@@ -6924,6 +6925,7 @@ impl FlowlistApp {
             serde_json::json!({
                 "query": state.query.text(),
                 "cursor": state.cursor,
+                "results": self.quick_open_entries().len(),
             })
         }));
         state["sidebar_visible"] = serde_json::json!(
