@@ -3083,3 +3083,136 @@ fn planned_dates_are_independent_of_availability() {
     let forecast = flowlist_core::query::forecast::forecast(store.db(), Utc::now());
     assert!(!forecast.planned_today.contains(&id));
 }
+
+#[test]
+fn forecast_puts_project_dates_above_the_tasks() {
+    use chrono::Duration;
+    use flowlist_core::query;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let today = local_date(Utc::now());
+    let day = |offset: i64| Stamp::date_only(today + Duration::days(offset));
+
+    let mut due = NewProject::new("Due today");
+    due.due = Some(day(0));
+    due.planned = Some(day(0));
+    let due_id = store
+        .execute(Command::CreateProject(due))
+        .unwrap()
+        .created[0]
+        .clone();
+    let due_id = store.db().resolve_project(&due_id).unwrap();
+
+    let mut deferred = NewProject::new("Deferred tomorrow");
+    deferred.defer = Some(day(1));
+    let deferred_id = store
+        .execute(Command::CreateProject(deferred))
+        .unwrap()
+        .created[0]
+        .clone();
+    let deferred_id = store.db().resolve_project(&deferred_id).unwrap();
+
+    let mut held = NewProject::new("On hold tomorrow");
+    held.due = Some(day(1));
+    let held_id = store
+        .execute(Command::CreateProject(held))
+        .unwrap()
+        .created[0]
+        .clone();
+    let held_id = store.db().resolve_project(&held_id).unwrap();
+    store
+        .execute(Command::SetProjectStatus {
+            id: held_id.clone(),
+            status: ProjectStatus::OnHold,
+        })
+        .unwrap();
+
+    let mut done = NewProject::new("Done today");
+    done.due = Some(day(0));
+    let done_id = store
+        .execute(Command::CreateProject(done))
+        .unwrap()
+        .created[0]
+        .clone();
+    let done_id = store.db().resolve_project(&done_id).unwrap();
+    store
+        .execute(Command::SetProjectStatus {
+            id: done_id.clone(),
+            status: ProjectStatus::Done,
+        })
+        .unwrap();
+
+    let mut later = NewProject::new("Later");
+    later.due = Some(day(20));
+    let later_id = store
+        .execute(Command::CreateProject(later))
+        .unwrap()
+        .created[0]
+        .clone();
+    let later_id = store.db().resolve_project(&later_id).unwrap();
+
+    let mut next = NewProject::new("Next month");
+    next.due = Some(day(40));
+    let next_id = store
+        .execute(Command::CreateProject(next))
+        .unwrap()
+        .created[0]
+        .clone();
+    let next_id = store.db().resolve_project(&next_id).unwrap();
+
+    let mut past = NewProject::new("Past due");
+    past.due = Some(day(-2));
+    let past_id = store
+        .execute(Command::CreateProject(past))
+        .unwrap()
+        .created[0]
+        .clone();
+    let past_id = store.db().resolve_project(&past_id).unwrap();
+
+    let groups = query::forecast_view(store.db(), Utc::now(), true);
+    let group = |key: &str| groups.iter().find(|group| group.key == key).unwrap();
+    // Due and planned on the same day still make one project row.
+    assert_eq!(
+        group("forecast:today")
+            .projects
+            .iter()
+            .filter(|id| **id == due_id)
+            .count(),
+        1
+    );
+    assert!(group("forecast:past").projects.contains(&past_id));
+    assert!(group("forecast:tomorrow").projects.contains(&deferred_id));
+    assert!(group("forecast:tomorrow").projects.contains(&held_id));
+    assert!(!groups.iter().any(|group| group.projects.contains(&done_id)));
+    assert!(group("forecast:later").projects.contains(&later_id));
+    assert!(group("forecast:next-month").projects.contains(&next_id));
+    assert!(query::projects_on_date(store.db(), today, true).contains(&due_id));
+    assert!(query::projects_on_date(store.db(), today + Duration::days(1), true)
+        .contains(&deferred_id));
+    assert!(query::forecast_past_projects(store.db(), Utc::now(), true).contains(&past_id));
+    assert!(query::forecast_future_projects(
+        store.db(),
+        today + Duration::days(7),
+        true
+    )
+    .contains(&later_id));
+
+    // The Planned toggle hides a planned-only project without hiding its due
+    // siblings.
+    let mut planned_only = NewProject::new("Planned only");
+    planned_only.planned = Some(day(0));
+    let planned_id = store
+        .execute(Command::CreateProject(planned_only))
+        .unwrap()
+        .created[0]
+        .clone();
+    let planned_id = store.db().resolve_project(&planned_id).unwrap();
+    let groups = query::forecast_view(store.db(), Utc::now(), true);
+    assert!(groups
+        .iter()
+        .find(|group| group.key == "forecast:planned-today")
+        .is_some_and(|group| group.projects.contains(&planned_id)));
+    let groups = query::forecast_view(store.db(), Utc::now(), false);
+    assert!(!groups.iter().any(|group| group.projects.contains(&planned_id)));
+}

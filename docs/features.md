@@ -181,6 +181,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       only appears while the pointer is on that heading, so a resting rail
       reads as calm labels. Keyboard focus and Settings both respect a folded
       or hidden section.
+- [x] Projects in Forecast: project rows on their own due, defer and planned
+      dates above the day's tasks, with status, progress and click-through.
 - [x] Forecast month calendar above the list: Monday-first grid, previous /
       Today / next controls, an accent circle for today, tinted event pills,
       and `+N more` when a day overflows. One full-width month is shown, so

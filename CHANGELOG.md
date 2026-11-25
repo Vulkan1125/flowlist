@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Projects in Forecast.** A project now appears on its own due, defer and
+  planned dates, above that day's tasks. The row shows the project icon, name,
+  status, which dates it carries and its completion progress; clicking it opens
+  the project. Completed and dropped projects stay out, the Planned chip hides
+  planned-only project rows, and the calendar pills, counts, Past and Future
+  tiles all include projects.
 - **Strict dates everywhere.** Typing a project into the task inspector now
   shows the same Adjust dates sheet; editing a task date outside the limits
   keeps the field open with an error; changing a project’s due/defer asks

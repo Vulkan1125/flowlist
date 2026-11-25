@@ -452,6 +452,8 @@ pub struct FlowlistApp {
     content_group_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Task row boxes, keyed by task id.
     content_row_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Forecast project row boxes, keyed by project id.
+    content_project_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Site favicons keyed by host, fetched once per session.
     favicons: Rc<RefCell<BTreeMap<String, Arc<gpui::RenderImage>>>>,
     /// Hosts currently being fetched, so a row does not ask twice.
@@ -886,6 +888,7 @@ impl FlowlistApp {
             content_rows: Rc::new(RefCell::new(Vec::new())),
             content_group_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             content_row_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            content_project_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             favicons: Rc::new(RefCell::new(BTreeMap::new())),
             favicon_requests: Rc::new(RefCell::new(BTreeSet::new())),
             favicon_misses: Rc::new(RefCell::new(BTreeSet::new())),
@@ -1462,7 +1465,9 @@ impl FlowlistApp {
                 if self.forecast_calendar_open && self.forecast_past =>
             {
                 let ids = query::forecast_past(db, at, self.forecast_planned);
+                let projects = query::forecast_past_projects(db, at, self.forecast_planned);
                 vec![Group {
+                    projects,
                     key: "forecast-focus:past".to_string(),
                     title: "Past".to_string(),
                     position: 0,
@@ -1474,7 +1479,9 @@ impl FlowlistApp {
             {
                 let after = self.forecast_week + chrono::Duration::days(6);
                 let ids = query::forecast_future(db, at, after, self.forecast_planned);
+                let projects = query::forecast_future_projects(db, after, self.forecast_planned);
                 vec![Group {
+                    projects,
                     key: "forecast-focus:future".to_string(),
                     title: "Future".to_string(),
                     position: 0,
@@ -1486,8 +1493,10 @@ impl FlowlistApp {
             {
                 let date = self.forecast_date.expect("guard checked");
                 let ids = query::tasks_on_date(db, date, at, self.forecast_planned);
+                let projects = query::projects_on_date(db, date, self.forecast_planned);
                 let title = query::forecast::day_label(date, local_date(at));
                 vec![Group {
+                    projects,
                     key: format!("forecast-day:{date}"),
                     title,
                     position: 0,
@@ -1523,6 +1532,7 @@ impl FlowlistApp {
                     .collect();
                 let rows = query::rows_for(db, &ids, at);
                 vec![Group {
+                    projects: Vec::new(),
                     key: format!("tag:{id}"),
                     title: db.tag_path(id),
                     position: 0,
@@ -1599,6 +1609,7 @@ impl FlowlistApp {
             .map(|project| project.name.clone())
             .unwrap_or_else(|| "Project".to_string());
         vec![Group {
+            projects: Vec::new(),
             key: format!("project:{id}"),
             title,
             position: 0,
@@ -1657,6 +1668,7 @@ impl FlowlistApp {
             .map(|(_, _, id)| query::row_for(db, &id, at))
             .collect();
         vec![Group {
+            projects: Vec::new(),
             key: "search:library".to_string(),
             title: "Search results".to_string(),
             position: 0,
@@ -7387,6 +7399,8 @@ impl FlowlistApp {
         state["content_groups"] = serde_json::json!(self.content_group_boxes.borrow().clone());
         state["content_row_boxes"] =
             serde_json::json!(self.content_row_boxes.borrow().clone());
+        state["content_projects"] =
+            serde_json::json!(self.content_project_boxes.borrow().clone());
         state["task_disclosures"] = serde_json::json!(self.task_disclosures.borrow().clone());
         state["inspector_subtasks"] = serde_json::json!(self.inspector_boxes.borrow().clone());
         let text = state.to_string();

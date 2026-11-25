@@ -9,7 +9,7 @@ pub mod forecast;
 pub mod perspective;
 pub mod sort;
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use std::collections::BTreeMap;
 
 use crate::db::Db;
@@ -38,6 +38,9 @@ pub struct Group {
     /// Ordering hint; groups are sorted by this, then title.
     pub position: i64,
     pub rows: Vec<TaskRow>,
+    /// Projects whose own date falls on this group's day. Forecast paints
+    /// these above the task rows; every other view leaves the list empty.
+    pub projects: Vec<ProjectId>,
 }
 
 /// Every task in manual (outline) order: projects in library order, then the
@@ -146,6 +149,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 .map(|row| row_for(db, &row.task, at))
                 .collect();
             vec![Group {
+                projects: Vec::new(),
                 key: "inbox".to_string(),
                 title: "Inbox".to_string(),
                 position: 0,
@@ -171,6 +175,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                     .map(|task_row| row_for(db, &task_row.task, at))
                     .collect();
                 groups.push(Group {
+                    projects: Vec::new(),
                     key: format!("project:{id}"),
                     title: db.project_path(&id),
                     position: index as i64,
@@ -202,6 +207,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                     continue;
                 }
                 groups.push(Group {
+                    projects: Vec::new(),
                     key: format!("tag:{}", row.tag),
                     title,
                     position: index as i64,
@@ -227,6 +233,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 .collect();
             sort::sort_rows(db, &mut rows, SortBy::CompletedAt);
             vec![Group {
+                projects: Vec::new(),
                 key: "completed".to_string(),
                 title: "Completed".to_string(),
                 position: 0,
@@ -244,6 +251,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                     .map(|task_row| row_for(db, &task_row.task, at))
                     .collect();
                 groups.push(Group {
+                    projects: Vec::new(),
                     key: format!("archive:{id}"),
                     title: db.project_path(&id),
                     position: index as i64,
@@ -265,6 +273,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
             let hits = nearby(db, at);
             let ids: Vec<TaskId> = hits.into_iter().map(|hit| hit.task).collect();
             vec![Group {
+                projects: Vec::new(),
                 key: "nearby".to_string(),
                 title: "Nearby".to_string(),
                 position: 0,
@@ -282,6 +291,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 .collect();
             ids.sort_by_key(|id| std::cmp::Reverse(db.tasks[id].modified_at));
             vec![Group {
+                projects: Vec::new(),
                 key: "changed".to_string(),
                 title: format!("Changed in the last {days} day(s)"),
                 position: 0,
@@ -298,6 +308,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 })
                 .collect();
             vec![Group {
+                projects: Vec::new(),
                 key: "attachments".to_string(),
                 title: "Tasks with attachments".to_string(),
                 position: 0,
@@ -307,6 +318,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
         BuiltinPerspective::Trash => {
             let ids = db.trashed_roots();
             vec![Group {
+                projects: Vec::new(),
                 key: "trash".to_string(),
                 title: "Trash".to_string(),
                 position: 0,
@@ -392,6 +404,7 @@ pub fn today(db: &Db, include_past: bool, at: DateTime<Utc>) -> Vec<Group> {
     let mut groups = Vec::new();
     if include_past && !past_planned.is_empty() {
         groups.push(Group {
+            projects: Vec::new(),
             key: "today:past".to_string(),
             title: "Past plans".to_string(),
             position: -2,
@@ -400,6 +413,7 @@ pub fn today(db: &Db, include_past: bool, at: DateTime<Utc>) -> Vec<Group> {
     }
     if include_past && !overdue.is_empty() {
         groups.push(Group {
+            projects: Vec::new(),
             key: "today:overdue".to_string(),
             title: "Overdue".to_string(),
             position: -1,
@@ -408,6 +422,7 @@ pub fn today(db: &Db, include_past: bool, at: DateTime<Utc>) -> Vec<Group> {
     }
     if !due_today.is_empty() {
         groups.push(Group {
+            projects: Vec::new(),
             key: "today".to_string(),
             title: "Today".to_string(),
             position: 0,
@@ -429,6 +444,7 @@ pub fn priority(db: &Db, priority: crate::model::Priority, at: DateTime<Utc>) ->
         })
         .collect();
     vec![Group {
+        projects: Vec::new(),
         key: format!("priority:{}", priority.slug()),
         title: format!("{} priority", priority.label()),
         position: 0,
@@ -563,15 +579,107 @@ pub fn forecast_future(
     ids
 }
 
+/// Projects with their own date on one local day, deduped and ordered by
+/// deadline then name. Used by a clicked Forecast day.
+pub fn projects_on_date(
+    db: &Db,
+    date: NaiveDate,
+    show_planned: bool,
+) -> Vec<ProjectId> {
+    let mut ids: Vec<ProjectId> = db
+        .projects
+        .values()
+        .filter(|project| project.status.is_open())
+        .filter(|project| {
+            project.due.is_some_and(|stamp| stamp.local_date() == date)
+                || project.defer.is_some_and(|stamp| stamp.local_date() == date)
+                || (show_planned
+                    && project
+                        .planned
+                        .is_some_and(|stamp| stamp.local_date() == date))
+        })
+        .map(|project| project.id.clone())
+        .collect();
+    sort_project_ids(db, &mut ids);
+    ids
+}
+
+/// Projects whose due date, or shown planned date, has slipped before today.
+pub fn forecast_past_projects(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<ProjectId> {
+    let today = crate::time::local_date(at);
+    let mut ids: Vec<ProjectId> = db
+        .projects
+        .values()
+        .filter(|project| project.status.is_open())
+        .filter(|project| {
+            project.due.is_some_and(|stamp| stamp.local_date() < today)
+                || (show_planned
+                    && project
+                        .planned
+                        .is_some_and(|stamp| stamp.local_date() < today))
+        })
+        .map(|project| project.id.clone())
+        .collect();
+    sort_project_ids(db, &mut ids);
+    ids
+}
+
+/// Projects with any due, defer or shown planned date after `after`.
+pub fn forecast_future_projects(
+    db: &Db,
+    after: NaiveDate,
+    show_planned: bool,
+) -> Vec<ProjectId> {
+    let mut ids: Vec<ProjectId> = db
+        .projects
+        .values()
+        .filter(|project| project.status.is_open())
+        .filter(|project| {
+            project.due.is_some_and(|stamp| stamp.local_date() > after)
+                || project.defer.is_some_and(|stamp| stamp.local_date() > after)
+                || (show_planned
+                    && project
+                        .planned
+                        .is_some_and(|stamp| stamp.local_date() > after))
+        })
+        .map(|project| project.id.clone())
+        .collect();
+    sort_project_ids(db, &mut ids);
+    ids
+}
+
+fn sort_project_ids(db: &Db, ids: &mut [ProjectId]) {
+    ids.sort_by_cached_key(|id| {
+        db.projects.get(id).map(|project| {
+            (
+                project
+                    .due
+                    .or(project.planned)
+                    .or(project.defer)
+                    .map(|stamp| stamp.at),
+                project.name.to_lowercase(),
+            )
+        })
+    });
+}
+
 fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group> {
     let data = forecast::forecast(db, at);
     let today = crate::time::local_date(at);
+    let tomorrow = today + Duration::days(1);
+    let horizon = today + Duration::days(7);
+    let month_horizon = today + Duration::days(30);
     let mut groups = Vec::new();
-    let mut push = |key: &str, title: &str, position: i64, ids: &[TaskId]| {
-        if ids.is_empty() {
+    let mut push = |key: &str,
+                    title: &str,
+                    position: i64,
+                    ids: &[TaskId],
+                    projects: &[ProjectId]| {
+        if ids.is_empty() && projects.is_empty() {
             return;
         }
         groups.push(Group {
+            projects: projects.to_vec(),
             key: key.to_string(),
             title: title.to_string(),
             position,
@@ -579,16 +687,93 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group>
         });
     };
 
+    let mut project_past = Vec::new();
+    let mut project_deferred_today = Vec::new();
+    let mut project_today = Vec::new();
+    let mut project_planned_today = Vec::new();
+    let mut project_tomorrow = Vec::new();
+    let mut project_days: BTreeMap<NaiveDate, Vec<ProjectId>> = BTreeMap::new();
+    let mut project_later = Vec::new();
+    let mut project_next_month = Vec::new();
+    for (date, day) in &data.projects {
+        if *date < today {
+            project_past.extend(day.due.iter().cloned());
+            if show_planned {
+                project_past.extend(day.planned.iter().cloned());
+            }
+            continue;
+        }
+        if *date == today {
+            project_today.extend(day.due.iter().cloned());
+            project_deferred_today.extend(day.deferred.iter().cloned());
+            if show_planned {
+                project_planned_today.extend(day.planned.iter().cloned());
+            }
+        } else {
+            let mut ids = day.due.clone();
+            ids.extend(day.deferred.iter().cloned());
+            if show_planned {
+                ids.extend(day.planned.iter().cloned());
+            }
+            if *date == tomorrow {
+                project_tomorrow.extend(ids);
+            } else if *date <= horizon {
+                project_days.entry(*date).or_default().extend(ids);
+            } else if *date <= month_horizon {
+                project_later.extend(ids);
+            } else {
+                project_next_month.extend(ids);
+            }
+        }
+    }
+    let project_key = |id: &ProjectId| {
+        db.projects.get(id).map(|project| {
+            (
+                project
+                    .due
+                    .or(project.planned)
+                    .or(project.defer)
+                    .map(|stamp| stamp.at),
+                project.name.to_lowercase(),
+            )
+        })
+    };
+    for ids in [
+        &mut project_past,
+        &mut project_deferred_today,
+        &mut project_today,
+        &mut project_planned_today,
+        &mut project_tomorrow,
+        &mut project_later,
+        &mut project_next_month,
+    ] {
+        dedupe_projects(ids);
+        ids.sort_by_key(project_key);
+    }
+    for ids in project_days.values_mut() {
+        dedupe_projects(ids);
+        ids.sort_by_key(project_key);
+    }
+    project_deferred_today.retain(|id| !project_today.contains(id));
+    project_planned_today
+        .retain(|id| !project_today.contains(id) && !project_deferred_today.contains(id));
+
     let mut past = data.overdue.clone();
     if show_planned {
         past.extend(data.past_planned.iter().cloned());
         dedupe(&mut past);
     }
-    push("forecast:past", "Past", -4, &past);
+    push("forecast:past", "Past", -4, &past, &project_past);
     let mut deferred_today = data.deferred_today.clone();
     deferred_today.retain(|id| !data.today.contains(id));
-    push("forecast:deferred", "Deferred Today", -3, &deferred_today);
-    push("forecast:today", "Today", -2, &data.today);
+    push(
+        "forecast:deferred",
+        "Deferred Today",
+        -3,
+        &deferred_today,
+        &project_deferred_today,
+    );
+    push("forecast:today", "Today", -2, &data.today, &project_today);
     if show_planned {
         let mut planned_today = data.planned_today.clone();
         planned_today.retain(|id| !data.today.contains(id) && !deferred_today.contains(id));
@@ -597,9 +782,16 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group>
             "Planned Today",
             -1,
             &planned_today,
+            &project_planned_today,
         );
     }
-    push("forecast:tomorrow", "Tomorrow", 0, &data.tomorrow);
+    push(
+        "forecast:tomorrow",
+        "Tomorrow",
+        0,
+        &data.tomorrow,
+        &project_tomorrow,
+    );
     for (date, day) in &data.days {
         let mut ids = day.due.clone();
         ids.extend(day.deferred.iter().cloned());
@@ -609,11 +801,13 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group>
         dedupe(&mut ids);
         let position = (*date - today).num_days();
         let title = forecast::day_label(*date, today);
+        let projects = project_days.get(date).map(Vec::as_slice).unwrap_or(&[]);
         push(
             &format!("forecast:{}", date.format("%Y-%m-%d")),
             &title,
             position,
             &ids,
+            projects,
         );
     }
     let later: Vec<TaskId> = if show_planned {
@@ -625,7 +819,7 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group>
             .cloned()
             .collect()
     };
-    push("forecast:later", "Later", i64::MAX - 1, &later);
+    push("forecast:later", "Later", i64::MAX - 1, &later, &project_later);
     let next_month: Vec<TaskId> = if show_planned {
         data.next_month.clone()
     } else {
@@ -640,9 +834,15 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group>
         "Next month and later",
         i64::MAX,
         &next_month,
+        &project_next_month,
     );
     groups.sort_by(|a, b| a.position.cmp(&b.position));
     groups
+}
+
+fn dedupe_projects(ids: &mut Vec<ProjectId>) {
+    let mut seen = std::collections::BTreeSet::new();
+    ids.retain(|id| seen.insert(id.clone()));
 }
 
 /// Drop repeated ids while keeping the first occurrence's order. A task can
@@ -900,6 +1100,7 @@ fn group_rows(db: &Db, rows: Vec<TaskRow>, group_by: GroupBy, at: DateTime<Utc>)
         } else {
             index.insert(key.clone(), groups.len());
             groups.push(Group {
+                projects: Vec::new(),
                 key,
                 title,
                 position,

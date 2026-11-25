@@ -155,7 +155,7 @@ The rail is the map of the library:
 | --- | --- |
 | **Inbox** | unscheduled tasks — no project, no due or defer date (a planned date does not count) |
 | **Today** | due or planned today (including inherited plans), deferred to today, overdue, and slipped plans |
-| **Forecast** | the month calendar and upcoming due, deferred and planned work; the collapsed strip has **Past** and **Future** end tiles, the **Planned** chip hides planned-only rows, and work more than 30 days out sits under **Next month and later**, folded |
+| **Forecast** | the month calendar and upcoming due, deferred and planned work; project rows sit above each day's tasks, the collapsed strip has **Past** and **Future** end tiles, the **Planned** chip hides planned-only rows, and work more than 30 days out sits under **Next month and later**, folded |
 | **Review** | projects whose review date has arrived |
 | **Projects** | every project at a glance |
 | **Tags** | tasks grouped by context |
@@ -235,6 +235,10 @@ titles itself **Search** and ranks the closest matches first.
   headings.
   **Available** keeps only tasks you can start now; **Priority** filters by
   priority. The choices are remembered per view.
+- Projects appear in Forecast on their own due, defer and planned dates. A
+  project row shows its icon, name, status, dates and progress; clicking opens
+  the project. Completed and dropped projects stay out, and the **Planned** chip
+  also hides planned-only project rows.
 - The **Calendar** chip in Forecast hides and restores the calendar, and
   remembers whether it was the week strip or the full month. Hiding also clears
   any picked day, so the list always returns to the full agenda. The chevron

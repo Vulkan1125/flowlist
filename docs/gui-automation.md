@@ -176,7 +176,8 @@ toggle and `hide_past_anchor` its chip box. `empty_note` is the title the
 content pane painted for an empty list (for example `Nothing planned or due
 today`), so a probe can check the calm Today copy. `content_groups` maps every painted group header to its box, so a probe can
 open a folded section such as Forecast's `forecast:next-month`.
-`content_row_boxes` maps task rows by id, for drag probes. `view_subtitle`
+`content_row_boxes` maps task rows by id, for drag probes. `content_projects`
+maps Forecast project rows by project id. `view_subtitle`
 reports the line under the view title. `view_form.description` carries the
 saved-view description. `icon_picker` reports whether an icon card is open and
 its first Return match. The saved-view and project icon cards

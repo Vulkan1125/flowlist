@@ -129,9 +129,9 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Date warning on every path** — inspector project assignment and
       project date edits use the Adjust dates sheet; direct date edits report
       an inline error.
-- [ ] **Projects in Forecast** — show project rows on their due/defer/planned
-      dates. Start with a Projects section above the task rows for a day; later
-      decide whether to unify task and project rows.
+- [x] **Projects in Forecast** — project rows on their due/defer/planned dates,
+      above the day's task rows, with status, progress, calendar pills and
+      Past/Future support.
 - [ ] **Full notification model** — defer/available alerts, per-item custom
       notification schedules, and richer notification payloads beyond due
       reminders and full-screen reminders.

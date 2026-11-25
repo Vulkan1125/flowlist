@@ -4,7 +4,7 @@ use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use std::collections::BTreeMap;
 
 use crate::db::Db;
-use crate::ids::TaskId;
+use crate::ids::{ProjectId, TaskId};
 use crate::model::ProjectStatus;
 use crate::time::{local_date, weekday_short};
 
@@ -14,6 +14,16 @@ pub struct ForecastDay {
     pub due: Vec<TaskId>,
     pub deferred: Vec<TaskId>,
     pub planned: Vec<TaskId>,
+}
+
+/// Project dates for one local day. A project can carry due, defer and planned
+/// dates on the same day; Forecast still draws it once in that day's Projects
+/// section.
+#[derive(Clone, Debug, Default)]
+pub struct ForecastProjectDay {
+    pub due: Vec<ProjectId>,
+    pub deferred: Vec<ProjectId>,
+    pub planned: Vec<ProjectId>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -31,6 +41,9 @@ pub struct Forecast {
     /// Planned dates that have slipped: still open, still informative, and
     /// deliberately not rolled forward. Forecast keeps them in Past.
     pub past_planned: Vec<TaskId>,
+    /// Project due/defer/planned dates, keyed by local day. Completed and
+    /// dropped projects are excluded; on-hold projects keep their dates.
+    pub projects: BTreeMap<NaiveDate, ForecastProjectDay>,
 }
 
 impl Forecast {
@@ -140,6 +153,47 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
                 result.next_month.push(task.id.clone());
             }
         }
+    }
+
+    for project in db.projects.values() {
+        if !project.status.is_open() {
+            continue;
+        }
+        for (date, kind) in [
+            (project.due, 0),
+            (project.defer, 1),
+            (project.planned, 2),
+        ] {
+            let Some(stamp) = date else {
+                continue;
+            };
+            let day = result
+                .projects
+                .entry(stamp.local_date())
+                .or_insert_with(ForecastProjectDay::default);
+            match kind {
+                0 => day.due.push(project.id.clone()),
+                1 => day.deferred.push(project.id.clone()),
+                _ => day.planned.push(project.id.clone()),
+            }
+        }
+    }
+    let project_key = |db: &Db, id: &ProjectId| {
+        db.projects.get(id).map(|project| {
+            (
+                project
+                    .due
+                    .or(project.planned)
+                    .or(project.defer)
+                    .map(|stamp| stamp.at),
+                project.name.to_lowercase(),
+            )
+        })
+    };
+    for day in result.projects.values_mut() {
+        day.due.sort_by_key(|id| project_key(db, id));
+        day.deferred.sort_by_key(|id| project_key(db, id));
+        day.planned.sort_by_key(|id| project_key(db, id));
     }
 
     let by_due = |db: &Db, id: &TaskId| db.effective_due(id).map(|stamp| stamp.at);

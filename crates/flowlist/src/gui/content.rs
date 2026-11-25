@@ -160,6 +160,63 @@ impl FlowlistApp {
         days
     }
 
+    /// Projects with their own due, defer or planned date, grouped by local
+    /// day. The calendar and the strip count these alongside tasks.
+    fn forecast_projects_by_day(&self) -> BTreeMap<NaiveDate, Vec<ProjectId>> {
+        let db = self.store.db();
+        let mut days: BTreeMap<NaiveDate, Vec<ProjectId>> = BTreeMap::new();
+        for project in db.projects.values() {
+            if !project.status.is_open() {
+                continue;
+            }
+            let mut dates = vec![
+                project.due.map(|stamp| stamp.local_date()),
+                project.defer.map(|stamp| stamp.local_date()),
+            ];
+            if self.forecast_planned {
+                dates.push(project.planned.map(|stamp| stamp.local_date()));
+            }
+            for date in dates.into_iter().flatten() {
+                let ids = days.entry(date).or_default();
+                if !ids.contains(&project.id) {
+                    ids.push(project.id.clone());
+                }
+            }
+        }
+        for ids in days.values_mut() {
+            ids.sort_by_cached_key(|id| {
+                let project = &db.projects[id];
+                (
+                    project
+                        .due
+                        .or(project.planned)
+                        .or(project.defer)
+                        .map(|stamp| stamp.at),
+                    project.name.to_lowercase(),
+                )
+            });
+        }
+        days
+    }
+
+    fn forecast_past_project_count(&self, today: NaiveDate) -> usize {
+        self.forecast_projects_by_day()
+            .into_iter()
+            .filter(|(date, _)| *date < today)
+            .flat_map(|(_, ids)| ids)
+            .collect::<BTreeSet<_>>()
+            .len()
+    }
+
+    fn forecast_future_project_count(&self, after: NaiveDate) -> usize {
+        self.forecast_projects_by_day()
+            .into_iter()
+            .filter(|(date, _)| *date > after)
+            .flat_map(|(_, ids)| ids)
+            .collect::<BTreeSet<_>>()
+            .len()
+    }
+
     /// Move the selected Forecast day, creating one at today when none is set.
     pub(super) fn forecast_step_date(&mut self, delta: i64) {
         let today = local_date(now());
@@ -533,6 +590,7 @@ impl FlowlistApp {
         let week = week_start(self.forecast_week).max(base);
         let anchor = self.forecast_date.unwrap_or(week);
         let days = self.forecast_tasks_by_day();
+        let project_days = self.forecast_projects_by_day();
         let at_base = week <= base;
         let labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
         let title = anchor.format("%B %Y").to_string();
@@ -596,14 +654,16 @@ impl FlowlistApp {
         );
 
         let mut row = div().flex().w_full().gap_1().pt_2();
-        let past_count = query::forecast_past(self.store.db(), now(), self.forecast_planned).len();
+        let past_count = query::forecast_past(self.store.db(), now(), self.forecast_planned).len()
+            + self.forecast_past_project_count(today);
         let future_count = query::forecast_future(
             self.store.db(),
             now(),
             week + Duration::days(6),
             self.forecast_planned,
         )
-        .len();
+        .len()
+            + self.forecast_future_project_count(week + Duration::days(6));
         let past_sink = strip_boxes.clone();
         let past_selected = self.forecast_past;
         row = row.child(
@@ -660,7 +720,8 @@ impl FlowlistApp {
         );
         for (index, label) in labels.iter().enumerate() {
             let date = week + Duration::days(index as i64);
-            let count = days.get(&date).map_or(0, Vec::len);
+            let count = days.get(&date).map_or(0, Vec::len)
+                + project_days.get(&date).map_or(0, Vec::len);
             let selected = !self.forecast_past
                 && !self.forecast_future
                 && self.forecast_date == Some(date);
@@ -834,6 +895,7 @@ impl FlowlistApp {
         let theme = self.theme;
         let db = self.store.db();
         let cell_height = self.forecast_cell_height(first);
+        let project_days = self.forecast_projects_by_day();
         let (grid_start, _, weeks) = month_grid(first);
         let day_boxes = self.forecast_day_boxes.clone();
         let chip_boxes = self.forecast_chip_boxes.clone();
@@ -870,7 +932,8 @@ impl FlowlistApp {
                 let is_today = date == today;
                 let is_selected = self.forecast_date == Some(date);
                 let ids = days.get(&date).cloned().unwrap_or_default();
-                let count = ids.len();
+                let project_ids = project_days.get(&date).cloned().unwrap_or_default();
+                let count = ids.len() + project_ids.len();
                 let cell_key = date.to_string();
                 let box_sink = day_boxes.clone();
                 let drop_date = date;
@@ -952,7 +1015,51 @@ impl FlowlistApp {
                         }),
                 );
 
-                for id in ids.iter().take(2) {
+                let mut shown = 0;
+                for project_id in project_ids.iter().take(2) {
+                    let Some(project) = db.projects.get(project_id) else {
+                        continue;
+                    };
+                    let name = project.name.clone();
+                    let open_id = project_id.clone();
+                    let open_month = select_month;
+                    let open_date = date;
+                    cell = cell.child(
+                        div()
+                            .id(super::sid(format!("forecast-project-chip:{project_id}")))
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .h(px(15.))
+                            .w_full()
+                            .min_w_0()
+                            .px_1()
+                            .rounded_sm()
+                            .bg(theme.selection)
+                            .text_xs()
+                            .text_color(theme.text)
+                            .cursor_pointer()
+                            .child(widgets::icon_spec(&project.icon, 10.0, theme.text_faint))
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_ellipsis()
+                                    .child(name),
+                            )
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.forecast_past = false;
+                                this.forecast_future = false;
+                                this.forecast_date = Some(open_date);
+                                this.forecast_month = open_month;
+                                this.forecast_week = week_start(open_date);
+                                this.open_view(View::Project(open_id.clone()), cx);
+                            })),
+                    );
+                    shown += 1;
+                }
+                for id in ids.iter().take(2 - shown) {
                     let Some(task) = db.tasks.get(id) else {
                         continue;
                     };
@@ -1000,13 +1107,14 @@ impl FlowlistApp {
                                     .child(title),
                             ),
                     );
+                    shown += 1;
                 }
-                if count > 2 {
+                if count > shown {
                     cell = cell.child(
                         div()
                             .text_xs()
                             .text_color(theme.text_faint)
-                            .child(format!("+{} more", count - 2)),
+                            .child(format!("+{} more", count - shown)),
                     );
                 }
 
@@ -1708,7 +1816,10 @@ impl FlowlistApp {
         );
         // A view with a single empty group is really an empty view: give it
         // the same illustrated empty state instead of a lonely caption.
-        let entirely_empty = groups.len() == 1 && groups[0].rows.is_empty() && !show_headers;
+        let entirely_empty = groups.len() == 1
+            && groups[0].rows.is_empty()
+            && groups[0].projects.is_empty()
+            && !show_headers;
         if groups.is_empty() || entirely_empty {
             if !self.search.is_empty() {
                 let (title, detail) = if self.search_library {
@@ -1782,6 +1893,23 @@ impl FlowlistApp {
                 list = list.child(self.render_group_header(group, open, cx));
             }
             if open {
+                // Forecast puts a project's own deadline above the day's
+                // actions. Every other view has an empty list here.
+                if !group.projects.is_empty() {
+                    list = list.child(
+                        div()
+                            .px_4()
+                            .pt_2()
+                            .pb_1()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(theme.text_faint)
+                            .child("Projects"),
+                    );
+                    for project in &group.projects {
+                        list = list.child(self.render_forecast_project_row(project, cx));
+                    }
+                }
                 // One root drop target before the first top-level row. Rows
                 // themselves handle "after this row", so no spacer is needed
                 // between every pair and the rows stay visually joined.
@@ -1798,7 +1926,7 @@ impl FlowlistApp {
                     }
                     list = list.child(self.render_task_row(&row, cx));
                 }
-                if group.rows.is_empty() {
+                if group.rows.is_empty() && group.projects.is_empty() {
                     list = list.child(
                         div()
                             .px_4()
@@ -2154,6 +2282,101 @@ impl FlowlistApp {
         false
     }
 
+    /// A project's own Forecast row. It has no checkbox: the project is a
+    /// container and clicking the row opens it. Progress and status sit on the
+    /// right so the project reads differently from an action.
+    fn render_forecast_project_row(
+        &self,
+        project: &ProjectId,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let db = self.store.db();
+        let Some(entity) = db.projects.get(project) else {
+            return div().into_any_element();
+        };
+        let (done, total) = db.project_progress(project);
+        let mut dates = Vec::new();
+        if entity.due.is_some() {
+            dates.push("Due");
+        }
+        if entity.defer.is_some() {
+            dates.push("Deferred");
+        }
+        if entity.planned.is_some() {
+            dates.push("Planned");
+        }
+        let meta = if dates.is_empty() {
+            format!("{done} of {total} done")
+        } else {
+            format!("{} · {done} of {total} done", dates.join(" · "))
+        };
+        let id = project.clone();
+        let row = div()
+            .id(super::sid(format!("forecast-project:{project}")))
+            .flex()
+            .items_center()
+            .gap_2()
+            .h(px(34.))
+            .px_4()
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.hover))
+            .child(widgets::icon_spec(&entity.icon, 14.0, theme.text_faint))
+            .child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .text_sm()
+                    .text_color(theme.text)
+                    .child(entity.name.clone()),
+            )
+            .when(entity.status != ProjectStatus::Active, |this| {
+                this.child(widgets::chip(
+                    theme,
+                    entity.status.label(),
+                    if entity.status == ProjectStatus::OnHold {
+                        theme.warning
+                    } else {
+                        theme.text_faint
+                    },
+                ))
+            })
+            .child(div().flex_grow())
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(meta),
+            )
+            .child(
+                div()
+                    .w(px(70.))
+                    .child(widgets::progress(theme, done, total)),
+            )
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.open_view(View::Project(id.clone()), cx);
+                this.focus = FocusArea::Content;
+            }));
+        let box_id = project.to_string();
+        let boxes = self.content_project_boxes.clone();
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        box_id.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .child(row)
+            .into_any_element()
+    }
+
     fn render_group_header(
         &self,
         group: &Group,
@@ -2214,7 +2437,10 @@ impl FlowlistApp {
                         .text_color(theme.text_dim)
                         .child(group.title.clone()),
                 )
-                .child(widgets::count(theme, group.rows.len()))
+                .child(widgets::count(
+                    theme,
+                    group.rows.len() + group.projects.len(),
+                ))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.toggle_group_collapsed(open_key.clone(), cx)
                 }));
