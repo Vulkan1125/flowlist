@@ -26,12 +26,14 @@ reach them without the mouse.
 
 ### Quick capture panel
 
-`⌘F` opens a two-tab keyboard card. **Search tasks** matches every task in the
-library; **Quick Open** reaches perspectives, folders, projects and tags
-without walking the sidebar. `⇥` and `⇧⇥` switch tabs, each tab keeps its own
-query, `↑`/`↓` move, `Return` opens and `Esc` closes. `⌘O` opens the card
-straight on Quick Open, and the `⌘O Jump` chip in the search field gives mouse
-users the same route.
+`⌘F` opens **Search tasks**, which matches every task in the library. `⌘O`
+opens **Quick Open**, which reaches perspectives, folders, projects and tags
+without walking the sidebar. Both are bare faces: no tab row, no clutter.
+
+Clicking the title-bar **Search** box with a mouse opens the same card with a
+tab row between the field and the results. `⇥` and `⇧⇥` then switch between
+Search tasks and Quick Open, and each tab keeps its own query. In every face,
+`↑`/`↓` move, `Return` opens and `Esc` closes.
 
 `⌃⌥Space` opens the floating capture panel from any app; the same chord closes
 it again without filing. The title field has keyboard focus as soon as the

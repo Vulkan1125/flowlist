@@ -336,10 +336,6 @@ pub(super) type PaintedTaskRow = (String, u32, String, bool);
 pub(super) const SIDEBAR_WIDTH: f32 = 240.0;
 pub(super) const INSPECTOR_WIDTH: f32 = 320.0;
 
-/// Right inset reserved inside the title-bar search for the `⌘O Jump` chip,
-/// so typed text never slides underneath it.
-const SEARCH_JUMP_TRAILER: f32 = 62.0;
-
 /// The two faces of the ⌘F card. Tab cycles, and both buffers are kept so
 /// switching back does not lose what was typed.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -370,6 +366,9 @@ impl PaletteTab {
 
 struct QuickOpenState {
     tab: PaletteTab,
+    /// Manual clicks on the title-bar search show both tabs; ⌘F and ⌘O open a
+    /// bare face with no tab row.
+    show_tabs: bool,
     search: text::TextBuffer,
     jump: text::TextBuffer,
     cursor: usize,
@@ -514,9 +513,6 @@ pub struct FlowlistApp {
     sort_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// Today's Hide overdue chip, measured so a GUI probe can click it.
     hide_overdue_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
-    /// The `⌘O Jump` chip inside the search field, measured so a probe can
-    /// confirm it paints and click it without guessing the header layout.
-    search_jump_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     group_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     priority_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// The first text field in the open sheet, measured so a GUI probe can
@@ -923,7 +919,6 @@ impl FlowlistApp {
             priority_menu_open: false,
             sort_anchor: Rc::new(Cell::new(None)),
             hide_overdue_anchor: Rc::new(Cell::new(None)),
-            search_jump_anchor: Rc::new(Cell::new(None)),
             group_anchor: Rc::new(Cell::new(None)),
             priority_anchor: Rc::new(Cell::new(None)),
             modal_field_anchor: Rc::new(Cell::new(None)),
@@ -1669,7 +1664,13 @@ impl FlowlistApp {
         cx.notify();
     }
 
-    fn open_palette(&mut self, tab: PaletteTab, window: &mut Window, cx: &mut Context<Self>) {
+    fn open_palette(
+        &mut self,
+        tab: PaletteTab,
+        show_tabs: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.modal.is_some() {
             return;
         }
@@ -1680,6 +1681,7 @@ impl FlowlistApp {
         self.date_picker = None;
         self.quick_open = Some(QuickOpenState {
             tab,
+            show_tabs,
             search: text::TextBuffer::empty(),
             jump: text::TextBuffer::empty(),
             cursor: 0,
@@ -1688,14 +1690,6 @@ impl FlowlistApp {
         self.focus = FocusArea::Content;
         window.focus(&self.focus_handle);
         cx.notify();
-    }
-
-    fn open_quick_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_palette(PaletteTab::Jump, window, cx);
-    }
-
-    fn open_search_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_palette(PaletteTab::Search, window, cx);
     }
 
     fn close_quick_open(&mut self, cx: &mut Context<Self>) {
@@ -1713,6 +1707,18 @@ impl FlowlistApp {
             return;
         }
         state.tab = tab;
+        state.cursor = 0;
+        self.quick_open_scroll.set_offset(point(px(0.), px(0.)));
+    }
+
+    /// A shortcut shows one face only, hiding the tab row that a mouse click
+    /// opens. Both buffers survive, so switching back is lossless.
+    fn show_palette_face(&mut self, tab: PaletteTab) {
+        let Some(state) = &mut self.quick_open else {
+            return;
+        };
+        state.tab = tab;
+        state.show_tabs = false;
         state.cursor = 0;
         self.quick_open_scroll.set_offset(point(px(0.), px(0.)));
     }
@@ -1919,11 +1925,12 @@ impl FlowlistApp {
         let stroke = &event.keystroke;
         let mods = stroke.modifiers;
         if mods.platform && stroke.key == "o" {
-            self.close_quick_open(cx);
+            self.show_palette_face(PaletteTab::Jump);
+            cx.notify();
             return;
         }
         if mods.platform && stroke.key == "f" {
-            self.set_palette_tab(PaletteTab::Search);
+            self.show_palette_face(PaletteTab::Search);
             cx.notify();
             return;
         }
@@ -1933,12 +1940,14 @@ impl FlowlistApp {
                 return;
             }
             "tab" => {
-                let tab = self.quick_open.as_ref().map(|state| {
-                    if mods.shift {
-                        state.tab.previous()
-                    } else {
-                        state.tab.next()
-                    }
+                let tab = self.quick_open.as_ref().and_then(|state| {
+                    state.show_tabs.then(|| {
+                        if mods.shift {
+                            state.tab.previous()
+                        } else {
+                            state.tab.next()
+                        }
+                    })
                 });
                 if let Some(tab) = tab {
                     self.set_palette_tab(tab);
@@ -2033,7 +2042,8 @@ impl FlowlistApp {
         // the background.
         let viewport_height = f32::from(window.viewport_size().height);
         let panel_max_height = (viewport_height - 134.0).clamp(220.0, 420.0);
-        let list_max_height = (panel_max_height - 126.0).max(80.0);
+        let list_max_height =
+            (panel_max_height - if state.show_tabs { 126.0 } else { 100.0 }).max(80.0);
         let mut list = div()
             .id("quick-open-scroll")
             .flex()
@@ -2205,7 +2215,17 @@ impl FlowlistApp {
                     })
                     .bg(if active { theme.selection } else { theme.clear })
                     .hover(|style| style.bg(theme.hover))
-                    .child(tab.label())
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(tab.label())
+                            .child(div().text_color(theme.text_faint).child(match tab {
+                                PaletteTab::Search => "⌘F",
+                                PaletteTab::Jump => "⌘O",
+                            })),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.set_palette_tab(tab);
                         this.focus = FocusArea::Content;
@@ -2214,40 +2234,41 @@ impl FlowlistApp {
             );
         }
         let placeholder = match state.tab {
-            PaletteTab::Search => "Search every task…",
+            PaletteTab::Search => "Search",
             PaletteTab::Jump => "Jump to a perspective, folder, project or tag…",
         };
-        let panel = div()
-            .w(px(560.))
-            .max_h(px(panel_max_height))
-            .flex()
-            .flex_col()
-            .gap_2()
-            .p_2()
-            .rounded_lg()
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.raised)
-            .shadow_lg()
-            .overflow_hidden()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|_, _, _, cx| cx.stop_propagation()),
-            )
-            .child(tabs)
-            .child(
-                div()
-                    .px_1()
-                    .child(widgets::text_field(theme, &query, placeholder, true)),
-            )
-            .child(list)
-            .child(
-                div()
-                    .px_1()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child("⇥ switch · ↑↓ move · ↵ open · esc close"),
-            );
+        let panel =
+            div()
+                .w(px(560.))
+                .max_h(px(panel_max_height))
+                .flex()
+                .flex_col()
+                .gap_2()
+                .p_2()
+                .rounded_lg()
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.raised)
+                .shadow_lg()
+                .overflow_hidden()
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|_, _, _, cx| cx.stop_propagation()),
+                )
+                .child(
+                    div()
+                        .px_1()
+                        .child(widgets::text_field(theme, &query, placeholder, true)),
+                )
+                .when(state.show_tabs, |this| this.child(tabs))
+                .child(list)
+                .child(div().px_1().text_xs().text_color(theme.text_faint).child(
+                    if state.show_tabs {
+                        "⇥ switch · ↑↓ move · ↵ open · esc close"
+                    } else {
+                        "↑↓ move · ↵ open · esc close"
+                    },
+                ));
         div()
             .id("quick-open-layer")
             .absolute()
@@ -5092,7 +5113,7 @@ impl FlowlistApp {
                     cx,
                 );
             } else {
-                self.open_quick_open(window, cx);
+                self.open_palette(PaletteTab::Jump, false, window, cx);
             }
             return;
         }
@@ -5661,7 +5682,7 @@ impl FlowlistApp {
                         self.focus = FocusArea::Search;
                         self.search.select_all();
                     } else {
-                        self.open_search_palette(window, cx);
+                        self.open_palette(PaletteTab::Search, false, window, cx);
                     }
                 }
                 "i" => {
@@ -7230,7 +7251,6 @@ impl FlowlistApp {
         state["field_editor"] = serde_json::json!(anchor(self.field_editor_anchor.get()));
         state["hide_overdue"] = serde_json::json!(self.hide_overdue);
         state["hide_overdue_anchor"] = serde_json::json!(anchor(self.hide_overdue_anchor.get()));
-        state["search_jump_anchor"] = serde_json::json!(anchor(self.search_jump_anchor.get()));
         state["forecast_calendar_open"] = serde_json::json!(self.forecast_calendar_open);
         state["forecast_calendar_expanded"] = serde_json::json!(self.forecast_calendar_expanded);
         state["forecast_week"] = serde_json::json!(self.forecast_week.to_string());
@@ -7258,6 +7278,7 @@ impl FlowlistApp {
         state["quick_open"] = serde_json::json!(self.quick_open.as_ref().map(|state| {
             serde_json::json!({
                 "tab": state.tab.label(),
+                "show_tabs": state.show_tabs,
                 "query": state.query().text(),
                 "search": state.search.text(),
                 "jump": state.jump.text(),
@@ -7478,9 +7499,6 @@ impl FlowlistApp {
     fn render_header(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let window_width = self.window_size.map_or(1254.0, |(width, _)| width);
-        if !self.search.is_empty() {
-            self.search_jump_anchor.set(None);
-        }
         let (search_left, search_width) = search_slot(window_width);
         let can_back = self.can_go_back();
         let can_forward = self.can_go_forward();
@@ -7568,66 +7586,10 @@ impl FlowlistApp {
                             .child(widgets::text_field_with_trailer(
                                 theme,
                                 &self.search,
-                                if self.search_library {
-                                    "Search library"
-                                } else {
-                                    "Search tasks"
-                                },
+                                "Search",
                                 self.focus == FocusArea::Search,
-                                if self.search.is_empty() {
-                                    SEARCH_JUMP_TRAILER
-                                } else {
-                                    26.0
-                                },
+                                if self.search.is_empty() { 0.0 } else { 26.0 },
                             ))
-                            // The search field is the one place every user
-                            // already looks, so Quick Open advertises itself
-                            // here instead of hiding behind a shortcut.
-                            .when(self.search.is_empty(), |this| {
-                                let anchor = self.search_jump_anchor.clone();
-                                this.child(
-                                    div()
-                                        .id("search-jump")
-                                        .absolute()
-                                        .right(px(2.))
-                                        .top(px(2.))
-                                        .h(px(24.))
-                                        .px(px(6.))
-                                        .flex()
-                                        .items_center()
-                                        .rounded_sm()
-                                        .cursor_pointer()
-                                        .hover(|style| style.bg(theme.hover))
-                                        .flow_tip(self, cx, theme, "Quick Open (⌘O)")
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            cx.stop_propagation();
-                                            this.open_quick_open(window, cx);
-                                        }))
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .items_center()
-                                                .gap_1()
-                                                .on_children_prepainted(move |bounds, _, _| {
-                                                    if let Some(bounds) = bounds.first() {
-                                                        anchor.set(Some(*bounds));
-                                                    }
-                                                })
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(theme.text_faint)
-                                                        .child("⌘O"),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(theme.text_dim)
-                                                        .child("Jump"),
-                                                ),
-                                        ),
-                                )
-                            })
                             .when(!self.search.is_empty(), |this| {
                                 this.child(
                                     div()
@@ -7657,10 +7619,11 @@ impl FlowlistApp {
                                         })),
                                 )
                             })
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.focus = FocusArea::Search;
-                                this.search.select_all();
-                                cx.notify();
+                            // A manual click opens the tabbed card. The
+                            // shortcuts open a bare face, so the tabs only
+                            // appear when someone discovers search by mouse.
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_palette(PaletteTab::Search, true, window, cx);
                             })),
                     ),
             )
