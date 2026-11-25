@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{FolderId, PerspectiveId, ProjectId, TagId};
-use crate::model::{Priority, ProjectIcon};
+use crate::model::{IconSpec, Priority};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -328,7 +328,11 @@ pub struct Perspective {
     /// Optional rail glyph. Pinned views default to a pin and other saved
     /// views to the perspective symbol, but either can be replaced.
     #[serde(default)]
-    pub icon: Option<ProjectIcon>,
+    pub icon: Option<IconSpec>,
+    /// One-line description shown under the view title. Empty falls back to
+    /// the generic Saved perspective subtitle.
+    #[serde(default)]
+    pub note: String,
 }
 
 fn default_group() -> GroupBy {
@@ -347,6 +351,7 @@ impl Perspective {
             position: 0,
             pinned: false,
             icon: None,
+            note: String::new(),
         }
     }
 }

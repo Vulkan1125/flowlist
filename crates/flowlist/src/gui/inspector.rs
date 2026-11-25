@@ -6,9 +6,9 @@ use gpui::{
     AnyElement, Context, CursorStyle, IntoElement, MouseButton, Window, div, prelude::*, px,
 };
 
-use flowlist_core::command::{Command, ProjectPatch};
+use flowlist_core::command::Command;
 use flowlist_core::ids::{ChecklistId, TaskId};
-use flowlist_core::model::{Priority, ProjectIcon, ProjectStatus};
+use flowlist_core::model::{Priority, ProjectStatus};
 use flowlist_core::time::{format_duration, human_date, local_date, now};
 
 use super::content::month_grid;
@@ -1792,9 +1792,10 @@ impl FlowlistApp {
             .filter_map(|tag| db.tags.get(tag).map(|tag| db.tag_path(&tag.id)))
             .collect();
         let status = project.status;
-        let icon = project.icon;
+        let icon = project.icon.clone();
         let attachments = project.attachments.clone();
         let project_id = id.clone();
+        let icon_project = id.clone();
         let rename_id = id.clone();
         let due = project.due.map(|stamp| human_date(&stamp, now()));
         let defer = project.defer.map(|stamp| human_date(&stamp, now()));
@@ -1830,6 +1831,9 @@ impl FlowlistApp {
                     .child(div().text_xs().text_color(theme.text_faint).child("Icon"))
                     .child(
                         div()
+                            .on_children_prepainted(
+                                self.theme_probe("project-icon-toggle".to_string()),
+                            )
                             .id("project-icon-toggle")
                             .flex()
                             .items_center()
@@ -1838,24 +1842,18 @@ impl FlowlistApp {
                             .py_1()
                             .rounded_md()
                             .border_1()
-                            .border_color(if self.project_icon_open {
-                                theme.accent
-                            } else {
-                                theme.border
-                            })
-                            .bg(if self.project_icon_open {
-                                theme.selection
-                            } else {
-                                theme.field
-                            })
+                            .border_color(theme.border)
+                            .bg(theme.field)
                             .cursor_pointer()
                             .flow_tip(self, cx, theme, "Change the project icon")
                             .hover(|style| style.bg(theme.hover))
-                            .child(widgets::icon_for_project(icon, 14.0, theme.text_dim))
+                            .child(widgets::icon_spec(&icon, 14.0, theme.text_dim))
                             .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.project_icon_open = !this.project_icon_open;
-                                cx.notify();
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.open_modal(
+                                    super::modals::Modal::icon_picker(icon_project.clone()),
+                                    cx,
+                                );
                             })),
                     )
                     .child(
@@ -1865,50 +1863,6 @@ impl FlowlistApp {
                             .child(icon.label()),
                     ),
             )
-            .when(self.project_icon_open, |this| {
-                this.child(div().flex().flex_wrap().items_center().gap_1().children(
-                    ProjectIcon::ALL.into_iter().map(|candidate| {
-                        let set_id = project_id.clone();
-                        let active = icon == candidate;
-                        div()
-                            .id(super::sid(format!(
-                                "project-inspector-icon:{}",
-                                candidate.slug()
-                            )))
-                            .size(px(24.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(if active { theme.accent } else { theme.border })
-                            .bg(if active { theme.selection } else { theme.field })
-                            .cursor_pointer()
-                            .flow_tip(self, cx, theme, candidate.label())
-                            .hover(|style| style.bg(theme.hover))
-                            .child(widgets::icon_for_project(
-                                candidate,
-                                13.0,
-                                if active {
-                                    theme.accent
-                                } else {
-                                    theme.text_faint
-                                },
-                            ))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.execute(Command::UpdateProject {
-                                    id: set_id.clone(),
-                                    patch: ProjectPatch {
-                                        icon: Some(candidate),
-                                        ..Default::default()
-                                    },
-                                });
-                                this.project_icon_open = false;
-                                cx.notify();
-                            }))
-                    }),
-                ))
-            })
             .child(
                 div()
                     .flex()

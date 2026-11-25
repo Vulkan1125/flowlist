@@ -185,6 +185,9 @@ titles itself **Search** and ranks the closest matches first.
 ## Organising
 
 - **New project / folder / tag / perspective**: `⇧⌘N`, `⌥⌘N`, `⌃⌘N`, `⇧⌘P`.
+- **Icons and emoji**: click the icon button to open a card. Type to search
+  named icons and emoji, or paste an emoji; Return picks the first match.
+  Projects and saved views share the same card.
 - **Saved perspectives** share one editor with the phone: text, Inbox only,
   Flagged only, Status, Projects, Tags with child tags, Priorities, Due,
   Planned and Defer windows (including **Later / none**), full-screen reminder
@@ -193,9 +196,9 @@ titles itself **Search** and ranks the closest matches first.
   top of SAVED; pin or unpin from the editor or the row's context menu
   (`perspective add --pinned` for the CLI). Each pinned view keeps the pin mark
   by default, or takes a custom rail icon from the editor's icon grid
-  (`perspective add --icon` for the CLI); a shipped **Running** view uses a
-  running figure and lists started work that is not due yet. It can be edited
-  or deleted like any other saved view. Folding SAVED hides every saved view,
+  (`perspective add --icon` for the CLI); a shipped **Running** view lists
+  started work that is not due yet. It can be edited or deleted like any other
+  saved view. Folding SAVED hides every saved view,
   pinned or not.
   Both platforms offer project/folder/tag/due/defer/flagged/estimate
   grouping and manual/due/defer/name/priority/flagged/estimate/created

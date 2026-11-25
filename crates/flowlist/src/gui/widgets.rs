@@ -17,7 +17,7 @@ use gpui::{
 use super::FlowlistApp;
 use super::icons::{self, Icon};
 use super::text::TextBuffer;
-use flowlist_core::model::ProjectIcon;
+use flowlist_core::model::{IconSpec, ProjectIcon};
 
 use super::theme::Theme;
 
@@ -933,6 +933,21 @@ pub fn tip(
 }
 
 /// The small icon that stands in for a project in the rail and dashboards.
+/// A project or saved-view glyph: a named icon or an emoji.
+pub fn icon_spec(spec: &IconSpec, size: f32, color: gpui::Hsla) -> gpui::AnyElement {
+    match spec {
+        IconSpec::Builtin(icon) => icon_for_project(*icon, size, color).into_any_element(),
+        IconSpec::Emoji(value) => div()
+            .size(px(size + 2.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(px(size + 1.0))
+            .child(value.clone())
+            .into_any_element(),
+    }
+}
+
 pub fn icon_for_project(icon: ProjectIcon, size: f32, color: gpui::Hsla) -> impl IntoElement {
     let glyph = match icon {
         ProjectIcon::Project => Icon::Project,
@@ -976,7 +991,7 @@ pub fn icon_for_project(icon: ProjectIcon, size: f32, color: gpui::Hsla) -> impl
         ProjectIcon::Paintbrush => Icon::Paintbrush,
         ProjectIcon::Palette => Icon::Palette,
         ProjectIcon::Person => Icon::User,
-        ProjectIcon::Running => Icon::Running,
+        ProjectIcon::Running => Icon::User,
         ProjectIcon::Team => Icon::Users,
         ProjectIcon::Pill => Icon::Pill,
         ProjectIcon::Pin => Icon::Pin,

@@ -1241,7 +1241,7 @@ impl FlowlistApp {
                     .overflow_hidden()
                     .whitespace_nowrap()
                     .child(if library_search {
-                        "Matches from the whole library"
+                        "Matches from the whole library".to_string()
                     } else {
                         self.view_subtitle()
                     }),
@@ -1860,8 +1860,8 @@ impl FlowlistApp {
                     .rounded_md()
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover))
-                    .child(widgets::icon_for_project(
-                        project.icon,
+                    .child(widgets::icon_spec(
+                        &project.icon,
                         15.0,
                         theme.text_faint,
                     ))
@@ -2563,8 +2563,8 @@ impl FlowlistApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(widgets::icon_for_project(
-                                project.icon,
+                            .child(widgets::icon_spec(
+                                &project.icon,
                                 15.0,
                                 theme.text_dim,
                             ))

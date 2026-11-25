@@ -149,6 +149,7 @@ data class PerspectiveDto(
     val position: Int = 0,
     val pinned: Boolean = false,
     val icon: String? = null,
+    val note: String = "",
 )
 
 @Serializable

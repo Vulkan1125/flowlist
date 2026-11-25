@@ -8,6 +8,7 @@ mod background;
 mod blur;
 mod content;
 mod drag;
+mod emoji;
 mod favicon;
 mod hotkey;
 mod media;
@@ -531,8 +532,6 @@ pub struct FlowlistApp {
     sort_closed_on_up: bool,
     group_closed_on_up: bool,
     priority_closed_on_up: bool,
-    /// The project inspector's icon grid, shown only on request.
-    project_icon_open: bool,
     /// Highlighted completion in the project and tag fields.
     suggestion_index: usize,
     /// True once the user moved through the project dropdown with the arrow
@@ -913,7 +912,6 @@ impl FlowlistApp {
             sort_closed_on_up: false,
             group_closed_on_up: false,
             priority_closed_on_up: false,
-            project_icon_open: false,
             suggestion_index: 0,
             suggestion_engaged: false,
             selected,
@@ -2029,7 +2027,6 @@ impl FlowlistApp {
     /// navigation uses this so stepping back does not push a new entry.
     fn apply_view(&mut self, view: View) {
         self.remember_view_options();
-        self.project_icon_open = false;
         self.view = view;
         self.restore_view_options();
         self.selected.clear();
@@ -2082,8 +2079,16 @@ impl FlowlistApp {
         self.view.title(self.store.db())
     }
 
-    fn view_subtitle(&self) -> &'static str {
-        self.view.subtitle()
+    fn view_subtitle(&self) -> String {
+        if let View::Custom(id) = &self.view {
+            if let Some(perspective) = self.store.db().perspectives.get(id) {
+                let note = perspective.note.trim();
+                if !note.is_empty() {
+                    return note.to_string();
+                }
+            }
+        }
+        self.view.subtitle().to_string()
     }
 
     // ----------------------------------------------------------- selection
@@ -4370,7 +4375,7 @@ impl FlowlistApp {
                 let mut new_project = NewProject::new(name);
                 new_project.notes = notes.text().to_string();
                 new_project.kind = *kind;
-                new_project.icon = *icon;
+                new_project.icon = icon.clone();
                 new_project.review_interval_days = review_interval_days;
                 new_project.sequential = *kind == ProjectKind::Sequential;
                 new_project.fullscreen_reminder = *fullscreen_reminder;
@@ -4603,6 +4608,7 @@ impl FlowlistApp {
                 let plan = crate::uninstall::plan(*purge, &root);
                 crate::uninstall::schedule(&plan)?;
             }
+            modals::Modal::IconPicker { .. } => {}
             modals::Modal::ReviewInterval { id, days, .. } => {
                 let value = days
                     .text()
@@ -5109,6 +5115,21 @@ impl FlowlistApp {
                     "enter" | "return" => {
                         self.commit_modal(cx);
                         return;
+                    }
+                    _ => {}
+                }
+            }
+            if let Some((target, search_index)) = self.icon_picker_target() {
+                match stroke.key.as_str() {
+                    "escape" => {
+                        self.close_icon_picker(cx);
+                        return;
+                    }
+                    "enter" | "return" if !mods.platform => {
+                        if let Some(spec) = self.first_icon_match(search_index) {
+                            self.choose_icon(target, spec, cx);
+                            return;
+                        }
                     }
                     _ => {}
                 }
@@ -6902,12 +6923,24 @@ impl FlowlistApp {
             _ => None,
         });
         state["theme_boxes"] = serde_json::json!(self.theme_boxes.borrow().clone());
+        state["view_subtitle"] = serde_json::json!(self.view_subtitle());
+        state["icon_picker"] = serde_json::json!({
+            "open": self.icon_picker_target().is_some(),
+            "first": self
+                .icon_picker_target()
+                .and_then(|(_, index)| self.first_icon_match(index))
+                .map(|spec| spec.stored()),
+        });
         state["view_menu"] = serde_json::json!(self.view_menu.map(|field| field.key()));
         state["view_boxes"] = serde_json::json!(self.view_boxes.borrow().clone());
         state["view_form"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::Perspective { form }) => Some(serde_json::json!({
                 "name": form.name.text(),
+                "note": form.note.text(),
                 "text": form.text.text(),
+                "icon": form.icon.as_ref().map(|icon| icon.stored()),
+                "icon_open": form.icon_open,
+                "pinned": form.pinned,
                 "inbox_only": form.inbox_only,
                 "flagged_only": form.flagged_only,
                 "show_completed": form.show_completed,
@@ -7022,7 +7055,7 @@ impl FlowlistApp {
         state["forecast_grip_anchor"] = serde_json::json!(anchor(self.forecast_grip_anchor.get()));
         state["forecast_calendar_height"] = serde_json::json!(self.forecast_calendar_height);
         state["modal_project_icon"] = serde_json::json!(match &self.modal {
-            Some(modals::Modal::NewProject { icon, .. }) => Some(icon.slug()),
+            Some(modals::Modal::NewProject { icon, .. }) => Some(icon.stored()),
             _ => None,
         });
         state["wallpaper_light"] = serde_json::json!(

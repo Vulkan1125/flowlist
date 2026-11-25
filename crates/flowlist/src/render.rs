@@ -109,7 +109,7 @@ pub fn project_value(db: &Db, id: &ProjectId) -> Value {
         "sequential": project.sequential,
         "kind": project.effective_kind().label(),
         "kind_key": project.effective_kind().slug(),
-        "icon": project.icon.slug(),
+        "icon": &project.icon,
         "attachments": project.attachments,
         "completed_tasks": completed,
         "total_tasks": total,

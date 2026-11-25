@@ -10,7 +10,7 @@ use crate::db::{ContainerPosition, Db, OrderKey, Position};
 use crate::error::{Error, Result};
 use crate::ids::{ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use crate::model::{
-    ChecklistItem, Folder, Geo, Perspective, Priority, Project, ProjectIcon, ProjectKind,
+    ChecklistItem, Folder, Geo, IconSpec, Perspective, Priority, Project, ProjectKind,
     ProjectStatus, RepeatRule, Tag, TagStatus, Task, increment_repeat_title,
 };
 use crate::time::{Stamp, local_date, now};
@@ -165,7 +165,7 @@ pub struct NewProject {
     pub next_review: Option<NaiveDate>,
     pub sequential: bool,
     pub kind: ProjectKind,
-    pub icon: ProjectIcon,
+    pub icon: IconSpec,
     pub attachments: Vec<String>,
     /// Opt the project's tasks into full-screen reminders.
     #[serde(default)]
@@ -186,7 +186,7 @@ impl NewProject {
             next_review: None,
             sequential: false,
             kind: ProjectKind::Parallel,
-            icon: ProjectIcon::default(),
+            icon: IconSpec::default(),
             attachments: Vec::new(),
             fullscreen_reminder: false,
             position: ContainerPosition::End,
@@ -210,7 +210,7 @@ pub struct ProjectPatch {
     pub next_review: Option<NaiveDate>,
     pub sequential: Option<bool>,
     pub kind: Option<ProjectKind>,
-    pub icon: Option<ProjectIcon>,
+    pub icon: Option<IconSpec>,
     pub attachments: Option<Vec<String>>,
     pub fullscreen_reminder: Option<bool>,
 }
@@ -1061,7 +1061,7 @@ impl Command {
                 project.tags = task.tags.clone();
                 project.due = task.due;
                 project.defer = task.defer;
-                project.icon = ProjectIcon::default();
+                project.icon = IconSpec::default();
                 project.attachments = clean_attachments(task.attachments.clone());
                 if task.sequential {
                     project.kind = ProjectKind::Sequential;

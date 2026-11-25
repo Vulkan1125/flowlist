@@ -12,7 +12,8 @@ use crate::command::{Command, Outcome};
 use crate::db::Db;
 use crate::error::{Error, Result};
 use crate::model::{
-    Condition, DueWindow, FilterNode, GroupBy, Perspective, ProjectIcon, SortBy, TaskStatus,
+    Condition, DueWindow, FilterNode, GroupBy, IconSpec, Perspective, ProjectIcon, SortBy,
+    TaskStatus,
 };
 use crate::paths::DataPaths;
 use crate::persist::lock::StoreGuard;
@@ -101,7 +102,7 @@ impl Store {
     /// stops them from coming back.
     fn seed_shipped_views(&mut self) -> Result<()> {
         if self.data.db.settings.seeded_running_view
-            && self.data.db.settings.seeded_running_icon
+            && self.data.db.settings.cleared_running_icon
         {
             return Ok(());
         }
@@ -132,7 +133,7 @@ impl Store {
                 perspective.group_by = GroupBy::Project;
                 perspective.sort = SortBy::Planned;
                 perspective.pinned = true;
-                perspective.icon = Some(ProjectIcon::Running);
+                perspective.icon = None;
                 perspective.position = db
                     .perspectives
                     .values()
@@ -143,19 +144,20 @@ impl Store {
                 db.perspectives
                     .insert(perspective.id.clone(), perspective);
             }
-            // Upgrade a library seeded before icons existed, without touching
-            // an icon the user already picked.
-            if !db.settings.seeded_running_icon {
-                if let Some(perspective) = db
-                    .perspectives
-                    .values_mut()
-                    .find(|perspective| perspective.name.eq_ignore_ascii_case("Running"))
-                {
-                    if perspective.icon.is_none() {
-                        perspective.icon = Some(ProjectIcon::Running);
+            // Retire the old running figure from libraries that saw it. It is
+            // kept as a legacy ProjectIcon value only so old data can load.
+            if !db.settings.cleared_running_icon {
+                for perspective in db.perspectives.values_mut() {
+                    if perspective.icon == Some(IconSpec::builtin(ProjectIcon::Running)) {
+                        perspective.icon = None;
                     }
                 }
-                db.settings.seeded_running_icon = true;
+                for project in db.projects.values_mut() {
+                    if project.icon == IconSpec::builtin(ProjectIcon::Running) {
+                        project.icon = IconSpec::default();
+                    }
+                }
+                db.settings.cleared_running_icon = true;
             }
             let mut outcome = Outcome::new("Seed shipped views");
             outcome.message = Some("Added the Running saved view".to_string());

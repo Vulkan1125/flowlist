@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Notes on saved views.** A saved view can carry a one-line note under its
+  title, in the same place Today explains itself. The editor suggests a note
+  from the filters you pick (`Available · planned today · #Work`) and keeps it
+  in sync until you edit it, then leaves it alone. `perspective add --note`
+  sets it from the CLI.
+- **Searchable icon card with emoji.** Projects and saved views can use any
+  named icon or an emoji. The old wrapped icon row is now a card with a search
+  field, separate **Icons** and **Emoji** sections, and Return to pick the
+  first match. Emojis are stored as plain strings in `icon`, and the CLI
+  accepts `--icon 🏃`. The retired running figure is gone; existing libraries
+  are cleaned on open.
 - **Past plans stay visible.** A planned date that slips no longer disappears.
   Today lists carried-over plans in a **Past plans** group above Overdue, and
   Forecast gains a **Past** section. One **Hide past** chip hides both. Forecast
@@ -13,8 +24,8 @@
   ordinary saved view and can be edited or deleted. Any saved view can be
   pinned to the top of **SAVED** from its context menu or the editor
   (`perspective add --pinned`), and any saved view can take a custom rail icon
-  from the editor or `perspective add --icon`; Running ships with a running
-  figure. Filters gain a **Later / none** window.
+  from the editor or `perspective add --icon`. Filters gain a **Later / none**
+  window.
 - **Next month and later.** Forecast moves due or planned work more than 30
   days out into a **Next month and later** group, folded by default so the
   coming week stays at the top.

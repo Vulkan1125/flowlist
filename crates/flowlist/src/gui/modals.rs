@@ -12,7 +12,8 @@ use gpui::{
 
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TaskId};
 use flowlist_core::model::{
-    BuiltinPerspective, GroupBy, Priority, ProjectIcon, ProjectKind, SidebarOptions, SortBy,
+    BuiltinPerspective, GroupBy, IconSpec, Priority, ProjectIcon, ProjectKind, SidebarOptions,
+    SortBy,
     TaskStatus,
 };
 use flowlist_core::query;
@@ -93,10 +94,16 @@ pub enum Modal {
         /// default and can be changed per project.
         review_days: TextBuffer,
         kind: ProjectKind,
-        icon: ProjectIcon,
-        /// The icon grid stays folded away until the current icon is clicked.
+        icon: IconSpec,
+        /// The icon card stays folded away until the current icon is clicked.
         icon_open: bool,
+        icon_query: TextBuffer,
         fullscreen_reminder: bool,
+    },
+    /// A small sheet for choosing one project glyph.
+    IconPicker {
+        project: ProjectId,
+        query: TextBuffer,
     },
     /// Typing a project path that does not exist yet asks before creating it,
     /// so a typo cannot silently fill the sidebar with projects.
@@ -416,9 +423,17 @@ impl Modal {
             notes: TextBuffer::empty(),
             review_days: TextBuffer::new(app.store.db().settings.default_review_days.to_string()),
             kind: ProjectKind::Parallel,
-            icon: ProjectIcon::default(),
+            icon: IconSpec::default(),
             icon_open: false,
+            icon_query: TextBuffer::empty(),
             fullscreen_reminder: false,
+        }
+    }
+
+    pub fn icon_picker(project: ProjectId) -> Self {
+        Modal::IconPicker {
+            project,
+            query: TextBuffer::empty(),
         }
     }
 
@@ -606,6 +621,7 @@ impl Modal {
             Modal::Rename { .. } => "Rename",
             Modal::ReviewInterval { .. } => "Review interval",
             Modal::NewProject { .. } => "New project",
+            Modal::IconPicker { .. } => "Project icon",
             Modal::CreateProject { .. } => "Create project",
             Modal::DeleteProject { .. } => "Delete project",
             Modal::DeleteFolder { .. } => "Delete folder",
@@ -633,6 +649,9 @@ impl Modal {
             Modal::ReviewInterval { .. } => "How often this project comes back for a review.",
             Modal::NewProject { .. } => {
                 "Projects hold an outline of tasks; folders keep projects together."
+            }
+            Modal::IconPicker { .. } => {
+                "Choose a named icon or an emoji for this project."
             }
             Modal::CreateProject { .. } => {
                 "This path is not in the library yet. Create it and file the task there?"
@@ -698,6 +717,7 @@ impl Modal {
             Modal::PriorityScope { .. } => "Apply",
             Modal::RemoveAttachment { .. } => "Remove",
             Modal::Uninstall { .. } => "Uninstall",
+            Modal::IconPicker { .. } => "Close",
             Modal::AttachLink { replace, .. } if replace.is_some() => "Rename",
             Modal::AttachLink { .. } => "Attach",
             _ => "Save",
@@ -708,7 +728,14 @@ impl Modal {
         match self {
             Modal::Rename { .. } => 1,
             Modal::ReviewInterval { .. } => 1,
-            Modal::NewProject { .. } => 3,
+            Modal::NewProject { icon_open, .. } => {
+                if *icon_open {
+                    4
+                } else {
+                    3
+                }
+            }
+            Modal::IconPicker { .. } => 1,
             Modal::CreateProject { .. } => 0,
             Modal::DeleteProject { .. } => 0,
             Modal::DeleteFolder { .. } => 0,
@@ -719,7 +746,13 @@ impl Modal {
             Modal::Uninstall { .. } => 0,
             Modal::AttachLink { .. } => 2,
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
-            Modal::Perspective { .. } => 4,
+            Modal::Perspective { form } => {
+                if form.icon_open {
+                    6
+                } else {
+                    5
+                }
+            }
             Modal::Import { .. } => 1,
             Modal::Settings { .. } => 5,
             Modal::Location { .. } | Modal::TagLocation { .. } => 2,
@@ -735,13 +768,16 @@ impl Modal {
                 name,
                 notes,
                 review_days,
+                icon_query,
                 ..
             } => match index {
                 0 => Some(name),
                 1 => Some(notes),
                 2 => Some(review_days),
+                3 => Some(icon_query),
                 _ => None,
             },
+            Modal::IconPicker { query, .. } => (index == 0).then_some(query),
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
@@ -757,9 +793,11 @@ impl Modal {
             Modal::NewFolder { name, .. } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => match index {
                 0 => Some(&form.name),
-                1 => Some(&form.text),
-                2 => Some(&form.estimate_min),
-                3 => Some(&form.estimate_max),
+                1 => Some(&form.note),
+                2 => Some(&form.text),
+                3 => Some(&form.estimate_min),
+                4 => Some(&form.estimate_max),
+                5 => Some(&form.icon_query),
                 _ => None,
             },
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -796,13 +834,16 @@ impl Modal {
                 name,
                 notes,
                 review_days,
+                icon_query,
                 ..
             } => match index {
                 0 => Some(name),
                 1 => Some(notes),
                 2 => Some(review_days),
+                3 => Some(icon_query),
                 _ => None,
             },
+            Modal::IconPicker { query, .. } => (index == 0).then_some(query),
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. } => None,
@@ -818,9 +859,11 @@ impl Modal {
             Modal::NewFolder { name, .. } | Modal::NewTag { name } => (index == 0).then_some(name),
             Modal::Perspective { form } => match index {
                 0 => Some(&mut form.name),
-                1 => Some(&mut form.text),
-                2 => Some(&mut form.estimate_min),
-                3 => Some(&mut form.estimate_max),
+                1 => Some(&mut form.note),
+                2 => Some(&mut form.text),
+                3 => Some(&mut form.estimate_min),
+                4 => Some(&mut form.estimate_max),
+                5 => Some(&mut form.icon_query),
                 _ => None,
             },
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -857,8 +900,10 @@ impl Modal {
                 0 => "Name",
                 1 => "Notes",
                 2 => "Review every (days)",
+                3 => "Search icons",
                 _ => "",
             },
+            Modal::IconPicker { .. } => "Search icons",
             Modal::CreateProject { .. } => "",
             Modal::DeleteProject { .. } => "",
             Modal::DeleteFolder { .. } => "",
@@ -874,9 +919,11 @@ impl Modal {
             Modal::NewFolder { .. } | Modal::NewTag { .. } => "Name",
             Modal::Perspective { .. } => match index {
                 0 => "Name",
-                1 => "Contains text",
-                2 => "Minimum estimate (minutes)",
-                3 => "Maximum estimate (minutes)",
+                1 => "Note",
+                2 => "Contains text",
+                3 => "Minimum estimate (minutes)",
+                4 => "Maximum estimate (minutes)",
+                5 => "Search icons",
                 _ => "",
             },
             Modal::Import { .. } => "Library text",
@@ -913,6 +960,7 @@ impl Modal {
             Modal::HideSubtasks { .. } => 560.0,
             Modal::PriorityScope { .. } => 520.0,
             Modal::Perspective { .. } => 680.0,
+            Modal::IconPicker { .. } => 540.0,
             Modal::Settings { .. } => 880.0,
             Modal::Uninstall { .. } => 560.0,
             _ => 460.0,
@@ -933,6 +981,14 @@ fn view_checkbox(theme: super::theme::Theme, selected: bool) -> gpui::Div {
         .when(selected, |this| this.child(icons::icon(Icon::Check, 9.0, theme.bg)))
 }
 
+/// Where a picker's selection goes.
+#[derive(Clone)]
+pub(super) enum IconTarget {
+    NewProject,
+    Perspective,
+    Project(ProjectId),
+}
+
 impl FlowlistApp {
     pub(super) fn render_modal(
         &mut self,
@@ -940,6 +996,14 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = self.theme;
+        // Keep a new view's note following its filters until the user edits it.
+        let suggestion = match &self.modal {
+            Some(Modal::Perspective { form }) => form.note_suggestion(self.store.db()),
+            _ => String::new(),
+        };
+        if let Some(Modal::Perspective { form }) = &mut self.modal {
+            form.sync_note(&suggestion);
+        }
         let Some(modal) = self.modal.as_ref() else {
             return div().into_any_element();
         };
@@ -950,6 +1014,7 @@ impl FlowlistApp {
         let confirm_label = modal.confirm_label();
         let is_help = matches!(modal, Modal::Help);
         let is_perspective = matches!(modal, Modal::Perspective { .. });
+        let is_icon_picker = matches!(modal, Modal::IconPicker { .. });
         let is_import = matches!(modal, Modal::Import { .. });
         let is_settings = matches!(modal, Modal::Settings { .. });
         let is_new_project = matches!(modal, Modal::NewProject { .. });
@@ -1308,6 +1373,7 @@ impl FlowlistApp {
                 if is_perspective {
                     body = body.child(self.render_modal_field(0, cx));
                     body = body.child(self.render_modal_field(1, cx));
+                    body = body.child(self.render_modal_field(2, cx));
                     body = body.child(
                         div()
                             .flex()
@@ -1317,19 +1383,41 @@ impl FlowlistApp {
                                 div()
                                     .flex_1()
                                     .min_w_0()
-                                    .child(self.render_modal_field(2, cx)),
+                                    .child(self.render_modal_field(3, cx)),
                             )
                             .child(
                                 div()
                                     .flex_1()
                                     .min_w_0()
-                                    .child(self.render_modal_field(3, cx)),
+                                    .child(self.render_modal_field(4, cx)),
                             ),
                     );
+                } else if is_new_project {
+                    for index in 0..3 {
+                        body = body.child(self.render_modal_field(index, cx));
+                    }
+                } else if is_icon_picker {
+                    // The picker card renders its own search field.
                 } else {
                     for index in 0..field_count {
                         body = body.child(self.render_modal_field(index, cx));
                     }
+                }
+            }
+            if is_icon_picker {
+                if let Modal::IconPicker { project, .. } = modal {
+                    let current = self
+                        .store
+                        .db()
+                        .projects
+                        .get(project)
+                        .map(|project| project.icon.clone());
+                    body = body.child(self.render_icon_picker_card(
+                        IconTarget::Project(project.clone()),
+                        0,
+                        current.as_ref(),
+                        cx,
+                    ));
                 }
             }
             if is_new_project {
@@ -1824,6 +1912,323 @@ impl FlowlistApp {
             .into_any_element()
     }
 
+
+    /// A searchable card of named icons and emoji. The search field is a
+    /// normal modal field so typing, selection and tab order keep working.
+    fn render_icon_picker_card(
+        &self,
+        target: IconTarget,
+        search_index: usize,
+        current: Option<&IconSpec>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let raw_query = self
+            .modal
+            .as_ref()
+            .and_then(|modal| modal.field(search_index))
+            .map(|buffer| buffer.text().trim().to_string())
+            .unwrap_or_default();
+        let query = raw_query.to_lowercase();
+
+        let mut icons = div().flex().flex_wrap().items_center().gap_1();
+        let mut icon_count = 0;
+        for candidate in ProjectIcon::ALL {
+            if !query.is_empty()
+                && !candidate.slug().contains(&query)
+                && !candidate.label().to_lowercase().contains(&query)
+            {
+                continue;
+            }
+            icon_count += 1;
+            let active = current == Some(&IconSpec::builtin(candidate));
+            icons = icons.child(self.icon_choice_cell(
+                format!("picker-icon:{}", candidate.slug()),
+                active,
+                widgets::icon_for_project(candidate, 14.0, theme.text_dim).into_any_element(),
+                candidate.label(),
+                target.clone(),
+                IconSpec::builtin(candidate),
+                cx,
+            ));
+        }
+
+        let mut emojis = div().flex().flex_wrap().items_center().gap_1();
+        let mut emoji_count = 0;
+        if flowlist_core::model::icon::is_single_emoji(&raw_query)
+            && !super::emoji::ALL
+                .iter()
+                .any(|candidate| candidate.glyph == raw_query)
+        {
+            emoji_count += 1;
+            let active = current == Some(&IconSpec::Emoji(raw_query.clone()));
+            emojis = emojis.child(self.icon_choice_cell(
+                "picker-emoji:custom".to_string(),
+                active,
+                div()
+                    .text_size(px(17.))
+                    .child(raw_query.clone())
+                    .into_any_element(),
+                "Use this emoji",
+                target.clone(),
+                IconSpec::Emoji(raw_query.clone()),
+                cx,
+            ));
+        }
+        for item in super::emoji::ALL {
+            if !query.is_empty()
+                && item.glyph != raw_query
+                && !item.name.to_lowercase().contains(&query)
+                && !item.keywords.contains(&query)
+            {
+                continue;
+            }
+            emoji_count += 1;
+            let spec = IconSpec::Emoji(item.glyph.to_string());
+            let active = current == Some(&spec);
+            emojis = emojis.child(self.icon_choice_cell(
+                format!("picker-emoji:{}", item.glyph),
+                active,
+                div()
+                    .text_size(px(17.))
+                    .child(item.glyph)
+                    .into_any_element(),
+                item.name,
+                target.clone(),
+                spec,
+                cx,
+            ));
+        }
+
+        let mut results = div()
+            .on_children_prepainted(
+                self.theme_probe("icon-picker-results".to_string()),
+            )
+            .id("icon-picker-results")
+            .flex()
+            .flex_col()
+            .gap_2()
+            .max_h(px(240.))
+            .overflow_y_scroll();
+        if icon_count > 0 {
+            results = results.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(theme.text_faint)
+                            .child("ICONS"),
+                    )
+                    .child(icons),
+            );
+        }
+        if emoji_count > 0 {
+            results = results.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(theme.text_faint)
+                            .child("EMOJI"),
+                    )
+                    .child(emojis),
+            );
+        }
+        if icon_count == 0 && emoji_count == 0 {
+            results = results.child(
+                div()
+                    .text_sm()
+                    .text_color(theme.text_faint)
+                    .child("No icons or emoji match."),
+            );
+        }
+
+        let default_active = match &target {
+            IconTarget::Perspective => current.is_none(),
+            _ => current == Some(&IconSpec::default()),
+        };
+        div()
+            .on_children_prepainted(self.theme_probe("icon-picker-card".to_string()))
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_2()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.field)
+            .child(self.render_modal_field(search_index, cx))
+            .child(
+                div()
+                    .id("icon-picker-default")
+                    .child(widgets::toggle_chip(theme, "Default", default_active))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.choose_default_icon(target.clone(), cx);
+                    })),
+            )
+            .child(results)
+            .into_any_element()
+    }
+
+    fn icon_choice_cell(
+        &self,
+        id: String,
+        active: bool,
+        glyph: AnyElement,
+        label: &'static str,
+        target: IconTarget,
+        spec: IconSpec,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        div()
+            .on_children_prepainted(self.theme_probe(id.clone()))
+            .id(super::sid(id))
+            .size(px(30.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded_md()
+            .border_1()
+            .border_color(if active {
+                theme.accent
+            } else {
+                theme.border_soft
+            })
+            .bg(if active { theme.selection } else { theme.clear })
+            .cursor_pointer()
+            .flow_tip(self, cx, theme, label.to_string())
+            .hover(|style| style.bg(theme.hover))
+            .child(glyph)
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.choose_icon(target.clone(), spec.clone(), cx);
+            }))
+            .into_any_element()
+    }
+
+    pub(super) fn choose_icon(
+        &mut self,
+        target: IconTarget,
+        spec: IconSpec,
+        cx: &mut Context<Self>,
+    ) {
+        match target {
+            IconTarget::NewProject => {
+                if let Some(Modal::NewProject {
+                    icon,
+                    icon_open,
+                    icon_query,
+                    ..
+                }) = &mut self.modal
+                {
+                    *icon = spec;
+                    *icon_open = false;
+                    icon_query.set(String::new());
+                }
+            }
+            IconTarget::Perspective => {
+                if let Some(Modal::Perspective { form }) = &mut self.modal {
+                    form.icon = Some(spec);
+                    form.icon_open = false;
+                    form.icon_query.set(String::new());
+                }
+            }
+            IconTarget::Project(id) => {
+                self.execute(flowlist_core::command::Command::UpdateProject {
+                    id,
+                    patch: flowlist_core::command::ProjectPatch {
+                        icon: Some(spec),
+                        ..Default::default()
+                    },
+                });
+                self.close_modal(cx);
+            }
+        }
+        cx.notify();
+    }
+
+    fn choose_default_icon(&mut self, target: IconTarget, cx: &mut Context<Self>) {
+        match target {
+            IconTarget::Perspective => {
+                if let Some(Modal::Perspective { form }) = &mut self.modal {
+                    form.icon = None;
+                    form.icon_open = false;
+                    form.icon_query.set(String::new());
+                }
+                cx.notify();
+            }
+            _ => self.choose_icon(target, IconSpec::default(), cx),
+        }
+    }
+
+    /// If the icon card is open, where a selection goes and which field holds
+    /// its search text.
+    pub(super) fn icon_picker_target(&self) -> Option<(IconTarget, usize)> {
+        match &self.modal {
+            Some(Modal::Perspective { form }) if form.icon_open => {
+                Some((IconTarget::Perspective, 5))
+            }
+            Some(Modal::NewProject { icon_open: true, .. }) => {
+                Some((IconTarget::NewProject, 3))
+            }
+            Some(Modal::IconPicker { project, .. }) => {
+                Some((IconTarget::Project(project.clone()), 0))
+            }
+            _ => None,
+        }
+    }
+
+    /// The first search result, used by Return without a pointer.
+    pub(super) fn first_icon_match(&self, search_index: usize) -> Option<IconSpec> {
+        let raw_query = self
+            .modal
+            .as_ref()
+            .and_then(|modal| modal.field(search_index))
+            .map(|buffer| buffer.text().trim().to_string())
+            .unwrap_or_default();
+        if raw_query.is_empty() {
+            return None;
+        }
+        let query = raw_query.to_lowercase();
+        for candidate in ProjectIcon::ALL {
+            if candidate.slug().contains(&query)
+                || candidate.label().to_lowercase().contains(&query)
+            {
+                return Some(IconSpec::builtin(candidate));
+            }
+        }
+        if flowlist_core::model::icon::is_single_emoji(&raw_query) {
+            return Some(IconSpec::Emoji(raw_query));
+        }
+        for item in super::emoji::ALL {
+            if item.name.to_lowercase().contains(&query) || item.keywords.contains(&query) {
+                return Some(IconSpec::Emoji(item.glyph.to_string()));
+            }
+        }
+        None
+    }
+
+    pub(super) fn close_icon_picker(&mut self, cx: &mut Context<Self>) {
+        match &mut self.modal {
+            Some(Modal::Perspective { form }) => form.icon_open = false,
+            Some(Modal::NewProject { icon_open, .. }) => *icon_open = false,
+            Some(Modal::IconPicker { .. }) => {
+                self.close_modal(cx);
+                return;
+            }
+            _ => {}
+        }
+        cx.notify();
+    }
+
     /// The perspective editor is a small settings sheet rather than a row of
     /// cycling chips: every condition has its own labelled row and opens a menu
     /// of every value, so choosing one is a jump instead of a lap.
@@ -1834,16 +2239,19 @@ impl FlowlistApp {
         };
         let form = form.clone();
         let db = self.store.db();
-        let icon = form.icon;
+        let icon = form.icon.clone();
         let icon_open = form.icon_open;
-        let display_icon = icon.unwrap_or(if form.pinned {
-            ProjectIcon::Pin
-        } else {
-            ProjectIcon::Project
+        let display_icon = icon.clone().unwrap_or_else(|| {
+            IconSpec::builtin(if form.pinned {
+                ProjectIcon::Pin
+            } else {
+                ProjectIcon::Project
+            })
         });
         let icon_label = icon
+            .as_ref()
             .map(|icon| icon.label())
-            .unwrap_or(if form.pinned { "Pin" } else { "Default" });
+            .unwrap_or_else(|| if form.pinned { "Pin" } else { "Default" }.to_string());
         let project_label = match form.projects.len() {
             0 => "Any".to_string(),
             1 => db.project_path(form.projects.first().expect("length checked")),
@@ -1908,14 +2316,18 @@ impl FlowlistApp {
             .items_center()
             .gap_1()
             .child(
-                toggle("Inbox only", form.inbox_only, "modal-inbox").on_click(cx.listener(
-                    |this, _, _, cx| {
+                div()
+                    .on_children_prepainted(
+                        self.theme_probe("modal-inbox".to_string()),
+                    )
+                    .id("modal-inbox-wrap")
+                    .child(toggle("Inbox only", form.inbox_only, "modal-inbox"))
+                    .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(Modal::Perspective { form }) = &mut this.modal {
                             form.toggle_inbox();
                         }
                         cx.notify();
-                    },
-                )),
+                    })),
             )
             .child(
                 toggle("Flagged only", form.flagged_only, "modal-flagged").on_click(cx.listener(
@@ -2004,11 +2416,7 @@ impl FlowlistApp {
                     })
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover))
-                    .child(widgets::icon_for_project(
-                        display_icon,
-                        14.0,
-                        theme.text_dim,
-                    ))
+                    .child(widgets::icon_spec(&display_icon, 14.0, theme.text_dim))
                     .child(
                         div()
                             .text_xs()
@@ -2019,67 +2427,15 @@ impl FlowlistApp {
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(Modal::Perspective { form }) = &mut this.modal {
                             form.icon_open = !form.icon_open;
+                            if form.icon_open {
+                                this.modal_focus = 5;
+                                this.modal_scroll
+                                    .set_offset(point(px(0.), px(-3000.)));
+                            }
                         }
                         cx.notify();
                     })),
             );
-        let mut icon_grid = div().flex().flex_wrap().items_center().gap_1();
-        icon_grid = icon_grid.child(
-            div()
-                .on_children_prepainted(
-                    self.theme_probe("perspective-icon:default".to_string()),
-                )
-                .id("perspective-icon:default")
-                .child(widgets::toggle_chip(theme, "Default", icon.is_none()))
-                .on_click(cx.listener(|this, _, _, cx| {
-                    if let Some(Modal::Perspective { form }) = &mut this.modal {
-                        form.icon = None;
-                        form.icon_open = false;
-                    }
-                    cx.notify();
-                })),
-        );
-        for candidate in ProjectIcon::ALL {
-            let active = icon == Some(candidate);
-            icon_grid = icon_grid.child(
-                div()
-                    .on_children_prepainted(self.theme_probe(format!(
-                        "perspective-icon:{}",
-                        candidate.slug()
-                    )))
-                    .id(super::sid(format!(
-                        "perspective-icon:{}",
-                        candidate.slug()
-                    )))
-                    .size(px(26.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(if active {
-                        theme.accent
-                    } else {
-                        theme.border_soft
-                    })
-                    .bg(if active { theme.selection } else { theme.clear })
-                    .cursor_pointer()
-                    .flow_tip(self, cx, theme, candidate.label())
-                    .hover(|style| style.bg(theme.hover))
-                    .child(widgets::icon_for_project(
-                        candidate,
-                        14.0,
-                        theme.text_dim,
-                    ))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(Modal::Perspective { form }) = &mut this.modal {
-                            form.icon = Some(candidate);
-                            form.icon_open = false;
-                        }
-                        cx.notify();
-                    })),
-            );
-        }
         let project_tag_row = div()
             .flex()
             .items_start()
@@ -2251,7 +2607,14 @@ impl FlowlistApp {
             .flex_col()
             .gap_2()
             .child(icon_row)
-            .when(icon_open, |this| this.child(icon_grid))
+            .when(icon_open, |this| {
+                this.child(self.render_icon_picker_card(
+                    IconTarget::Perspective,
+                    5,
+                    form.icon.as_ref(),
+                    cx,
+                ))
+            })
             .child(widgets::divider(theme))
             .child(heading("FILTERS"))
             .child(toggles)
@@ -2708,8 +3071,13 @@ impl FlowlistApp {
                 icon_open,
                 fullscreen_reminder,
                 ..
-            }) => (*kind, *icon, *icon_open, *fullscreen_reminder),
-            _ => (ProjectKind::Parallel, ProjectIcon::default(), false, false),
+            }) => (kind.clone(), icon.clone(), *icon_open, *fullscreen_reminder),
+            _ => (
+                ProjectKind::Parallel,
+                IconSpec::default(),
+                false,
+                false,
+            ),
         };
         let mut row = div().flex().flex_col().gap_1().child(
             div()
@@ -2751,6 +3119,9 @@ impl FlowlistApp {
                     .gap_2()
                     .child(
                         div()
+                            .on_children_prepainted(
+                                self.theme_probe("new-project-icon-toggle".to_string()),
+                            )
                             .id("new-project-icon-toggle")
                             .flex()
                             .items_center()
@@ -2772,7 +3143,7 @@ impl FlowlistApp {
                             .cursor_pointer()
                             .flow_tip(self, cx, theme, format!("Icon · {}", icon.label()))
                             .hover(|style| style.bg(theme.hover))
-                            .child(widgets::icon_for_project(icon, 14.0, theme.text_dim))
+                            .child(widgets::icon_spec(&icon, 14.0, theme.text_dim))
                             .child(icons::icon(
                                 super::icons::Icon::ChevronDown,
                                 10.0,
@@ -2781,6 +3152,11 @@ impl FlowlistApp {
                             .on_click(cx.listener(|this, _, _, cx| {
                                 if let Some(Modal::NewProject { icon_open, .. }) = &mut this.modal {
                                     *icon_open = !*icon_open;
+                                    if *icon_open {
+                                        this.modal_focus = 3;
+                                        this.modal_scroll
+                                            .set_offset(point(px(0.), px(-3000.)));
+                                    }
                                 }
                                 cx.notify();
                             })),
@@ -2793,41 +3169,12 @@ impl FlowlistApp {
                     ),
             )
             .when(icon_open, |this| {
-                let mut icons = div().flex().flex_wrap().items_center().gap_1();
-                for candidate in ProjectIcon::ALL {
-                    let active = icon == candidate;
-                    icons = icons.child(
-                        div()
-                            .id(super::sid(format!("project-icon:{}", candidate.slug())))
-                            .size(px(26.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(if active {
-                                theme.accent
-                            } else {
-                                theme.border_soft
-                            })
-                            .bg(if active { theme.selection } else { theme.clear })
-                            .cursor_pointer()
-                            .flow_tip(self, cx, theme, candidate.label())
-                            .hover(|style| style.bg(theme.hover))
-                            .child(widgets::icon_for_project(candidate, 14.0, theme.text_dim))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if let Some(Modal::NewProject {
-                                    icon, icon_open, ..
-                                }) = &mut this.modal
-                                {
-                                    *icon = candidate;
-                                    *icon_open = false;
-                                }
-                                cx.notify();
-                            })),
-                    );
-                }
-                this.child(icons)
+                this.child(self.render_icon_picker_card(
+                    IconTarget::NewProject,
+                    3,
+                    Some(&icon),
+                    cx,
+                ))
             });
         row.child(icon_row).child(
             div()

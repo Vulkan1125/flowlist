@@ -186,7 +186,7 @@ flowlist folder remove <ID>      # nested folders and projects go too; tasks mov
 ```
 
 Project icons: `project`, `folder`, `star`, `briefcase`, `home`, `heart`,
-`book`, `code`, `rocket`, `coffee`, `running`, and more. Like task attachments, project attachments
+`book`, `code`, `rocket`, `coffee`, and more, or one emoji such as `🏃`. Like task attachments, project attachments
 store a local file path or an http(s) link; files are never copied into the
 library.
 
@@ -208,7 +208,8 @@ flowlist tag remove <ID>
 ```sh
 flowlist perspective add <NAME> [--filter '<JSON FILTER>'] \
   [--group-by none|project|folder|tag|due|defer|flagged|estimate] \
-  [--sort <ORDER>] [--show-completed] [--pinned] [--icon <SLUG>]
+  [--sort <ORDER>] [--show-completed] [--pinned] [--icon <SLUG|EMOJI>] \
+  [--note <TEXT>]
 flowlist perspective list
 flowlist perspective remove <ID>
 ```

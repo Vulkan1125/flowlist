@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+unicode-segmentation.workspace = true
 chrono.workspace = true
 fs2.workspace = true
 serde.workspace = true

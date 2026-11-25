@@ -8,7 +8,8 @@ use flowlist_core::command::{
 use flowlist_core::db::{ContainerPosition, Position};
 use flowlist_core::ids::{FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    Condition, FilterNode, GroupBy, Priority, ProjectStatus, RepeatMode, RepeatRule, SortBy,
+    Condition, FilterNode, GroupBy, IconSpec, Priority, ProjectStatus, RepeatMode, RepeatRule,
+    SortBy,
     TagStatus, Task,
 };
 use flowlist_core::paths::DataPaths;
@@ -1402,10 +1403,10 @@ fn attachments_and_project_icons_round_trip() {
     let mut project = NewProject::new("Launch");
     assert_eq!(
         project.icon,
-        flowlist_core::model::ProjectIcon::Project,
+        IconSpec::builtin(flowlist_core::model::ProjectIcon::Project),
         "a new project starts with the project icon"
     );
-    project.icon = flowlist_core::model::ProjectIcon::Rocket;
+    project.icon = IconSpec::builtin(flowlist_core::model::ProjectIcon::Rocket);
     project.attachments = vec!["/tmp/spec.pdf".to_string()];
     let created = store
         .execute(Command::CreateProject(project))
@@ -1415,7 +1416,7 @@ fn attachments_and_project_icons_round_trip() {
     let project_id = store.db().resolve_project(&created).unwrap();
     assert_eq!(
         store.db().projects[&project_id].icon,
-        flowlist_core::model::ProjectIcon::Rocket
+        IconSpec::builtin(flowlist_core::model::ProjectIcon::Rocket)
     );
     assert_eq!(
         store.db().projects[&project_id].attachments,
@@ -1426,7 +1427,7 @@ fn attachments_and_project_icons_round_trip() {
         .execute(Command::UpdateProject {
             id: project_id.clone(),
             patch: ProjectPatch {
-                icon: Some(flowlist_core::model::ProjectIcon::Star),
+                icon: Some(IconSpec::builtin(flowlist_core::model::ProjectIcon::Star)),
                 attachments: Some(vec![
                     " /tmp/spec.pdf ".to_string(),
                     String::new(),
@@ -1438,7 +1439,7 @@ fn attachments_and_project_icons_round_trip() {
         .unwrap();
     assert_eq!(
         store.db().projects[&project_id].icon,
-        flowlist_core::model::ProjectIcon::Star
+        IconSpec::builtin(flowlist_core::model::ProjectIcon::Star)
     );
     assert_eq!(
         store.db().projects[&project_id].attachments,
@@ -1484,7 +1485,7 @@ fn convert_task_to_project_is_one_undo_step() {
     assert!(!store.db().tasks.contains_key(&parent_id));
     assert_eq!(
         store.db().projects[&project_id].icon,
-        flowlist_core::model::ProjectIcon::Project,
+        IconSpec::builtin(flowlist_core::model::ProjectIcon::Project),
         "converting a task keeps the default project icon"
     );
     // Two subtasks plus the checklist item, which became a task.
@@ -2528,7 +2529,12 @@ fn every_project_icon_round_trips_by_slug() {
         assert_eq!(ProjectIcon::from_slug(icon.slug()), Some(icon));
         assert!(slugs.insert(icon.slug()), "duplicate icon slug");
     }
-    assert_eq!(ProjectIcon::ALL.len(), 55);
+    assert_eq!(ProjectIcon::ALL.len(), 54);
+    // The retired running figure still resolves so old libraries load.
+    assert_eq!(
+        ProjectIcon::from_slug("running"),
+        Some(ProjectIcon::Running)
+    );
 }
 
 #[test]

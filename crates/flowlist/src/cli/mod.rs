@@ -18,8 +18,8 @@ use flowlist_core::ids::{
     ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId,
 };
 use flowlist_core::model::{
-    BuiltinPerspective, Condition, DueWindow, FilterNode, GroupBy, Perspective, Priority,
-    ProjectIcon, ProjectKind, ProjectStatus, RepeatRule, SortBy, TagStatus, TaskStatus,
+    BuiltinPerspective, Condition, DueWindow, FilterNode, GroupBy, IconSpec, Perspective,
+    Priority, ProjectKind, ProjectStatus, RepeatRule, SortBy, TagStatus, TaskStatus,
 };
 use flowlist_core::parse::{
     parse_duration, parse_quick, parse_repeat, parse_stamp, with_default_time,
@@ -537,7 +537,7 @@ pub struct ProjectAddArgs {
     /// parallel | sequential | single_actions.
     #[arg(long)]
     pub kind: Option<String>,
-    /// project | folder | star | briefcase | home | heart | book | code | rocket | coffee
+    /// A named icon (project, star, rocket, …) or one emoji such as 🏃
     #[arg(long)]
     pub icon: Option<String>,
     /// Attach a file path or http(s) link; repeat for several attachments.
@@ -569,7 +569,7 @@ pub struct ProjectEditArgs {
     /// parallel | sequential | single_actions.
     #[arg(long)]
     pub kind: Option<String>,
-    /// project | folder | star | briefcase | home | heart | book | code | rocket | coffee
+    /// A named icon (project, star, rocket, …) or one emoji such as 🏃
     #[arg(long)]
     pub icon: Option<String>,
     /// Attach a file path or http(s) link; repeat for several attachments.
@@ -638,9 +638,12 @@ pub struct PerspectiveAddArgs {
     /// Keep this view above the saved views.
     #[arg(long)]
     pub pinned: bool,
-    /// Rail icon slug (pin, running, star, rocket, …).
+    /// A named icon (pin, star, rocket, …) or one emoji such as 🏃
     #[arg(long)]
     pub icon: Option<String>,
+    /// One-line description shown under the view title.
+    #[arg(long)]
+    pub note: Option<String>,
 }
 
 #[derive(Args, Debug, Clone, Default)]
@@ -2256,10 +2259,12 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
             }
             perspective.show_completed = args.show_completed;
             perspective.pinned = args.pinned;
+            if let Some(note) = args.note {
+                perspective.note = note;
+            }
             if let Some(icon) = args.icon {
                 perspective.icon = Some(
-                    ProjectIcon::from_slug(&icon)
-                        .ok_or_else(|| anyhow!("unknown icon “{icon}”"))?,
+                    IconSpec::parse(&icon).map_err(|message| anyhow!(message))?,
                 );
             }
             let outcome = store.execute(CoreCommand::SavePerspective {
@@ -2310,7 +2315,8 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
                                 "sort": format!("{:?}", perspective.sort),
                                 "show_completed": perspective.show_completed,
                                 "pinned": perspective.pinned,
-                                "icon": perspective.icon.map(|icon| icon.slug()),
+                                "icon": perspective.icon,
+                                "note": perspective.note,
                             }))
                             .collect::<Vec<_>>()
                     ))?
@@ -2720,9 +2726,8 @@ fn parse_due_window(value: &str, at: chrono::DateTime<Utc>) -> Result<DueWindow>
     Ok(DueWindow::On(parse_stamp(value, at)?.local_date()))
 }
 
-fn parse_project_icon(value: &str) -> Result<ProjectIcon> {
-    ProjectIcon::from_slug(value)
-        .ok_or_else(|| anyhow!("icon must be one of: project, folder, star, briefcase, home, heart, book, code, rocket, coffee"))
+fn parse_project_icon(value: &str) -> Result<IconSpec> {
+    IconSpec::parse(value).map_err(|message| anyhow!(message))
 }
 
 fn parse_priority(value: &str) -> Result<Priority> {

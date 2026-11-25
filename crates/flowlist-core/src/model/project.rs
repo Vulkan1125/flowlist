@@ -7,6 +7,8 @@ use std::collections::BTreeSet;
 use crate::ids::{FolderId, TagId, TaskId};
 use crate::time::{Stamp, local_date, now};
 
+use super::icon::IconSpec;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectStatus {
@@ -177,7 +179,7 @@ pub enum ProjectIcon {
 }
 
 impl ProjectIcon {
-    pub const ALL: [ProjectIcon; 55] = [
+    pub const ALL: [ProjectIcon; 54] = [
         ProjectIcon::Project,
         ProjectIcon::Folder,
         ProjectIcon::Star,
@@ -219,7 +221,6 @@ impl ProjectIcon {
         ProjectIcon::Paintbrush,
         ProjectIcon::Palette,
         ProjectIcon::Person,
-        ProjectIcon::Running,
         ProjectIcon::Team,
         ProjectIcon::Pill,
         ProjectIcon::Pin,
@@ -356,9 +357,13 @@ impl ProjectIcon {
     }
 
     pub fn from_slug(value: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|icon| icon.slug() == value.trim().to_lowercase())
+        let value = value.trim().to_lowercase();
+        // Kept so libraries and undo history written while the running figure
+        // existed still load. It is no longer offered in the picker.
+        if value == "running" {
+            return Some(ProjectIcon::Running);
+        }
+        Self::ALL.into_iter().find(|icon| icon.slug() == value)
     }
 
     pub fn next(self) -> Self {
@@ -395,9 +400,10 @@ pub struct Project {
     pub sequential: bool,
     #[serde(default)]
     pub kind: ProjectKind,
-    /// Optional decorative icon shown in the sidebar and dashboards.
+    /// Decorative icon shown in the sidebar and dashboards: a named glyph or
+    /// one emoji.
     #[serde(default)]
-    pub icon: ProjectIcon,
+    pub icon: IconSpec,
     /// Local file paths for briefs, images or PDFs that belong to the
     /// project. Like task attachments these are referenced, never copied.
     #[serde(default)]
@@ -435,7 +441,7 @@ impl Project {
             next_review: local_date(at) + chrono::Duration::days(default_review_days() as i64),
             sequential: false,
             kind: ProjectKind::Parallel,
-            icon: ProjectIcon::default(),
+            icon: IconSpec::default(),
             attachments: Vec::new(),
             task_order: Vec::new(),
             created_at: at,

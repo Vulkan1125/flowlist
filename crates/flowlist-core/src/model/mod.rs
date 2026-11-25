@@ -2,6 +2,7 @@
 
 pub mod attachment;
 pub mod folder;
+pub mod icon;
 pub mod perspective;
 pub mod project;
 pub mod repeat;
@@ -10,6 +11,7 @@ pub mod tag;
 pub mod task;
 
 pub use folder::Folder;
+pub use icon::IconSpec;
 pub use perspective::{
     BuiltinPerspective, Condition, DueWindow, FilterNode, GroupBy, Perspective, SortBy, TaskStatus,
 };

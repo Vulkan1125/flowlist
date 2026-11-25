@@ -16,7 +16,7 @@ use flowlist_core::command::{
 use flowlist_core::db::{ContainerPosition, Db, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    BuiltinPerspective, Condition, FilterNode, Geo, GroupBy, Perspective, Priority, ProjectIcon,
+    BuiltinPerspective, Condition, FilterNode, Geo, GroupBy, IconSpec, Perspective, Priority,
     ProjectKind, ProjectStatus, SortBy, TagStatus, TaskStatus,
 };
 use flowlist_core::parse::{parse_duration, parse_repeat, parse_stamp};
@@ -1518,7 +1518,7 @@ fn tool_definitions() -> Vec<Value> {
                     "review_interval_days": n("Review interval in days"),
                     "kind": s("parallel | sequential | single_actions"),
                     "sequential": b("Work through top-level tasks in order"),
-                    "icon": s("project | folder | star | briefcase | home | heart | book | code | rocket | coffee"),
+                    "icon": s("project | folder | star | briefcase | home | heart | book | code | rocket | coffee, or one emoji"),
                     "attachments": arr("Local file paths or http(s) links to reference"),
                 }),
                 &["name"],
@@ -1539,7 +1539,7 @@ fn tool_definitions() -> Vec<Value> {
                     "next_review": s("Next review date"),
                     "kind": s("parallel | sequential | single_actions"),
                     "sequential": b("Sequential tasks"),
-                    "icon": s("project | folder | star | briefcase | home | heart | book | code | rocket | coffee"),
+                    "icon": s("project | folder | star | briefcase | home | heart | book | code | rocket | coffee, or one emoji"),
                     "attachments": arr("Replace the project's attachment paths and links"),
                     "clear_attachments": b("Remove every attachment"),
                 }),
@@ -1851,12 +1851,8 @@ fn parse_priority(value: &str) -> Result<Priority> {
         .ok_or_else(|| anyhow!("priority must be low, medium or high"))
 }
 
-fn parse_project_icon(value: &str) -> Result<ProjectIcon> {
-    ProjectIcon::from_slug(value).ok_or_else(|| {
-        anyhow!(
-            "icon must be one of: project, folder, star, briefcase, home, heart, book, code, rocket, coffee"
-        )
-    })
+fn parse_project_icon(value: &str) -> Result<IconSpec> {
+    IconSpec::parse(value).map_err(|message| anyhow!(message))
 }
 
 fn parse_project_kind(value: &str) -> Result<ProjectKind> {

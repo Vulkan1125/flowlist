@@ -8,7 +8,7 @@ use gpui::{
 use flowlist_core::db::Db;
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId};
 use flowlist_core::model::{
-    BuiltinPerspective, Perspective, Priority, ProjectIcon, ProjectStatus, SidebarOptions,
+    BuiltinPerspective, IconSpec, Perspective, Priority, ProjectStatus, SidebarOptions,
 };
 use flowlist_core::query;
 use flowlist_core::time::now;
@@ -1493,8 +1493,9 @@ impl FlowlistApp {
                     .items_center()
                     .justify_center()
                     .child(match row.icon {
-                        Some(icon) => widgets::icon_for_project(icon, 14.0, icon_color)
-                            .into_any_element(),
+                        Some(icon) => {
+                            widgets::icon_spec(&icon, 14.0, icon_color).into_any_element()
+                        }
                         None if pinned => {
                             icons::icon(Icon::Pin, 14.0, icon_color).into_any_element()
                         }
@@ -1797,8 +1798,8 @@ impl FlowlistApp {
                         ))
                         .child(self.measured(
                             format!("project:{id}"),
-                            widgets::icon_for_project(
-                                project.icon,
+                            widgets::icon_spec(
+                                &project.icon,
                                 14.0,
                                 if active {
                                     self.theme.accent
@@ -2109,7 +2110,7 @@ struct PerspectiveRow {
     id: flowlist_core::ids::PerspectiveId,
     name: String,
     pinned: bool,
-    icon: Option<ProjectIcon>,
+    icon: Option<IconSpec>,
 }
 
 trait ReviewBadge {
