@@ -19,6 +19,52 @@ use super::icons::Icon;
 use super::widgets::TipExt;
 use super::{ClockUnit, DateField, DatePickerStep, EditField, FlowlistApp, View, icons, widgets};
 
+/// Where an effective date comes from when the task itself has no value.
+fn inherited_date_suffix(
+    db: &flowlist_core::db::Db,
+    task: &flowlist_core::model::Task,
+    field: DateField,
+) -> Option<&'static str> {
+    let own = match field {
+        DateField::Defer => task.defer,
+        DateField::Planned => task.planned,
+        DateField::Due => task.due,
+        DateField::Reminder => return None,
+    };
+    if own.is_some() {
+        return None;
+    }
+    let mut parent = task.parent.clone();
+    let mut guard = 0;
+    while let Some(id) = parent {
+        guard += 1;
+        if guard > 64 {
+            break;
+        }
+        let Some(ancestor) = db.tasks.get(&id) else {
+            break;
+        };
+        let value = match field {
+            DateField::Defer => ancestor.defer,
+            DateField::Planned => ancestor.planned,
+            DateField::Due => ancestor.due,
+            DateField::Reminder => None,
+        };
+        if value.is_some() {
+            return Some("with parent");
+        }
+        parent = ancestor.parent.clone();
+    }
+    let project = db.effective_project(&task.id).and_then(|id| db.projects.get(&id));
+    let value = project.and_then(|project| match field {
+        DateField::Defer => project.defer,
+        DateField::Planned => project.planned,
+        DateField::Due => project.due,
+        DateField::Reminder => None,
+    });
+    value.is_some().then_some("with project")
+}
+
 impl FlowlistApp {
     pub(super) fn render_inspector(
         &mut self,
@@ -287,6 +333,9 @@ impl FlowlistApp {
         let due = db
             .effective_due(&id)
             .map(|stamp| human_date(&stamp, now()));
+        let defer_suffix = inherited_date_suffix(db, task, DateField::Defer);
+        let planned_suffix = inherited_date_suffix(db, task, DateField::Planned);
+        let due_suffix = inherited_date_suffix(db, task, DateField::Due);
         let estimate = task.estimate_min.map(format_duration);
         let repeat = task.repeat.as_ref().map(|rule| rule.description());
         let attachments = task.attachments.clone();
@@ -384,9 +433,24 @@ impl FlowlistApp {
             ))
             .child(self.inspector_tag_section(&tags, cx))
             .child(self.inspector_project_row(project, project_id, cx))
-            .child(self.inspector_date_field(DateField::Defer, &defer.unwrap_or_default(), cx))
-            .child(self.inspector_date_field(DateField::Planned, &planned.unwrap_or_default(), cx))
-            .child(self.inspector_date_field(DateField::Due, &due.unwrap_or_default(), cx))
+            .child(self.inspector_date_field(
+                DateField::Defer,
+                &defer.unwrap_or_default(),
+                defer_suffix,
+                cx,
+            ))
+            .child(self.inspector_date_field(
+                DateField::Planned,
+                &planned.unwrap_or_default(),
+                planned_suffix,
+                cx,
+            ))
+            .child(self.inspector_date_field(
+                DateField::Due,
+                &due.unwrap_or_default(),
+                due_suffix,
+                cx,
+            ))
             .child(self.inspector_text_field(
                 "Estimate",
                 EditField::Estimate,
@@ -689,9 +753,14 @@ impl FlowlistApp {
         &self,
         field: DateField,
         value: &str,
+        suffix: Option<&'static str>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
+        let label = match suffix {
+            Some(suffix) => format!("{} {suffix}", field.label()),
+            None => field.label().to_string(),
+        };
         let editing =
             self.editing == Some(field.edit_field()) && self.focus == super::FocusArea::Field;
         let open = self.date_picker == Some(field);
@@ -708,7 +777,7 @@ impl FlowlistApp {
                     .text_xs()
                     .text_color(theme.text_faint)
                     .child(icons::icon(field.icon(), 11.0, theme.text_faint))
-                    .child(field.label()),
+                    .child(label),
             )
             .child(if editing {
                 div()
@@ -1514,7 +1583,7 @@ impl FlowlistApp {
                     )
                     .into_any_element()
             } else {
-                self.inspector_date_field(DateField::Reminder, reminder, cx)
+                self.inspector_date_field(DateField::Reminder, reminder, None, cx)
                     .into_any_element()
             })
     }

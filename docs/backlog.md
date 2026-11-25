@@ -124,8 +124,8 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Strict date validation** — contradictory task dates are rejected on
       save, moves show an Adjust dates sheet, and legacy libraries are clamped
       once on open.
-- [ ] **Inherited date labels** — show “Deferred with project” / “Due with
-      project” in the task inspector.
+- [x] **Inherited date labels** — the task inspector says “Defer/Planned/Due
+      with project” or “with parent” when the value is inherited.
 - [ ] **Projects in Forecast** — show project rows on their due/defer/planned
       dates. Start with a Projects section above the task rows for a day; later
       decide whether to unify task and project rows.

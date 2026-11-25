@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Inherited date labels.** The task inspector now says “Defer with project”,
+  “Planned with project” or “Due with project” (and “with parent” for an action
+  group) when the shown date comes from a container instead of the task.
 - **Strict project dates.** A task can no longer be saved with a due date later
   than its project/parent due, or a defer date earlier than its container
   defer. Dragging such a task into a project opens an **Adjust dates?** sheet;

@@ -199,6 +199,9 @@ titles itself **Search** and ranks the closest matches first.
   earlier than the project, never the other way around. Dropping a task whose
   dates break the rule opens an **Adjust dates?** sheet; confirming changes the
   dates and completes the move together. Cancel leaves everything untouched.
+  When a date comes from the project or a parent action group, the inspector
+  says “Defer with project”, “Planned with project” or “Due with project” (or
+  “with parent”) instead of implying the task owns it.
 - **Right-click a folder** for Open, Rename, **Edit folder…**, New project here,
   New subfolder and Delete.
 - **Saved perspectives** share one editor with the phone: text, Inbox only,
