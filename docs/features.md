@@ -339,7 +339,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       earlier respectively. Effective dates drive Today, Forecast, overdue,
       filters, grouping, sorting, badges and the task inspector
 - [x] Strict date validation: contradictory task dates cannot be saved.
-      Moving one asks first and adjusts the stored dates in one undoable step
+      Moves and project assignments ask first and adjust the stored dates in
+      one undoable step; direct date edits stay open with an error; project
+      date changes ask before clamping existing tasks
 - [x] Inherited date labels in the task inspector: “Defer with project”,
       “Planned with project”, “Due with project” and the parent equivalents
 - [x] Deleting a folder asks first: nested folders, their projects and every

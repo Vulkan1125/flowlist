@@ -284,6 +284,12 @@ pub enum Command {
         id: TaskId,
         patch: TaskPatch,
     },
+    /// Apply a task patch and explicitly clamp the task's dates to its new
+    /// container. Used only after the user confirms the adjustment.
+    UpdateTaskAdjusted {
+        id: TaskId,
+        patch: TaskPatch,
+    },
     CompleteTasks {
         ids: Vec<TaskId>,
         completed: bool,
@@ -379,6 +385,12 @@ pub enum Command {
     },
     CreateProject(NewProject),
     UpdateProject {
+        id: ProjectId,
+        patch: ProjectPatch,
+    },
+    /// Apply a project patch and explicitly clamp its tasks to the new dates.
+    /// Used only after the user confirms the adjustment.
+    UpdateProjectAdjusted {
         id: ProjectId,
         patch: ProjectPatch,
     },
@@ -500,6 +512,8 @@ impl Command {
             Command::MoveTasks { ids, .. } | Command::MoveTasksAdjusted { ids, .. } => {
                 format!("Move {}", task_count(ids.len()))
             }
+            Command::UpdateTaskAdjusted { .. } => "Change task".to_string(),
+            Command::UpdateProjectAdjusted { .. } => "Change project".to_string(),
             Command::SetTaskTags { ids, .. } => format!("Tag {}", task_count(ids.len())),
             Command::SetTaskFlag { ids, flagged } => {
                 format!(
@@ -676,6 +690,21 @@ impl Command {
                 db.touch();
                 outcome.created.push(id.to_string());
                 outcome.message = Some(format!("Task “{title}” added"));
+            }
+            Command::UpdateTaskAdjusted { id, patch } => {
+                Command::UpdateTask {
+                    id: id.clone(),
+                    patch,
+                }
+                .apply(db, at)?;
+                let adjusted = db.clamp_task_to_container(&id);
+                db.touch();
+                outcome.affected.push(id.to_string());
+                outcome.message = Some(if adjusted {
+                    "Task updated; dates adjusted".to_string()
+                } else {
+                    "Task updated".to_string()
+                });
             }
             Command::UpdateTask { id, patch } => {
                 // Resolve or create a project path before borrowing the task so
@@ -1356,6 +1385,21 @@ impl Command {
                 outcome.created.push(id.to_string());
                 outcome.message = Some(format!("Project “{name}” added"));
             }
+            Command::UpdateProjectAdjusted { id, patch } => {
+                Command::UpdateProject {
+                    id: id.clone(),
+                    patch,
+                }
+                .apply(db, at)?;
+                let adjusted = db.clamp_tasks_in_project(&id);
+                db.touch();
+                outcome.affected.push(id.to_string());
+                outcome.message = Some(if adjusted > 0 {
+                    format!("Project updated; adjusted {} task date(s)", adjusted)
+                } else {
+                    "Project updated".to_string()
+                });
+            }
             Command::UpdateProject { id, patch } => {
                 if let Some(name) = &patch.name {
                     let name = name.trim();
@@ -2001,6 +2045,117 @@ fn clean_attachments(paths: Vec<String>) -> Vec<String> {
         .map(|path| path.trim().to_string())
         .filter(|path| !path.is_empty())
         .collect()
+}
+
+/// Stored task dates that applying this patch would have to change.
+pub fn date_conflicts_for_task_patch(
+    db: &Db,
+    id: &TaskId,
+    patch: &TaskPatch,
+) -> Vec<DateConflict> {
+    let Some(task) = db.tasks.get(id) else {
+        return Vec::new();
+    };
+    let due = patch.due.unwrap_or(task.due);
+    let defer = patch.defer.unwrap_or(task.defer);
+    let parent = patch.parent.clone().unwrap_or(task.parent.clone());
+    let project = match &patch.project_path {
+        Some(Some(path)) => db
+            .find_project_by_path(path)
+            .or_else(|| db.find_project_by_name(path)),
+        Some(None) => None,
+        None => patch.project.clone().unwrap_or(task.project.clone()),
+    };
+    let (container_due, container_defer) = if let Some(parent) = parent {
+        (db.effective_due(&parent), db.effective_defer(&parent))
+    } else if let Some(project) = project {
+        db.projects
+            .get(&project)
+            .map(|project| (project.due, project.defer))
+            .unwrap_or((None, None))
+    } else {
+        (None, None)
+    };
+    let due_change = match (due, container_due) {
+        (Some(from), Some(to)) if from.at > to.at => Some((from, to)),
+        _ => None,
+    };
+    let defer_change = match (defer, container_defer) {
+        (Some(from), Some(to)) if from.at < to.at => Some((from, to)),
+        _ => None,
+    };
+    if due_change.is_none() && defer_change.is_none() {
+        Vec::new()
+    } else {
+        vec![DateConflict {
+            task: id.clone(),
+            title: task.title.clone(),
+            due: due_change,
+            defer: defer_change,
+        }]
+    }
+}
+
+/// Tasks that a project-date patch would have to clamp.
+pub fn date_conflicts_for_project_patch(
+    db: &Db,
+    id: &ProjectId,
+    patch: &ProjectPatch,
+) -> Vec<DateConflict> {
+    let Some(project) = db.projects.get(id) else {
+        return Vec::new();
+    };
+    let project_due = patch.due.unwrap_or(project.due);
+    let project_defer = patch.defer.unwrap_or(project.defer);
+    let mut out = Vec::new();
+    for task in db.tasks.values() {
+        if task.project.as_ref() != Some(id) || task.completed || task.is_trashed() {
+            continue;
+        }
+        let mut container_due = project_due;
+        let mut container_defer = project_defer;
+        let mut parent = task.parent.clone();
+        let mut guard = 0;
+        while let Some(parent_id) = parent {
+            guard += 1;
+            if guard > 64 {
+                break;
+            }
+            let Some(parent_task) = db.tasks.get(&parent_id) else {
+                break;
+            };
+            if let Some(due) = parent_task.due {
+                container_due = match container_due {
+                    Some(current) if current.at <= due.at => Some(current),
+                    _ => Some(due),
+                };
+            }
+            if let Some(defer) = parent_task.defer {
+                container_defer = match container_defer {
+                    Some(current) if current.at >= defer.at => Some(current),
+                    _ => Some(defer),
+                };
+            }
+            parent = parent_task.parent.clone();
+        }
+        let due = match (task.due, container_due) {
+            (Some(from), Some(to)) if from.at > to.at => Some((from, to)),
+            _ => None,
+        };
+        let defer = match (task.defer, container_defer) {
+            (Some(from), Some(to)) if from.at < to.at => Some((from, to)),
+            _ => None,
+        };
+        if due.is_some() || defer.is_some() {
+            out.push(DateConflict {
+                task: task.id.clone(),
+                title: task.title.clone(),
+                due,
+                defer,
+            });
+        }
+    }
+    out
 }
 
 /// Stored task dates that the requested move would have to change.

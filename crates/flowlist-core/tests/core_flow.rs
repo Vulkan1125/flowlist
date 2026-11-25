@@ -2246,6 +2246,65 @@ fn project_due_and_defer_constrain_tasks() {
     let child_id = store.db().resolve_task(&child_id).unwrap();
     assert_eq!(store.db().effective_due(&child_id), Some(day(1)));
 
+    // The same preflight works for an inspector project assignment.
+    let mut patch_late = NewTask::new("Patch late");
+    patch_late.due = Some(day(6));
+    let patch_late_id = store
+        .execute(Command::CreateTask(patch_late))
+        .unwrap()
+        .created[0]
+        .clone();
+    let patch_late_id = store.db().resolve_task(&patch_late_id).unwrap();
+    let patch = flowlist_core::command::TaskPatch {
+        project: Some(Some(project_id.clone())),
+        ..Default::default()
+    };
+    assert_eq!(
+        flowlist_core::command::date_conflicts_for_task_patch(
+            store.db(),
+            &patch_late_id,
+            &patch
+        )
+        .len(),
+        1
+    );
+    store
+        .execute(Command::UpdateTaskAdjusted {
+            id: patch_late_id.clone(),
+            patch,
+        })
+        .unwrap();
+    assert_eq!(store.db().tasks[&patch_late_id].due, Some(day(4)));
+
+    // Moving a project deadline earlier asks to clamp its tasks.
+    let project_patch = flowlist_core::command::ProjectPatch {
+        due: Some(Some(day(2))),
+        ..Default::default()
+    };
+    assert!(!flowlist_core::command::date_conflicts_for_project_patch(
+        store.db(),
+        &project_id,
+        &project_patch
+    )
+    .is_empty());
+    store
+        .execute(Command::UpdateProjectAdjusted {
+            id: project_id.clone(),
+            patch: project_patch,
+        })
+        .unwrap();
+    assert_eq!(store.db().tasks[&patch_late_id].due, Some(day(2)));
+    // Put the deadline back for the remaining assertions.
+    store
+        .execute(Command::UpdateProject {
+            id: project_id.clone(),
+            patch: flowlist_core::command::ProjectPatch {
+                due: Some(Some(day(4))),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+
     // A project due today pulls its undated action into Today.
     let mut due_today_project = NewProject::new("Due today project");
     due_today_project.due = Some(day(0));

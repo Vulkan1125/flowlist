@@ -537,6 +537,9 @@ pub struct FlowlistApp {
     sidebar_menu: Option<sidebar::SidebarMenu>,
     /// Boxes for the items in the open sidebar menu, keyed by item id.
     sidebar_menu_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// A sheet to open after the current one commits, used when an edit needs
+    /// a follow-up date confirmation.
+    pending_modal: Option<modals::Modal>,
     /// A click's mouse-up closed the sort or group menu. The chip under the
     /// same click must not immediately reopen it.
     sort_closed_on_up: bool,
@@ -983,6 +986,7 @@ impl FlowlistApp {
             field_error: None,
             draft_task: None,
             modal: None,
+            pending_modal: None,
             theme_on_open: None,
             plain_accent_light,
             plain_accent_dark,
@@ -3655,6 +3659,47 @@ impl FlowlistApp {
                 patch.repeat = Some(repeat);
             }
         }
+        let conflicts =
+            flowlist_core::command::date_conflicts_for_task_patch(self.store.db(), &id, &patch);
+        if !conflicts.is_empty() {
+            if field == EditField::Project {
+                self.editing = None;
+                self.field_error = None;
+                self.focus = FocusArea::Content;
+                self.open_modal(
+                    modals::Modal::adjust_dates(
+                        Command::UpdateTaskAdjusted { id, patch },
+                        conflicts,
+                    ),
+                    cx,
+                );
+                return false;
+            }
+            if matches!(
+                field,
+                EditField::Defer | EditField::Planned | EditField::Due
+            ) {
+                let conflict = &conflicts[0];
+                let message = if let Some((from, to)) = conflict.due {
+                    format!(
+                        "Due {} is later than the container due {}",
+                        from.to_input_string(),
+                        to.to_input_string()
+                    )
+                } else if let Some((from, to)) = conflict.defer {
+                    format!(
+                        "Defer {} is earlier than the container defer {}",
+                        from.to_input_string(),
+                        to.to_input_string()
+                    )
+                } else {
+                    "That date is outside the container limits".to_string()
+                };
+                self.field_error = Some(message);
+                cx.notify();
+                return false;
+            }
+        }
         self.execute(Command::UpdateTask { id, patch });
         self.editing = None;
         self.field_error = None;
@@ -4273,6 +4318,7 @@ impl FlowlistApp {
     // -------------------------------------------------------------- modals
 
     fn open_modal(&mut self, modal: modals::Modal, cx: &mut Context<Self>) {
+        self.pending_modal = None;
         // Settings previews theme changes live, so remember what to put back
         // if the sheet is cancelled.
         if matches!(modal, modals::Modal::Settings { .. }) {
@@ -4327,6 +4373,7 @@ impl FlowlistApp {
         }
         self.modal = None;
         self.modal_focus = 0;
+        self.pending_modal = None;
         self.view_menu = None;
         self.view_menu_cursor = 0;
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
@@ -4346,7 +4393,11 @@ impl FlowlistApp {
             Ok(()) => {
                 self.modal = None;
                 self.modal_focus = 0;
-                self.focus = FocusArea::Content;
+                if let Some(modal) = self.pending_modal.take() {
+                    self.open_modal(modal, cx);
+                } else {
+                    self.focus = FocusArea::Content;
+                }
                 self.sync_notifications(cx);
                 // The previewed theme is now committed; drop the undo copy.
                 self.theme_on_open = None;
@@ -4451,21 +4502,37 @@ impl FlowlistApp {
                 let planned = parse_date(planned, "Planned")?;
                 let due = parse_date(due, "Due")?;
                 if let Some(id) = editing {
-                    self.execute(Command::UpdateProject {
-                        id: id.clone(),
-                        patch: ProjectPatch {
-                            name: Some(name),
-                            notes: Some(notes.text().to_string()),
-                            review_interval_days,
-                            defer: Some(defer),
-                            planned: Some(planned),
-                            due: Some(due),
-                            kind: Some(*kind),
-                            icon: Some(icon.clone()),
-                            fullscreen_reminder: Some(*fullscreen_reminder),
-                            ..Default::default()
-                        },
-                    });
+                    let patch = ProjectPatch {
+                        name: Some(name),
+                        notes: Some(notes.text().to_string()),
+                        review_interval_days,
+                        defer: Some(defer),
+                        planned: Some(planned),
+                        due: Some(due),
+                        kind: Some(*kind),
+                        icon: Some(icon.clone()),
+                        fullscreen_reminder: Some(*fullscreen_reminder),
+                        ..Default::default()
+                    };
+                    let conflicts = flowlist_core::command::date_conflicts_for_project_patch(
+                        self.store.db(),
+                        id,
+                        &patch,
+                    );
+                    if conflicts.is_empty() {
+                        self.execute(Command::UpdateProject {
+                            id: id.clone(),
+                            patch,
+                        });
+                    } else {
+                        self.pending_modal = Some(modals::Modal::adjust_dates(
+                            Command::UpdateProjectAdjusted {
+                                id: id.clone(),
+                                patch,
+                            },
+                            conflicts,
+                        ));
+                    }
                     return Ok(());
                 }
                 let db = self.store.db();

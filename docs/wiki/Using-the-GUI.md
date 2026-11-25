@@ -199,6 +199,9 @@ titles itself **Search** and ranks the closest matches first.
   earlier than the project, never the other way around. Dropping a task whose
   dates break the rule opens an **Adjust dates?** sheet; confirming changes the
   dates and completes the move together. Cancel leaves everything untouched.
+  The same sheet appears when typing a project into the task inspector or when
+  a project date change would clamp existing tasks. Editing a task date that
+  violates its container keeps the field open with an error instead.
   When a date comes from the project or a parent action group, the inspector
   says “Defer with project”, “Planned with project” or “Due with project” (or
   “with parent”) instead of implying the task owns it.

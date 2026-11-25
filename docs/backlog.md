@@ -126,6 +126,9 @@ integrations are tracked separately and are not part of this phase.
       once on open.
 - [x] **Inherited date labels** — the task inspector says “Defer/Planned/Due
       with project” or “with parent” when the value is inherited.
+- [x] **Date warning on every path** — inspector project assignment and
+      project date edits use the Adjust dates sheet; direct date edits report
+      an inline error.
 - [ ] **Projects in Forecast** — show project rows on their due/defer/planned
       dates. Start with a Projects section above the task rows for a day; later
       decide whether to unify task and project rows.

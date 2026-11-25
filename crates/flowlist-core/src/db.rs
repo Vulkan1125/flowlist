@@ -567,6 +567,43 @@ impl Db {
         earliest
     }
 
+    /// Clamp one task's stored dates to its current container. Used only after
+    /// an explicit Adjust dates confirmation.
+    pub fn clamp_task_to_container(&mut self, task_id: &TaskId) -> bool {
+        let container_due = self.container_due(task_id);
+        let container_defer = self.container_defer(task_id);
+        let Some(task) = self.tasks.get_mut(task_id) else {
+            return false;
+        };
+        let mut changed = false;
+        if let (Some(due), Some(limit)) = (task.due, container_due) {
+            if due.at > limit.at {
+                task.due = Some(limit);
+                changed = true;
+            }
+        }
+        if let (Some(defer), Some(limit)) = (task.defer, container_defer) {
+            if defer.at < limit.at {
+                task.defer = Some(limit);
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    /// Clamp every task in a project to the project's dates.
+    pub fn clamp_tasks_in_project(&mut self, project: &ProjectId) -> usize {
+        let ids: Vec<TaskId> = self
+            .tasks
+            .values()
+            .filter(|task| task.project.as_ref() == Some(project))
+            .map(|task| task.id.clone())
+            .collect();
+        ids.iter()
+            .filter(|id| self.clamp_task_to_container(id))
+            .count()
+    }
+
     /// Stored dates that a container would change. Used by moves and edits.
     pub fn date_conflicts(&self, ids: &[TaskId]) -> Vec<DateConflict> {
         let mut out = Vec::new();

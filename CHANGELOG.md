@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Strict dates everywhere.** Typing a project into the task inspector now
+  shows the same Adjust dates sheet; editing a task date outside the limits
+  keeps the field open with an error; changing a project’s due/defer asks
+  before clamping its existing tasks.
 - **Inherited date labels.** The task inspector now says “Defer with project”,
   “Planned with project” or “Due with project” (and “with parent” for an action
   group) when the shown date comes from a container instead of the task.
