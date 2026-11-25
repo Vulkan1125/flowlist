@@ -2267,6 +2267,10 @@ impl FlowlistApp {
             }
             Err(error) => {
                 let message = error.to_string();
+                let message = message
+                    .strip_prefix("Invalid operation: ")
+                    .unwrap_or(&message)
+                    .to_string();
                 self.command_error = Some(message.clone());
                 // A form clears this when it shows the message inline. Lists
                 // and drag targets have no inline spot, so the toast remains
@@ -8301,17 +8305,17 @@ fn date_conflict_message(conflict: &DateConflict) -> String {
     let mut parts = Vec::new();
     if let Some((_, to)) = conflict.due {
         parts.push(format!(
-            "the new due date cannot be later than the {container}’s due date ({})",
+            "Due date cannot be later than the {container}’s due date ({})",
             to.local_date().format("%a %b %-d")
         ));
     }
     if let Some((_, to)) = conflict.defer {
         parts.push(format!(
-            "the new defer date cannot be earlier than the {container}’s defer date ({})",
+            "Defer date cannot be earlier than the {container}’s defer date ({})",
             to.local_date().format("%a %b %-d")
         ));
     }
-    format!("Invalid operation: {}.", parts.join("; "))
+    parts.join("; ")
 }
 
 pub fn run(paths: DataPaths) -> Result<()> {

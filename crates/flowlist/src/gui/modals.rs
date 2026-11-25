@@ -1337,93 +1337,37 @@ impl FlowlistApp {
             if let Modal::AdjustDates { conflicts, .. } = modal {
                 let mut list = div().flex().flex_col().gap_2();
                 for conflict in conflicts {
-                    let mut changes = div().flex().flex_col().gap_1();
+                    let mut lines = div().flex().flex_col().gap_0p5();
                     if let Some((from, to)) = conflict.due {
-                        changes = changes.child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .w(px(62.))
-                                        .text_xs()
-                                        .text_color(theme.text_faint)
-                                        .child("Due date"),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(theme.text)
-                                        .child(from.local_date().format("%a %b %-d").to_string()),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(theme.text_faint)
-                                        .child("→"),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(theme.warning)
-                                        .child(to.local_date().format("%a %b %-d").to_string()),
-                                ),
-                        );
+                        lines = lines.child(div().text_xs().text_color(theme.text_faint).child(
+                            format!(
+                                "Due: {} → {}",
+                                from.to_input_string(),
+                                to.to_input_string()
+                            ),
+                        ));
                     }
                     if let Some((from, to)) = conflict.defer {
-                        changes = changes.child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .w(px(62.))
-                                        .text_xs()
-                                        .text_color(theme.text_faint)
-                                        .child("Defer date"),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(theme.text)
-                                        .child(from.local_date().format("%a %b %-d").to_string()),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(theme.text_faint)
-                                        .child("→"),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(theme.warning)
-                                        .child(to.local_date().format("%a %b %-d").to_string()),
-                                ),
-                        );
+                        lines = lines.child(div().text_xs().text_color(theme.text_faint).child(
+                            format!(
+                                "Defer: {} → {}",
+                                from.to_input_string(),
+                                to.to_input_string()
+                            ),
+                        ));
                     }
                     list = list.child(
                         div()
                             .flex()
                             .flex_col()
                             .gap_1()
-                            .p_3()
+                            .p_2()
                             .rounded_md()
                             .border_1()
                             .border_color(theme.border)
                             .bg(theme.field)
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(theme.text)
-                                    .child(conflict.title.clone()),
-                            )
-                            .child(changes),
+                            .child(div().text_sm().text_color(theme.text).child(conflict.title.clone()))
+                            .child(lines),
                     );
                 }
                 body = body.child(list);

@@ -4,9 +4,9 @@
 
 - **Clearer date warnings.** Refusals now stay inside the inspector or edit sheet
   instead of opening a separate error box. They read directly, for example
-  “Invalid operation: the new due date cannot be later than the project’s due
-  date”, and use a yellow warning tone. The Adjust dates sheet shows only each
-  current date and its replacement. Same-day times are allowed when the
+  “Due date cannot be later than the project’s due date”, and use a yellow
+  warning tone. The Adjust dates sheet shows only each current date and its
+  replacement. Same-day times are allowed when the
   calendar day matches the container. Forecast also puts tasks belonging to
   that day’s project rows first and labels the action section **Tasks**, so a
   nearby task is not mistaken for a child.

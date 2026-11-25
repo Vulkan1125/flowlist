@@ -201,9 +201,9 @@ titles itself **Search** and ranks the closest matches first.
   dates and completes the move together. Cancel leaves everything untouched.
   The same sheet appears when typing a project into the task inspector or when
   a project date change would clamp existing tasks. Editing a task date that
-  violates its container keeps the field open with a direct **Invalid
-  operation** message and the last valid date. A time later on the same day is
-  allowed. When a date comes from the project or a parent action group, the
+  violates its container keeps the field open with a direct message such as
+  “Due date cannot be later than the project’s due date”. A time later on the
+  same day is allowed. When a date comes from the project or a parent action group, the
   inspector says “Defer with project”, “Planned with project” or “Due with
   project” (or “with parent”) instead of implying the task owns it.
 - **Right-click a folder** for Open, Rename, **Edit folder…**, New project here,
