@@ -15,9 +15,10 @@ There are three ways to add a task:
 - **`⌃⌥Space`** from any app opens the floating capture panel over what you are
   doing; press it again to put the panel away. The main window stays where it
   is.
-- **`⌘O`** opens Quick Open, one palette for perspectives, folders, projects,
-  tags and priorities. Type to filter; `↑`/`↓` move, `Return` opens and `Esc`
-  closes.
+- **`⌘F`** opens one card with two tabs: **Search tasks**, which matches every
+  task in the library, and **Quick Open**, for perspectives, folders, projects,
+  tags and priorities. `⇥` switches tabs and each keeps its own query; `↑`/`↓`
+  move, `Return` opens and `Esc` closes. `⌘O` opens it straight on Quick Open.
 - **Add task** in the title bar opens the same panel over the Flowlist window.
 - **`n`** puts the caret in the capture bar at the top of the list, when the
   view has one.
@@ -302,7 +303,9 @@ Press **`?`** for the full keyboard and mouse help. The essentials:
 | `⌘L` | add a subtask |
 | `⌘T` | toggle light / dark |
 | `⇧⌘T` / `⌥⌘T` | next / previous theme |
-| `⌘O` | Quick Open |
+| `⌘F` | search card (tasks / quick open) |
+| `⌘O` | quick open tab |
+| `⇥` | switch search-card tabs |
 | `⇧⌘O` | import TaskPaper or JSON |
 | `⌘,` | settings |
 
