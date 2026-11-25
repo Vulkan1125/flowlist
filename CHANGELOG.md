@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Clearer date warnings.** Refusals now stay inside the inspector or edit sheet
+  instead of opening a separate error box. The message names the project or
+  parent and both dates, says what is wrong, and tells you the last valid date.
+  Same-day times are allowed when the calendar day matches the container.
+  Forecast also puts tasks belonging to that day’s project rows first and labels
+  the action section **Tasks**, so a nearby task is not mistaken for a child.
 - **Projects in Forecast.** A project now appears on its own due, defer and
   planned dates, above that day's tasks. The row shows the project icon, name,
   status, which dates it carries and its completion progress; clicking it opens

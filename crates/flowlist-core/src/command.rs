@@ -1974,7 +1974,7 @@ fn ensure_dates_in_order(due: Option<Stamp>, defer: Option<Stamp>) -> Result<()>
     if let (Some(due), Some(defer)) = (due, defer) {
         if defer.local_date() > due.local_date() {
             return Err(Error::invalid(
-                "The defer date can't be after the due date",
+                "The defer date is later than the due date. A task or project cannot become available after it is due.",
             ));
         }
     }
@@ -2066,6 +2066,15 @@ pub fn date_conflicts_for_task_patch(
         Some(None) => None,
         None => patch.project.clone().unwrap_or(task.project.clone()),
     };
+    let container = if let Some(parent) = &parent {
+        db.tasks
+            .get(parent)
+            .map(|parent| (parent.title.clone(), true))
+    } else if let Some(project) = &project {
+        Some((db.project_path(project), false))
+    } else {
+        None
+    };
     let (container_due, container_defer) = if let Some(parent) = parent {
         (db.effective_due(&parent), db.effective_defer(&parent))
     } else if let Some(project) = project {
@@ -2077,11 +2086,11 @@ pub fn date_conflicts_for_task_patch(
         (None, None)
     };
     let due_change = match (due, container_due) {
-        (Some(from), Some(to)) if from.at > to.at => Some((from, to)),
+        (Some(from), Some(to)) if from.local_date() > to.local_date() => Some((from, to)),
         _ => None,
     };
     let defer_change = match (defer, container_defer) {
-        (Some(from), Some(to)) if from.at < to.at => Some((from, to)),
+        (Some(from), Some(to)) if from.local_date() < to.local_date() => Some((from, to)),
         _ => None,
     };
     if due_change.is_none() && defer_change.is_none() {
@@ -2090,6 +2099,7 @@ pub fn date_conflicts_for_task_patch(
         vec![DateConflict {
             task: id.clone(),
             title: task.title.clone(),
+            container,
             due: due_change,
             defer: defer_change,
         }]
@@ -2105,6 +2115,7 @@ pub fn date_conflicts_for_project_patch(
     let Some(project) = db.projects.get(id) else {
         return Vec::new();
     };
+    let container = Some((db.project_path(id), false));
     let project_due = patch.due.unwrap_or(project.due);
     let project_defer = patch.defer.unwrap_or(project.defer);
     let mut out = Vec::new();
@@ -2139,17 +2150,18 @@ pub fn date_conflicts_for_project_patch(
             parent = parent_task.parent.clone();
         }
         let due = match (task.due, container_due) {
-            (Some(from), Some(to)) if from.at > to.at => Some((from, to)),
+            (Some(from), Some(to)) if from.local_date() > to.local_date() => Some((from, to)),
             _ => None,
         };
         let defer = match (task.defer, container_defer) {
-            (Some(from), Some(to)) if from.at < to.at => Some((from, to)),
+            (Some(from), Some(to)) if from.local_date() < to.local_date() => Some((from, to)),
             _ => None,
         };
         if due.is_some() || defer.is_some() {
             out.push(DateConflict {
                 task: task.id.clone(),
                 title: task.title.clone(),
+                container: container.clone(),
                 due,
                 defer,
             });
@@ -2164,16 +2176,22 @@ pub fn date_conflicts_for_move(
     ids: &[TaskId],
     placement: &TaskPlacement,
 ) -> Vec<DateConflict> {
-    let (container_due, container_defer) = match placement {
-        TaskPlacement::Inbox(_) => (None, None),
-        TaskPlacement::Project { project, .. } => db
-            .projects
-            .get(project)
-            .map(|project| (project.due, project.defer))
-            .unwrap_or((None, None)),
+    let (container_due, container_defer, container) = match placement {
+        TaskPlacement::Inbox(_) => (None, None, None),
+        TaskPlacement::Project { project, .. } => {
+            let (due, defer) = db
+                .projects
+                .get(project)
+                .map(|project| (project.due, project.defer))
+                .unwrap_or((None, None));
+            (due, defer, Some((db.project_path(project), false)))
+        }
         TaskPlacement::Parent { parent, .. } => (
             db.effective_due(parent),
             db.effective_defer(parent),
+            db.tasks
+                .get(parent)
+                .map(|parent| (parent.title.clone(), true)),
         ),
     };
     let mut out = Vec::new();
@@ -2185,17 +2203,18 @@ pub fn date_conflicts_for_move(
             continue;
         }
         let due = match (task.due, container_due) {
-            (Some(from), Some(to)) if from.at > to.at => Some((from, to)),
+            (Some(from), Some(to)) if from.local_date() > to.local_date() => Some((from, to)),
             _ => None,
         };
         let defer = match (task.defer, container_defer) {
-            (Some(from), Some(to)) if from.at < to.at => Some((from, to)),
+            (Some(from), Some(to)) if from.local_date() < to.local_date() => Some((from, to)),
             _ => None,
         };
         if due.is_some() || defer.is_some() {
             out.push(DateConflict {
                 task: id.clone(),
                 title: task.title.clone(),
+                container: container.clone(),
                 due,
                 defer,
             });

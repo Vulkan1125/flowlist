@@ -27,6 +27,9 @@ pub type PerspectiveMap = BTreeMap<PerspectiveId, Perspective>;
 pub struct DateConflict {
     pub task: TaskId,
     pub title: String,
+    /// The project or parent that supplies the limit. `true` means a parent
+    /// action group, `false` a project.
+    pub container: Option<(String, bool)>,
     /// (from, to)
     pub due: Option<(Stamp, Stamp)>,
     /// (from, to)
@@ -577,13 +580,13 @@ impl Db {
         };
         let mut changed = false;
         if let (Some(due), Some(limit)) = (task.due, container_due) {
-            if due.at > limit.at {
+            if due.local_date() > limit.local_date() {
                 task.due = Some(limit);
                 changed = true;
             }
         }
         if let (Some(defer), Some(limit)) = (task.defer, container_defer) {
-            if defer.at < limit.at {
+            if defer.local_date() < limit.local_date() {
                 task.defer = Some(limit);
                 changed = true;
             }
@@ -617,17 +620,23 @@ impl Db {
             let container_due = self.container_due(id);
             let container_defer = self.container_defer(id);
             let due = match (task.due, container_due) {
-                (Some(from), Some(to)) if from.at > to.at => Some((from, to)),
+                (Some(from), Some(to)) if from.local_date() > to.local_date() => Some((from, to)),
                 _ => None,
             };
             let defer = match (task.defer, container_defer) {
-                (Some(from), Some(to)) if from.at < to.at => Some((from, to)),
+                (Some(from), Some(to)) if from.local_date() < to.local_date() => Some((from, to)),
                 _ => None,
             };
             if due.is_some() || defer.is_some() {
+                let container = task.parent.as_ref().and_then(|parent| {
+                    self.tasks
+                        .get(parent)
+                        .map(|parent| (parent.title.clone(), true))
+                });
                 out.push(DateConflict {
                     task: id.clone(),
                     title: task.title.clone(),
+                    container,
                     due,
                     defer,
                 });
@@ -1688,26 +1697,28 @@ impl Db {
             let mut parts = Vec::new();
             if let Some((from, to)) = conflict.due {
                 parts.push(format!(
-                    "due {} is later than its container due {}",
-                    from.to_input_string(),
-                    to.to_input_string()
+                    "is due {}, which is later than its project or parent’s due date of {}. A task cannot be due after its container",
+                    from.local_date().format("%a %b %-d"),
+                    to.local_date().format("%a %b %-d")
                 ));
             }
             if let Some((from, to)) = conflict.defer {
                 parts.push(format!(
-                    "defer {} is earlier than its container defer {}",
-                    from.to_input_string(),
-                    to.to_input_string()
+                    "defers on {}, which is earlier than its project or parent’s defer date of {}. A task cannot defer before its container",
+                    from.local_date().format("%a %b %-d"),
+                    to.local_date().format("%a %b %-d")
                 ));
             }
-            problems.push(format!("task “{}” {}", conflict.title, parts.join("; ")));
+            problems.push(format!("Task “{}” {}", conflict.title, parts.join("; ")));
         }
         for project in self.projects.values() {
             if let (Some(due), Some(defer)) = (project.due, project.defer) {
-                if due.at < defer.at {
+                if due.local_date() < defer.local_date() {
                     problems.push(format!(
-                        "project “{}” is due before it is deferred",
-                        project.name
+                        "Project “{}” is due {}, before its defer date of {}. A project cannot be due before it is deferred",
+                        project.name,
+                        due.local_date().format("%a %b %-d"),
+                        defer.local_date().format("%a %b %-d")
                     ));
                 }
             }

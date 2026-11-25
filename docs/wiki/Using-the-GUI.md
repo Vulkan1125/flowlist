@@ -201,10 +201,11 @@ titles itself **Search** and ranks the closest matches first.
   dates and completes the move together. Cancel leaves everything untouched.
   The same sheet appears when typing a project into the task inspector or when
   a project date change would clamp existing tasks. Editing a task date that
-  violates its container keeps the field open with an error instead.
-  When a date comes from the project or a parent action group, the inspector
-  says “Defer with project”, “Planned with project” or “Due with project” (or
-  “with parent”) instead of implying the task owns it.
+  violates its container keeps the field open with an inline message naming the
+  project or parent and the last valid date. A time later on the same day is
+  allowed. When a date comes from the project or a parent action group, the
+  inspector says “Defer with project”, “Planned with project” or “Due with
+  project” (or “with parent”) instead of implying the task owns it.
 - **Right-click a folder** for Open, Rename, **Edit folder…**, New project here,
   New subfolder and Delete.
 - **Saved perspectives** share one editor with the phone: text, Inbox only,
@@ -237,8 +238,10 @@ titles itself **Search** and ranks the closest matches first.
   priority. The choices are remembered per view.
 - Projects appear in Forecast on their own due, defer and planned dates. A
   project row shows its icon, name, status, dates and progress; clicking opens
-  the project. Completed and dropped projects stay out, and the **Planned** chip
-  also hides planned-only project rows.
+  the project. The day’s **Tasks** section follows, with tasks from those
+  projects first, so the first task is not read as a child of the project row.
+  Completed and dropped projects stay out, and the **Planned** chip also hides
+  planned-only project rows.
 - The **Calendar** chip in Forecast hides and restores the calendar, and
   remembers whether it was the week strip or the full month. Hiding also clears
   any picked day, so the list always returns to the full agenda. The chevron

@@ -56,7 +56,7 @@ use flowlist_core::command::{
     Command, ContainerPlacement, NewProject, NewTask, Outcome, ProjectPatch, SettingsPatch,
     TagPatch, TaskPatch, TaskPlacement,
 };
-use flowlist_core::db::{ContainerPosition, Db, OrderKey, Position};
+use flowlist_core::db::{ContainerPosition, DateConflict, Db, OrderKey, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{BuiltinPerspective, GroupBy, Priority, ProjectKind, SortBy, TagStatus};
 use flowlist_core::parse::{parse_duration, parse_quick, parse_repeat, parse_stamp};
@@ -109,6 +109,16 @@ pub enum EditField {
 }
 
 impl EditField {
+    fn date_field(self) -> Option<DateField> {
+        match self {
+            EditField::Defer => Some(DateField::Defer),
+            EditField::Planned => Some(DateField::Planned),
+            EditField::Due => Some(DateField::Due),
+            EditField::Reminder => Some(DateField::Reminder),
+            _ => None,
+        }
+    }
+
     fn next(self) -> Self {
         match self {
             EditField::Title => EditField::Notes,
@@ -542,6 +552,13 @@ pub struct FlowlistApp {
     /// A sheet to open after the current one commits, used when an edit needs
     /// a follow-up date confirmation.
     pending_modal: Option<modals::Modal>,
+    /// The most recent command refusal. Callers with an inline surface show it
+    /// there and clear it; otherwise it falls back to the toast.
+    command_error: Option<String>,
+    /// A refusal shown inside the open sheet, under its title.
+    modal_error: Option<String>,
+    /// A date warning shown under the inspector field that caused it.
+    date_error: Option<(TaskId, DateField, String)>,
     /// A click's mouse-up closed the sort or group menu. The chip under the
     /// same click must not immediately reopen it.
     sort_closed_on_up: bool,
@@ -990,6 +1007,9 @@ impl FlowlistApp {
             draft_task: None,
             modal: None,
             pending_modal: None,
+            command_error: None,
+            modal_error: None,
+            date_error: None,
             theme_on_open: None,
             plain_accent_light,
             plain_accent_dark,
@@ -2160,6 +2180,7 @@ impl FlowlistApp {
         if self.draft_task.as_ref() != Some(&id) {
             self.draft_task = None;
         }
+        self.date_error = None;
         self.selected = vec![id.clone()];
         self.anchor = Some(id);
     }
@@ -2235,6 +2256,7 @@ impl FlowlistApp {
     fn execute(&mut self, command: Command) -> Option<Outcome> {
         match self.store.execute(command) {
             Ok(outcome) => {
+                self.command_error = None;
                 self.toast = outcome
                     .message
                     .clone()
@@ -2244,7 +2266,16 @@ impl FlowlistApp {
                 Some(outcome)
             }
             Err(error) => {
-                self.toast = Some(format!("Could not save: {error}"));
+                let message = error.to_string();
+                let message = message
+                    .strip_prefix("invalid operation: ")
+                    .unwrap_or(&message)
+                    .to_string();
+                self.command_error = Some(message.clone());
+                // A form clears this when it shows the message inline. Lists
+                // and drag targets have no inline spot, so the toast remains
+                // their fallback.
+                self.toast = Some(message);
                 None
             }
         }
@@ -3403,7 +3434,10 @@ impl FlowlistApp {
         };
         let stamp = picker_stamp(date, self.date_picker_time);
         if let Some(message) = self.date_order_error(field, date) {
-            self.toast = Some(message.to_string());
+            self.date_picker = None;
+            self.date_picker_time = None;
+            self.date_error = Some((id.clone(), field, message.to_string()));
+            self.toast = None;
             cx.notify();
             return;
         }
@@ -3421,12 +3455,30 @@ impl FlowlistApp {
                 patch.reminder_match_due = Some(false);
             }
         }
-        self.execute(Command::UpdateTask { id, patch });
+        let conflicts =
+            flowlist_core::command::date_conflicts_for_task_patch(self.store.db(), &id, &patch);
+        if let Some(conflict) = conflicts.first() {
+            self.command_error = None;
+            self.toast = None;
+            self.date_error = Some((id, field, date_conflict_message(conflict)));
+            cx.notify();
+            return;
+        }
+        let _ = self.execute(Command::UpdateTask {
+            id: id.clone(),
+            patch,
+        });
+        if let Some(message) = self.command_error.take() {
+            self.toast = None;
+            self.date_error = Some((id, field, message));
+        } else {
+            self.date_error = None;
+        }
         cx.notify();
     }
 
     /// A defer date after its due date would leave the task hidden until it
-    /// is already overdue. Refuse the pick and explain in the toast.
+    /// is already overdue. Refuse the pick and explain beside the field.
     fn date_order_error(
         &self,
         field: DateField,
@@ -3535,6 +3587,7 @@ impl FlowlistApp {
         self.suggestion_engaged = false;
         self.editing = Some(field);
         self.focus = FocusArea::Field;
+        self.date_error = None;
         cx.notify();
     }
 
@@ -3555,6 +3608,7 @@ impl FlowlistApp {
         };
         let raw = self.field.text().to_string();
         let value = raw.trim().to_string();
+        self.date_error = None;
         let mut patch = TaskPatch::default();
         match field {
             EditField::Title => {
@@ -3691,30 +3745,35 @@ impl FlowlistApp {
                 field,
                 EditField::Defer | EditField::Planned | EditField::Due
             ) {
-                let conflict = &conflicts[0];
-                let message = if let Some((from, to)) = conflict.due {
-                    format!(
-                        "Due {} is later than the container due {}",
-                        from.to_input_string(),
-                        to.to_input_string()
-                    )
-                } else if let Some((from, to)) = conflict.defer {
-                    format!(
-                        "Defer {} is earlier than the container defer {}",
-                        from.to_input_string(),
-                        to.to_input_string()
-                    )
+                let message = date_conflict_message(&conflicts[0]);
+                if let Some(date_field) = field.date_field() {
+                    self.date_error = Some((id.clone(), date_field, message));
+                    self.field_error = None;
                 } else {
-                    "That date is outside the container limits".to_string()
-                };
-                self.field_error = Some(message);
+                    self.field_error = Some(message);
+                }
                 cx.notify();
                 return false;
             }
         }
-        self.execute(Command::UpdateTask { id, patch });
+        let _ = self.execute(Command::UpdateTask {
+            id: id.clone(),
+            patch,
+        });
+        if let Some(message) = self.command_error.take() {
+            self.toast = None;
+            if let Some(date_field) = field.date_field() {
+                self.date_error = Some((id, date_field, message));
+                self.field_error = None;
+            } else {
+                self.field_error = Some(message);
+            }
+            cx.notify();
+            return false;
+        }
         self.editing = None;
         self.field_error = None;
+        self.date_error = None;
         self.focus = FocusArea::Content;
         cx.notify();
         true
@@ -4331,6 +4390,7 @@ impl FlowlistApp {
 
     fn open_modal(&mut self, modal: modals::Modal, cx: &mut Context<Self>) {
         self.pending_modal = None;
+        self.modal_error = None;
         // Settings previews theme changes live, so remember what to put back
         // if the sheet is cancelled.
         if matches!(modal, modals::Modal::Settings { .. }) {
@@ -4386,6 +4446,7 @@ impl FlowlistApp {
         self.modal = None;
         self.modal_focus = 0;
         self.pending_modal = None;
+        self.modal_error = None;
         self.view_menu = None;
         self.view_menu_cursor = 0;
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
@@ -4400,10 +4461,17 @@ impl FlowlistApp {
         let uninstall = matches!(modal, modals::Modal::Uninstall { .. });
         self.view_menu = None;
         self.view_menu_cursor = 0;
-        let result = self.apply_modal(&modal);
+        self.command_error = None;
+        let result = self.apply_modal(&modal).and_then(|()| {
+            match self.command_error.take() {
+                Some(error) => Err(error),
+                None => Ok(()),
+            }
+        });
         match result {
             Ok(()) => {
                 self.modal = None;
+                self.modal_error = None;
                 self.modal_focus = 0;
                 if let Some(modal) = self.pending_modal.take() {
                     self.open_modal(modal, cx);
@@ -4421,7 +4489,9 @@ impl FlowlistApp {
             }
             Err(message) => {
                 self.modal = Some(modal);
-                self.toast = Some(message);
+                self.modal_error = Some(message);
+                self.toast = None;
+                self.focus = FocusArea::Modal;
             }
         }
         cx.notify();
@@ -6955,6 +7025,10 @@ impl FlowlistApp {
         let mut state = serde_json::json!({
             "view": self.view.key(),
             "modal": self.modal.as_ref().map(|modal| modal.title()),
+            "modal_message": self.modal_error.clone(),
+            "date_error": self.date_error.as_ref().map(|(_, field, message)| {
+                serde_json::json!({ "field": field.slug(), "message": message })
+            }),
             "modal_name": self
                 .modal
                 .as_ref()
@@ -8215,6 +8289,38 @@ fn raise_for_capture(window: &Window) {
 
 #[cfg(not(target_os = "macos"))]
 fn raise_for_capture(_window: &Window) {}
+
+fn date_conflict_message(conflict: &DateConflict) -> String {
+    let container = conflict
+        .container
+        .as_ref()
+        .map(|(name, parent)| {
+            if *parent {
+                format!("parent action “{name}”")
+            } else {
+                format!("project “{name}”")
+            }
+        })
+        .unwrap_or_else(|| "project or parent".to_string());
+    let mut parts = Vec::new();
+    if let Some((from, to)) = conflict.due {
+        parts.push(format!(
+            "The task is due {}, but the {container} is due {}. Choose a due date on or before {}.",
+            from.local_date().format("%a %b %-d"),
+            to.local_date().format("%a %b %-d"),
+            to.local_date().format("%a %b %-d")
+        ));
+    }
+    if let Some((from, to)) = conflict.defer {
+        parts.push(format!(
+            "The task’s defer date is {}, but the {container} has a defer date of {}. Choose a defer date on or after {}.",
+            from.local_date().format("%a %b %-d"),
+            to.local_date().format("%a %b %-d"),
+            to.local_date().format("%a %b %-d")
+        ));
+    }
+    parts.join(" ")
+}
 
 pub fn run(paths: DataPaths) -> Result<()> {
     let store = Store::open(paths.clone())?;

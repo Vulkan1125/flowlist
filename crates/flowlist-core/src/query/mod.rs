@@ -678,12 +678,24 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group>
         if ids.is_empty() && projects.is_empty() {
             return;
         }
+        let mut ordered = ids.to_vec();
+        // A day's project rows sit above its tasks. Put tasks that belong to
+        // one of those projects first, so the nearest task is not mistaken for
+        // a child of the project above it.
+        if !projects.is_empty() {
+            ordered.sort_by_key(|id| {
+                !db.tasks
+                    .get(id)
+                    .and_then(|task| task.project.as_ref())
+                    .is_some_and(|project| projects.contains(project))
+            });
+        }
         groups.push(Group {
             projects: projects.to_vec(),
             key: key.to_string(),
             title: title.to_string(),
             position,
-            rows: rows_for(db, ids, at),
+            rows: rows_for(db, &ordered, at),
         });
     };
 

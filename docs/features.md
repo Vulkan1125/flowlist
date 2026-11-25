@@ -342,8 +342,10 @@ working domain and GUI. This page tracks what is implemented and verified.
       filters, grouping, sorting, badges and the task inspector
 - [x] Strict date validation: contradictory task dates cannot be saved.
       Moves and project assignments ask first and adjust the stored dates in
-      one undoable step; direct date edits stay open with an error; project
-      date changes ask before clamping existing tasks
+      one undoable step; direct date edits stay open with an inline message;
+      project date changes ask before clamping existing tasks. Same-day times
+      are allowed, and Forecast orders a project’s own tasks first under a
+      separate Tasks label
 - [x] Inherited date labels in the task inspector: “Defer with project”,
       “Planned with project”, “Due with project” and the parent equivalents
 - [x] Deleting a folder asks first: nested folders, their projects and every

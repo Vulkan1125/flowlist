@@ -2184,6 +2184,26 @@ fn project_due_and_defer_constrain_tasks() {
     let early_id = store.db().resolve_task(&early_id).unwrap();
     assert_eq!(store.db().effective_due(&early_id), Some(day(2)));
 
+    // A task due later on the same day is not after its project's day.
+    let mut same_day = NewTask::new("Same day, later time");
+    same_day.project = Some(project_id.clone());
+    same_day.due = Some(Stamp::on(
+        (today + Duration::days(4)),
+        chrono::NaiveTime::from_hms_opt(17, 0, 0).unwrap(),
+    ));
+    let same_day_id = store
+        .execute(Command::CreateTask(same_day))
+        .unwrap()
+        .created[0]
+        .clone();
+    let same_day_id = store.db().resolve_task(&same_day_id).unwrap();
+    assert_eq!(
+        store.db().tasks[&same_day_id]
+            .due
+            .map(|stamp| stamp.local_date()),
+        Some(today + Duration::days(4))
+    );
+
     // A task with a later due cannot be moved in silently.
     let mut late = NewTask::new("Later due");
     late.due = Some(day(6));
@@ -2201,6 +2221,10 @@ fn project_due_and_defer_constrain_tasks() {
         flowlist_core::command::date_conflicts_for_move(store.db(), &[late_id.clone()], &placement);
     assert_eq!(conflicts.len(), 1);
     assert!(conflicts[0].due.is_some());
+    assert!(conflicts[0]
+        .container
+        .as_ref()
+        .is_some_and(|(name, parent)| name.contains("Project deadline") && !parent));
     assert!(store
         .execute(Command::MoveTasks {
             ids: vec![late_id.clone()],
@@ -2281,12 +2305,16 @@ fn project_due_and_defer_constrain_tasks() {
         due: Some(Some(day(2))),
         ..Default::default()
     };
-    assert!(!flowlist_core::command::date_conflicts_for_project_patch(
+    let project_conflicts = flowlist_core::command::date_conflicts_for_project_patch(
         store.db(),
         &project_id,
-        &project_patch
-    )
-    .is_empty());
+        &project_patch,
+    );
+    assert!(!project_conflicts.is_empty());
+    assert!(project_conflicts[0]
+        .container
+        .as_ref()
+        .is_some_and(|(name, parent)| name.contains("Project deadline") && !parent));
     store
         .execute(Command::UpdateProjectAdjusted {
             id: project_id.clone(),
@@ -3170,6 +3198,24 @@ fn forecast_puts_project_dates_above_the_tasks() {
         .clone();
     let past_id = store.db().resolve_project(&past_id).unwrap();
 
+    let mut alpha_task = NewTask::new("Alpha task");
+    alpha_task.project = Some(due_id.clone());
+    alpha_task.due = Some(day(0));
+    let alpha_task_id = store
+        .execute(Command::CreateTask(alpha_task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let alpha_task_id = store.db().resolve_task(&alpha_task_id).unwrap();
+    let mut other_task = NewTask::new("Other task");
+    other_task.due = Some(day(0));
+    let other_task_id = store
+        .execute(Command::CreateTask(other_task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let other_task_id = store.db().resolve_task(&other_task_id).unwrap();
+
     let groups = query::forecast_view(store.db(), Utc::now(), true);
     let group = |key: &str| groups.iter().find(|group| group.key == key).unwrap();
     // Due and planned on the same day still make one project row.
@@ -3188,6 +3234,10 @@ fn forecast_puts_project_dates_above_the_tasks() {
     assert!(group("forecast:later").projects.contains(&later_id));
     assert!(group("forecast:next-month").projects.contains(&next_id));
     assert!(query::projects_on_date(store.db(), today, true).contains(&due_id));
+    // The task from the project above the section comes before an unrelated one.
+    let today_rows = &group("forecast:today").rows;
+    assert_eq!(today_rows[0].id, alpha_task_id);
+    assert!(today_rows.iter().any(|row| row.id == other_task_id));
     assert!(query::projects_on_date(store.db(), today + Duration::days(1), true)
         .contains(&deferred_id));
     assert!(query::forecast_past_projects(store.db(), Utc::now(), true).contains(&past_id));

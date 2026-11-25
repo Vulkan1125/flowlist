@@ -128,7 +128,7 @@ integrations are tracked separately and are not part of this phase.
       with project” or “with parent” when the value is inherited.
 - [x] **Date warning on every path** — inspector project assignment and
       project date edits use the Adjust dates sheet; direct date edits report
-      an inline error.
+      an inline error under the field or inside the edit sheet.
 - [x] **Projects in Forecast** — project rows on their due/defer/planned dates,
       above the day's task rows, with status, progress, calendar pills and
       Past/Future support.

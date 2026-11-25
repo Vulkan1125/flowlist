@@ -862,6 +862,18 @@ impl FlowlistApp {
                     )
                     .into_any_element()
             });
+        if let Some((task, error_field, message)) = &self.date_error
+            && *error_field == field
+            && self.selected_one().as_ref() == Some(task)
+        {
+            row = row.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.danger)
+                    .whitespace_normal()
+                    .child(message.clone()),
+            );
+        }
         if editing {
             row = row.child(
                 div()

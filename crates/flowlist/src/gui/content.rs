@@ -1909,6 +1909,21 @@ impl FlowlistApp {
                     for project in &group.projects {
                         list = list.child(self.render_forecast_project_row(project, cx));
                     }
+                    if !group.rows.is_empty() {
+                        list = list.child(
+                            div()
+                                .mt_1()
+                                .mx_4()
+                                .pt_2()
+                                .pb_1()
+                                .border_t_1()
+                                .border_color(theme.border_soft)
+                                .text_xs()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(theme.text_faint)
+                                .child("Tasks"),
+                        );
+                    }
                 }
                 // One root drop target before the first top-level row. Rows
                 // themselves handle "after this row", so no spacer is needed
