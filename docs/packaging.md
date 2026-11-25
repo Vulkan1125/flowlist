@@ -42,12 +42,16 @@ asset. To publish one:
 # 2. Build the app and its zip.
 scripts/package.sh
 
-# 3. Tag the release commit and publish a normal (not draft or prerelease)
-#    release with the zip attached.
+# 3. Build a GitHub-ready notes file from the changelog. This joins the
+#    editor-wrapped lines, because GitHub turns every source newline into <br>.
 version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+scripts/release-notes.sh "$version" > "dist/notes-$version.md"
+
+# 4. Tag the release commit and publish a normal (not draft or prerelease)
+#    release with the zip attached.
 gh release create "v$version" "dist/Flowlist-$version.zip" "dist/Flowlist-$version.dmg" \
   --title "Flowlist $version" \
-  --notes-file notes.md \
+  --notes-file "dist/notes-$version.md" \
   --latest
 ```
 
