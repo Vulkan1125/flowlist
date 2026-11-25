@@ -169,6 +169,8 @@ impl FlowlistApp {
             .checked_add_signed(Duration::days(delta))
             .unwrap_or(today);
         self.forecast_date = Some(next);
+        self.forecast_past = false;
+        self.forecast_future = false;
         self.forecast_month = NaiveDate::from_ymd_opt(next.year(), next.month(), 1).unwrap_or(next);
         self.forecast_week = week_start(next);
         self.forecast_calendar_open = true;
@@ -176,6 +178,26 @@ impl FlowlistApp {
         self.selected.clear();
         self.anchor = None;
         self.save_session();
+    }
+
+    /// Select the Past tile, or clear it when it is already selected.
+    pub(super) fn forecast_pick_past(&mut self) {
+        let was = self.forecast_past;
+        self.forecast_date = None;
+        self.forecast_past = !was;
+        self.forecast_future = false;
+        self.selected.clear();
+        self.anchor = None;
+    }
+
+    /// Select the Future tile, or clear it when it is already selected.
+    pub(super) fn forecast_pick_future(&mut self) {
+        let was = self.forecast_future;
+        self.forecast_date = None;
+        self.forecast_future = !was;
+        self.forecast_past = false;
+        self.selected.clear();
+        self.anchor = None;
     }
 
     /// Move the Forecast calendar one month forward or back.
@@ -189,6 +211,8 @@ impl FlowlistApp {
         self.forecast_month =
             NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
         self.forecast_date = Some(today);
+        self.forecast_past = false;
+        self.forecast_future = false;
         self.forecast_week = week_start(today);
         self.forecast_calendar_open = true;
         self.forecast_calendar_expanded = true;
@@ -205,6 +229,8 @@ impl FlowlistApp {
         self.forecast_calendar_open = !self.forecast_calendar_open;
         if !self.forecast_calendar_open {
             self.forecast_date = None;
+            self.forecast_past = false;
+            self.forecast_future = false;
             self.selected.clear();
             self.anchor = None;
         }
@@ -231,9 +257,11 @@ impl FlowlistApp {
         let offset = anchor.weekday().num_days_from_monday() as i64;
         let date = next + Duration::days(offset);
         self.forecast_week = next;
-        self.forecast_date = Some(date);
-        self.forecast_month =
-            NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date);
+        if !self.forecast_past && !self.forecast_future {
+            self.forecast_date = Some(date);
+            self.forecast_month =
+                NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date);
+        }
         self.selected.clear();
         self.anchor = None;
         self.save_session();
@@ -242,6 +270,8 @@ impl FlowlistApp {
     /// Pick a day from the collapsed week strip, or clear the filter when the
     /// same day is clicked again.
     pub(super) fn forecast_pick_day(&mut self, date: NaiveDate) {
+        self.forecast_past = false;
+        self.forecast_future = false;
         if self.forecast_date == Some(date) {
             self.forecast_date = None;
         } else {
@@ -326,6 +356,8 @@ impl FlowlistApp {
                     .child(widgets::icon_button(theme, Icon::Close, true))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.forecast_date = None;
+                        this.forecast_past = false;
+                        this.forecast_future = false;
                         this.selected.clear();
                         this.anchor = None;
                         this.save_session();
@@ -342,6 +374,8 @@ impl FlowlistApp {
                     ))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.forecast_date = None;
+                        this.forecast_past = false;
+                        this.forecast_future = false;
                         this.selected.clear();
                         this.anchor = None;
                         this.save_session();
@@ -562,10 +596,74 @@ impl FlowlistApp {
         );
 
         let mut row = div().flex().w_full().gap_1().pt_2();
+        let past_count = query::forecast_past(self.store.db(), now(), self.forecast_planned).len();
+        let future_count = query::forecast_future(
+            self.store.db(),
+            now(),
+            week + Duration::days(6),
+            self.forecast_planned,
+        )
+        .len();
+        let past_sink = strip_boxes.clone();
+        let past_selected = self.forecast_past;
+        row = row.child(
+            div()
+                .on_children_prepainted(move |bounds, _, _| {
+                    record_box(&past_sink, "past", bounds.first().copied());
+                })
+                .id("forecast-week-past")
+                .w(px(66.))
+                .h(px(80.))
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap_1()
+                .rounded_md()
+                .bg(if past_selected {
+                    theme.selection
+                } else {
+                    theme.field
+                })
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover))
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(if past_selected {
+                            theme.accent
+                        } else {
+                            theme.text_dim
+                        })
+                        .child("Past"),
+                )
+                .child(
+                    div()
+                        .h(px(12.))
+                        .text_xs()
+                        .text_color(if past_selected {
+                            theme.accent
+                        } else {
+                            theme.text_faint
+                        })
+                        .child(if past_count > 0 {
+                            past_count.to_string()
+                        } else {
+                            String::new()
+                        }),
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.forecast_pick_past();
+                    cx.notify();
+                })),
+        );
         for (index, label) in labels.iter().enumerate() {
             let date = week + Duration::days(index as i64);
             let count = days.get(&date).map_or(0, Vec::len);
-            let selected = self.forecast_date == Some(date);
+            let selected = !self.forecast_past
+                && !self.forecast_future
+                && self.forecast_date == Some(date);
             let is_today = date == today;
             let drop_date = date;
             let box_sink = strip_boxes.clone();
@@ -639,6 +737,60 @@ impl FlowlistApp {
                     })),
             );
         }
+        let future_sink = strip_boxes.clone();
+        let future_selected = self.forecast_future;
+        row = row.child(
+            div()
+                .on_children_prepainted(move |bounds, _, _| {
+                    record_box(&future_sink, "future", bounds.first().copied());
+                })
+                .id("forecast-week-future")
+                .w(px(66.))
+                .h(px(80.))
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap_1()
+                .rounded_md()
+                .bg(if future_selected {
+                    theme.selection
+                } else {
+                    theme.field
+                })
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover))
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(if future_selected {
+                            theme.accent
+                        } else {
+                            theme.text_dim
+                        })
+                        .child("Future"),
+                )
+                .child(
+                    div()
+                        .h(px(12.))
+                        .text_xs()
+                        .text_color(if future_selected {
+                            theme.accent
+                        } else {
+                            theme.text_faint
+                        })
+                        .child(if future_count > 0 {
+                            future_count.to_string()
+                        } else {
+                            String::new()
+                        }),
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.forecast_pick_future();
+                    cx.notify();
+                })),
+        );
 
         div()
             .flex()
@@ -744,6 +896,8 @@ impl FlowlistApp {
                     .when(is_selected, |this| this.bg(theme.selection))
                     .when(!in_month, |this| this.opacity(0.42))
                     .on_click(cx.listener(move |this, _, _, cx| {
+                        this.forecast_past = false;
+                        this.forecast_future = false;
                         if this.forecast_date == Some(select_date) {
                             this.forecast_date = None;
                         } else {
@@ -830,6 +984,8 @@ impl FlowlistApp {
                                     .cursor_pointer()
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
+                                        this.forecast_past = false;
+                                        this.forecast_future = false;
                                         this.forecast_date = Some(date);
                                         this.forecast_month = select_month;
                                         this.forecast_week = week_start(date);

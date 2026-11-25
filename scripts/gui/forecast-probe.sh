@@ -160,9 +160,10 @@ python3 - "$state" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 assert d["forecast_week"], "no collapsed week"
-assert len(d["forecast_strip"]) == 7, len(d["forecast_strip"])
+assert len(d["forecast_strip"]) == 9, len(d["forecast_strip"])
+assert "past" in d["forecast_strip"] and "future" in d["forecast_strip"]
 assert d["forecast_strip_expand"], "no expand control"
-print("  week strip: %s, %d days" % (d["forecast_week"], len(d["forecast_strip"])))
+print("  week strip: %s, %d tiles" % (d["forecast_week"], len(d["forecast_strip"])))
 PY
 cell=$(python3 - "$state" <<'PY'
 import json, sys

@@ -380,6 +380,10 @@ pub struct FlowlistApp {
     forecast_week: chrono::NaiveDate,
     /// A clicked calendar date; `None` shows the normal Forecast buckets.
     forecast_date: Option<chrono::NaiveDate>,
+    /// The Past tile is selected.
+    forecast_past: bool,
+    /// The Future tile is selected.
+    forecast_future: bool,
     /// Whether any Forecast calendar is showing.
     forecast_calendar_open: bool,
     /// Whether Forecast lists items on their planned date.
@@ -847,6 +851,8 @@ impl FlowlistApp {
                 today - chrono::Duration::days(monday)
             },
             forecast_date: None,
+            forecast_past: false,
+            forecast_future: false,
             forecast_calendar_open,
             forecast_planned,
             forecast_calendar_expanded,
@@ -1445,6 +1451,29 @@ impl FlowlistApp {
             // ranked list. The rest still need ids here so j/k, x and undo
             // work on them.
             View::Builtin(BuiltinPerspective::Review | BuiltinPerspective::Archive) => Vec::new(),
+            View::Builtin(BuiltinPerspective::Forecast)
+                if self.forecast_calendar_open && self.forecast_past =>
+            {
+                let ids = query::forecast_past(db, at, self.forecast_planned);
+                vec![Group {
+                    key: "forecast-focus:past".to_string(),
+                    title: "Past".to_string(),
+                    position: 0,
+                    rows: query::rows_for(db, &ids, at),
+                }]
+            }
+            View::Builtin(BuiltinPerspective::Forecast)
+                if self.forecast_calendar_open && self.forecast_future =>
+            {
+                let after = self.forecast_week + chrono::Duration::days(6);
+                let ids = query::forecast_future(db, at, after, self.forecast_planned);
+                vec![Group {
+                    key: "forecast-focus:future".to_string(),
+                    title: "Future".to_string(),
+                    position: 0,
+                    rows: query::rows_for(db, &ids, at),
+                }]
+            }
             View::Builtin(BuiltinPerspective::Forecast)
                 if self.forecast_calendar_open && self.forecast_date.is_some() =>
             {
@@ -4164,6 +4193,8 @@ impl FlowlistApp {
             });
         }
         self.forecast_date = Some(date);
+        self.forecast_past = false;
+        self.forecast_future = false;
         self.forecast_month =
             chrono::NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date);
         self.toast = Some(format!("Moved to {}", date.format("%b %-d")));
@@ -5712,6 +5743,8 @@ impl FlowlistApp {
             }
             "\\" if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) => {
                 self.forecast_date = None;
+                self.forecast_past = false;
+                self.forecast_future = false;
                 self.selected.clear();
                 self.anchor = None;
                 self.save_session();
@@ -6858,6 +6891,8 @@ impl FlowlistApp {
             "title_visible": self.title_visible.get(),
             "sidebar_menu": self.sidebar_menu.as_ref().map(|menu| menu.key()),
             "forecast_date": self.forecast_date.map(|date| date.to_string()),
+            "forecast_past": self.forecast_past,
+            "forecast_future": self.forecast_future,
             "trashed": self.store.db().trash_count(),
             "traffic_lights": match self.traffic_lights_applied {
                 Some(true) => "visible",
@@ -7093,6 +7128,8 @@ impl FlowlistApp {
         state["forecast_days"] = serde_json::json!(self.forecast_day_boxes.borrow().clone());
         state["forecast_chips"] = serde_json::json!(self.forecast_chip_boxes.borrow().clone());
         state["forecast_day"] = serde_json::json!(self.forecast_date.map(|date| date.to_string()));
+        state["forecast_past"] = serde_json::json!(self.forecast_past);
+        state["forecast_future"] = serde_json::json!(self.forecast_future);
         state["empty_note"] = serde_json::json!(self.empty_note.borrow().clone());
         state["collapsed"] =
             serde_json::json!(self.collapsed_groups.iter().cloned().collect::<Vec<_>>());

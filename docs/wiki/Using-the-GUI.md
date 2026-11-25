@@ -155,7 +155,7 @@ The rail is the map of the library:
 | --- | --- |
 | **Inbox** | unscheduled tasks — no project, no due or defer date (a planned date does not count) |
 | **Today** | due or planned today (including inherited plans), deferred to today, overdue, and slipped plans |
-| **Forecast** | the month calendar and upcoming due, deferred and planned work; the **Planned** chip hides planned-only rows, and work more than 30 days out sits under **Next month and later**, folded |
+| **Forecast** | the month calendar and upcoming due, deferred and planned work; the collapsed strip has **Past** and **Future** end tiles, the **Planned** chip hides planned-only rows, and work more than 30 days out sits under **Next month and later**, folded |
 | **Review** | projects whose review date has arrived |
 | **Projects** | every project at a glance |
 | **Tags** | tasks grouped by context |

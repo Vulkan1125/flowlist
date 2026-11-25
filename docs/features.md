@@ -56,8 +56,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Projects
 - [x] Forecast (Past / overdue / today / tomorrow / later / next month and
       later; Due, Defer and Planned are independent, so one task can appear on
-      several days. The far horizon starts folded, and a Planned chip hides
-      planned-only rows)
+      several days. The collapsed strip has Past and Future end tiles; the far
+      horizon starts folded, and a Planned chip hides planned-only rows)
 - [x] Flagged
 - [x] Review
 - [x] Tags

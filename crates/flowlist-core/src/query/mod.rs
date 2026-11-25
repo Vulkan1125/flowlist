@@ -485,6 +485,82 @@ pub fn forecast_view(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Grou
     forecast_groups(db, at, show_planned)
 }
 
+/// Everything before today: overdue due dates and, when planned dates are
+/// shown, slipped plans. Deferred dates are deliberately excluded, matching
+/// Forecast's Past tile.
+pub fn forecast_past(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<TaskId> {
+    let today = crate::time::local_date(at);
+    let mut ids: Vec<TaskId> = db
+        .tasks
+        .values()
+        .filter(|task| {
+            if task.completed || task.is_trashed() {
+                return false;
+            }
+            if let Some(project_id) = &task.project {
+                match db.projects.get(project_id).map(|project| project.status) {
+                    Some(ProjectStatus::Active) | None => {}
+                    _ => return false,
+                }
+            }
+            task.due.is_some_and(|stamp| stamp.local_date() < today)
+                || (show_planned
+                    && db
+                        .effective_planned(&task.id)
+                        .is_some_and(|stamp| stamp.local_date() < today))
+        })
+        .map(|task| task.id.clone())
+        .collect();
+    ids.sort_by_key(|id| {
+        db.tasks[id]
+            .due
+            .or_else(|| db.effective_planned(id))
+            .map(|stamp| stamp.at)
+    });
+    ids
+}
+
+/// Everything after the last visible Forecast day. Due, defer and (when
+/// shown) inherited planned dates all count.
+pub fn forecast_future(
+    db: &Db,
+    at: DateTime<Utc>,
+    after: chrono::NaiveDate,
+    show_planned: bool,
+) -> Vec<TaskId> {
+    let mut ids: Vec<TaskId> = db
+        .tasks
+        .values()
+        .filter(|task| {
+            if task.completed || task.is_trashed() {
+                return false;
+            }
+            if let Some(project_id) = &task.project {
+                match db.projects.get(project_id).map(|project| project.status) {
+                    Some(ProjectStatus::Active) | None => {}
+                    _ => return false,
+                }
+            }
+            task.due.is_some_and(|stamp| stamp.local_date() > after)
+                || task.defer.is_some_and(|stamp| stamp.local_date() > after)
+                || (show_planned
+                    && db
+                        .effective_planned(&task.id)
+                        .is_some_and(|stamp| stamp.local_date() > after))
+        })
+        .map(|task| task.id.clone())
+        .collect();
+    ids.sort_by_key(|id| {
+        db.tasks[id]
+            .due
+            .or_else(|| db.effective_planned(id))
+            .or(db.tasks[id].defer)
+            .map(|stamp| stamp.at)
+    });
+    let _ = at;
+    ids
+}
+
 fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group> {
     let data = forecast::forecast(db, at);
     let today = crate::time::local_date(at);

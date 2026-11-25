@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Piano-key Forecast strip.** The collapsed Forecast calendar is now a
+  linear date strip with fixed **Past** and **Future** end tiles and a paged
+  week of days between them. Past shows overdue work and slipped plans; Future
+  shows due, deferred and planned work after the visible week. Both respect the
+  Planned chip.
 - **Delete confirmations.** Removing a project or tag from the sidebar now
   opens a confirmation sheet instead of deleting immediately. Undo still
   restores it.
