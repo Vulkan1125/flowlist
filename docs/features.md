@@ -328,6 +328,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Delete folder/tag/perspective/project from the sidebar (`⌘⌫` or `dd`);
       projects and tags ask first, deleting a project moves its tasks to Trash,
       and every delete is undoable
+- [x] Forecast badge can count only due items, ignoring planned and deferred
+      work (Workflow settings)
 - [x] Edit project from the sidebar context menu (name, notes, planned date,
       review cadence, type, icon) and edit a folder's name without leaving the
       rail

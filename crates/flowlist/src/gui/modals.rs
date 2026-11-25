@@ -227,6 +227,8 @@ pub enum Modal {
         /// Keep finished subtasks visible under their parent while the view
         /// hides completed work, per device.
         keep_completed_subtasks: bool,
+        /// Count only due items in Forecast badges.
+        forecast_due_counts: bool,
         /// Drop saved views from the rail while their filter matches nothing.
         hide_empty_views: bool,
         follow_system: bool,
@@ -625,6 +627,7 @@ impl Modal {
             wallpaper_note: None,
             reminder_wallpaper_note: None,
             keep_completed_subtasks: app.keep_completed_subtasks,
+            forecast_due_counts: app.store.db().settings.forecast_due_counts,
             hide_empty_views: app.hide_empty_views,
             follow_system: app.follow_system,
             theme: app.theme.kind(),
@@ -5757,12 +5760,47 @@ impl FlowlistApp {
                         })),
                 ),
         );
+        let due_counts = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                forecast_due_counts: true,
+                ..
+            })
+        );
+        let forecast_card = self.settings_card(
+            "Forecast",
+            Some("Badges can count only due work, ignoring planned and deferred items."),
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(div().text_sm().child("Count only due items"))
+                .child(
+                    div()
+                        .on_children_prepainted(
+                            self.theme_probe("forecast-due-counts-toggle".to_string()),
+                        )
+                        .id("forecast-due-counts-toggle")
+                        .child(widgets::switch(theme, due_counts))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(Modal::Settings {
+                                forecast_due_counts,
+                                ..
+                            }) = &mut this.modal
+                            {
+                                *forecast_due_counts = !*forecast_due_counts;
+                            }
+                            cx.notify();
+                        })),
+                ),
+        );
         div()
             .flex()
             .flex_col()
             .gap_3()
             .child(self.settings_card("Keyboard", None, keyboard))
             .child(subtasks_card)
+            .child(forecast_card)
             .child(
                 self.settings_card(
                     "Review and history",

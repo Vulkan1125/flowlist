@@ -189,6 +189,8 @@ titles itself **Search** and ranks the closest matches first.
   **Icons** and **Emoji** tabs, type to search, or paste an emoji; Return picks
   the first match. Projects and saved views share the same card. The card grows
   with the sheet rather than trapping the scroll wheel.
+- **Settings → Workflow → Forecast** can make the Forecast badge count only
+  due items, ignoring planned and deferred work.
 - **Right-click a project** for Open, Rename, **Edit project…**, status and
   Delete. The Edit sheet covers the name, notes, planned date, review cadence,
   type and icon. Tasks inherit the project's planned date unless they or a

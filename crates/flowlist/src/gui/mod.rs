@@ -4743,6 +4743,7 @@ impl FlowlistApp {
                 use_wallpaper,
                 wallpaper_opacity,
                 keep_completed_subtasks,
+                forecast_due_counts,
                 hide_empty_views,
                 follow_system,
                 theme,
@@ -4784,6 +4785,7 @@ impl FlowlistApp {
                     changed_days: Some(changed),
                     nearby_radius_km: Some(radius),
                     trash_retention_days: Some(trash),
+                    forecast_due_counts: Some(*forecast_due_counts),
                     sidebar: Some(sidebar.clone()),
                     ..Default::default()
                 }));
@@ -6682,14 +6684,22 @@ impl FlowlistApp {
                 .count(),
             BuiltinPerspective::Forecast => {
                 let today = local_date(at);
+                let due_counts = db.settings.forecast_due_counts;
                 db.tasks
                     .values()
                     .filter(|task| {
-                        !task.completed
-                            && !task.is_trashed()
-                            && (task.due.is_some_and(|stamp| stamp.local_date() <= today)
-                                || task.defer.is_some_and(|stamp| stamp.local_date() <= today)
-                                || task.planned.is_some_and(|stamp| stamp.local_date() <= today))
+                        if task.completed || task.is_trashed() {
+                            return false;
+                        }
+                        let due = task.due.is_some_and(|stamp| stamp.local_date() <= today);
+                        if due_counts {
+                            return due;
+                        }
+                        due || task.defer.is_some_and(|stamp| stamp.local_date() <= today)
+                            || (self.forecast_planned
+                                && db
+                                    .effective_planned(&task.id)
+                                    .is_some_and(|stamp| stamp.local_date() <= today))
                     })
                     .count()
             }
@@ -7071,6 +7081,9 @@ impl FlowlistApp {
         state["hide_past_anchor"] = serde_json::json!(anchor(self.hide_past_anchor.get()));
         state["forecast_calendar_open"] = serde_json::json!(self.forecast_calendar_open);
         state["forecast_planned"] = serde_json::json!(self.forecast_planned);
+        state["forecast_count"] = serde_json::json!(
+            self.perspective_count(BuiltinPerspective::Forecast)
+        );
         state["forecast_calendar_expanded"] = serde_json::json!(self.forecast_calendar_expanded);
         state["forecast_week"] = serde_json::json!(self.forecast_week.to_string());
         state["forecast_strip"] = serde_json::json!(self.forecast_strip_boxes.borrow().clone());

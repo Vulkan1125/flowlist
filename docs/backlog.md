@@ -111,6 +111,10 @@ integrations are tracked separately and are not part of this phase.
       it through parent actions, with task/parent overrides. Today, Forecast,
       filters, grouping, sorting, calendar dots, the project inspector and the
       Edit Project sheet all use the effective date. Availability is unchanged.
+- [x] **Forecast count option** — a Workflow switch counts only due items in
+      the Forecast badge.
+- [ ] **Past and Future calendar tiles** — dedicated tiles at either end of
+      the Forecast calendar, matching OmniFocus's Piano Keys.
 - [ ] **Full notification model** — defer/available alerts, per-item custom
       notification schedules, and richer notification payloads beyond due
       reminders and full-screen reminders.

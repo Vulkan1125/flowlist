@@ -40,6 +40,10 @@ pub struct Settings {
     /// Which sidebar sections appear, and where counts are shown.
     #[serde(default)]
     pub sidebar: SidebarOptions,
+    /// Count only due items in Forecast badges, ignoring planned and deferred
+    /// items.
+    #[serde(default)]
+    pub forecast_due_counts: bool,
     /// Whether the shipped Running saved view has been offered to this
     /// library. Once true it stays true, so renaming or deleting the view is
     /// permanent.
@@ -191,6 +195,7 @@ impl Default for Settings {
             nearby_radius_km: default_nearby_radius(),
             trash_retention_days: default_trash_days(),
             sidebar: SidebarOptions::default(),
+            forecast_due_counts: false,
             seeded_running_view: false,
             cleared_running_icon: false,
         }

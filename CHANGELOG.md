@@ -9,6 +9,8 @@
   because of a planned date, leaving due and deferred work. The choice is
   remembered per session, and the chip now sits beside Calendar instead of
   stacking under it.
+- **Only count due items.** A Workflow setting makes the Forecast badge count
+  due work alone, ignoring planned and deferred items.
 - **Planned dates inherit.** A project can carry a planned date; its actions
   inherit it unless the action or a parent action has its own planned date.
   The Edit Project sheet has a Planned date field, the project inspector shows
