@@ -1854,6 +1854,16 @@ impl FlowlistApp {
             1 => form.dues.first().expect("length checked").label().to_string(),
             count => format!("{count} date filters"),
         };
+        let planned_label = match form.planned.len() {
+            0 => "Any".to_string(),
+            1 => form
+                .planned
+                .first()
+                .expect("length checked")
+                .label()
+                .to_string(),
+            count => format!("{count} planned filters"),
+        };
         let defer_label = match form.defers.len() {
             0 => "Any".to_string(),
             1 => form.defers.first().expect("length checked").label().to_string(),
@@ -1986,26 +1996,44 @@ impl FlowlistApp {
 
         let windows_row = div()
             .flex()
-            .items_start()
+            .flex_col()
             .gap_2()
-            .child(div().flex_1().min_w_0().child(self.perspective_select(
-                ViewField::Status,
-                form.status_label().to_string(),
-                form.status != TaskStatus::Any,
-                cx,
-            )))
-            .child(div().flex_1().min_w_0().child(self.perspective_select(
-                ViewField::Due,
-                due_label,
-                !form.dues.is_empty(),
-                cx,
-            )))
-            .child(div().flex_1().min_w_0().child(self.perspective_select(
-                ViewField::Defer,
-                defer_label,
-                !form.defers.is_empty(),
-                cx,
-            )));
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap_2()
+                    .child(div().flex_1().min_w_0().child(self.perspective_select(
+                        ViewField::Status,
+                        form.status_label().to_string(),
+                        form.status != TaskStatus::Any,
+                        cx,
+                    )))
+                    .child(div().flex_1().min_w_0().child(self.perspective_select(
+                        ViewField::Due,
+                        due_label,
+                        !form.dues.is_empty(),
+                        cx,
+                    ))),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap_2()
+                    .child(div().flex_1().min_w_0().child(self.perspective_select(
+                        ViewField::Planned,
+                        planned_label,
+                        !form.planned.is_empty(),
+                        cx,
+                    )))
+                    .child(div().flex_1().min_w_0().child(self.perspective_select(
+                        ViewField::Defer,
+                        defer_label,
+                        !form.defers.is_empty(),
+                        cx,
+                    ))),
+            );
 
         let fullscreen_row = div().flex().items_start().gap_2().child(
             div().flex_1().min_w_0().child(self.perspective_select(
@@ -2241,6 +2269,18 @@ impl FlowlistApp {
             .into_iter()
             .map(ViewChoice::Due)
             .collect(),
+            ViewField::Planned => [
+                super::perspective::DueChoice::Any,
+                super::perspective::DueChoice::Overdue,
+                super::perspective::DueChoice::Today,
+                super::perspective::DueChoice::Tomorrow,
+                super::perspective::DueChoice::Next7Days,
+                super::perspective::DueChoice::Next30Days,
+                super::perspective::DueChoice::NoDate,
+            ]
+            .into_iter()
+            .map(ViewChoice::Planned)
+            .collect(),
             ViewField::Fullscreen => [None, Some(true), Some(false)]
                 .into_iter()
                 .map(ViewChoice::Fullscreen)
@@ -2309,6 +2349,7 @@ impl FlowlistApp {
             }
             .to_string(),
             ViewChoice::Due(choice) => choice.label().to_string(),
+            ViewChoice::Planned(choice) => choice.label().to_string(),
             ViewChoice::Defer(choice) => choice.label().to_string(),
             ViewChoice::Fullscreen(None) => "Any".to_string(),
             ViewChoice::Fullscreen(Some(true)) => "Has full-screen reminder".to_string(),
@@ -2326,8 +2367,11 @@ impl FlowlistApp {
             ViewChoice::Tag(Some(id)) => form.tags.contains(id),
             ViewChoice::Status(status) => form.status == *status,
             ViewChoice::Due(choice) => {
-                (*choice == DueChoice::Any && form.dues.is_empty())
-                    || form.dues.contains(choice)
+                (*choice == DueChoice::Any && form.dues.is_empty()) || form.dues.contains(choice)
+            }
+            ViewChoice::Planned(choice) => {
+                (*choice == DueChoice::Any && form.planned.is_empty())
+                    || form.planned.contains(choice)
             }
             ViewChoice::Defer(choice) => {
                 (*choice == DeferChoice::Any && form.defers.is_empty())
@@ -2365,6 +2409,7 @@ impl FlowlistApp {
             ViewChoice::Project(_)
                 | ViewChoice::Tag(_)
                 | ViewChoice::Due(_)
+                | ViewChoice::Planned(_)
                 | ViewChoice::Defer(_)
         );
         if let Some(Modal::Perspective { form }) = &mut self.modal {
@@ -2373,6 +2418,7 @@ impl FlowlistApp {
                 ViewChoice::Tag(id) => form.toggle_tag(id),
                 ViewChoice::Status(status) => form.status = status,
                 ViewChoice::Due(choice) => form.toggle_due(choice),
+                ViewChoice::Planned(choice) => form.toggle_planned(choice),
                 ViewChoice::Defer(choice) => form.toggle_defer(choice),
                 ViewChoice::Fullscreen(value) => form.fullscreen = value,
                 ViewChoice::Group(group) => form.group = group,

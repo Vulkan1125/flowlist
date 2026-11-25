@@ -78,7 +78,9 @@ impl View {
     pub fn subtitle(&self) -> &'static str {
         match self {
             View::Builtin(BuiltinPerspective::Inbox) => "Capture now, organise later",
-            View::Builtin(BuiltinPerspective::Today) => "Due today, plus what is overdue",
+            View::Builtin(BuiltinPerspective::Today) => {
+                "Due or planned today, plus what is overdue"
+            }
             View::Builtin(BuiltinPerspective::Projects) => "Every project at a glance",
             View::Builtin(BuiltinPerspective::Forecast) => "What is coming up",
             View::Builtin(BuiltinPerspective::Flagged) => "Your personal priority list",

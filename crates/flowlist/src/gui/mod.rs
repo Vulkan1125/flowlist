@@ -202,6 +202,16 @@ impl DateField {
             DateField::Reminder => "No reminder time",
         }
     }
+
+    /// The mark each date field carries in the inspector and on task rows.
+    pub(super) fn icon(self) -> Icon {
+        match self {
+            DateField::Defer => Icon::DeferDate,
+            DateField::Planned => Icon::PlannedDate,
+            DateField::Due => Icon::DueDate,
+            DateField::Reminder => Icon::Clock,
+        }
+    }
 }
 
 pub(super) enum BufferKey {
@@ -6588,7 +6598,8 @@ impl FlowlistApp {
                         !task.completed
                             && !task.is_trashed()
                             && (task.due.is_some_and(|stamp| stamp.local_date() <= today)
-                                || task.defer.is_some_and(|stamp| stamp.local_date() <= today))
+                                || task.defer.is_some_and(|stamp| stamp.local_date() <= today)
+                                || task.planned.is_some_and(|stamp| stamp.local_date() <= today))
                     })
                     .count()
             }

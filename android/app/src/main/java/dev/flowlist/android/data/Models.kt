@@ -327,10 +327,16 @@ fun Db.today(): List<TaskView> {
         .asSequence()
         .filter { it.isActive && it.parent == null }
         .filter { task ->
-            val due = task.due?.local()?.toLocalDate() ?: return@filter false
-            !due.isAfter(today)
+            val due = task.due?.local()?.toLocalDate()
+            val planned = task.planned?.local()?.toLocalDate()
+            (due != null && !due.isAfter(today)) || planned == today
         }
-        .sortedWith(compareBy({ it.due?.at ?: "" }, { it.title.lowercase() }))
+        .sortedWith(
+            compareBy(
+                { it.due?.at ?: it.planned?.at ?: "" },
+                { it.title.lowercase() },
+            ),
+        )
         .map { it.toView(this) }
         .toList()
 }

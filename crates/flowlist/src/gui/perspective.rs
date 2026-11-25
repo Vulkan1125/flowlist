@@ -119,6 +119,7 @@ pub enum ViewField {
     Tag,
     Status,
     Due,
+    Planned,
     Defer,
     Fullscreen,
     Group,
@@ -132,6 +133,7 @@ impl ViewField {
             ViewField::Tag => "tag",
             ViewField::Status => "status",
             ViewField::Due => "due",
+            ViewField::Planned => "planned",
             ViewField::Defer => "defer",
             ViewField::Fullscreen => "fullscreen",
             ViewField::Group => "group",
@@ -145,6 +147,7 @@ impl ViewField {
             ViewField::Tag => "Tags",
             ViewField::Status => "Status",
             ViewField::Due => "Due dates",
+            ViewField::Planned => "Planned dates",
             ViewField::Defer => "Defer dates",
             ViewField::Fullscreen => "Full-screen reminders",
             ViewField::Group => "Group by",
@@ -156,7 +159,11 @@ impl ViewField {
     pub fn is_multi(self) -> bool {
         matches!(
             self,
-            ViewField::Project | ViewField::Tag | ViewField::Due | ViewField::Defer
+            ViewField::Project
+                | ViewField::Tag
+                | ViewField::Due
+                | ViewField::Planned
+                | ViewField::Defer
         )
     }
 }
@@ -169,6 +176,7 @@ pub enum ViewChoice {
     Tag(Option<TagId>),
     Status(TaskStatus),
     Due(DueChoice),
+    Planned(DueChoice),
     Defer(DeferChoice),
     Fullscreen(Option<bool>),
     Group(GroupBy),
@@ -196,6 +204,16 @@ impl ViewChoice {
             ViewChoice::Fullscreen(Some(true)) => "has".to_string(),
             ViewChoice::Fullscreen(Some(false)) => "none".to_string(),
             ViewChoice::Fullscreen(None) => "any".to_string(),
+            ViewChoice::Planned(choice) => match choice {
+                DueChoice::Any => "any",
+                DueChoice::Overdue => "overdue",
+                DueChoice::Today => "today",
+                DueChoice::Tomorrow => "tomorrow",
+                DueChoice::Next7Days => "next7",
+                DueChoice::Next30Days => "next30",
+                DueChoice::NoDate => "none",
+            }
+            .to_string(),
             ViewChoice::Defer(choice) => match choice {
                 DeferChoice::Any => "any",
                 DeferChoice::Today => "today",
@@ -297,6 +315,7 @@ pub struct PerspectiveForm {
     pub inbox_only: bool,
     pub status: TaskStatus,
     pub dues: BTreeSet<DueChoice>,
+    pub planned: BTreeSet<DueChoice>,
     pub defers: BTreeSet<DeferChoice>,
     pub fullscreen: Option<bool>,
     pub projects: BTreeSet<ProjectId>,
@@ -325,6 +344,7 @@ impl Default for PerspectiveForm {
             inbox_only: false,
             status: TaskStatus::Any,
             dues: BTreeSet::new(),
+            planned: BTreeSet::new(),
             defers: BTreeSet::new(),
             fullscreen: None,
             projects: BTreeSet::new(),
@@ -391,6 +411,12 @@ impl PerspectiveForm {
                 }
                 None => return false,
             },
+            Condition::Planned { window } => match DueChoice::from_window(*window) {
+                Some(choice) => {
+                    self.planned.insert(choice);
+                }
+                None => return false,
+            },
             Condition::Deferred { window } => match DeferChoice::from_window(*window) {
                 Some(choice) => {
                     self.defers.insert(choice);
@@ -443,6 +469,7 @@ impl PerspectiveForm {
                 Condition::Tag { .. } => Some(1),
                 Condition::Due { .. } => Some(2),
                 Condition::Deferred { .. } => Some(3),
+                Condition::Planned { .. } => Some(5),
                 Condition::Priority { .. } => Some(4),
                 _ => None,
             }
@@ -501,6 +528,16 @@ impl PerspectiveForm {
                 .iter()
                 .map(|choice| Condition::Due {
                     window: choice.window().expect("stored choices always have a window"),
+                })
+                .collect(),
+        );
+        group(
+            self.planned
+                .iter()
+                .map(|choice| Condition::Planned {
+                    window: choice
+                        .window()
+                        .expect("stored choices always have a window"),
                 })
                 .collect(),
         );
@@ -600,6 +637,14 @@ impl PerspectiveForm {
             self.dues.clear();
         } else if !self.dues.remove(&choice) {
             self.dues.insert(choice);
+        }
+    }
+
+    pub fn toggle_planned(&mut self, choice: DueChoice) {
+        if choice == DueChoice::Any {
+            self.planned.clear();
+        } else if !self.planned.remove(&choice) {
+            self.planned.insert(choice);
         }
     }
 
@@ -890,5 +935,22 @@ mod tests {
             FilterNode::All(nodes) => assert!(nodes.contains(&nested)),
             other => panic!("expected an all-root, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn planned_windows_round_trip_through_the_editor() {
+        let mut form = PerspectiveForm::new();
+        form.name.set("Planned today");
+        form.toggle_planned(DueChoice::Today);
+        let perspective = form.to_perspective();
+        assert!(matches!(
+            &perspective.filter,
+            FilterNode::All(nodes) if nodes.iter().any(|node| matches!(
+                node,
+                FilterNode::Condition(Condition::Planned { .. })
+            ))
+        ));
+        let rebuilt = PerspectiveForm::edit(&perspective);
+        assert!(rebuilt.planned.contains(&DueChoice::Today));
     }
 }

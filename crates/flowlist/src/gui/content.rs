@@ -2219,29 +2219,48 @@ impl FlowlistApp {
                         ))
                     })
                     .when_some(planned, |this, stamp| {
+                        let label = human_date(&stamp, now());
                         this.child(
                             div()
+                                .id(super::sid(format!("planned:{}", row.id)))
                                 .flex()
                                 .items_center()
                                 .gap_1()
                                 .text_xs()
                                 .text_color(theme.text_faint)
-                                .child(icons::icon(Icon::Calendar, 11.0, theme.text_faint))
-                                .child(human_date(&stamp, now())),
+                                .flow_tip(
+                                    self,
+                                    cx,
+                                    theme,
+                                    format!("Planned {label}"),
+                                )
+                                .child(icons::icon(
+                                    Icon::PlannedDate,
+                                    11.0,
+                                    theme.text_faint,
+                                ))
+                                .child(label),
                         )
                     })
                     .when_some(due, |this, stamp| {
+                        let label = human_date(&stamp, now());
                         this.child(
                             div()
+                                .id(super::sid(format!("due:{}", row.id)))
+                                .flex()
+                                .items_center()
+                                .gap_1()
                                 .text_xs()
                                 .text_color(due_color)
-                                .child(human_date(&stamp, now())),
+                                .flow_tip(self, cx, theme, format!("Due {label}"))
+                                .child(icons::icon(Icon::DueDate, 11.0, due_color))
+                                .child(label),
                         )
                     })
                     .when_some(defer.filter(|stamp| stamp.at > now()), |this, stamp| {
                         this.child(widgets::chip_with_icon(
                             theme,
-                            Icon::Clock,
+                            Icon::DeferDate,
                             human_date(&stamp, now()),
                             theme.text_faint,
                         ))

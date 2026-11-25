@@ -696,8 +696,12 @@ impl FlowlistApp {
             .gap_1()
             .child(
                 div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
                     .text_xs()
                     .text_color(theme.text_faint)
+                    .child(icons::icon(field.icon(), 11.0, theme.text_faint))
                     .child(field.label()),
             )
             .child(if editing {

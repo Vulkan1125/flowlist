@@ -316,14 +316,16 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
     }
 }
 
-/// Tasks that want attention today: due today, deferred to today or earlier,
-/// and — unless hidden — everything with an overdue due date. Completed tasks,
-/// trashed tasks and tasks in closed projects are left out, matching Forecast.
+/// Tasks that want attention today: due today, planned today, deferred to
+/// today or earlier, and — unless hidden — everything with an overdue due
+/// date. Completed tasks, trashed tasks and tasks in closed projects are left
+/// out, matching Forecast.
 pub fn today(db: &Db, include_overdue: bool, at: DateTime<Utc>) -> Vec<Group> {
     let today = crate::time::local_date(at);
     let mut overdue: Vec<TaskId> = Vec::new();
     let mut due_today: Vec<TaskId> = Vec::new();
     let mut deferred: Vec<TaskId> = Vec::new();
+    let mut planned_today: Vec<TaskId> = Vec::new();
 
     for id in manual_order(db) {
         let Some(task) = db.tasks.get(&id) else {
@@ -337,6 +339,14 @@ pub fn today(db: &Db, include_overdue: bool, at: DateTime<Utc>) -> Vec<Group> {
                 Some(ProjectStatus::Active) | None => {}
                 _ => continue,
             }
+        }
+        // Planned today counts even when a later due date exists; the retain
+        // below drops anything already shown in another bucket.
+        if task
+            .planned
+            .is_some_and(|stamp| stamp.local_date() == today)
+        {
+            planned_today.push(id.clone());
         }
         match task.due {
             Some(due) if due.local_date() < today => overdue.push(id),
@@ -352,9 +362,15 @@ pub fn today(db: &Db, include_overdue: bool, at: DateTime<Utc>) -> Vec<Group> {
     }
 
     overdue.sort_by_key(|id| db.tasks[id].due.map(|stamp| stamp.at));
+    planned_today
+        .retain(|id| !overdue.contains(id) && !due_today.contains(id) && !deferred.contains(id));
+    due_today.extend(planned_today);
     due_today.sort_by_cached_key(|id| {
         (
-            db.tasks[id].due.map(|stamp| stamp.at),
+            db.tasks[id]
+                .due
+                .or(db.tasks[id].planned)
+                .map(|stamp| stamp.at),
             db.tasks[id].title.to_lowercase(),
         )
     });

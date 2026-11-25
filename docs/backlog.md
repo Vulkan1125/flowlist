@@ -92,9 +92,11 @@ integrations are tracked separately and are not part of this phase.
       `Esc` closes, and typing filters without opening a second search UI.
 - [x] **Planned dates** — a third date field beside Due and Defer that never
       changes availability. Inspector calendar field, `planned:` / `plan:`
-      quick capture, Forecast Planned Today and planned calendar days,
-      Planned filters, sorting and grouping, CLI `--planned`, MCP
-      `planned` / `planned_at`, and Android display.
+      quick capture, Forecast Planned Today and planned calendar days, Today
+      including planned-today tasks, a Planned dates filter in the saved-view
+      editor, Planned sorting and grouping, CLI `--planned`, MCP
+      `planned` / `planned_at`, Android display, and distinct OmniFocus-style
+      marks for Defer, Planned and Due.
 - [ ] **Full notification model** — defer/available alerts, per-item custom
       notification schedules, and richer notification payloads beyond due
       reminders and full-screen reminders.

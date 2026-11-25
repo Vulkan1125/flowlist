@@ -51,6 +51,9 @@ pub enum Icon {
     Trash,
     Clock,
     Calendar,
+    DeferDate,
+    PlannedDate,
+    DueDate,
     Repeat,
     Star,
     Briefcase,
@@ -106,7 +109,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    pub const ALL: [Icon; 92] = [
+    pub const ALL: [Icon; 95] = [
         Icon::Inbox,
         Icon::Projects,
         Icon::Forecast,
@@ -147,6 +150,9 @@ impl Icon {
         Icon::Trash,
         Icon::Clock,
         Icon::Calendar,
+        Icon::DeferDate,
+        Icon::PlannedDate,
+        Icon::DueDate,
         Icon::Repeat,
         Icon::Star,
         Icon::Briefcase,
@@ -243,6 +249,9 @@ impl Icon {
             Icon::Trash => "icons/trash.svg",
             Icon::Clock => "icons/clock.svg",
             Icon::Calendar => "icons/calendar.svg",
+            Icon::DeferDate => "icons/defer-date.svg",
+            Icon::PlannedDate => "icons/planned-date.svg",
+            Icon::DueDate => "icons/due-date.svg",
             Icon::Repeat => "icons/repeat.svg",
             Icon::Star => "icons/star.svg",
             Icon::Briefcase => "icons/briefcase.svg",
@@ -393,6 +402,17 @@ impl Icon {
             }
             Icon::Calendar => {
                 r#"<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>"#
+            }
+            // Defer: a turning arrow, as OmniFocus uses.
+            Icon::DeferDate => r#"<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>"#,
+            // Planned: a signpost, matching OmniFocus's planning mark.
+            Icon::PlannedDate => {
+                r#"<path d="M12 3v18"/><path d="M12 6h6l2 2-2 2h-6z"/><path d="M12 14H6l-2 2 2 2h6z"/>"#
+            }
+            // Due: a clock on a calendar, the mark OmniFocus uses for a
+            // deadline, so it never reads as a deferral or a plan.
+            Icon::DueDate => {
+                r#"<path d="M8 2v4"/><path d="M16 2v4"/><path d="M3 10h18"/><path d="M21 12V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7"/><circle cx="17" cy="17" r="4"/><path d="M17 15.2V17l1.1.8"/>"#
             }
             Icon::Repeat => {
                 r#"<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>"#
@@ -593,7 +613,7 @@ mod tests {
 
     #[test]
     fn icon_set_is_complete_and_unique() {
-        assert_eq!(Icon::ALL.len(), 92);
+        assert_eq!(Icon::ALL.len(), 95);
         let mut paths: Vec<&str> = Icon::ALL.iter().map(|icon| icon.path()).collect();
         paths.sort_unstable();
         paths.dedup();

@@ -49,9 +49,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 
 - [x] Inbox (tasks with no project and no schedule; a due or defer date
       files the task into Today or Forecast instead)
-- [x] Today (due today plus overdue; deferred-to-today work joins the day, and
-      a Hide overdue chip drops the overdue group. A clear day shows a calm
-      “Nothing due today” message)
+- [x] Today (due or planned today plus overdue; deferred-to-today work joins
+      the day, and a Hide overdue chip drops the overdue group. A clear day
+      shows a calm “Nothing due today” message)
 - [x] Projects
 - [x] Forecast (overdue / today / tomorrow / later)
 - [x] Flagged
@@ -214,8 +214,12 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Planned dates: a third date beside Due and Defer that never changes
       availability. The inspector has a Planned calendar field, quick capture
       accepts `planned:` / `plan:`, Forecast shows Planned Today and planned
-      days, and filters, sorting, grouping, CLI and MCP understand it.
-- [x] Calendar icons on the inspector's Due and Defer fields open a two-step
+      days, Today includes planned-today tasks, saved views can filter by
+      Planned window, and sorting, grouping, CLI and MCP understand it.
+- [x] Date marks: Defer, Planned and Due carry distinct OmniFocus-style
+      icons (turning arrow, signpost, clock-on-calendar) on task rows and
+      inspector labels, with hover tooltips.
+- [x] Calendar icons on the inspector's Defer, Planned and Due fields open a two-step
       picker. The first step is a month calendar: a clicked day is applied
       through the normal command layer (so it is undoable), an existing time
       of day survives a date change, and Today, Clear, month arrows, arrow

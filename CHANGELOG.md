@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Three dates at a glance.** Rows and inspector labels now carry OmniFocus-
+  style marks — a turning arrow for Defer, a signpost for Planned and a clock
+  on a calendar for Due — so the dates never read as the same thing. Today now
+  includes tasks planned for today and its subtitle says so. Saved views gain
+  a Planned dates filter (Any, Overdue, Today, Tomorrow, Next 7/30 days, No
+  planned date).
 - **Planned dates.** A third date beside Due and Defer that never changes
   availability. The inspector gets a Planned calendar field, quick capture
   accepts `planned:` / `plan:`, Forecast gains a Planned Today bucket and
