@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Default wording.** Sort and Group now say **Default** where they used to
+  say View: “use this screen’s natural order or grouping”. Manual still means
+  your drag order, and None still means one flat list.
+- **Project date constraints.** The Edit Project sheet now has **Defer**,
+  **Planned** and **Due** fields. Actions inherit those dates: a project defer
+  is a start-no-earlier gate, a project due is a finish-no-later deadline, and
+  the task/parent can only make them later or earlier respectively. Today,
+  Forecast, overdue, filters, grouping, sorting, badges and the task inspector
+  use the effective dates. Planned remains constraint-free.
 - **Piano-key Forecast strip.** The collapsed Forecast calendar is now a
   linear date strip with fixed **Past** and **Future** end tiles and a paged
   week of days between them. Past shows overdue work and slipped plans; Future

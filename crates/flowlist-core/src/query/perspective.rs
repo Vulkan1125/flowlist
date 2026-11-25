@@ -45,8 +45,12 @@ pub fn condition_matches(db: &Db, task: &Task, condition: &Condition, at: DateTi
         Condition::Flagged { value } => task.flagged == *value,
         Condition::Priority { value } => task.priority == Some(*value),
         Condition::Status { value } => status_matches(db, task, *value, at),
-        Condition::Due { window } => window_matches(task.due, *window, at),
-        Condition::Deferred { window } => window_matches(task.defer, *window, at),
+        Condition::Due { window } => {
+            window_matches(db.effective_due(&task.id), *window, at)
+        }
+        Condition::Deferred { window } => {
+            window_matches(db.effective_defer(&task.id), *window, at)
+        }
         Condition::Planned { window } => {
             window_matches(db.effective_planned(&task.id), *window, at)
         }

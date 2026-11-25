@@ -63,7 +63,7 @@ pub fn compute(db: &Db, at: DateTime<Utc>) -> Stats {
         if task.flagged {
             stats.flagged += 1;
         }
-        if let Some(due) = task.due {
+        if let Some(due) = db.effective_due(&task.id) {
             let date = due.local_date();
             if date < today {
                 stats.overdue += 1;

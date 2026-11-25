@@ -84,7 +84,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Availability: available, deferred, blocked, completed
 - [x] Sorting: manual, due, defer, name, flagged, estimate, created, completed
 - [x] Grouping: project, folder, tag, due, defer, flagged, estimate
-- [x] Sort and Group menus that list every option instead of cycling
+- [x] Sort and Group menus that list every option instead of cycling, with
+      **Default** meaning the view's natural order/grouping
 - [x] Priority menu with All priorities / High / Medium / Low, matching the
       Sort and Group chips
 - [x] First Available filter (only the next actionable row)
@@ -330,9 +331,13 @@ working domain and GUI. This page tracks what is implemented and verified.
       and every delete is undoable
 - [x] Forecast badge can count only due items, ignoring planned and deferred
       work (Workflow settings)
-- [x] Edit project from the sidebar context menu (name, notes, planned date,
-      review cadence, type, icon) and edit a folder's name without leaving the
-      rail
+- [x] Edit project from the sidebar context menu (name, notes, defer, planned
+      and due dates, review cadence, type, icon) and edit a folder's name
+      without leaving the rail
+- [x] Project date inheritance: project defer gates availability, project due
+      caps action deadlines, and action/parent dates can only be later or
+      earlier respectively. Effective dates drive Today, Forecast, overdue,
+      filters, grouping, sorting, badges and the task inspector
 - [x] Deleting a folder asks first: nested folders, their projects and every
       task inside move to Trash with it, the sheet names the folder and counts
       its projects, and one Undo restores the whole tree. The × button, the

@@ -4387,7 +4387,9 @@ impl FlowlistApp {
                 name,
                 notes,
                 review_days,
+                defer,
                 planned,
+                due,
                 kind,
                 icon,
                 fullscreen_reminder,
@@ -4409,16 +4411,21 @@ impl FlowlistApp {
                             .max(1),
                     )
                 };
-                let planned = {
-                    let text = planned.text().trim();
+                let parse_date = |buffer: &text::TextBuffer,
+                                  label: &str|
+                 -> std::result::Result<Option<flowlist_core::time::Stamp>, String> {
+                    let text = buffer.text().trim();
                     if text.is_empty() {
-                        None
+                        Ok(None)
                     } else {
-                        Some(flowlist_core::parse::parse_stamp(text, now()).map_err(
-                            |error| format!("Planned date: {error}"),
-                        )?)
+                        flowlist_core::parse::parse_stamp(text, now())
+                            .map(Some)
+                            .map_err(|error| format!("{label} date: {error}"))
                     }
                 };
+                let defer = parse_date(defer, "Defer")?;
+                let planned = parse_date(planned, "Planned")?;
+                let due = parse_date(due, "Due")?;
                 if let Some(id) = editing {
                     self.execute(Command::UpdateProject {
                         id: id.clone(),
@@ -4426,7 +4433,9 @@ impl FlowlistApp {
                             name: Some(name),
                             notes: Some(notes.text().to_string()),
                             review_interval_days,
+                            defer: Some(defer),
                             planned: Some(planned),
+                            due: Some(due),
                             kind: Some(*kind),
                             icon: Some(icon.clone()),
                             fullscreen_reminder: Some(*fullscreen_reminder),
@@ -4449,7 +4458,9 @@ impl FlowlistApp {
                 new_project.kind = *kind;
                 new_project.icon = icon.clone();
                 new_project.review_interval_days = review_interval_days;
+                new_project.defer = defer;
                 new_project.planned = planned;
+                new_project.due = due;
                 new_project.sequential = *kind == ProjectKind::Sequential;
                 new_project.fullscreen_reminder = *fullscreen_reminder;
                 new_project.folder = folder;
@@ -6625,7 +6636,7 @@ fn sort_from_slug(value: &str) -> Option<SortBy> {
 
 fn sort_label(sort: Option<SortBy>) -> &'static str {
     match sort {
-        None => "View",
+        None => "Default",
         Some(SortBy::Manual) => "Manual",
         Some(SortBy::Due) => "Due",
         Some(SortBy::Defer) => "Defer",
@@ -6676,7 +6687,7 @@ fn group_from_slug(value: &str) -> Option<GroupBy> {
 
 fn group_label(group: Option<GroupBy>) -> &'static str {
     match group {
-        None => "View",
+        None => "Default",
         Some(GroupBy::None) => "None",
         Some(GroupBy::Project) => "Project",
         Some(GroupBy::Folder) => "Folder",

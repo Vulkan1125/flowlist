@@ -11,21 +11,13 @@ pub fn sort_rows(db: &Db, rows: &mut [TaskRow], sort: SortBy) {
     match sort {
         SortBy::Manual => {}
         SortBy::Due => rows.sort_by(|a, b| {
-            let left = db.tasks.get(&a.id).and_then(|task| task.due).map(|s| s.at);
-            let right = db.tasks.get(&b.id).and_then(|task| task.due).map(|s| s.at);
+            let left = db.effective_due(&a.id).map(|s| s.at);
+            let right = db.effective_due(&b.id).map(|s| s.at);
             option_cmp(left, right)
         }),
         SortBy::Defer => rows.sort_by(|a, b| {
-            let left = db
-                .tasks
-                .get(&a.id)
-                .and_then(|task| task.defer)
-                .map(|s| s.at);
-            let right = db
-                .tasks
-                .get(&b.id)
-                .and_then(|task| task.defer)
-                .map(|s| s.at);
+            let left = db.effective_defer(&a.id).map(|s| s.at);
+            let right = db.effective_defer(&b.id).map(|s| s.at);
             option_cmp(left, right)
         }),
         SortBy::Planned => rows.sort_by(|a, b| {

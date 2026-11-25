@@ -2139,6 +2139,146 @@ fn planned_dates_inherit_from_project_and_parent_with_overrides() {
     assert_eq!(store.db().effective_planned(&own_id), Some(day(2)));
 }
 
+
+#[test]
+fn project_due_and_defer_constrain_tasks() {
+    use chrono::Duration;
+    use flowlist_core::query;
+    use flowlist_core::query::availability;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let today = local_date(Utc::now());
+    let day = |offset: i64| Stamp::date_only(today + Duration::days(offset));
+
+    let mut project = NewProject::new("Project deadline");
+    project.defer = Some(day(0));
+    project.due = Some(day(4));
+    let project_id = store
+        .execute(Command::CreateProject(project))
+        .unwrap()
+        .created[0]
+        .clone();
+    let project_id = store.db().resolve_project(&project_id).unwrap();
+
+    let mut plain = NewTask::new("Follows project");
+    plain.project = Some(project_id.clone());
+    let plain_id = store
+        .execute(Command::CreateTask(plain))
+        .unwrap()
+        .created[0]
+        .clone();
+    let plain_id = store.db().resolve_task(&plain_id).unwrap();
+    assert_eq!(store.db().effective_defer(&plain_id), Some(day(0)));
+    assert_eq!(store.db().effective_due(&plain_id), Some(day(4)));
+
+    // Earlier task dates win; later ones are clamped by the container.
+    let mut early = NewTask::new("Earlier due");
+    early.project = Some(project_id.clone());
+    early.due = Some(day(2));
+    let early_id = store
+        .execute(Command::CreateTask(early))
+        .unwrap()
+        .created[0]
+        .clone();
+    let early_id = store.db().resolve_task(&early_id).unwrap();
+    assert_eq!(store.db().effective_due(&early_id), Some(day(2)));
+
+    let mut late = NewTask::new("Later due");
+    late.project = Some(project_id.clone());
+    late.due = Some(day(6));
+    let late_id = store
+        .execute(Command::CreateTask(late))
+        .unwrap()
+        .created[0]
+        .clone();
+    let late_id = store.db().resolve_task(&late_id).unwrap();
+    assert_eq!(store.db().effective_due(&late_id), Some(day(4)));
+
+    let mut later_defer = NewTask::new("Later defer");
+    later_defer.project = Some(project_id.clone());
+    later_defer.defer = Some(day(2));
+    let later_defer_id = store
+        .execute(Command::CreateTask(later_defer))
+        .unwrap()
+        .created[0]
+        .clone();
+    let later_defer_id = store.db().resolve_task(&later_defer_id).unwrap();
+    assert_eq!(store.db().effective_defer(&later_defer_id), Some(day(2)));
+
+    // Parent action groups constrain children too.
+    let mut parent = NewTask::new("Parent due");
+    parent.project = Some(project_id.clone());
+    parent.due = Some(day(1));
+    let parent_id = store
+        .execute(Command::CreateTask(parent))
+        .unwrap()
+        .created[0]
+        .clone();
+    let parent_id = store.db().resolve_task(&parent_id).unwrap();
+    let mut child = NewTask::new("Child follows parent");
+    child.parent = Some(parent_id.clone());
+    let child_id = store
+        .execute(Command::CreateTask(child))
+        .unwrap()
+        .created[0]
+        .clone();
+    let child_id = store.db().resolve_task(&child_id).unwrap();
+    assert_eq!(store.db().effective_due(&child_id), Some(day(1)));
+
+    // A project due today pulls its undated action into Today.
+    let mut due_today_project = NewProject::new("Due today project");
+    due_today_project.due = Some(day(0));
+    let due_today_project_id = store
+        .execute(Command::CreateProject(due_today_project))
+        .unwrap()
+        .created[0]
+        .clone();
+    let due_today_project_id = store
+        .db()
+        .resolve_project(&due_today_project_id)
+        .unwrap();
+    let mut due_today_task = NewTask::new("Due by project today");
+    due_today_task.project = Some(due_today_project_id);
+    let due_today_task_id = store
+        .execute(Command::CreateTask(due_today_task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let due_today_task_id = store.db().resolve_task(&due_today_task_id).unwrap();
+    let groups = query::today(store.db(), true, Utc::now());
+    assert!(groups
+        .iter()
+        .flat_map(|group| group.rows.iter())
+        .any(|row| row.id == due_today_task_id));
+
+    // Forecast uses the effective due date.
+    let forecast = query::forecast::forecast(store.db(), Utc::now());
+    assert!(forecast
+        .days
+        .get(&(today + Duration::days(4)))
+        .is_some_and(|day| day.due.contains(&plain_id)));
+
+    // A project defer date blocks availability, matching the project gate.
+    let mut deferred_project = NewProject::new("Deferred project");
+    deferred_project.defer = Some(day(1));
+    let deferred_project_id = store
+        .execute(Command::CreateProject(deferred_project))
+        .unwrap()
+        .created[0]
+        .clone();
+    let deferred_project_id = store.db().resolve_project(&deferred_project_id).unwrap();
+    let mut blocked = NewTask::new("Blocked by project");
+    blocked.project = Some(deferred_project_id);
+    let blocked_id = store
+        .execute(Command::CreateTask(blocked))
+        .unwrap()
+        .created[0]
+        .clone();
+    let blocked_id = store.db().resolve_task(&blocked_id).unwrap();
+    assert!(!availability::availability(store.db(), &blocked_id, Utc::now()).is_available());
+}
+
 #[test]
 fn attachment_links_sit_alongside_file_paths() {
     use flowlist_core::model::BuiltinPerspective;

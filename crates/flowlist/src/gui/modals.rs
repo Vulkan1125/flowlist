@@ -97,7 +97,9 @@ pub enum Modal {
         /// Review cadence for this project, in days. Starts at the library
         /// default and can be changed per project.
         review_days: TextBuffer,
+        defer: TextBuffer,
         planned: TextBuffer,
+        due: TextBuffer,
         kind: ProjectKind,
         icon: IconSpec,
         /// The icon card stays folded away until the current icon is clicked.
@@ -439,7 +441,9 @@ impl Modal {
             name: TextBuffer::empty(),
             notes: TextBuffer::empty(),
             review_days: TextBuffer::new(app.store.db().settings.default_review_days.to_string()),
+            defer: TextBuffer::empty(),
             planned: TextBuffer::empty(),
+            due: TextBuffer::empty(),
             kind: ProjectKind::Parallel,
             icon: IconSpec::default(),
             icon_open: false,
@@ -456,9 +460,21 @@ impl Modal {
             name: TextBuffer::new(project.name.clone()),
             notes: TextBuffer::new(project.notes.clone()),
             review_days: TextBuffer::new(project.review_interval_days.to_string()),
+            defer: TextBuffer::new(
+                project
+                    .defer
+                    .map(|stamp| stamp.to_input_string())
+                    .unwrap_or_default(),
+            ),
             planned: TextBuffer::new(
                 project
                     .planned
+                    .map(|stamp| stamp.to_input_string())
+                    .unwrap_or_default(),
+            ),
+            due: TextBuffer::new(
+                project
+                    .due
                     .map(|stamp| stamp.to_input_string())
                     .unwrap_or_default(),
             ),
@@ -823,9 +839,9 @@ impl Modal {
             Modal::ReviewInterval { .. } => 1,
             Modal::NewProject { icon_open, .. } => {
                 if *icon_open {
-                    5
+                    7
                 } else {
-                    4
+                    6
                 }
             }
             Modal::IconPicker { .. } => 1,
@@ -861,15 +877,19 @@ impl Modal {
                 name,
                 notes,
                 review_days,
+                defer,
                 planned,
+                due,
                 icon_query,
                 ..
             } => match index {
                 0 => Some(name),
                 1 => Some(notes),
                 2 => Some(review_days),
-                3 => Some(planned),
-                4 => Some(icon_query),
+                3 => Some(defer),
+                4 => Some(planned),
+                5 => Some(due),
+                6 => Some(icon_query),
                 _ => None,
             },
             Modal::IconPicker { query, .. } => (index == 0).then_some(query),
@@ -929,15 +949,19 @@ impl Modal {
                 name,
                 notes,
                 review_days,
+                defer,
                 planned,
+                due,
                 icon_query,
                 ..
             } => match index {
                 0 => Some(name),
                 1 => Some(notes),
                 2 => Some(review_days),
-                3 => Some(planned),
-                4 => Some(icon_query),
+                3 => Some(defer),
+                4 => Some(planned),
+                5 => Some(due),
+                6 => Some(icon_query),
                 _ => None,
             },
             Modal::IconPicker { query, .. } => (index == 0).then_some(query),
@@ -997,8 +1021,10 @@ impl Modal {
                 0 => "Name",
                 1 => "Notes",
                 2 => "Review every (days)",
-                3 => "Planned date",
-                4 => "Search icons",
+                3 => "Defer date",
+                4 => "Planned date",
+                5 => "Due date",
+                6 => "Search icons",
                 _ => "",
             },
             Modal::IconPicker { .. } => "Search icons",
@@ -1474,6 +1500,9 @@ impl FlowlistApp {
                 ));
             }
             if !is_settings {
+                if is_new_project {
+                    body = body.child(self.render_new_project_icon(cx));
+                }
                 if is_perspective {
                     body = body.child(self.render_modal_field(0, cx));
                     body = body.child(self.render_modal_field(1, cx));
@@ -1497,7 +1526,7 @@ impl FlowlistApp {
                             ),
                     );
                 } else if is_new_project {
-                    for index in 0..4 {
+                    for index in 0..6 {
                         body = body.child(self.render_modal_field(index, cx));
                     }
                 } else if is_icon_picker {
@@ -2322,7 +2351,7 @@ impl FlowlistApp {
                 Some((IconTarget::Perspective, 5))
             }
             Some(Modal::NewProject { icon_open: true, .. }) => {
-                Some((IconTarget::NewProject, 4))
+                Some((IconTarget::NewProject, 6))
             }
             Some(Modal::IconPicker { project, .. }) => {
                 Some((IconTarget::Project(project.clone()), 0))
@@ -3200,30 +3229,16 @@ impl FlowlistApp {
         )
     }
 
-    fn render_new_project_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_new_project_icon(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
-        let (kind, icon, icon_open, icon_tab, fullscreen) = match &self.modal {
+        let (icon, icon_open, icon_tab) = match &self.modal {
             Some(Modal::NewProject {
-                kind,
                 icon,
                 icon_open,
                 icon_tab,
-                fullscreen_reminder,
                 ..
-            }) => (
-                kind.clone(),
-                icon.clone(),
-                *icon_open,
-                *icon_tab,
-                *fullscreen_reminder,
-            ),
-            _ => (
-                ProjectKind::Parallel,
-                IconSpec::default(),
-                false,
-                IconTab::Icons,
-                false,
-            ),
+            }) => (icon.clone(), *icon_open, *icon_tab),
+            _ => (IconSpec::default(), false, IconTab::Icons),
         };
         let icon_label = match &icon {
             IconSpec::Builtin(spec) => spec.label().to_string(),
@@ -3233,34 +3248,6 @@ impl FlowlistApp {
             IconSpec::Builtin(spec) => format!("Icon · {}", spec.label()),
             IconSpec::Emoji(_) => "Change the icon".to_string(),
         };
-        let mut row = div().flex().flex_col().gap_1().child(
-            div()
-                .text_xs()
-                .text_color(theme.text_faint)
-                .child("Project type"),
-        );
-        let mut chips = div().flex().items_center().gap_1();
-        for candidate in ProjectKind::ALL {
-            let active = kind == candidate;
-            chips = chips.child(
-                div()
-                    .id(super::sid(format!("project-kind:{}", candidate.slug())))
-                    .cursor_pointer()
-                    .child(widgets::toggle_chip(theme, candidate.label(), active))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(Modal::NewProject { kind, .. }) = &mut this.modal {
-                            *kind = candidate;
-                        }
-                        cx.notify();
-                    })),
-            );
-        }
-        row = row.child(chips).child(
-            div()
-                .text_xs()
-                .text_color(theme.text_faint)
-                .child(kind.hint()),
-        );
         let icon_row = div()
             .flex()
             .flex_col()
@@ -3307,7 +3294,7 @@ impl FlowlistApp {
                                 if let Some(Modal::NewProject { icon_open, .. }) = &mut this.modal {
                                     *icon_open = !*icon_open;
                                     if *icon_open {
-                                        this.modal_focus = 4;
+                                        this.modal_focus = 6;
                                     }
                                 }
                                 cx.notify();
@@ -3325,13 +3312,55 @@ impl FlowlistApp {
             .when(icon_open, |this| {
                 this.child(self.render_icon_picker_card(
                     IconTarget::NewProject,
-                    4,
+                    6,
                     Some(&icon),
                     icon_tab,
                     cx,
                 ))
             });
-        row.child(icon_row).child(
+
+        div().w_full().child(icon_row).into_any_element()
+    }
+
+    fn render_new_project_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let (kind, fullscreen) = match &self.modal {
+            Some(Modal::NewProject {
+                kind,
+                fullscreen_reminder,
+                ..
+            }) => (kind.clone(), *fullscreen_reminder),
+            _ => (ProjectKind::Parallel, false),
+        };
+        let mut row = div().flex().flex_col().gap_1().child(
+            div()
+                .text_xs()
+                .text_color(theme.text_faint)
+                .child("Project type"),
+        );
+        let mut chips = div().flex().items_center().gap_1();
+        for candidate in ProjectKind::ALL {
+            let active = kind == candidate;
+            chips = chips.child(
+                div()
+                    .id(super::sid(format!("project-kind:{}", candidate.slug())))
+                    .cursor_pointer()
+                    .child(widgets::toggle_chip(theme, candidate.label(), active))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::NewProject { kind, .. }) = &mut this.modal {
+                            *kind = candidate;
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        row = row.child(chips).child(
+            div()
+                .text_xs()
+                .text_color(theme.text_faint)
+                .child(kind.hint()),
+        );
+        row.child(
             div()
                 .flex()
                 .items_center()

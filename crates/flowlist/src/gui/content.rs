@@ -132,8 +132,8 @@ impl FlowlistApp {
                 }
             }
             let mut dates = vec![
-                task.due.map(|stamp| stamp.local_date()),
-                task.defer.map(|stamp| stamp.local_date()),
+                db.effective_due(id).map(|stamp| stamp.local_date()),
+                db.effective_defer(id).map(|stamp| stamp.local_date()),
             ];
             if self.forecast_planned {
                 dates.push(db.effective_planned(id).map(|stamp| stamp.local_date()));
@@ -149,9 +149,9 @@ impl FlowlistApp {
             ids.sort_by_cached_key(|id| {
                 let task = &db.tasks[id];
                 (
-                    task.due
+                    db.effective_due(id)
                         .or_else(|| db.effective_planned(id))
-                        .or(task.defer)
+                        .or_else(|| db.effective_defer(id))
                         .map(|stamp| stamp.at),
                     task.title.to_lowercase(),
                 )
@@ -2317,8 +2317,8 @@ impl FlowlistApp {
                 .attachments
                 .iter()
                 .all(|value| flowlist_core::model::attachment::is_web_link(value));
-        let due = task.due;
-        let defer = task.defer;
+        let due = db.effective_due(&id);
+        let defer = db.effective_defer(&id);
         let planned = db.effective_planned(&id);
         let tags: Vec<String> = task
             .tags

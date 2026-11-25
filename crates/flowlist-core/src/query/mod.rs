@@ -352,20 +352,22 @@ pub fn today(db: &Db, include_past: bool, at: DateTime<Utc>) -> Vec<Group> {
                 past_planned.push(id.clone());
             }
         }
-        match task.due {
+        let due = db.effective_due(&id);
+        let defer = db.effective_defer(&id);
+        match due {
             Some(due) if due.local_date() < today => overdue.push(id),
             Some(due) if due.local_date() == today => due_today.push(id),
             Some(_) => {}
             // A task deferred until today (or earlier) has come due even
             // without a deadline, so it belongs in the day's list.
-            None if task.defer.is_some_and(|stamp| stamp.local_date() <= today) => {
+            None if defer.is_some_and(|stamp| stamp.local_date() <= today) => {
                 deferred.push(id)
             }
             None => {}
         }
     }
 
-    overdue.sort_by_key(|id| db.tasks[id].due.map(|stamp| stamp.at));
+    overdue.sort_by_key(|id| db.effective_due(id).map(|stamp| stamp.at));
     past_planned.retain(|id| {
         !overdue.contains(id)
             && !due_today.contains(id)
@@ -378,14 +380,13 @@ pub fn today(db: &Db, include_past: bool, at: DateTime<Utc>) -> Vec<Group> {
     due_today.extend(planned_today);
     due_today.sort_by_cached_key(|id| {
         (
-            db.tasks[id]
-                .due
+            db.effective_due(id)
                 .or_else(|| db.effective_planned(id))
                 .map(|stamp| stamp.at),
             db.tasks[id].title.to_lowercase(),
         )
     });
-    deferred.sort_by_key(|id| db.tasks[id].defer.map(|stamp| stamp.at));
+    deferred.sort_by_key(|id| db.effective_defer(id).map(|stamp| stamp.at));
     due_today.extend(deferred);
 
     let mut groups = Vec::new();
@@ -458,20 +459,20 @@ pub fn tasks_on_date(
                     _ => return false,
                 }
             }
-            task.due.is_some_and(|stamp| stamp.local_date() == date)
+            db.effective_due(id).is_some_and(|stamp| stamp.local_date() == date)
                 || (include_planned
                     && db
                         .effective_planned(id)
                         .is_some_and(|stamp| stamp.local_date() == date))
-                || task.defer.is_some_and(|stamp| stamp.local_date() == date)
+                || db.effective_defer(id).is_some_and(|stamp| stamp.local_date() == date)
         })
         .collect();
     ids.sort_by_cached_key(|id| {
         let task = &db.tasks[id];
         (
-            task.due
+            db.effective_due(id)
                 .or_else(|| db.effective_planned(id))
-                .or(task.defer)
+                .or_else(|| db.effective_defer(id))
                 .map(|stamp| stamp.at),
             task.title.to_lowercase(),
         )
@@ -503,7 +504,7 @@ pub fn forecast_past(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Task
                     _ => return false,
                 }
             }
-            task.due.is_some_and(|stamp| stamp.local_date() < today)
+            db.effective_due(&task.id).is_some_and(|stamp| stamp.local_date() < today)
                 || (show_planned
                     && db
                         .effective_planned(&task.id)
@@ -541,8 +542,10 @@ pub fn forecast_future(
                     _ => return false,
                 }
             }
-            task.due.is_some_and(|stamp| stamp.local_date() > after)
-                || task.defer.is_some_and(|stamp| stamp.local_date() > after)
+            db.effective_due(&task.id).is_some_and(|stamp| stamp.local_date() > after)
+                || db
+                    .effective_defer(&task.id)
+                    .is_some_and(|stamp| stamp.local_date() > after)
                 || (show_planned
                     && db
                         .effective_planned(&task.id)
@@ -551,10 +554,9 @@ pub fn forecast_future(
         .map(|task| task.id.clone())
         .collect();
     ids.sort_by_key(|id| {
-        db.tasks[id]
-            .due
+        db.effective_due(id)
             .or_else(|| db.effective_planned(id))
-            .or(db.tasks[id].defer)
+            .or_else(|| db.effective_defer(id))
             .map(|stamp| stamp.at)
     });
     let _ = at;
@@ -619,7 +621,7 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group>
     } else {
         data.later
             .iter()
-            .filter(|id| db.tasks[*id].due.is_some())
+            .filter(|id| db.effective_due(id).is_some())
             .cloned()
             .collect()
     };
@@ -629,7 +631,7 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group>
     } else {
         data.next_month
             .iter()
-            .filter(|id| db.tasks[*id].due.is_some())
+            .filter(|id| db.effective_due(id).is_some())
             .cloned()
             .collect()
     };
@@ -821,7 +823,7 @@ impl<'a> GroupContext<'a> {
                     None => ("untagged".to_string(), "No Tag".to_string(), i64::MAX),
                 }
             }
-            GroupBy::DueDate => match task.due {
+            GroupBy::DueDate => match db.effective_due(&task.id) {
                 Some(stamp) => {
                     let today = crate::time::local_date(self.at);
                     let date = stamp.local_date();
@@ -833,7 +835,7 @@ impl<'a> GroupContext<'a> {
                 }
                 None => ("due:none".to_string(), "No Due Date".to_string(), i64::MAX),
             },
-            GroupBy::DeferDate => match task.defer {
+            GroupBy::DeferDate => match db.effective_defer(&task.id) {
                 Some(stamp) => {
                     let today = crate::time::local_date(self.at);
                     let date = stamp.local_date();

@@ -278,11 +278,15 @@ impl FlowlistApp {
                     .map(|tag| (tag_id.clone(), db.tag_path(&tag.id)))
             })
             .collect();
-        let defer = task.defer.map(|stamp| human_date(&stamp, now()));
+        let defer = db
+            .effective_defer(&id)
+            .map(|stamp| human_date(&stamp, now()));
         let planned = db
             .effective_planned(&id)
             .map(|stamp| human_date(&stamp, now()));
-        let due = task.due.map(|stamp| human_date(&stamp, now()));
+        let due = db
+            .effective_due(&id)
+            .map(|stamp| human_date(&stamp, now()));
         let estimate = task.estimate_min.map(format_duration);
         let repeat = task.repeat.as_ref().map(|rule| rule.description());
         let attachments = task.attachments.clone();

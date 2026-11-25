@@ -198,9 +198,7 @@ pub fn is_available(db: &Db, task_id: &TaskId, at: DateTime<Utc>) -> bool {
 }
 
 pub fn is_due_on(db: &Db, task_id: &TaskId, date: chrono::NaiveDate, at: DateTime<Utc>) -> bool {
-    db.tasks
-        .get(task_id)
-        .and_then(|task| task.due)
+    db.effective_due(task_id)
         .is_some_and(|due| due.local_date() == date)
         && !db.tasks[task_id].completed
         && local_date(at) == date
@@ -211,10 +209,15 @@ pub fn due_today(db: &Db, at: DateTime<Utc>) -> Vec<TaskId> {
     let mut out: Vec<TaskId> = db
         .tasks
         .values()
-        .filter(|task| !task.completed && task.due.is_some_and(|stamp| stamp.local_date() == today))
+        .filter(|task| {
+            !task.completed
+                && db
+                    .effective_due(&task.id)
+                    .is_some_and(|stamp| stamp.local_date() == today)
+        })
         .map(|task| task.id.clone())
         .collect();
-    out.sort_by_key(|id| db.tasks[id].due.map(|stamp| stamp.at));
+    out.sort_by_key(|id| db.effective_due(id).map(|stamp| stamp.at));
     out
 }
 
@@ -223,9 +226,14 @@ pub fn overdue(db: &Db, at: DateTime<Utc>) -> Vec<TaskId> {
     let mut out: Vec<TaskId> = db
         .tasks
         .values()
-        .filter(|task| !task.completed && task.due.is_some_and(|stamp| stamp.local_date() < today))
+        .filter(|task| {
+            !task.completed
+                && db
+                    .effective_due(&task.id)
+                    .is_some_and(|stamp| stamp.local_date() < today)
+        })
         .map(|task| task.id.clone())
         .collect();
-    out.sort_by_key(|id| db.tasks[id].due.map(|stamp| stamp.at));
+    out.sort_by_key(|id| db.effective_due(id).map(|stamp| stamp.at));
     out
 }

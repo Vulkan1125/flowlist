@@ -115,6 +115,18 @@ integrations are tracked separately and are not part of this phase.
       the Forecast badge.
 - [x] **Past and Future calendar tiles** — the collapsed Forecast strip is a
       piano-key timeline with fixed Past/Future end tiles and a paged week.
+- [x] **Default wording** — Sort and Group say “Default” for the view's
+      natural order/grouping instead of “View”.
+- [x] **Project date constraints** — Defer, Planned and Due in the project
+      sheets; actions inherit defer (start no earlier) and due (finish no
+      later), effective dates drive Today/Forecast/overdue/filters/groups/sorts,
+      and planned stays constraint-free.
+- [ ] **Inherited date labels and validation** — show “Deferred with project”
+      / “Due with project” in the task inspector and reject a child defer
+      earlier than, or a child due later than, its container.
+- [ ] **Projects in Forecast** — show project rows on their due/defer/planned
+      dates. Start with a Projects section above the task rows for a day; later
+      decide whether to unify task and project rows.
 - [ ] **Full notification model** — defer/available alerts, per-item custom
       notification schedules, and richer notification payloads beyond due
       reminders and full-screen reminders.

@@ -74,7 +74,7 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
             }
         }
 
-        if let Some(due) = task.due {
+        if let Some(due) = db.effective_due(&task.id) {
             let date = due.local_date();
             if date < today {
                 result.overdue.push(task.id.clone());
@@ -101,7 +101,7 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
 
         // Defer dates place work on the day it becomes available; a defer date
         // in the past is simply available, not a Forecast entry.
-        if let Some(defer) = task.defer {
+        if let Some(defer) = db.effective_defer(&task.id) {
             let date = defer.local_date();
             if date == today {
                 result.deferred_today.push(task.id.clone());
@@ -142,34 +142,32 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
         }
     }
 
-    let by_due = |db: &Db, id: &TaskId| db.tasks[id].due.map(|stamp| stamp.at);
+    let by_due = |db: &Db, id: &TaskId| db.effective_due(id).map(|stamp| stamp.at);
     let by_planned = |db: &Db, id: &TaskId| db.effective_planned(id).map(|stamp| stamp.at);
     result.overdue.sort_by_key(|id| by_due(db, id));
     result.today.sort_by_key(|id| by_due(db, id));
     result.tomorrow.sort_by_key(|id| by_due(db, id));
     result.later.sort_by_key(|id| {
-        db.tasks[id]
-            .due
+        db.effective_due(id)
             .or_else(|| db.effective_planned(id))
             .map(|stamp| stamp.at)
     });
     result.later.dedup();
     result.next_month.sort_by_key(|id| {
-        db.tasks[id]
-            .due
-            .or(db.tasks[id].planned)
+        db.effective_due(id)
+            .or_else(|| db.effective_planned(id))
             .map(|stamp| stamp.at)
     });
     result.next_month.dedup();
     for day in result.days.values_mut() {
         day.due.sort_by_key(|id| by_due(db, id));
         day.deferred
-            .sort_by_key(|id| db.tasks[id].defer.map(|stamp| stamp.at));
+            .sort_by_key(|id| db.effective_defer(id).map(|stamp| stamp.at));
         day.planned.sort_by_key(|id| by_planned(db, id));
     }
     result
         .deferred_today
-        .sort_by_key(|id| db.tasks[id].defer.map(|stamp| stamp.at));
+        .sort_by_key(|id| db.effective_defer(id).map(|stamp| stamp.at));
     result
         .planned_today
         .sort_by_key(|id| by_planned(db, id));

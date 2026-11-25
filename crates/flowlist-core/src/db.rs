@@ -484,6 +484,83 @@ impl Db {
             .and_then(|project| project.planned)
     }
 
+    /// The latest defer date in the task's container chain. A project or
+    /// parent action cannot be started before its own defer date, so the
+    /// effective defer is the maximum of the task, its ancestors and its
+    /// project.
+    pub fn effective_defer(&self, task_id: &TaskId) -> Option<Stamp> {
+        let task = self.tasks.get(task_id)?;
+        let mut latest = task.defer;
+        let mut ancestor = task.parent.clone();
+        let mut guard = 0;
+        while let Some(id) = ancestor {
+            guard += 1;
+            if guard > 64 {
+                break;
+            }
+            let Some(parent) = self.tasks.get(&id) else {
+                break;
+            };
+            if let Some(defer) = parent.defer {
+                latest = match latest {
+                    Some(current) if current.at >= defer.at => Some(current),
+                    _ => Some(defer),
+                };
+            }
+            ancestor = parent.parent.clone();
+        }
+        if let Some(project) = self
+            .effective_project(task_id)
+            .and_then(|project| self.projects.get(&project))
+        {
+            if let Some(defer) = project.defer {
+                latest = match latest {
+                    Some(current) if current.at >= defer.at => Some(current),
+                    _ => Some(defer),
+                };
+            }
+        }
+        latest
+    }
+
+    /// The earliest due date in the task's container chain. A project or
+    /// parent action must be finished by its own due date, so the effective
+    /// due is the minimum of the task, its ancestors and its project.
+    pub fn effective_due(&self, task_id: &TaskId) -> Option<Stamp> {
+        let task = self.tasks.get(task_id)?;
+        let mut earliest = task.due;
+        let mut ancestor = task.parent.clone();
+        let mut guard = 0;
+        while let Some(id) = ancestor {
+            guard += 1;
+            if guard > 64 {
+                break;
+            }
+            let Some(parent) = self.tasks.get(&id) else {
+                break;
+            };
+            if let Some(due) = parent.due {
+                earliest = match earliest {
+                    Some(current) if current.at <= due.at => Some(current),
+                    _ => Some(due),
+                };
+            }
+            ancestor = parent.parent.clone();
+        }
+        if let Some(project) = self
+            .effective_project(task_id)
+            .and_then(|project| self.projects.get(&project))
+        {
+            if let Some(due) = project.due {
+                earliest = match earliest {
+                    Some(current) if current.at <= due.at => Some(current),
+                    _ => Some(due),
+                };
+            }
+        }
+        earliest
+    }
+
     pub fn task_depth(&self, task_id: &TaskId) -> u32 {
         self.task_ancestors(task_id).len() as u32
     }

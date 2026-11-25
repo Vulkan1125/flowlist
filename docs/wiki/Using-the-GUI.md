@@ -192,9 +192,11 @@ titles itself **Search** and ranks the closest matches first.
 - **Settings → Workflow → Forecast** can make the Forecast badge count only
   due items, ignoring planned and deferred work.
 - **Right-click a project** for Open, Rename, **Edit project…**, status and
-  Delete. The Edit sheet covers the name, notes, planned date, review cadence,
-  type and icon. Tasks inherit the project's planned date unless they or a
-  parent task carry their own.
+  Delete. The Edit sheet covers the name, notes, defer, planned and due dates,
+  review cadence, type and icon. Tasks inherit the project's dates: defer gates
+  when they become available, due caps their deadline, and planned is a
+  constraint-free default. A task or parent task can defer later or fall due
+  earlier than the project, never the other way around.
 - **Right-click a folder** for Open, Rename, **Edit folder…**, New project here,
   New subfolder and Delete.
 - **Saved perspectives** share one editor with the phone: text, Inbox only,
@@ -220,6 +222,9 @@ titles itself **Search** and ranks the closest matches first.
   and tag location. Rename is also `⌘R`.
 - Drag tasks between projects, tags and parents; drag projects into folders.
 - **Sort** and **Group** chips at the top of the list open a menu of orders.
+  **Default** means “use this view’s natural order or grouping”; **Manual**
+  means your drag-and-drop order; **None** means one flat list with no
+  headings.
   **Available** keeps only tasks you can start now; **Priority** filters by
   priority. The choices are remembered per view.
 - The **Calendar** chip in Forecast hides and restores the calendar, and
