@@ -1,7 +1,7 @@
 //! Which list the window is showing, and the small amount of state that
 //! survives a quit (view, selection, theme, inspector, window size).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -282,6 +282,15 @@ pub struct Session {
     /// Show read-only macOS Calendar events in Forecast. Per device.
     #[serde(default)]
     pub calendar_events: Option<bool>,
+    /// Calendar identifiers hidden from Forecast; empty means every calendar.
+    #[serde(default)]
+    pub calendar_hidden: BTreeSet<String>,
+    /// Show only due dates in Forecast. Per device.
+    #[serde(default)]
+    pub forecast_due_only: Option<bool>,
+    /// Last size of the Settings sheet.
+    #[serde(default)]
+    pub settings_size: Option<(f32, f32)>,
     /// Take over the screen with a due reminder while Flowlist is running.
     #[serde(default)]
     pub fullscreen_reminders: Option<bool>,

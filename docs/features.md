@@ -238,9 +238,11 @@ working domain and GUI. This page tracks what is implemented and verified.
       and Last Reviewed.
 - [x] Single-task inspector tabs: **Properties** and **Subtasks**.
 - [x] Sheets show Save only; Escape still cancels.
-- [x] Calendar events in Forecast, read-only from macOS Calendar, with a
-      per-device Settings toggle, permission handling, agenda interleaving,
-      month-grid chips and week-strip counts.
+- [x] Calendar events in Forecast, read-only from macOS Calendar, in their own
+      Settings section with permission handling, per-calendar show/hide
+      switches, agenda interleaving, month-grid chips and week-strip counts.
+- [x] Forecast due-only mode, hiding defer-only and planned-only entries.
+- [x] Settings reopens at the size it was last dragged to.
 - [x] One Notifications section with an Add Notification menu and a per-row
       full-screen reminder checkbox; the separate Alerts text field is retired.
 - [x] OmniFocus-style tag chips in their own section, with a `+` add control.

@@ -2,6 +2,7 @@
 //! locations and the keyboard help card.
 
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -230,6 +231,10 @@ pub enum Modal {
         notifications: bool,
         /// Show macOS Calendar events in Forecast, per device.
         calendar_events: bool,
+        /// Calendar identifiers hidden from Forecast.
+        calendar_hidden: BTreeSet<String>,
+        /// Show only due dates in Forecast, per device.
+        forecast_due_only: bool,
         /// Take over the screen when a task comes due, per device.
         fullscreen_reminders: bool,
         /// Pause system media while a full-screen reminder is on screen.
@@ -304,6 +309,7 @@ pub enum SettingsSection {
     Sidebar,
     Workflow,
     Reminders,
+    Calendar,
     Nearby,
     Trash,
     Mobile,
@@ -311,11 +317,12 @@ pub enum SettingsSection {
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 8] = [
+    pub const ALL: [SettingsSection; 9] = [
         SettingsSection::Appearance,
         SettingsSection::Sidebar,
         SettingsSection::Workflow,
         SettingsSection::Reminders,
+        SettingsSection::Calendar,
         SettingsSection::Nearby,
         SettingsSection::Trash,
         SettingsSection::Mobile,
@@ -328,6 +335,7 @@ impl SettingsSection {
             SettingsSection::Sidebar => "sidebar",
             SettingsSection::Workflow => "workflow",
             SettingsSection::Reminders => "reminders",
+            SettingsSection::Calendar => "calendar",
             SettingsSection::Nearby => "nearby",
             SettingsSection::Trash => "trash",
             SettingsSection::Mobile => "mobile",
@@ -341,6 +349,7 @@ impl SettingsSection {
             SettingsSection::Sidebar => "Sidebar",
             SettingsSection::Workflow => "Workflow",
             SettingsSection::Reminders => "Reminders",
+            SettingsSection::Calendar => "Calendar",
             SettingsSection::Nearby => "Nearby",
             SettingsSection::Trash => "Trash",
             SettingsSection::Mobile => "Mobile",
@@ -357,6 +366,9 @@ impl SettingsSection {
             SettingsSection::Workflow => "Keyboard, review cadence and history windows.",
             SettingsSection::Reminders => {
                 "Due notifications and full-screen reminder timing and backdrops."
+            }
+            SettingsSection::Calendar => {
+                "Read-only macOS Calendar events and which calendars Forecast shows."
             }
             SettingsSection::Nearby => "How distance ranks tasks with tagged locations.",
             SettingsSection::Trash => "How long deleted tasks stay restorable.",
@@ -376,6 +388,7 @@ impl SettingsSection {
             SettingsSection::Appearance
             | SettingsSection::Sidebar
             | SettingsSection::Reminders
+            | SettingsSection::Calendar
             | SettingsSection::Mobile
             | SettingsSection::About => &[],
         }
@@ -387,6 +400,7 @@ impl SettingsSection {
             SettingsSection::Sidebar => Icon::PanelRight,
             SettingsSection::Workflow => Icon::Review,
             SettingsSection::Reminders => Icon::Clock,
+            SettingsSection::Calendar => Icon::Calendar,
             SettingsSection::Nearby => Icon::Crosshair,
             SettingsSection::Trash => Icon::Trash,
             SettingsSection::Mobile => Icon::Smartphone,
@@ -686,6 +700,8 @@ impl Modal {
             vim_mode: app.vim_mode,
             notifications: app.due_notifications,
             calendar_events: app.calendar_events_enabled,
+            calendar_hidden: app.calendar_hidden.clone(),
+            forecast_due_only: app.forecast_due_only,
             fullscreen_reminders: app.fullscreen_reminders,
             pause_media_on_reminder: app.pause_media_on_reminder,
             reminder_background: app.reminder_background,
@@ -3738,6 +3754,7 @@ impl FlowlistApp {
             SettingsSection::Sidebar => self.render_sidebar_settings(cx).into_any_element(),
             SettingsSection::Workflow => self.render_workflow_settings(cx),
             SettingsSection::Reminders => self.render_reminder_settings(cx),
+            SettingsSection::Calendar => self.render_calendar_settings(cx),
             SettingsSection::Nearby => self.render_nearby_settings(cx),
             SettingsSection::Trash => self.render_trash_settings(cx),
             SettingsSection::Mobile => self.render_mobile_settings(cx),
@@ -6056,6 +6073,186 @@ impl FlowlistApp {
             .into_any_element()
     }
 
+    fn render_calendar_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let calendar_events = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                calendar_events: true,
+                ..
+            })
+        );
+        let calendar_hidden = match &self.modal {
+            Some(Modal::Settings {
+                calendar_hidden, ..
+            }) => calendar_hidden.clone(),
+            _ => BTreeSet::new(),
+        };
+        let calendar_permission = super::calendar::permission();
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(div().flex_1().text_sm().child("Show Calendar events in Forecast"))
+                    .child(
+                        div()
+                            .on_children_prepainted(
+                                self.theme_probe("settings-calendar-events".to_string()),
+                            )
+                            .id("settings-calendar-events")
+                            .child(widgets::switch(theme, calendar_events))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(Modal::Settings { calendar_events, .. }) = &mut this.modal
+                                {
+                                    *calendar_events = !*calendar_events;
+                                }
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .whitespace_normal()
+                    .text_color(if calendar_permission.allowed() {
+                        theme.success
+                    } else {
+                        theme.text_faint
+                    })
+                    .child(format!("Calendar access: {}", calendar_permission.label())),
+            );
+        if !calendar_permission.allowed() {
+            let can_ask = matches!(
+                calendar_permission,
+                super::calendar::Permission::Unknown
+                    | super::calendar::Permission::NotDetermined
+            );
+            let label = if can_ask {
+                "Allow Calendar access"
+            } else {
+                "Open Calendar privacy settings"
+            };
+            body = body.child(
+                div()
+                    .id("calendar-permission-button")
+                    .w(px(220.))
+                    .px_2()
+                    .py_1()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.field)
+                    .text_xs()
+                    .text_color(theme.accent)
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(label)
+                    .on_click(cx.listener(move |_this, _, _, cx| {
+                        if can_ask {
+                            super::calendar::request_permission();
+                        } else {
+                            super::calendar::open_settings();
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        let main_card = self.settings_card(
+            "Calendar",
+            Some(
+                "Read-only macOS Calendar events appear beside tasks in Forecast. Access is per device and Flowlist never changes your calendars.",
+            ),
+            body,
+        );
+        let mut calendars = div().flex().flex_col().gap_2();
+        if calendar_permission.allowed() && !self.calendar_calendars.is_empty() {
+            for calendar in &self.calendar_calendars {
+                let id = calendar.id.clone();
+                let hidden = calendar_hidden.contains(&id);
+                let color: gpui::Hsla = calendar
+                    .color
+                    .map(|color| rgb(color).into())
+                    .unwrap_or(theme.accent);
+                calendars = calendars.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .flex_1()
+                                .min_w_0()
+                                .child(div().size(px(7.)).rounded_full().bg(color))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_sm()
+                                        .child(calendar.title.clone()),
+                                )
+                                .when_some(calendar.source.clone(), |this, source| {
+                                    this.child(
+                                        div()
+                                            .flex_shrink_0()
+                                            .text_xs()
+                                            .text_color(theme.text_faint)
+                                            .child(source),
+                                    )
+                                }),
+                        )
+                        .child(
+                            div()
+                                .on_children_prepainted(
+                                    self.theme_probe(format!("calendar-keep:{id}")),
+                                )
+                                .id(super::sid(format!("calendar-keep:{id}")))
+                                .child(widgets::switch(theme, !hidden))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if let Some(Modal::Settings { calendar_hidden, .. }) =
+                                        &mut this.modal
+                                    {
+                                        if !calendar_hidden.remove(&id) {
+                                            calendar_hidden.insert(id.clone());
+                                        }
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                );
+            }
+        } else if calendar_permission.allowed() {
+            calendars = calendars.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("No calendars are available."),
+            );
+        }
+        let calendars_card = self.settings_card(
+            "Calendars",
+            Some("Turn a calendar off to keep its events out of Forecast. New calendars appear on by default."),
+            calendars,
+        );
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(main_card)
+            .child(calendars_card)
+            .into_any_element()
+    }
+
     fn render_workflow_settings(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
         let vim = matches!(&self.modal, Some(Modal::Settings { vim_mode: true, .. }));
@@ -6172,6 +6369,13 @@ impl FlowlistApp {
                 ..
             })
         );
+        let forecast_due_only = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                forecast_due_only: true,
+                ..
+            })
+        );
         let forecast_card = self.settings_card(
             "Forecast",
             Some("The Forecast tag pulls undated actions into Forecast. Flagged undated actions can join them. Badges can count only due work."),
@@ -6231,96 +6435,33 @@ impl FlowlistApp {
                                     cx.notify();
                                 })),
                         ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(div().flex_1().text_sm().child("Show only due dates"))
+                        .child(
+                            div()
+                                .on_children_prepainted(
+                                    self.theme_probe("forecast-due-only-toggle".to_string()),
+                                )
+                                .id("forecast-due-only-toggle")
+                                .child(widgets::switch(theme, forecast_due_only))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Settings {
+                                        forecast_due_only,
+                                        ..
+                                    }) = &mut this.modal
+                                    {
+                                        *forecast_due_only = !*forecast_due_only;
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
                 ),
-        );
-        let calendar_events = matches!(
-            &self.modal,
-            Some(Modal::Settings {
-                calendar_events: true,
-                ..
-            })
-        );
-        let calendar_permission = super::calendar::permission();
-        let mut calendar_body = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(div().flex_1().text_sm().child("Show Calendar events in Forecast"))
-                    .child(
-                        div()
-                            .on_children_prepainted(
-                                self.theme_probe("settings-calendar-events".to_string()),
-                            )
-                            .id("settings-calendar-events")
-                            .child(widgets::switch(theme, calendar_events))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(Modal::Settings { calendar_events, .. }) = &mut this.modal
-                                {
-                                    *calendar_events = !*calendar_events;
-                                }
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .whitespace_normal()
-                    .text_color(if calendar_permission.allowed() {
-                        theme.success
-                    } else {
-                        theme.text_faint
-                    })
-                    .child(format!("Calendar access: {}", calendar_permission.label())),
-            );
-        if !calendar_permission.allowed() {
-            let can_ask = matches!(
-                calendar_permission,
-                super::calendar::Permission::Unknown
-                    | super::calendar::Permission::NotDetermined
-            );
-            let label = if can_ask {
-                "Allow Calendar access"
-            } else {
-                "Open Calendar privacy settings"
-            };
-            calendar_body = calendar_body.child(
-                div()
-                    .id("calendar-permission-button")
-                    .w(px(220.))
-                    .px_2()
-                    .py_1()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(theme.border)
-                    .bg(theme.field)
-                    .text_xs()
-                    .text_color(theme.accent)
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .child(label)
-                    .on_click(cx.listener(move |_this, _, _, cx| {
-                        if can_ask {
-                            super::calendar::request_permission();
-                        } else {
-                            super::calendar::open_settings();
-                        }
-                        cx.notify();
-                    })),
-            );
-        }
-        let calendar_card = self.settings_card(
-            "Calendar",
-            Some(
-                "Read-only macOS Calendar events appear beside tasks in Forecast. Access is per device and Flowlist never changes your calendars.",
-            ),
-            calendar_body,
         );
         let focus_banner = matches!(
             &self.modal,
@@ -6364,7 +6505,6 @@ impl FlowlistApp {
             .child(toolbar_card)
             .child(subtasks_card)
             .child(forecast_card)
-            .child(calendar_card)
             .child(focus_card)
             .child(
                 self.settings_card(

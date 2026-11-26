@@ -55,6 +55,14 @@ fn store_status(status: isize) {
 /// The calendars and events are read-only. We never write to the user's
 /// Calendar database.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct CalendarInfo {
+    pub id: String,
+    pub title: String,
+    pub color: Option<u32>,
+    pub source: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Event {
     pub id: String,
     pub title: String,
@@ -62,6 +70,7 @@ pub struct Event {
     pub end: DateTime<Utc>,
     pub all_day: bool,
     pub calendar: String,
+    pub calendar_id: String,
     pub color: Option<u32>,
     pub location: Option<String>,
 }
@@ -160,6 +169,60 @@ pub fn request_permission() {
 
 /// Events whose local start date falls inside `[from, to]`, sorted with
 /// all-day events first and then by start time.
+pub fn calendars() -> Vec<CalendarInfo> {
+    if std::env::var_os("FLOWLIST_TEST_CALENDAR").is_some() {
+        return test_calendars();
+    }
+    if !permission().allowed() {
+        return Vec::new();
+    }
+    #[cfg(target_os = "macos")]
+    unsafe {
+        return macos_calendars();
+    }
+    #[cfg(not(target_os = "macos"))]
+    Vec::new()
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn macos_calendars() -> Vec<CalendarInfo> {
+    use std::ffi::CStr;
+    use std::os::raw::c_char;
+    use objc::runtime::Object;
+    use objc::{class, msg_send, sel, sel_impl};
+
+    fn string(ptr: *mut Object) -> Option<String> {
+        if ptr.is_null() { return None; }
+        unsafe {
+            let text: *const c_char = msg_send![ptr, UTF8String];
+            if text.is_null() { None } else {
+                Some(CStr::from_ptr(text).to_string_lossy().into_owned())
+            }
+        }
+    }
+
+    let store: *mut Object = msg_send![class!(EKEventStore), alloc];
+    let store: *mut Object = msg_send![store, init];
+    if store.is_null() { return Vec::new(); }
+    let raw: *mut Object = msg_send![store, calendarsForEntityType: 0isize];
+    let mut out = Vec::new();
+    if !raw.is_null() {
+        let count: usize = msg_send![raw, count];
+        for index in 0..count {
+            let calendar: *mut Object = msg_send![raw, objectAtIndex: index];
+            if calendar.is_null() { continue; }
+            let id = string(msg_send![calendar, calendarIdentifier]).unwrap_or_default();
+            let title = string(msg_send![calendar, title]).unwrap_or_else(|| "Calendar".to_string());
+            let source: *mut Object = msg_send![calendar, source];
+            let source = if source.is_null() { None } else { string(msg_send![source, title]) };
+            out.push(CalendarInfo { id, title, color: event_color(calendar), source });
+        }
+    }
+    let _: () = msg_send![store, release];
+    out.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    out
+}
+
 pub fn events(from: NaiveDate, to: NaiveDate) -> Vec<Event> {
     if std::env::var_os("FLOWLIST_TEST_CALENDAR").is_some() {
         return test_events(from, to);
@@ -250,6 +313,7 @@ unsafe fn macos_events(from: NaiveDate, to: NaiveDate) -> Vec<Event> {
             let calendar: *mut Object = msg_send![event, calendar];
             let calendar_title = string(msg_send![calendar, title])
                 .unwrap_or_else(|| "Calendar".to_string());
+            let calendar_id = string(msg_send![calendar, calendarIdentifier]).unwrap_or_default();
             let color = event_color(calendar);
             events.push(Event {
                 id: string(msg_send![event, eventIdentifier])
@@ -259,6 +323,7 @@ unsafe fn macos_events(from: NaiveDate, to: NaiveDate) -> Vec<Event> {
                 end,
                 all_day: msg_send![event, isAllDay],
                 calendar: calendar_title,
+                calendar_id,
                 color,
                 location: string(msg_send![event, location]),
             });
@@ -288,6 +353,15 @@ unsafe fn event_color(calendar: *mut objc::runtime::Object) -> Option<u32> {
     Some((to_byte(red) << 16) | (to_byte(green) << 8) | to_byte(blue))
 }
 
+fn test_calendars() -> Vec<CalendarInfo> {
+    vec![
+        CalendarInfo { id: "work".into(), title: "Work".into(), color: Some(0x3B82F6), source: Some("iCloud".into()) },
+        CalendarInfo { id: "personal".into(), title: "Personal".into(), color: Some(0xF59E0B), source: Some("iCloud".into()) },
+        CalendarInfo { id: "holidays".into(), title: "Holidays".into(), color: Some(0xEF4444), source: Some("Holidays".into()) },
+        CalendarInfo { id: "birthdays".into(), title: "Birthdays".into(), color: Some(0xA855F7), source: Some("Birthdays".into()) },
+    ]
+}
+
 fn test_events(from: NaiveDate, to: NaiveDate) -> Vec<Event> {
     let today = local_date(now());
     let tomorrow = today + Duration::days(1);
@@ -305,6 +379,7 @@ fn test_events(from: NaiveDate, to: NaiveDate) -> Vec<Event> {
             end: at(today, 9, 30),
             all_day: false,
             calendar: "Work".to_string(),
+            calendar_id: "work".to_string(),
             color: Some(0x3B82F6),
             location: Some("Meeting room".to_string()),
         },
@@ -314,8 +389,20 @@ fn test_events(from: NaiveDate, to: NaiveDate) -> Vec<Event> {
             start: at(today, 0, 0),
             end: at(tomorrow, 0, 0),
             all_day: true,
-            calendar: "Personal".to_string(),
-            color: Some(0xF59E0B),
+            calendar: "Holidays".to_string(),
+            calendar_id: "holidays".to_string(),
+            color: Some(0xEF4444),
+            location: None,
+        },
+        Event {
+            id: "test-birthday".to_string(),
+            title: "Alex's birthday".to_string(),
+            start: at(today, 0, 0),
+            end: at(tomorrow, 0, 0),
+            all_day: true,
+            calendar: "Birthdays".to_string(),
+            calendar_id: "birthdays".to_string(),
+            color: Some(0xA855F7),
             location: None,
         },
         Event {
@@ -325,6 +412,7 @@ fn test_events(from: NaiveDate, to: NaiveDate) -> Vec<Event> {
             end: at(tomorrow, 15, 0),
             all_day: false,
             calendar: "Work".to_string(),
+            calendar_id: "work".to_string(),
             color: Some(0x3B82F6),
             location: None,
         },
@@ -362,7 +450,7 @@ mod tests {
     #[test]
     fn range_filters_events_by_local_day() {
         let today = local_date(now());
-        assert_eq!(test_events(today, today).len(), 2);
+        assert_eq!(test_events(today, today).len(), 3);
         assert_eq!(
             test_events(today + Duration::days(1), today + Duration::days(1)).len(),
             1

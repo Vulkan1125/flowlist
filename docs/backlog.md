@@ -101,7 +101,7 @@ integrations are tracked separately and are not part of this phase.
       Forecast's Past section and in Today's Past plans group; one Hide past
       chip folds both carried-over groups. Forecast treats Due, Defer and
       Planned independently, calendar clicks include planned days, and work
-      more than 30 days out folds under **Next month and later**. Saved views
+      more than 30 days out folds under **Later**. Saved views
       can be pinned to the top of SAVED and given a custom rail icon. A shipped,
       pinned **Running** view lists started work that is not due yet and can be
       edited or deleted. Saved views carry an editable description, and
@@ -148,8 +148,8 @@ integrations are tracked separately and are not part of this phase.
       part of the alert editor rather than Forecast dates.
 - [x] **Calendar events in Forecast** — read upcoming events from macOS
       Calendar and interleave them with due, planned and deferred tasks.
-      Settings → Workflow → Calendar enables it; access is read-only and
-      per-device.
+      Settings → Calendar enables it, lists every calendar with a show/hide
+      switch, and keeps access read-only and per-device.
 - [ ] **Nested perspective rules** — an All / Any / None rule builder with
       nesting, date-range rules, tag/project-status rules, and comments.
 - [ ] **Project-level custom perspectives** — an “Entire Projects” structure

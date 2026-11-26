@@ -255,7 +255,7 @@ The rail is the map of the library:
 | --- | --- |
 | **Inbox** | unscheduled tasks — no project, no due or defer date (a planned date does not count) |
 | **Today** | due or planned today (including inherited plans), deferred to today, overdue, and slipped plans |
-| **Forecast** | the month calendar and upcoming due, deferred and planned work; project rows sit above each day's tasks, the collapsed strip has **Past** and **Future** end tiles, the **Planned** chip hides planned-only rows, and work more than 30 days out sits under **Next month and later**, folded. A designated **Forecast tag** and optional flagged undated actions appear above Past |
+| **Forecast** | the month calendar and upcoming due, deferred and planned work; project rows sit above each day's tasks, the collapsed strip has **Past** and **Future** end tiles, the **Planned** chip hides planned-only rows, and work more than 30 days out sits under **Later**, folded; the nearer horizon is **Later this month**. A designated **Forecast tag** and optional flagged undated actions appear above Past |
 | **Review** | projects whose review date has arrived |
 | **Projects** | every project at a glance |
 | **Tags** | tasks grouped by context |
@@ -340,12 +340,13 @@ titles itself **Search** and ranks the closest matches first.
   appear in Forecast without needing a date. **Show flagged undated tasks** does
   the same for flagged actions. A task that already has a due, defer or planned
   date stays in its date section instead of duplicating.
-- **Settings → Workflow → Calendar** enables read-only macOS Calendar events.
-  They sit above each day's tasks under a **Calendar** heading, and the month
-  grid shows event chips with the calendar's colour. The week strip counts
-  events with the day's tasks. The first enable asks for Calendar access; if it
-  is denied, the same card opens System Settings. Events are never added to the
-  library.
+- **Settings → Calendar** enables read-only macOS Calendar events. They sit
+  above each day's tasks under a **Calendar** heading, and the month grid shows
+  event chips with the calendar's colour. The week strip counts events with the
+  day's tasks. The same section lists each calendar (Work, Holidays, Birthdays
+  and so on) with a switch, so you can keep only the ones you want. The first
+  enable asks for Calendar access; if it is denied, the same section opens
+  System Settings. Events are never added to the library.
 - Projects appear in Forecast on their own due, defer and planned dates. A
   project row shows its icon, name, status, dates and progress; clicking opens
   the project. The day’s **Tasks** section follows, with tasks from those

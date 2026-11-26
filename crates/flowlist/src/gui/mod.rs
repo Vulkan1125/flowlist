@@ -749,8 +749,12 @@ pub struct FlowlistApp {
     calendar_events_enabled: bool,
     /// Read-only events for the visible Forecast range.
     calendar_events: Vec<calendar::Event>,
+    calendar_calendars: Vec<calendar::CalendarInfo>,
+    calendar_hidden: BTreeSet<String>,
     calendar_permission: calendar::Permission,
     calendar_last_refresh: Option<Instant>,
+    /// Show only due-date entries in Forecast.
+    forecast_due_only: bool,
     /// Show a full-screen reminder when a task comes due while the app runs.
     fullscreen_reminders: bool,
     /// Pause system media while a full-screen reminder is on screen.
@@ -953,6 +957,8 @@ impl FlowlistApp {
         let vim_mode = session.vim_mode.unwrap_or(true);
         let due_notifications = session.notifications.unwrap_or(false);
         let calendar_events_enabled = session.calendar_events.unwrap_or(false);
+        let calendar_hidden = session.calendar_hidden.clone();
+        let forecast_due_only = session.forecast_due_only.unwrap_or(false);
         let fullscreen_reminders = session.fullscreen_reminders.unwrap_or(true);
         let pause_media_on_reminder = session.pause_media_on_reminder.unwrap_or(false);
         let reminder_match_theme = session.reminder_match_theme.unwrap_or(true);
@@ -1182,8 +1188,11 @@ impl FlowlistApp {
             due_notifications,
             calendar_events_enabled,
             calendar_events: Vec::new(),
+            calendar_calendars: Vec::new(),
+            calendar_hidden,
             calendar_permission: calendar::Permission::Unknown,
             calendar_last_refresh: None,
+            forecast_due_only,
             fullscreen_reminders,
             pause_media_on_reminder,
             reminder_seen: BTreeSet::new(),
@@ -1251,7 +1260,7 @@ impl FlowlistApp {
             accent_on_open: None,
             modal_focus: 0,
             modal_scroll: ScrollHandle::new(),
-            settings_size: None,
+            settings_size: session.settings_size,
             scroll_drag_grab: Rc::new(Cell::new(None)),
             inspector_scroll_drag_grab: Rc::new(Cell::new(None)),
             toast,
@@ -1333,13 +1342,17 @@ impl FlowlistApp {
         self.calendar_permission = calendar::permission();
         if !self.calendar_events_enabled || !self.calendar_permission.allowed() {
             self.calendar_events.clear();
+            self.calendar_calendars.clear();
             self.calendar_last_refresh = None;
             cx.notify();
             return;
         }
         let today = local_date(now());
+        self.calendar_calendars = calendar::calendars();
         self.calendar_events =
             calendar::events(today - chrono::Duration::days(31), today + chrono::Duration::days(366));
+        self.calendar_events
+            .retain(|event| !self.calendar_hidden.contains(&event.calendar_id));
         self.calendar_last_refresh = Some(Instant::now());
         cx.notify();
     }
@@ -1350,6 +1363,10 @@ impl FlowlistApp {
             self.calendar_permission = status;
             cx.notify();
         }
+        if status.allowed() && self.calendar_calendars.is_empty() {
+            self.calendar_calendars = calendar::calendars();
+            cx.notify();
+        }
         if !self.calendar_events_enabled {
             return;
         }
@@ -1358,22 +1375,6 @@ impl FlowlistApp {
             .is_none_or(|refreshed| refreshed.elapsed() >= Duration::from_secs(300));
         if status.allowed() && stale {
             self.refresh_calendar_events(cx);
-        }
-    }
-
-    fn set_calendar_events_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
-        self.calendar_events_enabled = enabled;
-        self.save_session();
-        self.calendar_last_refresh = None;
-        if enabled {
-            self.calendar_permission = calendar::permission();
-            if !self.calendar_permission.allowed() {
-                calendar::request_permission();
-            }
-            self.refresh_calendar_events(cx);
-        } else {
-            self.calendar_events.clear();
-            cx.notify();
         }
     }
 
@@ -1671,6 +1672,9 @@ impl FlowlistApp {
             vim_mode: Some(self.vim_mode),
             notifications: Some(self.due_notifications),
             calendar_events: Some(self.calendar_events_enabled),
+            calendar_hidden: self.calendar_hidden.clone(),
+            forecast_due_only: Some(self.forecast_due_only),
+            settings_size: self.settings_size,
             fullscreen_reminders: Some(self.fullscreen_reminders),
             pause_media_on_reminder: Some(self.pause_media_on_reminder),
             reminder_background: Some(self.reminder_background.slug().to_string()),
@@ -2032,8 +2036,10 @@ impl FlowlistApp {
             View::Builtin(BuiltinPerspective::Forecast)
                 if self.forecast_calendar_open && self.forecast_past =>
             {
-                let ids = query::forecast_past(db, at, self.forecast_planned);
-                let projects = query::forecast_past_projects(db, at, self.forecast_planned);
+                let show_planned = self.forecast_planned && !self.forecast_due_only;
+                let ids = query::forecast_past(db, at, show_planned, self.forecast_due_only);
+                let projects =
+                    query::forecast_past_projects(db, at, show_planned, self.forecast_due_only);
                 vec![Group {
                     projects,
                     key: "forecast-focus:past".to_string(),
@@ -2046,8 +2052,20 @@ impl FlowlistApp {
                 if self.forecast_calendar_open && self.forecast_future =>
             {
                 let after = self.forecast_week + chrono::Duration::days(6);
-                let ids = query::forecast_future(db, at, after, self.forecast_planned);
-                let projects = query::forecast_future_projects(db, after, self.forecast_planned);
+                let show_planned = self.forecast_planned && !self.forecast_due_only;
+                let ids = query::forecast_future(
+                    db,
+                    at,
+                    after,
+                    show_planned,
+                    self.forecast_due_only,
+                );
+                let projects = query::forecast_future_projects(
+                    db,
+                    after,
+                    show_planned,
+                    self.forecast_due_only,
+                );
                 vec![Group {
                     projects,
                     key: "forecast-focus:future".to_string(),
@@ -2060,8 +2078,16 @@ impl FlowlistApp {
                 if self.forecast_calendar_open && self.forecast_date.is_some() =>
             {
                 let date = self.forecast_date.expect("guard checked");
-                let ids = query::tasks_on_date(db, date, at, self.forecast_planned);
-                let projects = query::projects_on_date(db, date, self.forecast_planned);
+                let show_planned = self.forecast_planned && !self.forecast_due_only;
+                let ids = query::tasks_on_date(
+                    db,
+                    date,
+                    at,
+                    show_planned,
+                    self.forecast_due_only,
+                );
+                let projects =
+                    query::projects_on_date(db, date, show_planned, self.forecast_due_only);
                 let title = query::forecast::day_label(date, local_date(at));
                 vec![Group {
                     projects,
@@ -2073,7 +2099,12 @@ impl FlowlistApp {
             }
             View::Builtin(BuiltinPerspective::Today) => query::today(db, !self.hide_past, at),
             View::Builtin(BuiltinPerspective::Forecast) => {
-                let mut groups = query::forecast_view(db, at, self.forecast_planned);
+                let mut groups = query::forecast_view(
+                    db,
+                    at,
+                    self.forecast_planned && !self.forecast_due_only,
+                    self.forecast_due_only,
+                );
                 self.add_forecast_calendar_groups(&mut groups, at);
                 groups
             }
@@ -5055,6 +5086,7 @@ impl FlowlistApp {
         self.view_menu_cursor = 0;
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
         self.focus = FocusArea::Content;
+        self.save_session();
         cx.notify();
     }
 
@@ -5695,6 +5727,8 @@ impl FlowlistApp {
                 vim_mode,
                 notifications,
                 calendar_events,
+                calendar_hidden,
+                forecast_due_only,
                 fullscreen_reminders,
                 pause_media_on_reminder,
                 reminder_background,
@@ -5798,16 +5832,21 @@ impl FlowlistApp {
                 }
                 self.vim_mode = *vim_mode;
                 self.due_notifications = *notifications;
+                self.forecast_due_only = *forecast_due_only;
+                self.calendar_hidden = calendar_hidden.clone();
                 if self.calendar_events_enabled != *calendar_events {
                     self.calendar_events_enabled = *calendar_events;
                     self.calendar_last_refresh = None;
-                    self.save_session();
                     if self.calendar_events_enabled {
                         calendar::request_permission();
                     } else {
                         self.calendar_events.clear();
+                        self.calendar_calendars.clear();
                     }
+                } else if self.calendar_events_enabled {
+                    self.calendar_last_refresh = None;
                 }
+                self.save_session();
                 self.fullscreen_reminders = *fullscreen_reminders;
                 self.pause_media_on_reminder = *pause_media_on_reminder;
                 self.reminder_background = *reminder_background;
@@ -5957,6 +5996,7 @@ impl FlowlistApp {
                     "2" => Some(modals::SettingsSection::Sidebar),
                     "3" => Some(modals::SettingsSection::Workflow),
                     "4" => Some(modals::SettingsSection::Reminders),
+                    "9" => Some(modals::SettingsSection::Calendar),
                     "5" => Some(modals::SettingsSection::Nearby),
                     "6" => Some(modals::SettingsSection::Trash),
                     "7" => Some(modals::SettingsSection::Mobile),
@@ -7745,7 +7785,7 @@ impl FlowlistApp {
                         })
                         .count()
                 } else {
-                    let data = query::forecast::forecast(db, at);
+                    let data = query::forecast::forecast(db, at, self.forecast_due_only);
                     data.all_ids()
                         .into_iter()
                         .filter(|id| self.focus_allows_task(id))
@@ -8360,6 +8400,9 @@ impl FlowlistApp {
         state["calendar_events"] = serde_json::json!(self.calendar_events);
         state["calendar_events_enabled"] = serde_json::json!(self.calendar_events_enabled);
         state["calendar_permission"] = serde_json::json!(self.calendar_permission.label());
+        state["calendar_calendars"] = serde_json::json!(self.calendar_calendars);
+        state["calendar_hidden"] = serde_json::json!(self.calendar_hidden);
+        state["forecast_due_only"] = serde_json::json!(self.forecast_due_only);
         state["inspector_section_boxes"] =
             serde_json::json!(self.inspector_section_boxes.borrow().clone());
         state["inspector_sections"] = serde_json::json!(self.inspector_sections);

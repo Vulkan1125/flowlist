@@ -2,11 +2,15 @@
 
 ## Unreleased
 
-- **Calendar events in Forecast.** With Settings → Workflow → Calendar enabled,
-  Flowlist reads macOS Calendar events and shows them above each day's tasks in
-  Forecast. The month grid shows event chips and the week strip counts them;
-  events are read-only, never stored in the library, and do not affect task
-  counts outside Forecast.
+- **Calendar events in Forecast.** Calendar now has its own Settings section.
+  Turn on Forecast events, grant read-only access, and switch individual
+  calendars (holidays, birthdays and the rest) on or off. Events sit above each
+  day's tasks, the month grid shows event chips and the week strip counts them.
+- **Forecast due-only mode and Later headings.** Settings → Workflow → Forecast
+  can show only due dates, hiding defer-only and planned-only entries. The
+  near horizon is **Later this month** and the far folded horizon is **Later**.
+- **Settings remembers its size.** The Settings sheet reopens at the size it was
+  last dragged to.
 - **Collapsible inspector sections.** Title, Action, Notes & Attachments, Dates,
   Repeat, Tags and Notifications each fold from their header; the choice is
   remembered per device. Project sections cover Project, Dates, Review,

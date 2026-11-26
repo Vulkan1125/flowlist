@@ -131,12 +131,12 @@ impl FlowlistApp {
                     _ => continue,
                 }
             }
-            let mut dates = vec![
-                db.effective_due(id).map(|stamp| stamp.local_date()),
-                db.effective_defer(id).map(|stamp| stamp.local_date()),
-            ];
-            if self.forecast_planned {
-                dates.push(db.effective_planned(id).map(|stamp| stamp.local_date()));
+            let mut dates = vec![db.effective_due(id).map(|stamp| stamp.local_date())];
+            if !self.forecast_due_only {
+                dates.push(db.effective_defer(id).map(|stamp| stamp.local_date()));
+                if self.forecast_planned {
+                    dates.push(db.effective_planned(id).map(|stamp| stamp.local_date()));
+                }
             }
             for date in dates.into_iter().flatten() {
                 let ids = days.entry(date).or_default();
@@ -169,12 +169,12 @@ impl FlowlistApp {
             if !project.status.is_open() || !self.focus_allows_project(&project.id) {
                 continue;
             }
-            let mut dates = vec![
-                project.due.map(|stamp| stamp.local_date()),
-                project.defer.map(|stamp| stamp.local_date()),
-            ];
-            if self.forecast_planned {
-                dates.push(project.planned.map(|stamp| stamp.local_date()));
+            let mut dates = vec![project.due.map(|stamp| stamp.local_date())];
+            if !self.forecast_due_only {
+                dates.push(project.defer.map(|stamp| stamp.local_date()));
+                if self.forecast_planned {
+                    dates.push(project.planned.map(|stamp| stamp.local_date()));
+                }
             }
             for date in dates.into_iter().flatten() {
                 let ids = days.entry(date).or_default();
@@ -654,7 +654,12 @@ impl FlowlistApp {
         );
 
         let mut row = div().flex().w_full().gap_1().pt_2();
-        let past_count = query::forecast_past(self.store.db(), now(), self.forecast_planned)
+        let past_count = query::forecast_past(
+            self.store.db(),
+            now(),
+            self.forecast_planned && !self.forecast_due_only,
+            self.forecast_due_only,
+        )
             .into_iter()
             .filter(|id| self.focus_allows_task(id))
             .count()
@@ -663,7 +668,8 @@ impl FlowlistApp {
             self.store.db(),
             now(),
             week + Duration::days(6),
-            self.forecast_planned,
+            self.forecast_planned && !self.forecast_due_only,
+            self.forecast_due_only,
         )
         .into_iter()
         .filter(|id| self.focus_allows_task(id))
@@ -1385,7 +1391,8 @@ impl FlowlistApp {
                                                 }
                                             }),
                                     )
-                                    .child(
+                                    .when(!self.forecast_due_only, |this| {
+                                        this.child(
                                         div()
                                             .flex_shrink_0()
                                             .child(
@@ -1412,7 +1419,8 @@ impl FlowlistApp {
                                                         cx.notify();
                                                     })),
                                             ),
-                                    )
+                                        )
+                                    })
                                 },
                             )
                             .when(!is_trash && !is_archive, |this| {

@@ -334,4 +334,19 @@ if not offset or offset <= 0:
 PY
 echo "  dragged the body to offset $scroll"
 
+echo "11. Settings remembers its size"
+size_before=$(value settings_size)
+"$helpers/flowctl" key 53
+sleep 0.6
+launch
+size_after=$(value settings_size)
+python3 - "$size_before" "$size_after" <<'PY'
+import ast, sys
+before = ast.literal_eval(sys.argv[1])
+after = ast.literal_eval(sys.argv[2])
+if abs(before[0] - after[0]) > 2 or abs(before[1] - after[1]) > 2:
+    raise SystemExit(f"FAIL: settings size {before} became {after}")
+print(f"  reopened at {after}")
+PY
+
 echo "ALL SETTINGS CHECKS PASSED"

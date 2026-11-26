@@ -295,10 +295,12 @@ library:
   survive a relaunch.
 - `scripts/gui/calendar-events-probe.sh` runs Forecast with the
   `FLOWLIST_TEST_CALENDAR` fixture and checks agenda event rows, month-grid
-  chips and event-only Today/Tomorrow groups.
+  chips, event-only Today/Tomorrow groups and hiding a whole calendar from the
+  Calendar settings section.
 - `scripts/gui/settings-probe.sh` checks the sectioned sheet, the `⌘1`–`⌘7`
   section shortcuts, Plain's keyboard accent presets, Escape's undo pair, the
-  saved accent pair, relaunch persistence and Reset to ink.
+  saved accent pair, relaunch persistence, Reset to ink and the remembered
+  Settings size.
 - `scripts/gui/notification-parity-probe.sh` removes and restores a default
   notification, adds relative and custom notifications through the Add
   Notification menu, checks the full-screen reminder and collapses the section.

@@ -184,7 +184,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
             }
             groups
         }
-        BuiltinPerspective::Forecast => forecast_groups(db, at, true),
+        BuiltinPerspective::Forecast => forecast_groups(db, at, true, false),
         BuiltinPerspective::Flagged => run(
             db,
             &FilterNode::condition(Condition::Flagged { value: true }),
@@ -459,6 +459,7 @@ pub fn tasks_on_date(
     date: chrono::NaiveDate,
     _at: DateTime<Utc>,
     include_planned: bool,
+    due_only: bool,
 ) -> Vec<TaskId> {
     let mut ids: Vec<TaskId> = manual_order(db)
         .into_iter()
@@ -476,11 +477,14 @@ pub fn tasks_on_date(
                 }
             }
             db.effective_due(id).is_some_and(|stamp| stamp.local_date() == date)
-                || (include_planned
-                    && db
-                        .effective_planned(id)
-                        .is_some_and(|stamp| stamp.local_date() == date))
-                || db.effective_defer(id).is_some_and(|stamp| stamp.local_date() == date)
+                || (!due_only
+                    && (db
+                        .effective_defer(id)
+                        .is_some_and(|stamp| stamp.local_date() == date)
+                        || (include_planned
+                            && db
+                                .effective_planned(id)
+                                .is_some_and(|stamp| stamp.local_date() == date))))
         })
         .collect();
     ids.sort_by_cached_key(|id| {
@@ -498,14 +502,24 @@ pub fn tasks_on_date(
 
 /// The Forecast list. `show_planned` mirrors the Forecast header's Planned
 /// toggle; the calendar and day lists use the same flag.
-pub fn forecast_view(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group> {
-    forecast_groups(db, at, show_planned)
+pub fn forecast_view(
+    db: &Db,
+    at: DateTime<Utc>,
+    show_planned: bool,
+    due_only: bool,
+) -> Vec<Group> {
+    forecast_groups(db, at, show_planned, due_only)
 }
 
 /// Everything before today: overdue due dates and, when planned dates are
 /// shown, slipped plans. Deferred dates are deliberately excluded, matching
 /// Forecast's Past tile.
-pub fn forecast_past(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<TaskId> {
+pub fn forecast_past(
+    db: &Db,
+    at: DateTime<Utc>,
+    show_planned: bool,
+    due_only: bool,
+) -> Vec<TaskId> {
     let today = crate::time::local_date(at);
     let mut ids: Vec<TaskId> = db
         .tasks
@@ -521,7 +535,8 @@ pub fn forecast_past(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Task
                 }
             }
             db.effective_due(&task.id).is_some_and(|stamp| stamp.local_date() < today)
-                || (show_planned
+                || (!due_only
+                    && show_planned
                     && db
                         .effective_planned(&task.id)
                         .is_some_and(|stamp| stamp.local_date() < today))
@@ -544,6 +559,7 @@ pub fn forecast_future(
     at: DateTime<Utc>,
     after: chrono::NaiveDate,
     show_planned: bool,
+    due_only: bool,
 ) -> Vec<TaskId> {
     let mut ids: Vec<TaskId> = db
         .tasks
@@ -559,13 +575,14 @@ pub fn forecast_future(
                 }
             }
             db.effective_due(&task.id).is_some_and(|stamp| stamp.local_date() > after)
-                || db
-                    .effective_defer(&task.id)
-                    .is_some_and(|stamp| stamp.local_date() > after)
-                || (show_planned
-                    && db
-                        .effective_planned(&task.id)
-                        .is_some_and(|stamp| stamp.local_date() > after))
+                || (!due_only
+                    && (db
+                        .effective_defer(&task.id)
+                        .is_some_and(|stamp| stamp.local_date() > after)
+                        || (show_planned
+                            && db
+                                .effective_planned(&task.id)
+                                .is_some_and(|stamp| stamp.local_date() > after))))
         })
         .map(|task| task.id.clone())
         .collect();
@@ -585,6 +602,7 @@ pub fn projects_on_date(
     db: &Db,
     date: NaiveDate,
     show_planned: bool,
+    due_only: bool,
 ) -> Vec<ProjectId> {
     let mut ids: Vec<ProjectId> = db
         .projects
@@ -592,11 +610,12 @@ pub fn projects_on_date(
         .filter(|project| project.status.is_open())
         .filter(|project| {
             project.due.is_some_and(|stamp| stamp.local_date() == date)
-                || project.defer.is_some_and(|stamp| stamp.local_date() == date)
-                || (show_planned
-                    && project
-                        .planned
-                        .is_some_and(|stamp| stamp.local_date() == date))
+                || (!due_only
+                    && (project.defer.is_some_and(|stamp| stamp.local_date() == date)
+                        || (show_planned
+                            && project
+                                .planned
+                                .is_some_and(|stamp| stamp.local_date() == date))))
         })
         .map(|project| project.id.clone())
         .collect();
@@ -605,7 +624,12 @@ pub fn projects_on_date(
 }
 
 /// Projects whose due date, or shown planned date, has slipped before today.
-pub fn forecast_past_projects(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<ProjectId> {
+pub fn forecast_past_projects(
+    db: &Db,
+    at: DateTime<Utc>,
+    show_planned: bool,
+    due_only: bool,
+) -> Vec<ProjectId> {
     let today = crate::time::local_date(at);
     let mut ids: Vec<ProjectId> = db
         .projects
@@ -613,7 +637,8 @@ pub fn forecast_past_projects(db: &Db, at: DateTime<Utc>, show_planned: bool) ->
         .filter(|project| project.status.is_open())
         .filter(|project| {
             project.due.is_some_and(|stamp| stamp.local_date() < today)
-                || (show_planned
+                || (!due_only
+                    && show_planned
                     && project
                         .planned
                         .is_some_and(|stamp| stamp.local_date() < today))
@@ -629,6 +654,7 @@ pub fn forecast_future_projects(
     db: &Db,
     after: NaiveDate,
     show_planned: bool,
+    due_only: bool,
 ) -> Vec<ProjectId> {
     let mut ids: Vec<ProjectId> = db
         .projects
@@ -636,11 +662,12 @@ pub fn forecast_future_projects(
         .filter(|project| project.status.is_open())
         .filter(|project| {
             project.due.is_some_and(|stamp| stamp.local_date() > after)
-                || project.defer.is_some_and(|stamp| stamp.local_date() > after)
-                || (show_planned
-                    && project
-                        .planned
-                        .is_some_and(|stamp| stamp.local_date() > after))
+                || (!due_only
+                    && (project.defer.is_some_and(|stamp| stamp.local_date() > after)
+                        || (show_planned
+                            && project
+                                .planned
+                                .is_some_and(|stamp| stamp.local_date() > after))))
         })
         .map(|project| project.id.clone())
         .collect();
@@ -663,8 +690,13 @@ fn sort_project_ids(db: &Db, ids: &mut [ProjectId]) {
     });
 }
 
-fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group> {
-    let data = forecast::forecast(db, at);
+fn forecast_groups(
+    db: &Db,
+    at: DateTime<Utc>,
+    show_planned: bool,
+    due_only: bool,
+) -> Vec<Group> {
+    let data = forecast::forecast(db, at, due_only);
     let today = crate::time::local_date(at);
     let tomorrow = today + Duration::days(1);
     let horizon = today + Duration::days(7);
@@ -845,7 +877,13 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group>
             .cloned()
             .collect()
     };
-    push("forecast:later", "Later", i64::MAX - 1, &later, &project_later);
+    push(
+        "forecast:later",
+        "Later this month",
+        i64::MAX - 1,
+        &later,
+        &project_later,
+    );
     let next_month: Vec<TaskId> = if show_planned {
         data.next_month.clone()
     } else {
@@ -857,7 +895,7 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group>
     };
     push(
         "forecast:next-month",
-        "Next month and later",
+        "Later",
         i64::MAX,
         &next_month,
         &project_next_month,

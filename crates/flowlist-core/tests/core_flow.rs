@@ -1371,7 +1371,7 @@ fn tasks_on_date_uses_the_local_due_date() {
     later.defer = Some(Stamp::date_only(today + Duration::days(3)));
     let later_id = store.execute(Command::CreateTask(later)).unwrap().created[0].clone();
 
-    let ids: Vec<String> = query::tasks_on_date(store.db(), today, Utc::now(), true)
+    let ids: Vec<String> = query::tasks_on_date(store.db(), today, Utc::now(), true, false)
         .into_iter()
         .map(|id| id.to_string())
         .collect();
@@ -2003,7 +2003,7 @@ fn forecast_keeps_each_date_type_independent() {
     let near_future = make(&mut store, "Later this month", None, Some(day(20)));
     let far_future = make(&mut store, "Next month", None, Some(day(45)));
 
-    let data = forecast::forecast(store.db(), Utc::now());
+    let data = forecast::forecast(store.db(), Utc::now(), false);
     assert!(data.planned_today.contains(&both));
     assert!(data
         .days
@@ -2015,9 +2015,9 @@ fn forecast_keeps_each_date_type_independent() {
     assert!(!data.later.contains(&far_future));
     assert!(data.next_month.contains(&far_future));
 
-    let on_planned = query::tasks_on_date(store.db(), today, Utc::now(), true);
+    let on_planned = query::tasks_on_date(store.db(), today, Utc::now(), true, false);
     assert!(on_planned.contains(&both));
-    let on_due = query::tasks_on_date(store.db(), today + Duration::days(5), Utc::now(), true);
+    let on_due = query::tasks_on_date(store.db(), today + Duration::days(5), Utc::now(), true, false);
     assert!(on_due.contains(&both));
 }
 
@@ -2122,7 +2122,7 @@ fn planned_dates_inherit_from_project_and_parent_with_overrides() {
         .collect();
     assert!(today_ids.contains(&from_project_id));
 
-    let forecast = flowlist_core::query::forecast::forecast(store.db(), Utc::now());
+    let forecast = flowlist_core::query::forecast::forecast(store.db(), Utc::now(), false);
     assert!(forecast.planned_today.contains(&from_project_id));
 
     // Clearing the project plan removes the inherited date.
@@ -2360,7 +2360,7 @@ fn project_due_and_defer_constrain_tasks() {
         .any(|row| row.id == due_today_task_id));
 
     // Forecast uses the effective due date.
-    let forecast = query::forecast::forecast(store.db(), Utc::now());
+    let forecast = query::forecast::forecast(store.db(), Utc::now(), false);
     assert!(forecast
         .days
         .get(&(today + Duration::days(4)))
@@ -3087,7 +3087,7 @@ fn planned_dates_are_independent_of_availability() {
     assert_eq!(db.tasks[&id].planned, Some(stamp));
     // A planned date is informational: the task is still available.
     assert!(flowlist_core::query::availability::availability(db, &id, Utc::now()).is_available());
-    let forecast = flowlist_core::query::forecast::forecast(db, Utc::now());
+    let forecast = flowlist_core::query::forecast::forecast(db, Utc::now(), false);
     assert!(forecast.planned_today.contains(&id));
 
     // Sorts and groups can read it.
@@ -3108,7 +3108,7 @@ fn planned_dates_are_independent_of_availability() {
             },
         })
         .unwrap();
-    let forecast = flowlist_core::query::forecast::forecast(store.db(), Utc::now());
+    let forecast = flowlist_core::query::forecast::forecast(store.db(), Utc::now(), false);
     assert!(!forecast.planned_today.contains(&id));
 }
 
@@ -3216,7 +3216,7 @@ fn forecast_puts_project_dates_above_the_tasks() {
         .clone();
     let other_task_id = store.db().resolve_task(&other_task_id).unwrap();
 
-    let groups = query::forecast_view(store.db(), Utc::now(), true);
+    let groups = query::forecast_view(store.db(), Utc::now(), true, false);
     let group = |key: &str| groups.iter().find(|group| group.key == key).unwrap();
     // Due and planned on the same day still make one project row.
     assert_eq!(
@@ -3233,18 +3233,19 @@ fn forecast_puts_project_dates_above_the_tasks() {
     assert!(!groups.iter().any(|group| group.projects.contains(&done_id)));
     assert!(group("forecast:later").projects.contains(&later_id));
     assert!(group("forecast:next-month").projects.contains(&next_id));
-    assert!(query::projects_on_date(store.db(), today, true).contains(&due_id));
+    assert!(query::projects_on_date(store.db(), today, true, false).contains(&due_id));
     // The task from the project above the section comes before an unrelated one.
     let today_rows = &group("forecast:today").rows;
     assert_eq!(today_rows[0].id, alpha_task_id);
     assert!(today_rows.iter().any(|row| row.id == other_task_id));
-    assert!(query::projects_on_date(store.db(), today + Duration::days(1), true)
+    assert!(query::projects_on_date(store.db(), today + Duration::days(1), true, false)
         .contains(&deferred_id));
-    assert!(query::forecast_past_projects(store.db(), Utc::now(), true).contains(&past_id));
+    assert!(query::forecast_past_projects(store.db(), Utc::now(), true, false).contains(&past_id));
     assert!(query::forecast_future_projects(
         store.db(),
         today + Duration::days(7),
-        true
+        true,
+        false
     )
     .contains(&later_id));
 
@@ -3258,12 +3259,12 @@ fn forecast_puts_project_dates_above_the_tasks() {
         .created[0]
         .clone();
     let planned_id = store.db().resolve_project(&planned_id).unwrap();
-    let groups = query::forecast_view(store.db(), Utc::now(), true);
+    let groups = query::forecast_view(store.db(), Utc::now(), true, false);
     assert!(groups
         .iter()
         .find(|group| group.key == "forecast:planned-today")
         .is_some_and(|group| group.projects.contains(&planned_id)));
-    let groups = query::forecast_view(store.db(), Utc::now(), false);
+    let groups = query::forecast_view(store.db(), Utc::now(), false, false);
     assert!(!groups.iter().any(|group| group.projects.contains(&planned_id)));
 }
 
@@ -3463,7 +3464,7 @@ fn forecast_tag_and_flagged_undated_tasks_join_forecast() {
         ))
         .unwrap();
 
-    let groups = query::forecast_view(store.db(), Utc::now(), true);
+    let groups = query::forecast_view(store.db(), Utc::now(), true, false);
     let group = |key: &str| groups.iter().find(|group| group.key == key).unwrap();
     assert!(group("forecast:tag").rows.iter().any(|row| row.id == tagged_id));
     assert!(group("forecast:flagged")
@@ -3590,4 +3591,59 @@ fn completing_a_review_records_the_last_reviewed_date() {
         project.next_review,
         reviewed_on + chrono::Duration::days(project.review_interval_days as i64)
     );
+}
+
+#[test]
+fn due_only_forecast_skips_defer_and_planned_dates() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let today = local_date(Utc::now());
+    let tomorrow = today + chrono::Duration::days(1);
+
+    let mut task = NewTask::new("Due only");
+    task.defer = Some(Stamp::date_only(today));
+    task.due = Some(Stamp::date_only(tomorrow));
+    let id = store
+        .execute(Command::CreateTask(task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let task_id = store.db().resolve_task(&id).unwrap();
+
+    let normal = flowlist_core::query::forecast_view(store.db(), Utc::now(), true, false);
+    let today_group = normal
+        .iter()
+        .find(|group| group.key == "forecast:deferred")
+        .expect("deferred group");
+    assert!(today_group.rows.iter().any(|row| row.id == task_id));
+
+    let due_only = flowlist_core::query::forecast_view(store.db(), Utc::now(), true, true);
+    assert!(
+        !due_only
+            .iter()
+            .find(|group| group.key == "forecast:deferred")
+            .is_some_and(|group| group.rows.iter().any(|row| row.id == task_id))
+    );
+    assert!(
+        due_only
+            .iter()
+            .find(|group| group.key == "forecast:tomorrow")
+            .is_some_and(|group| group.rows.iter().any(|row| row.id == task_id))
+    );
+    assert!(!flowlist_core::query::tasks_on_date(
+        store.db(),
+        today,
+        Utc::now(),
+        true,
+        true
+    )
+    .contains(&task_id));
+    assert!(flowlist_core::query::tasks_on_date(
+        store.db(),
+        tomorrow,
+        Utc::now(),
+        true,
+        true
+    )
+    .contains(&task_id));
 }

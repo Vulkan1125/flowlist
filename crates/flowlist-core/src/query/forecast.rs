@@ -34,7 +34,7 @@ pub struct Forecast {
     pub days: BTreeMap<NaiveDate, ForecastDay>,
     pub later: Vec<TaskId>,
     /// Due or planned more than 30 days out. Kept separate so Forecast can
-    /// fold the far horizon away under Next month and later.
+    /// fold the far horizon away under Later.
     pub next_month: Vec<TaskId>,
     pub deferred_today: Vec<TaskId>,
     pub planned_today: Vec<TaskId>,
@@ -75,7 +75,7 @@ impl Forecast {
 /// projects are excluded. Each date type is independent: a task planned for
 /// today and due next week appears in both places, and a planned date that has
 /// slipped stays in Past rather than moving forward.
-pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
+pub fn forecast(db: &Db, at: DateTime<Utc>, due_only: bool) -> Forecast {
     let today = local_date(at);
     let tomorrow = today + chrono::Duration::days(1);
     let horizon = today + chrono::Duration::days(7);
@@ -119,8 +119,9 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
         }
 
         // Defer dates place work on the day it becomes available; a defer date
-        // in the past is simply available, not a Forecast entry.
-        if let Some(defer) = db.effective_defer(&task.id) {
+        // in the past is simply available, not a Forecast entry. Due-only mode
+        // deliberately skips both defer and planned buckets.
+        if !due_only && let Some(defer) = db.effective_defer(&task.id) {
             let date = defer.local_date();
             if date == today {
                 result.deferred_today.push(task.id.clone());
@@ -137,7 +138,7 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
             }
         }
 
-        if let Some(planned) = db.effective_planned(&task.id) {
+        if !due_only && let Some(planned) = db.effective_planned(&task.id) {
             let date = planned.local_date();
             if date < today {
                 result.past_planned.push(task.id.clone());
@@ -170,6 +171,9 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
             (project.defer, 1),
             (project.planned, 2),
         ] {
+            if due_only && kind != 0 {
+                continue;
+            }
             let Some(stamp) = date else {
                 continue;
             };
