@@ -4520,7 +4520,23 @@ impl FlowlistApp {
                         .flex()
                         .flex_col()
                         .gap_0p5()
-                        .child(div().text_sm().child("Window controls"))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .child(div().text_sm().child("Window controls"))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.text_faint)
+                                        .child(if traffic_lights {
+                                            "· shown in the header"
+                                        } else {
+                                            "· hidden"
+                                        }),
+                                ),
+                        )
                         .child(
                             div()
                                 .text_xs()
@@ -4546,16 +4562,8 @@ impl FlowlistApp {
                         .id("settings-window-controls")
                         .flex()
                         .items_center()
-                        .gap_2()
                         .cursor_pointer()
                         .child(widgets::switch(theme, traffic_lights))
-                        .child(div().text_xs().text_color(theme.text_faint).child(
-                            if traffic_lights {
-                                "Shown in the header"
-                            } else {
-                                "Hidden"
-                            },
-                        ))
                         .on_click(cx.listener(|this, _, _, cx| {
                             if let Some(Modal::Settings { traffic_lights, .. }) = &mut this.modal {
                                 *traffic_lights = !*traffic_lights;
