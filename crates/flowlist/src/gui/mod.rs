@@ -401,8 +401,10 @@ pub struct FlowlistApp {
     /// Alternate Dock icon, saved with the session.
     app_icon: AppIcon,
     view: View,
-    /// A project or folder scoping every perspective, or `None`.
-    focus_target: Option<FocusTarget>,
+    /// Projects and folders scoping every perspective.
+    focus_targets: Vec<FocusTarget>,
+    /// Projects and folders Cmd-clicked in the sidebar, waiting for Focus.
+    focus_selection: Vec<FocusTarget>,
     /// First day of the month the Forecast calendar shows.
     forecast_month: chrono::NaiveDate,
     /// Monday of the week the collapsed Forecast strip shows.
@@ -453,8 +455,10 @@ pub struct FlowlistApp {
     history_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Settings-sheet sidebar toggles, measured for the same reason.
     settings_toggle_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
-    /// The header focus chip, measured so a probe can clear focus by clicking it.
-    focus_chip_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The focus banner, measured so a probe can clear focus by clicking it.
+    focus_banner_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The sidebar's "Focus on N selected" action.
+    focus_selected_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// Collapsible sidebar headings, measured so a probe can fold a section.
     sidebar_section_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Sidebar count badges keyed by row, so a probe can see which numbers a
@@ -750,13 +754,23 @@ impl FlowlistApp {
         if !view_exists(store.db(), &view) {
             view = View::Builtin(BuiltinPerspective::Inbox);
         }
-        let focus_target = session
-            .focus
-            .as_deref()
-            .and_then(|key| FocusTarget::from_key(store.db(), key));
-        if let Some(target) = &focus_target
+        let mut focus_targets: Vec<FocusTarget> = session
+            .focus_targets
+            .iter()
+            .filter_map(|key| FocusTarget::from_key(store.db(), key))
+            .collect();
+        if focus_targets.is_empty()
+            && let Some(key) = session.focus.as_deref()
+            && let Some(target) = FocusTarget::from_key(store.db(), key)
+        {
+            focus_targets.push(target);
+        }
+        focus_targets.dedup_by(|left, right| left.key() == right.key());
+        if let Some(target) = focus_targets.first()
             && matches!(view, View::Project(_) | View::Folder(_))
-            && !target.allows_view(store.db(), &view)
+            && !focus_targets
+                .iter()
+                .any(|target| target.allows_view(store.db(), &view))
         {
             view = target.view();
         }
@@ -765,9 +779,10 @@ impl FlowlistApp {
             .into_iter()
             .filter(|id| store.db().tasks.contains_key(id))
             .filter(|id| {
-                focus_target
-                    .as_ref()
-                    .is_none_or(|target| target.allows_task(store.db(), id))
+                focus_targets.is_empty()
+                    || focus_targets
+                        .iter()
+                        .any(|target| target.allows_task(store.db(), id))
             })
             .collect();
         let (theme_kind, theme_appearance) = session.theme_choice();
@@ -905,7 +920,8 @@ impl FlowlistApp {
             theme,
             app_icon,
             view,
-            focus_target,
+            focus_targets,
+            focus_selection: Vec::new(),
             forecast_month,
             forecast_week: {
                 let today = local_date(now());
@@ -933,7 +949,8 @@ impl FlowlistApp {
             sidebar_name_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             history_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             settings_toggle_boxes: Rc::new(RefCell::new(BTreeMap::new())),
-            focus_chip_anchor: Rc::new(Cell::new(None)),
+            focus_banner_anchor: Rc::new(Cell::new(None)),
+            focus_selected_anchor: Rc::new(Cell::new(None)),
             sidebar_section_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             sidebar_count_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             sidebar_count_values: Rc::new(RefCell::new(BTreeMap::new())),
@@ -1446,7 +1463,12 @@ impl FlowlistApp {
             forecast_planned: Some(self.forecast_planned),
             forecast_calendar_expanded: Some(self.forecast_calendar_expanded),
             forecast_calendar_height: self.forecast_calendar_height,
-            focus: self.focus_target.as_ref().map(FocusTarget::key),
+            focus: None,
+            focus_targets: self
+                .focus_targets
+                .iter()
+                .map(FocusTarget::key)
+                .collect(),
             view_options: {
                 let mut map = self.view_options.clone();
                 map.insert(self.view.key(), self.current_view_options());
@@ -1513,51 +1535,59 @@ impl FlowlistApp {
 
     fn prune_focus(&mut self) {
         let db = self.store.db();
-        let exists = self.focus_target.as_ref().is_none_or(|target| match target {
+        self.focus_targets.retain(|target| match target {
             FocusTarget::Project(id) => db.projects.contains_key(id),
             FocusTarget::Folder(id) => db.folders.contains_key(id),
         });
-        if !exists {
-            self.focus_target = None;
-            self.focus_chip_anchor.set(None);
+        self.focus_selection.retain(|target| match target {
+            FocusTarget::Project(id) => db.projects.contains_key(id),
+            FocusTarget::Folder(id) => db.folders.contains_key(id),
+        });
+        if self.focus_targets.is_empty() {
+            self.focus_banner_anchor.set(None);
         }
     }
 
     // --------------------------------------------------------------- focus
 
     fn focus_allows_project(&self, project: &ProjectId) -> bool {
-        self.focus_target
-            .as_ref()
-            .is_none_or(|target| target.allows_project(self.store.db(), project))
+        self.focus_targets.is_empty()
+            || self
+                .focus_targets
+                .iter()
+                .any(|target| target.allows_project(self.store.db(), project))
     }
 
     fn focus_allows_task(&self, task: &TaskId) -> bool {
-        self.focus_target
-            .as_ref()
-            .is_none_or(|target| target.allows_task(self.store.db(), task))
+        self.focus_targets.is_empty()
+            || self
+                .focus_targets
+                .iter()
+                .any(|target| target.allows_task(self.store.db(), task))
     }
 
     fn focus_groups(&self, groups: Vec<Group>) -> Vec<Group> {
-        let Some(target) = &self.focus_target else {
+        if self.focus_targets.is_empty() {
             return groups;
-        };
-        let db = self.store.db();
+        }
         groups
             .into_iter()
             .filter_map(|mut group| {
                 let group_project = group
                     .key
                     .strip_prefix("project:")
-                    .and_then(|id| db.resolve_project(id).ok());
+                    .and_then(|id| self.store.db().resolve_project(id).ok());
                 if let Some(project) = &group_project
-                    && !target.allows_project(db, project)
+                    && !self.focus_allows_project(project)
                 {
                     return None;
                 }
                 group
                     .projects
-                    .retain(|project| target.allows_project(db, project));
-                group.rows.retain(|row| target.allows_task(db, &row.id));
+                    .retain(|project| self.focus_allows_project(project));
+                group
+                    .rows
+                    .retain(|row| self.focus_allows_task(&row.id));
                 if group.rows.is_empty()
                     && group.projects.is_empty()
                     && group_project.is_none()
@@ -1571,22 +1601,39 @@ impl FlowlistApp {
     }
 
     fn set_focus(&mut self, target: FocusTarget, cx: &mut Context<Self>) {
+        self.set_focus_targets(vec![target], cx);
+    }
+
+    fn set_focus_targets(&mut self, targets: Vec<FocusTarget>, cx: &mut Context<Self>) {
+        let mut targets: Vec<FocusTarget> = targets;
+        let mut seen = BTreeSet::new();
+        targets.retain(|target| seen.insert(target.key()));
+        if targets.is_empty() {
+            self.clear_focus(cx);
+            return;
+        }
         let (ancestors, rebuild_view) = {
             let db = self.store.db();
-            let folder = match &target {
-                FocusTarget::Folder(id) => Some(id.clone()),
-                FocusTarget::Project(id) => {
-                    db.projects.get(id).and_then(|project| project.folder.clone())
-                }
-            };
             let mut ancestors = Vec::new();
-            let mut current = folder;
-            while let Some(id) = current {
-                ancestors.push(id.clone());
-                current = db.folders.get(&id).and_then(|folder| folder.parent.clone());
+            for target in &targets {
+                let folder = match target {
+                    FocusTarget::Folder(id) => Some(id.clone()),
+                    FocusTarget::Project(id) => {
+                        db.projects.get(id).and_then(|project| project.folder.clone())
+                    }
+                };
+                let mut current = folder;
+                while let Some(id) = current {
+                    if !ancestors.contains(&id) {
+                        ancestors.push(id.clone());
+                    }
+                    current = db.folders.get(&id).and_then(|folder| folder.parent.clone());
+                }
             }
             let rebuild = matches!(self.view, View::Project(_) | View::Folder(_))
-                && !target.allows_view(db, &self.view);
+                && !targets
+                    .iter()
+                    .any(|target| target.allows_view(db, &self.view));
             (ancestors, rebuild)
         };
         for id in ancestors {
@@ -1594,21 +1641,67 @@ impl FlowlistApp {
             self.expanded.insert(key.clone());
             self.collapsed_groups.remove(&key);
         }
-        self.focus_target = Some(target.clone());
-        self.focus_chip_anchor.set(None);
+        self.focus_targets = targets;
+        self.focus_selection.clear();
+        self.focus_banner_anchor.set(None);
         let db = self.store.db();
-        self.selected.retain(|id| target.allows_task(db, id));
+        self.selected.retain(|id| {
+            self.focus_targets
+                .iter()
+                .any(|target| target.allows_task(db, id))
+        });
         self.anchor = self.selected.first().cloned();
         if rebuild_view {
-            self.set_view(target.view());
+            self.set_view(self.focus_targets[0].view());
         }
         self.save_session();
         cx.notify();
     }
 
+    fn toggle_focus_selection(&mut self, target: FocusTarget, cx: &mut Context<Self>) {
+        if let Some(index) = self
+            .focus_selection
+            .iter()
+            .position(|candidate| candidate == &target)
+        {
+            self.focus_selection.remove(index);
+        } else {
+            self.focus_selection.push(target);
+        }
+        cx.notify();
+    }
+
+    fn clear_focus_selection(&mut self, cx: &mut Context<Self>) {
+        if !self.focus_selection.is_empty() {
+            self.focus_selection.clear();
+            cx.notify();
+        }
+    }
+
+    fn focus_selection_now(&mut self, cx: &mut Context<Self>) {
+        if self.focus_selection.is_empty() {
+            return;
+        }
+        let targets = self.focus_selection.clone();
+        self.set_focus_targets(targets, cx);
+    }
+
+    /// A sidebar focus command uses the whole Cmd-click selection when the
+    /// clicked row is part of it; otherwise it focuses that row alone.
+    fn focus_from_sidebar(&mut self, target: FocusTarget, cx: &mut Context<Self>) {
+        if self.focus_selection.len() > 1 && self.focus_selection.contains(&target) {
+            let targets = self.focus_selection.clone();
+            self.set_focus_targets(targets, cx);
+        } else {
+            self.set_focus_targets(vec![target], cx);
+        }
+    }
+
     fn clear_focus(&mut self, cx: &mut Context<Self>) {
-        if self.focus_target.take().is_some() {
-            self.focus_chip_anchor.set(None);
+        if !self.focus_targets.is_empty() {
+            self.focus_targets.clear();
+            self.focus_selection.clear();
+            self.focus_banner_anchor.set(None);
             self.save_session();
             cx.notify();
         }
@@ -1752,7 +1845,7 @@ impl FlowlistApp {
                 .collect();
         }
 
-        if self.focus_target.is_some()
+        if !self.focus_targets.is_empty()
             && !matches!(
                 self.view,
                 View::Builtin(
@@ -1920,7 +2013,7 @@ impl FlowlistApp {
                 rank: 1,
             });
         }
-        if self.focus_target.is_some() {
+        if !self.focus_targets.is_empty() {
             entries.push(QuickOpenEntry {
                 label: "Clear focus".to_string(),
                 detail: "Focus".to_string(),
@@ -2282,11 +2375,15 @@ impl FlowlistApp {
     /// Switch views without notifying. Callers that already repaint use this
     /// from inside a command; `open_view` is the interactive entry point.
     fn set_view(&mut self, view: View) {
-        if let Some(target) = self.focus_target.as_ref()
-            && !target.allows_view(self.store.db(), &view)
+        if !self.focus_targets.is_empty()
+            && !self
+                .focus_targets
+                .iter()
+                .any(|target| target.allows_view(self.store.db(), &view))
         {
-            self.focus_target = None;
-            self.focus_chip_anchor.set(None);
+            self.focus_targets.clear();
+            self.focus_selection.clear();
+            self.focus_banner_anchor.set(None);
         }
         let key = view.key();
         if self.view.key() != key {
@@ -7227,7 +7324,16 @@ impl FlowlistApp {
         };
         let mut state = serde_json::json!({
             "view": self.view.key(),
-            "focus_target": self.focus_target.as_ref().map(FocusTarget::key),
+            "focus_targets": self
+                .focus_targets
+                .iter()
+                .map(FocusTarget::key)
+                .collect::<Vec<_>>(),
+            "focus_selection": self
+                .focus_selection
+                .iter()
+                .map(FocusTarget::key)
+                .collect::<Vec<_>>(),
             "modal": self.modal.as_ref().map(|modal| modal.title()),
             "modal_message": self.modal_error.clone(),
             "date_error": self.date_error.as_ref().map(|(_, field, message)| {
@@ -7507,7 +7613,8 @@ impl FlowlistApp {
             }))
         }));
         state["field_editor"] = serde_json::json!(anchor(self.field_editor_anchor.get()));
-        state["focus_chip"] = serde_json::json!(anchor(self.focus_chip_anchor.get()));
+        state["focus_banner"] = serde_json::json!(anchor(self.focus_banner_anchor.get()));
+        state["focus_selected"] = serde_json::json!(anchor(self.focus_selected_anchor.get()));
         state["hide_past"] = serde_json::json!(self.hide_past);
         state["hide_past_anchor"] = serde_json::json!(anchor(self.hide_past_anchor.get()));
         state["forecast_calendar_open"] = serde_json::json!(self.forecast_calendar_open);
@@ -7764,61 +7871,57 @@ impl FlowlistApp {
             )
     }
 
-    /// The header chip that names the focused folder or project and clears it.
-    fn render_focus_chip(
-        &self,
-        target: &FocusTarget,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    /// The full-width Focus banner below the title bar.
+    fn render_focus_banner(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
-        let label = target.label(self.store.db());
-        let icon = match target {
-            FocusTarget::Project(_) => Icon::Project,
-            FocusTarget::Folder(_) => Icon::Folder,
-        };
-        let anchor = self.focus_chip_anchor.clone();
+        let labels: Vec<String> = self
+            .focus_targets
+            .iter()
+            .map(|target| target.label(self.store.db()))
+            .collect();
+        let label = format!("Focus: {}", labels.join(", "));
+        let anchor = self.focus_banner_anchor.clone();
+        let banner = div()
+            .id("focus-banner")
+            .w_full()
+            .h(px(30.))
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_3()
+            .border_b_1()
+            .border_color(theme.border_soft)
+            .bg(theme.selection)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(theme.text)
+                    .child(label),
+            )
+            .child(
+                div()
+                    .id("focus-clear")
+                    .size(px(22.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_sm()
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(icons::icon(Icon::Close, 11.0, theme.text_faint))
+                    .on_click(cx.listener(|this, _, _, cx| this.clear_focus(cx))),
+            );
         div()
             .on_children_prepainted(move |bounds, _, _| {
                 if let Some(bounds) = bounds.first() {
                     anchor.set(Some(*bounds));
                 }
             })
-            .id("focus-chip")
-            .flex()
-            .items_center()
-            .gap_1()
-            .h(px(28.))
-            .pl_2()
-            .pr_1()
-            .rounded_md()
-            .bg(theme.selection)
-            .text_color(theme.accent)
-            .cursor_pointer()
-            .hover(|style| style.bg(theme.hover))
-            .flow_tip(
-                self,
-                cx,
-                theme,
-                format!("Focused on {label} — click to clear"),
-            )
-            .child(icons::icon(icon, 12.0, theme.accent))
-            .child(
-                div()
-                    .max_w(px(160.))
-                    .truncate()
-                    .text_xs()
-                    .child(label),
-            )
-            .child(
-                div()
-                    .size(px(20.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_sm()
-                    .child(icons::icon(Icon::Close, 10.0, theme.text_faint)),
-            )
-            .on_click(cx.listener(|this, _, _, cx| this.clear_focus(cx)))
+            .child(banner)
             .into_any_element()
     }
 
@@ -7828,10 +7931,6 @@ impl FlowlistApp {
         let (search_left, search_width) = search_slot(window_width);
         let can_back = self.can_go_back();
         let can_forward = self.can_go_forward();
-        let focus_chip = self
-            .focus_target
-            .clone()
-            .map(|target| self.render_focus_chip(&target, cx));
         div()
             .flex()
             .items_center()
@@ -7967,7 +8066,6 @@ impl FlowlistApp {
                     .items_center()
                     .gap_1()
                     .pr_3()
-                    .when_some(focus_chip, |this, chip| this.child(chip))
                     .child(
                         div()
                             .id("add-task")
@@ -8384,6 +8482,9 @@ impl Render for FlowlistApp {
             );
         }
         root = root.child(self.render_header(window, cx));
+        if !self.focus_targets.is_empty() {
+            root = root.child(self.render_focus_banner(cx));
+        }
         let mut body = div().flex().flex_1().min_h_0();
         body = body.child(self.render_sidebar(window, cx));
         body = body.child(self.render_content(window, cx));

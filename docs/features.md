@@ -213,8 +213,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       projects, tags and priorities, with live filtering, keyboard selection
       and a scrolling result list that stays inside the panel
 - [x] Focus mode: scope every perspective, search, Forecast calendar and
-      project dashboard to one project or folder. The sidebar dims outside the
-      branch, the header chip clears focus, and Quick Open can set or clear it
+      project dashboard to one or more projects/folders. Cmd-click selects
+      sidebar rows, a banner below the title bar clears focus, the sidebar dims
+      outside the branch, and Quick Open can set or clear it
 - [x] Task capture with quick-entry syntax
 - [x] Multi-select, range select, keyboard navigation
 - [x] Complete/reopen, flag/unflag, delete, undo/redo and post-delete focus

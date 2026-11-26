@@ -362,7 +362,10 @@ pub struct Session {
     /// means the calendar sizes itself to the month's week count.
     #[serde(default)]
     pub forecast_calendar_height: Option<f32>,
-    /// Project or folder focus, stored as a `project:` / `folder:` key.
+    /// Projects and folders scoped by Focus, stored as `project:` / `folder:`
+    /// keys. `focus` is the older single-target field and is still read.
+    #[serde(default)]
+    pub focus_targets: Vec<String>,
     #[serde(default)]
     pub focus: Option<String>,
     /// Per-perspective sort, grouping and filters.
@@ -540,12 +543,15 @@ mod tests {
         assert!(!folder.allows_folder(&db, &personal));
 
         let session = Session {
-            focus: Some(project.key()),
+            focus_targets: vec![project.key(), folder.key()],
             ..Session::default()
         };
         let restored: Session =
             serde_json::from_str(&serde_json::to_string(&session).unwrap()).unwrap();
-        assert_eq!(restored.focus, Some(project.key()));
+        assert_eq!(
+            restored.focus_targets,
+            vec![project.key(), folder.key()]
+        );
     }
 
     #[test]

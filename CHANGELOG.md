@@ -2,11 +2,14 @@
 
 ## Unreleased
 
-- **Focus mode.** Focus on one project or folder from its sidebar menu or with
-  Quick Open. Every perspective, search, Forecast calendar and Review/Archive/
-  Nearby list is scoped to that branch; the sidebar dims everything outside it.
-  A header chip names the focus and clears it, and opening a project or folder
-  outside the branch leaves focus. Inbox and Trash stay global.
+- **Focus mode.** Focus on a project, a folder, or several of either. Cmd-click
+  rows in the sidebar to select them, then use **Focus on N selected** above the
+  creation buttons; a single row can still be focused from its context menu or
+  with Quick Open. Every perspective, search, Forecast calendar and Review/
+  Archive/Nearby list is scoped to the selected branches, and the sidebar dims
+  everything outside them. A full-width banner below the title bar names the
+  focus and clears it with its ✕. Opening a project or folder outside every
+  focused branch leaves focus. Inbox and Trash stay global.
 
 ## 0.9.50 — 2026-11-25
 

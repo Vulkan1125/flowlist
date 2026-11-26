@@ -156,6 +156,38 @@ func dragTo(_ x: Double, _ y: Double) {
     move?.post(tap: .cghidEventTap)
 }
 
+func cmdClick(_ x: Double, _ y: Double) {
+    let point = CGPoint(x: x, y: y)
+    let moved = CGEvent(
+        mouseEventSource: nil,
+        mouseType: .mouseMoved,
+        mouseCursorPosition: point,
+        mouseButton: .left
+    )
+    moved?.flags = .maskCommand
+    moved?.post(tap: .cghidEventTap)
+    usleep(60_000)
+    let down = CGEvent(
+        mouseEventSource: nil,
+        mouseType: .leftMouseDown,
+        mouseCursorPosition: point,
+        mouseButton: .left
+    )
+    down?.flags = .maskCommand
+    down?.setIntegerValueField(.mouseEventClickState, value: 1)
+    down?.post(tap: .cghidEventTap)
+    usleep(40_000)
+    let up = CGEvent(
+        mouseEventSource: nil,
+        mouseType: .leftMouseUp,
+        mouseCursorPosition: point,
+        mouseButton: .left
+    )
+    up?.flags = .maskCommand
+    up?.setIntegerValueField(.mouseEventClickState, value: 1)
+    up?.post(tap: .cghidEventTap)
+}
+
 func button(_ x: Double, _ y: Double, down: Bool) {
     let event = CGEvent(
         mouseEventSource: nil,
@@ -208,6 +240,7 @@ let args = CommandLine.arguments
 guard args.count >= 2 else { exit(1) }
 switch args[1] {
 case "mouse": mouse(Double(args[2])!, Double(args[3])!)
+case "cmdclick": cmdClick(Double(args[2])!, Double(args[3])!)
 case "dblclick": doubleClick(Double(args[2])!, Double(args[3])!)
 case "drag":
     drag(

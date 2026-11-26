@@ -150,11 +150,13 @@ folders and can carry their own tags, dates, attachments and icon.
 ## Focus
 
 Right-click a project or folder and choose **Focus on …**, or type `focus on`
-in Quick Open. Every perspective then shows only that project or folder, its
-descendants and their tasks. The sidebar dims everything outside the branch,
-and a chip beside the header actions names the focus. Click the chip or choose
-**Stop focusing** from the same menu to clear it. Inbox and Trash stay global,
-and opening a project or folder outside the branch leaves focus automatically.
+in Quick Open. To focus several, Cmd-click projects and folders in the rail;
+each gets a dot and a **Focus on N selected** button appears above the creation
+buttons. Every perspective then shows only those branches, their descendants
+and their tasks. The sidebar dims everything outside the focus, and a full-width
+banner below the title bar names it. Click the banner's ✕ or choose **Stop
+focusing** from the same menu to clear it. Inbox and Trash stay global, and
+opening a project or folder outside every focused branch leaves focus.
 
 ## Views
 

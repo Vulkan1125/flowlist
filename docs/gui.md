@@ -69,10 +69,12 @@ View sheet can express, plus conditions imported from the CLI/MCP that the GUI
 keeps but does not show.
 
 **Focus** is a temporary scope, not a saved setting. Choose **Focus on …** from
-a project or folder's sidebar menu, or search for it in Quick Open. Every
-perspective, search and dashboard then shows only that branch; outside rows in
-the sidebar dim. The chip in the header clears focus, as does opening a project
-or folder outside it. Inbox and Trash remain global.
+a project or folder's sidebar menu, or search for it in Quick Open. Cmd-click
+several project and folder rows to select them, then use **Focus on N selected**
+above the creation buttons. Every perspective, search and dashboard then shows
+only those branches; outside rows in the sidebar dim. A full-width banner under
+the title bar clears focus, as does opening a project or folder outside it.
+Inbox and Trash remain global.
 
 ### Content header
 
