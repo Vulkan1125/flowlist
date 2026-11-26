@@ -17,7 +17,7 @@ use super::drag::{DragFolder, DragProject, DragTask};
 use super::icons::{self, Icon};
 use super::modals;
 use super::widgets::TipExt;
-use super::{FlowlistApp, FocusArea, View, widgets};
+use super::{FlowlistApp, FocusArea, FocusTarget, View, widgets};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum SidebarTarget {
@@ -739,6 +739,28 @@ impl FlowlistApp {
                     cx,
                     move |this, cx| this.sidebar_activate(open_target.clone(), cx),
                 ));
+                let focus_id = id.clone();
+                let focus_name = name.clone();
+                let focused = self.focus_target == Some(FocusTarget::Folder(id.clone()));
+                items.push(self.sidebar_menu_item(
+                    "menu-focus-folder".to_string(),
+                    if focused {
+                        "Stop focusing".to_string()
+                    } else {
+                        format!("Focus on “{focus_name}”")
+                    },
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        if focused {
+                            this.clear_focus(cx);
+                        } else {
+                            this.set_focus(FocusTarget::Folder(focus_id.clone()), cx);
+                        }
+                    },
+                ));
+                items.push(self.sidebar_menu_divider());
                 items.push(self.sidebar_menu_item(
                     "menu-rename-folder".to_string(),
                     "Rename…",
@@ -824,6 +846,28 @@ impl FlowlistApp {
                     cx,
                     move |this, cx| this.sidebar_activate(open_target.clone(), cx),
                 ));
+                let focus_id = id.clone();
+                let focus_name = name.clone();
+                let focused = self.focus_target == Some(FocusTarget::Project(id.clone()));
+                items.push(self.sidebar_menu_item(
+                    "menu-focus-project".to_string(),
+                    if focused {
+                        "Stop focusing".to_string()
+                    } else {
+                        format!("Focus on “{focus_name}”")
+                    },
+                    false,
+                    false,
+                    cx,
+                    move |this, cx| {
+                        if focused {
+                            this.clear_focus(cx);
+                        } else {
+                            this.set_focus(FocusTarget::Project(focus_id.clone()), cx);
+                        }
+                    },
+                ));
+                items.push(self.sidebar_menu_divider());
                 items.push(self.sidebar_menu_item(
                     "menu-rename-project".to_string(),
                     "Rename…",
@@ -1732,6 +1776,13 @@ impl FlowlistApp {
                     if active {
                         row = row.bg(self.theme.selection).text_color(self.theme.accent);
                     }
+                    if self
+                        .focus_target
+                        .as_ref()
+                        .is_some_and(|target| !target.allows_folder(db, &id))
+                    {
+                        row = row.opacity(0.38);
+                    }
                     let anchor_boxes = self.sidebar_row_boxes.clone();
                     let anchor_key = format!("folder:{id}");
                     let drop_folder = id.clone();
@@ -1900,6 +1951,13 @@ impl FlowlistApp {
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sidebar_activate(SidebarTarget::Project(view_id.clone()), cx)
                         }));
+                    if self
+                        .focus_target
+                        .as_ref()
+                        .is_some_and(|target| !target.allows_project(db, &id))
+                    {
+                        row = row.opacity(0.38);
+                    }
                     let anchor_boxes = self.sidebar_row_boxes.clone();
                     let anchor_key = format!("project:{id}");
                     rows.push(

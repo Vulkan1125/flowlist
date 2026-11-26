@@ -179,7 +179,8 @@ open a folded section such as Forecast's `forecast:next-month`.
 `content_row_boxes` maps task rows by id, for drag probes. `content_projects`
 maps Forecast project rows by project id. `modal_message` carries a form's
 inline refusal, and `date_error` names the inspector date field plus its
-message. `view_subtitle`
+message. `focus_target` holds the focused `project:` or `folder:` key and
+`focus_chip` gives the header chip's box. `view_subtitle`
 reports the line under the view title. `view_form.description` carries the
 saved-view description. `icon_picker` reports whether an icon card is open and
 its first Return match. The saved-view and project icon cards

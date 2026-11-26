@@ -212,6 +212,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Quick Open (`⌘O`): one navigation palette for perspectives, folders,
       projects, tags and priorities, with live filtering, keyboard selection
       and a scrolling result list that stays inside the panel
+- [x] Focus mode: scope every perspective, search, Forecast calendar and
+      project dashboard to one project or folder. The sidebar dims outside the
+      branch, the header chip clears focus, and Quick Open can set or clear it
 - [x] Task capture with quick-entry syntax
 - [x] Multi-select, range select, keyboard navigation
 - [x] Complete/reopen, flag/unflag, delete, undo/redo and post-delete focus

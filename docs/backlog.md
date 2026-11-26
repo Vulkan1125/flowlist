@@ -137,8 +137,9 @@ integrations are tracked separately and are not part of this phase.
       reminders and full-screen reminders.
 - [ ] **Batch editing** — select several tasks and edit tags, project, dates,
       priority, flag and estimate together in the inspector as one undo step.
-- [ ] **Focus mode** — temporarily scope every perspective to one folder or
-      project, with an obvious way to clear focus.
+- [x] **Focus mode** — scope every perspective to one project or folder from
+      the sidebar menu or Quick Open. The sidebar dims outside the branch, a
+      header chip clears it, and Inbox/Trash stay global.
 - [ ] **Forecast tag and extra Forecast contents** — a designated tag that
       enters Forecast without a date, plus flagged items, on-hold projects and
       custom notification dates.

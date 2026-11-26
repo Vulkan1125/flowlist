@@ -122,7 +122,7 @@ impl FlowlistApp {
         let db = self.store.db();
         let mut days: BTreeMap<NaiveDate, Vec<TaskId>> = BTreeMap::new();
         for (id, task) in &db.tasks {
-            if task.completed || task.is_trashed() {
+            if task.completed || task.is_trashed() || !self.focus_allows_task(id) {
                 continue;
             }
             if let Some(project_id) = &task.project {
@@ -166,7 +166,7 @@ impl FlowlistApp {
         let db = self.store.db();
         let mut days: BTreeMap<NaiveDate, Vec<ProjectId>> = BTreeMap::new();
         for project in db.projects.values() {
-            if !project.status.is_open() {
+            if !project.status.is_open() || !self.focus_allows_project(&project.id) {
                 continue;
             }
             let mut dates = vec![
@@ -654,7 +654,10 @@ impl FlowlistApp {
         );
 
         let mut row = div().flex().w_full().gap_1().pt_2();
-        let past_count = query::forecast_past(self.store.db(), now(), self.forecast_planned).len()
+        let past_count = query::forecast_past(self.store.db(), now(), self.forecast_planned)
+            .into_iter()
+            .filter(|id| self.focus_allows_task(id))
+            .count()
             + self.forecast_past_project_count(today);
         let future_count = query::forecast_future(
             self.store.db(),
@@ -662,7 +665,9 @@ impl FlowlistApp {
             week + Duration::days(6),
             self.forecast_planned,
         )
-        .len()
+        .into_iter()
+        .filter(|id| self.focus_allows_task(id))
+        .count()
             + self.forecast_future_project_count(week + Duration::days(6));
         let past_sink = strip_boxes.clone();
         let past_selected = self.forecast_past;
@@ -1204,7 +1209,10 @@ impl FlowlistApp {
         // The caller already ran the query for the list; reuse it instead of
         // running the whole view a second time just to count the rows.
         let count = if is_archive {
-            query::archived_projects(self.store.db()).len()
+            query::archived_projects(self.store.db())
+                .into_iter()
+                .filter(|project| self.focus_allows_project(project))
+                .count()
         } else {
             groups.iter().map(|group| group.rows.len()).sum::<usize>()
         };
@@ -2077,7 +2085,7 @@ impl FlowlistApp {
     fn render_archive(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let db = self.store.db();
-        if query::archived_projects(db).is_empty() {
+        if self.archive_sections().is_empty() {
             return self
                 .render_empty(
                     "No finished projects",
@@ -2137,6 +2145,9 @@ impl FlowlistApp {
         let db = self.store.db();
         let mut groups: Vec<(String, String, Vec<ProjectId>)> = Vec::new();
         for id in query::archived_projects(db) {
+            if !self.focus_allows_project(&id) {
+                continue;
+            }
             let Some(project) = db.projects.get(&id) else {
                 continue;
             };
@@ -3123,6 +3134,7 @@ impl FlowlistApp {
             .values()
             .filter(|project| project.status.is_open())
             .map(|project| project.id.clone())
+            .filter(|project| self.focus_allows_project(project))
             .collect();
         projects.sort_by_key(|id| db.projects[id].next_review);
 
@@ -3259,7 +3271,8 @@ impl FlowlistApp {
             );
             return empty;
         }
-        let hits = query::nearby(db, at);
+        let mut hits = query::nearby(db, at);
+        hits.retain(|hit| self.focus_allows_task(&hit.task));
         let mut list = div().flex().flex_col().p_4().gap_1();
         list = list.child(
             div()

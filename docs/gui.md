@@ -68,6 +68,12 @@ Saved perspectives appear after the built-ins. They can use any filter the
 View sheet can express, plus conditions imported from the CLI/MCP that the GUI
 keeps but does not show.
 
+**Focus** is a temporary scope, not a saved setting. Choose **Focus on …** from
+a project or folder's sidebar menu, or search for it in Quick Open. Every
+perspective, search and dashboard then shows only that branch; outside rows in
+the sidebar dim. The chip in the header clears focus, as does opening a project
+or folder outside it. Inbox and Trash remain global.
+
 ### Content header
 
 The view title and Sort / Group / Filter chips share one row; the subtitle sits

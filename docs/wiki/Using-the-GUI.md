@@ -147,6 +147,15 @@ folders and can carry their own tags, dates, attachments and icon.
 - Drag a project onto a folder, onto the LIBRARY heading or onto empty space to
   move it back to the root.
 
+## Focus
+
+Right-click a project or folder and choose **Focus on …**, or type `focus on`
+in Quick Open. Every perspective then shows only that project or folder, its
+descendants and their tasks. The sidebar dims everything outside the branch,
+and a chip beside the header actions names the focus. Click the chip or choose
+**Stop focusing** from the same menu to clear it. Inbox and Trash stay global,
+and opening a project or folder outside the branch leaves focus automatically.
+
 ## Views
 
 The rail is the map of the library:

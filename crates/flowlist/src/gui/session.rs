@@ -125,6 +125,100 @@ impl View {
     }
 }
 
+/// A folder or project that temporarily scopes every perspective. Focus is a
+/// session choice, never part of the library.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FocusTarget {
+    Project(ProjectId),
+    Folder(FolderId),
+}
+
+impl FocusTarget {
+    pub fn key(&self) -> String {
+        match self {
+            FocusTarget::Project(id) => format!("project:{id}"),
+            FocusTarget::Folder(id) => format!("folder:{id}"),
+        }
+    }
+
+    pub fn from_key(db: &Db, key: &str) -> Option<Self> {
+        match View::from_key(db, key) {
+            Some(View::Project(id)) => Some(FocusTarget::Project(id)),
+            Some(View::Folder(id)) => Some(FocusTarget::Folder(id)),
+            _ => None,
+        }
+    }
+
+    pub fn view(&self) -> View {
+        match self {
+            FocusTarget::Project(id) => View::Project(id.clone()),
+            FocusTarget::Folder(id) => View::Folder(id.clone()),
+        }
+    }
+
+    pub fn label(&self, db: &Db) -> String {
+        match self {
+            FocusTarget::Project(id) => db
+                .projects
+                .get(id)
+                .map(|project| db.project_path(&project.id))
+                .unwrap_or_else(|| "Missing project".to_string()),
+            FocusTarget::Folder(id) => db
+                .folders
+                .get(id)
+                .map(|folder| db.folder_path(&folder.id))
+                .unwrap_or_else(|| "Missing folder".to_string()),
+        }
+    }
+
+    pub fn allows_project(&self, db: &Db, project: &ProjectId) -> bool {
+        match self {
+            FocusTarget::Project(id) => id == project,
+            FocusTarget::Folder(id) => db.project_is_in_folder(project, id, true),
+        }
+    }
+
+    pub fn allows_task(&self, db: &Db, task: &TaskId) -> bool {
+        db.effective_project(task)
+            .is_some_and(|project| self.allows_project(db, &project))
+    }
+
+    /// True for the focused folder, its descendants, and the folders that
+    /// contain them. Project focus also keeps the project's parent path lit.
+    pub fn allows_folder(&self, db: &Db, folder: &FolderId) -> bool {
+        match self {
+            FocusTarget::Folder(id) => {
+                folder_is_ancestor(db, folder, id)
+                    || db.folder_descendants(id).contains(folder)
+            }
+            FocusTarget::Project(id) => db
+                .projects
+                .get(id)
+                .and_then(|project| project.folder.as_ref())
+                .is_some_and(|parent| folder_is_ancestor(db, folder, parent)),
+        }
+    }
+
+    pub fn allows_view(&self, db: &Db, view: &View) -> bool {
+        match view {
+            View::Project(id) => self.allows_project(db, id),
+            View::Folder(id) => self.allows_folder(db, id),
+            _ => true,
+        }
+    }
+}
+
+fn folder_is_ancestor(db: &Db, folder: &FolderId, descendant: &FolderId) -> bool {
+    let mut current = Some(descendant.clone());
+    while let Some(id) = current {
+        if &id == folder {
+            return true;
+        }
+        current = db.folders.get(&id).and_then(|folder| folder.parent.clone());
+    }
+    false
+}
+
 /// Sorting, grouping and filters remembered per perspective. The choice lives
 /// in the session so built-in and saved views behave alike.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -268,6 +362,9 @@ pub struct Session {
     /// means the calendar sizes itself to the month's week count.
     #[serde(default)]
     pub forecast_calendar_height: Option<f32>,
+    /// Project or folder focus, stored as a `project:` / `folder:` key.
+    #[serde(default)]
+    pub focus: Option<String>,
     /// Per-perspective sort, grouping and filters.
     #[serde(default)]
     pub view_options: BTreeMap<String, ViewOptions>,
@@ -417,6 +514,38 @@ mod tests {
             restored.view_options["flagged"].priority.as_deref(),
             Some("high")
         );
+    }
+
+    #[test]
+    fn focus_scopes_folders_projects_and_parent_paths() {
+        let mut db = Db::new();
+        let work = db.ensure_folder_path("Work").unwrap();
+        let client = db.ensure_folder_path("Work/Client").unwrap();
+        let personal = db.ensure_folder_path("Personal").unwrap();
+        let alpha = db.ensure_project_path("Work/Client/Alpha").unwrap();
+        let beta = db.ensure_project_path("Personal/Beta").unwrap();
+
+        let project = FocusTarget::Project(alpha.clone());
+        assert!(project.allows_project(&db, &alpha));
+        assert!(!project.allows_project(&db, &beta));
+        assert!(project.allows_folder(&db, &work));
+        assert!(project.allows_folder(&db, &client));
+        assert!(!project.allows_folder(&db, &personal));
+
+        let folder = FocusTarget::Folder(work.clone());
+        assert!(folder.allows_project(&db, &alpha));
+        assert!(!folder.allows_project(&db, &beta));
+        assert!(folder.allows_folder(&db, &work));
+        assert!(folder.allows_folder(&db, &client));
+        assert!(!folder.allows_folder(&db, &personal));
+
+        let session = Session {
+            focus: Some(project.key()),
+            ..Session::default()
+        };
+        let restored: Session =
+            serde_json::from_str(&serde_json::to_string(&session).unwrap()).unwrap();
+        assert_eq!(restored.focus, Some(project.key()));
     }
 
     #[test]

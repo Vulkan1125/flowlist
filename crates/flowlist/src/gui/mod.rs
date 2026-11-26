@@ -71,7 +71,7 @@ use background::AbstractStyle;
 use drag::{DragFolder, DragProject, DragTask};
 use icons::Icon;
 
-pub use session::{Session, View};
+pub use session::{FocusTarget, Session, View};
 use theme::{Appearance, Theme};
 use widgets::TipExt;
 
@@ -370,11 +370,28 @@ struct QuickOpenState {
     cursor: usize,
 }
 
+#[derive(Clone)]
+enum QuickOpenAction {
+    Open(sidebar::SidebarTarget),
+    Focus(FocusTarget),
+    ClearFocus,
+}
+
+impl QuickOpenAction {
+    fn key(&self) -> String {
+        match self {
+            QuickOpenAction::Open(target) => target.key(),
+            QuickOpenAction::Focus(target) => format!("focus:{}", target.key()),
+            QuickOpenAction::ClearFocus => "focus:clear".to_string(),
+        }
+    }
+}
+
 struct QuickOpenEntry {
     label: String,
     detail: String,
     icon: Icon,
-    target: sidebar::SidebarTarget,
+    action: QuickOpenAction,
     rank: u8,
 }
 
@@ -384,6 +401,8 @@ pub struct FlowlistApp {
     /// Alternate Dock icon, saved with the session.
     app_icon: AppIcon,
     view: View,
+    /// A project or folder scoping every perspective, or `None`.
+    focus_target: Option<FocusTarget>,
     /// First day of the month the Forecast calendar shows.
     forecast_month: chrono::NaiveDate,
     /// Monday of the week the collapsed Forecast strip shows.
@@ -434,6 +453,8 @@ pub struct FlowlistApp {
     history_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Settings-sheet sidebar toggles, measured for the same reason.
     settings_toggle_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// The header focus chip, measured so a probe can clear focus by clicking it.
+    focus_chip_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// Collapsible sidebar headings, measured so a probe can fold a section.
     sidebar_section_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Sidebar count badges keyed by row, so a probe can see which numbers a
@@ -729,10 +750,25 @@ impl FlowlistApp {
         if !view_exists(store.db(), &view) {
             view = View::Builtin(BuiltinPerspective::Inbox);
         }
+        let focus_target = session
+            .focus
+            .as_deref()
+            .and_then(|key| FocusTarget::from_key(store.db(), key));
+        if let Some(target) = &focus_target
+            && matches!(view, View::Project(_) | View::Folder(_))
+            && !target.allows_view(store.db(), &view)
+        {
+            view = target.view();
+        }
         let selected = session
             .selected_tasks(store.db())
             .into_iter()
             .filter(|id| store.db().tasks.contains_key(id))
+            .filter(|id| {
+                focus_target
+                    .as_ref()
+                    .is_none_or(|target| target.allows_task(store.db(), id))
+            })
             .collect();
         let (theme_kind, theme_appearance) = session.theme_choice();
         let plain_accent_light = session.plain_accent(theme::Appearance::Light);
@@ -843,6 +879,7 @@ impl FlowlistApp {
                     }
                     if this.store.reload_if_changed().unwrap_or(false) {
                         this.prune_selection();
+                        this.prune_focus();
                         cx.notify();
                     }
                     this.sync_notifications(cx);
@@ -868,6 +905,7 @@ impl FlowlistApp {
             theme,
             app_icon,
             view,
+            focus_target,
             forecast_month,
             forecast_week: {
                 let today = local_date(now());
@@ -895,6 +933,7 @@ impl FlowlistApp {
             sidebar_name_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             history_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             settings_toggle_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            focus_chip_anchor: Rc::new(Cell::new(None)),
             sidebar_section_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             sidebar_count_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             sidebar_count_values: Rc::new(RefCell::new(BTreeMap::new())),
@@ -1407,6 +1446,7 @@ impl FlowlistApp {
             forecast_planned: Some(self.forecast_planned),
             forecast_calendar_expanded: Some(self.forecast_calendar_expanded),
             forecast_calendar_height: self.forecast_calendar_height,
+            focus: self.focus_target.as_ref().map(FocusTarget::key),
             view_options: {
                 let mut map = self.view_options.clone();
                 map.insert(self.view.key(), self.current_view_options());
@@ -1468,6 +1508,109 @@ impl FlowlistApp {
             if !db.tasks.contains_key(anchor) {
                 self.anchor = self.selected.first().cloned();
             }
+        }
+    }
+
+    fn prune_focus(&mut self) {
+        let db = self.store.db();
+        let exists = self.focus_target.as_ref().is_none_or(|target| match target {
+            FocusTarget::Project(id) => db.projects.contains_key(id),
+            FocusTarget::Folder(id) => db.folders.contains_key(id),
+        });
+        if !exists {
+            self.focus_target = None;
+            self.focus_chip_anchor.set(None);
+        }
+    }
+
+    // --------------------------------------------------------------- focus
+
+    fn focus_allows_project(&self, project: &ProjectId) -> bool {
+        self.focus_target
+            .as_ref()
+            .is_none_or(|target| target.allows_project(self.store.db(), project))
+    }
+
+    fn focus_allows_task(&self, task: &TaskId) -> bool {
+        self.focus_target
+            .as_ref()
+            .is_none_or(|target| target.allows_task(self.store.db(), task))
+    }
+
+    fn focus_groups(&self, groups: Vec<Group>) -> Vec<Group> {
+        let Some(target) = &self.focus_target else {
+            return groups;
+        };
+        let db = self.store.db();
+        groups
+            .into_iter()
+            .filter_map(|mut group| {
+                let group_project = group
+                    .key
+                    .strip_prefix("project:")
+                    .and_then(|id| db.resolve_project(id).ok());
+                if let Some(project) = &group_project
+                    && !target.allows_project(db, project)
+                {
+                    return None;
+                }
+                group
+                    .projects
+                    .retain(|project| target.allows_project(db, project));
+                group.rows.retain(|row| target.allows_task(db, &row.id));
+                if group.rows.is_empty()
+                    && group.projects.is_empty()
+                    && group_project.is_none()
+                {
+                    None
+                } else {
+                    Some(group)
+                }
+            })
+            .collect()
+    }
+
+    fn set_focus(&mut self, target: FocusTarget, cx: &mut Context<Self>) {
+        let (ancestors, rebuild_view) = {
+            let db = self.store.db();
+            let folder = match &target {
+                FocusTarget::Folder(id) => Some(id.clone()),
+                FocusTarget::Project(id) => {
+                    db.projects.get(id).and_then(|project| project.folder.clone())
+                }
+            };
+            let mut ancestors = Vec::new();
+            let mut current = folder;
+            while let Some(id) = current {
+                ancestors.push(id.clone());
+                current = db.folders.get(&id).and_then(|folder| folder.parent.clone());
+            }
+            let rebuild = matches!(self.view, View::Project(_) | View::Folder(_))
+                && !target.allows_view(db, &self.view);
+            (ancestors, rebuild)
+        };
+        for id in ancestors {
+            let key = format!("folder:{id}");
+            self.expanded.insert(key.clone());
+            self.collapsed_groups.remove(&key);
+        }
+        self.focus_target = Some(target.clone());
+        self.focus_chip_anchor.set(None);
+        let db = self.store.db();
+        self.selected.retain(|id| target.allows_task(db, id));
+        self.anchor = self.selected.first().cloned();
+        if rebuild_view {
+            self.set_view(target.view());
+        }
+        self.save_session();
+        cx.notify();
+    }
+
+    fn clear_focus(&mut self, cx: &mut Context<Self>) {
+        if self.focus_target.take().is_some() {
+            self.focus_chip_anchor.set(None);
+            self.save_session();
+            cx.notify();
         }
     }
 
@@ -1607,6 +1750,17 @@ impl FlowlistApp {
                     (!group.rows.is_empty()).then_some(group)
                 })
                 .collect();
+        }
+
+        if self.focus_target.is_some()
+            && !matches!(
+                self.view,
+                View::Builtin(
+                    BuiltinPerspective::Inbox | BuiltinPerspective::Trash
+                )
+            )
+        {
+            groups = self.focus_groups(groups);
         }
         groups
     }
@@ -1751,7 +1905,7 @@ impl FlowlistApp {
                 label: perspective.label().to_string(),
                 detail: "Perspective".to_string(),
                 icon: Icon::Perspective,
-                target: sidebar::SidebarTarget::Builtin(perspective),
+                action: QuickOpenAction::Open(sidebar::SidebarTarget::Builtin(perspective)),
                 rank: 0,
             });
         }
@@ -1760,26 +1914,59 @@ impl FlowlistApp {
                 label: perspective.name.clone(),
                 detail: "Saved perspective".to_string(),
                 icon: Icon::Perspective,
-                target: sidebar::SidebarTarget::Custom(perspective.id.clone()),
+                action: QuickOpenAction::Open(sidebar::SidebarTarget::Custom(
+                    perspective.id.clone(),
+                )),
                 rank: 1,
+            });
+        }
+        if self.focus_target.is_some() {
+            entries.push(QuickOpenEntry {
+                label: "Clear focus".to_string(),
+                detail: "Focus".to_string(),
+                icon: Icon::Close,
+                action: QuickOpenAction::ClearFocus,
+                rank: 0,
             });
         }
         for row in db.flatten_containers() {
             match row.container {
-                ContainerId::Folder(id) => entries.push(QuickOpenEntry {
-                    label: db.folder_path(&id),
-                    detail: "Folder".to_string(),
-                    icon: Icon::Folder,
-                    target: sidebar::SidebarTarget::Folder(id),
-                    rank: 2,
-                }),
-                ContainerId::Project(id) => entries.push(QuickOpenEntry {
-                    label: db.project_path(&id),
-                    detail: "Project".to_string(),
-                    icon: Icon::Project,
-                    target: sidebar::SidebarTarget::Project(id),
-                    rank: 3,
-                }),
+                ContainerId::Folder(id) => {
+                    let path = db.folder_path(&id);
+                    entries.push(QuickOpenEntry {
+                        label: path.clone(),
+                        detail: "Folder".to_string(),
+                        icon: Icon::Folder,
+                        action: QuickOpenAction::Open(sidebar::SidebarTarget::Folder(id.clone())),
+                        rank: 2,
+                    });
+                    entries.push(QuickOpenEntry {
+                        label: format!("Focus on {path}"),
+                        detail: "Focus".to_string(),
+                        icon: Icon::Folder,
+                        action: QuickOpenAction::Focus(FocusTarget::Folder(id)),
+                        rank: 6,
+                    });
+                }
+                ContainerId::Project(id) => {
+                    let path = db.project_path(&id);
+                    entries.push(QuickOpenEntry {
+                        label: path.clone(),
+                        detail: "Project".to_string(),
+                        icon: Icon::Project,
+                        action: QuickOpenAction::Open(sidebar::SidebarTarget::Project(
+                            id.clone(),
+                        )),
+                        rank: 3,
+                    });
+                    entries.push(QuickOpenEntry {
+                        label: format!("Focus on {path}"),
+                        detail: "Focus".to_string(),
+                        icon: Icon::Project,
+                        action: QuickOpenAction::Focus(FocusTarget::Project(id)),
+                        rank: 6,
+                    });
+                }
             }
         }
         for row in db.flatten_tags() {
@@ -1787,7 +1974,7 @@ impl FlowlistApp {
                 label: db.tag_path(&row.tag),
                 detail: "Tag".to_string(),
                 icon: Icon::Tag,
-                target: sidebar::SidebarTarget::Tag(row.tag),
+                action: QuickOpenAction::Open(sidebar::SidebarTarget::Tag(row.tag)),
                 rank: 4,
             });
         }
@@ -1796,7 +1983,7 @@ impl FlowlistApp {
                 label: format!("{} priority", priority.label()),
                 detail: "Priority".to_string(),
                 icon: Icon::Flagged,
-                target: sidebar::SidebarTarget::Priority(priority),
+                action: QuickOpenAction::Open(sidebar::SidebarTarget::Priority(priority)),
                 rank: 5,
             });
         }
@@ -1838,10 +2025,14 @@ impl FlowlistApp {
             cx.notify();
             return;
         };
-        let target = entry.target.clone();
+        let action = entry.action.clone();
         self.quick_open = None;
         self.focus = FocusArea::Content;
-        self.sidebar_activate(target, cx);
+        match action {
+            QuickOpenAction::Open(target) => self.sidebar_activate(target, cx),
+            QuickOpenAction::Focus(target) => self.set_focus(target, cx),
+            QuickOpenAction::ClearFocus => self.clear_focus(cx),
+        }
     }
 
     fn handle_quick_open_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
@@ -1961,10 +2152,10 @@ impl FlowlistApp {
         } else if typed {
             for (index, entry) in entries.iter().enumerate() {
                 let selected = index == cursor;
-                let target = entry.target.clone();
+                let action = entry.action.clone();
                 list = list.child(
                     div()
-                        .id(sid(format!("quick-open:{}", entry.target.key())))
+                        .id(sid(format!("quick-open:{}", entry.action.key())))
                         .flex()
                         .items_center()
                         .gap_2()
@@ -2014,7 +2205,13 @@ impl FlowlistApp {
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.quick_open = None;
                             this.focus = FocusArea::Content;
-                            this.sidebar_activate(target.clone(), cx);
+                            match action.clone() {
+                                QuickOpenAction::Open(target) => {
+                                    this.sidebar_activate(target, cx)
+                                }
+                                QuickOpenAction::Focus(target) => this.set_focus(target, cx),
+                                QuickOpenAction::ClearFocus => this.clear_focus(cx),
+                            }
                         })),
                 );
             }
@@ -2085,6 +2282,12 @@ impl FlowlistApp {
     /// Switch views without notifying. Callers that already repaint use this
     /// from inside a command; `open_view` is the interactive entry point.
     fn set_view(&mut self, view: View) {
+        if let Some(target) = self.focus_target.as_ref()
+            && !target.allows_view(self.store.db(), &view)
+        {
+            self.focus_target = None;
+            self.focus_chip_anchor.set(None);
+        }
         let key = view.key();
         if self.view.key() != key {
             // A new branch drops the forward trail, the same as a browser.
@@ -7024,6 +7227,7 @@ impl FlowlistApp {
         };
         let mut state = serde_json::json!({
             "view": self.view.key(),
+            "focus_target": self.focus_target.as_ref().map(FocusTarget::key),
             "modal": self.modal.as_ref().map(|modal| modal.title()),
             "modal_message": self.modal_error.clone(),
             "date_error": self.date_error.as_ref().map(|(_, field, message)| {
@@ -7303,6 +7507,7 @@ impl FlowlistApp {
             }))
         }));
         state["field_editor"] = serde_json::json!(anchor(self.field_editor_anchor.get()));
+        state["focus_chip"] = serde_json::json!(anchor(self.focus_chip_anchor.get()));
         state["hide_past"] = serde_json::json!(self.hide_past);
         state["hide_past_anchor"] = serde_json::json!(anchor(self.hide_past_anchor.get()));
         state["forecast_calendar_open"] = serde_json::json!(self.forecast_calendar_open);
@@ -7559,12 +7764,74 @@ impl FlowlistApp {
             )
     }
 
+    /// The header chip that names the focused folder or project and clears it.
+    fn render_focus_chip(
+        &self,
+        target: &FocusTarget,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let label = target.label(self.store.db());
+        let icon = match target {
+            FocusTarget::Project(_) => Icon::Project,
+            FocusTarget::Folder(_) => Icon::Folder,
+        };
+        let anchor = self.focus_chip_anchor.clone();
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    anchor.set(Some(*bounds));
+                }
+            })
+            .id("focus-chip")
+            .flex()
+            .items_center()
+            .gap_1()
+            .h(px(28.))
+            .pl_2()
+            .pr_1()
+            .rounded_md()
+            .bg(theme.selection)
+            .text_color(theme.accent)
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.hover))
+            .flow_tip(
+                self,
+                cx,
+                theme,
+                format!("Focused on {label} — click to clear"),
+            )
+            .child(icons::icon(icon, 12.0, theme.accent))
+            .child(
+                div()
+                    .max_w(px(160.))
+                    .truncate()
+                    .text_xs()
+                    .child(label),
+            )
+            .child(
+                div()
+                    .size(px(20.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_sm()
+                    .child(icons::icon(Icon::Close, 10.0, theme.text_faint)),
+            )
+            .on_click(cx.listener(|this, _, _, cx| this.clear_focus(cx)))
+            .into_any_element()
+    }
+
     fn render_header(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let window_width = self.window_size.map_or(1254.0, |(width, _)| width);
         let (search_left, search_width) = search_slot(window_width);
         let can_back = self.can_go_back();
         let can_forward = self.can_go_forward();
+        let focus_chip = self
+            .focus_target
+            .clone()
+            .map(|target| self.render_focus_chip(&target, cx));
         div()
             .flex()
             .items_center()
@@ -7700,6 +7967,7 @@ impl FlowlistApp {
                     .items_center()
                     .gap_1()
                     .pr_3()
+                    .when_some(focus_chip, |this, chip| this.child(chip))
                     .child(
                         div()
                             .id("add-task")
