@@ -51,8 +51,10 @@ flowlist add [OPTIONS] [TEXT]...
 ```
 
 Useful flags: `-p/--project`, `-t/--tag` (repeatable), `--due`, `--defer`,
-`--estimate`, `--repeat`, `--note`, `--flag`, `--parent` and `--attach`
-(repeatable; stores a reference to a local file path or an http(s) link).
+`--estimate`, `--repeat`, `--note`, `--flag`, `--parent`, `--alerts` and
+`--attach` (repeatable; stores a reference to a local file path or an http(s)
+link). Alerts use `due` / `defer` / `planned` with signed offsets, for example
+`--alerts 'due:-15m, defer, planned:+1h'`.
 
 ### `list`
 
@@ -95,11 +97,12 @@ flowlist done <ID>... [--undo]
 flowlist remove <ID>... [--series]   # move to Trash; --series takes the chain
 flowlist edit <ID> [--title ...] [--notes ...] [--due ...] [--defer ...] \
   [--estimate ...] [--flag|--unflag] [--repeat ...] [--project ...] \
-  [--parent ...] [--sequential] [--priority ...] \
+  [--parent ...] [--sequential] [--priority ...] [--alerts ...] \
   [--attach <PATH>]... [--clear-attachments]
 ```
 
 Use `none` to clear dates, estimates, repeat rules, projects or parents.
+`--alerts none` restores the default due reminder.
 Completing a repeating task increments the last number in its title, so
 `Week 3 review` spawns `Week 4 review`; `--series` on `remove` moves every
 occurrence of that chain to Trash instead of only the named one.

@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use flowlist_core::db::Db;
 use flowlist_core::ids::{ProjectId, TagId, TaskId};
-use flowlist_core::model::ProjectStatus;
+use flowlist_core::model::{ProjectStatus, TaskAlert};
 use flowlist_core::query::Group;
 use flowlist_core::query::availability;
 use flowlist_core::stats::Stats;
@@ -47,6 +47,11 @@ pub fn task_value(db: &Db, id: &TaskId) -> Value {
         "defer_at": task.defer.map(|stamp| stamp.at.to_rfc3339()),
         "planned": task.planned.map(|stamp| stamp.to_input_string()),
         "planned_at": task.planned.map(|stamp| stamp.at.to_rfc3339()),
+        "alerts": task.alerts.iter().map(|alert| json!({
+            "event": alert.event.slug(),
+            "offset_minutes": alert.offset_minutes,
+        })).collect::<Vec<_>>(),
+        "alerts_text": TaskAlert::format_list(&task.alerts),
         "estimate_min": task.estimate_min,
         "flagged": task.flagged,
         "priority": task.priority.map(|priority| priority.label()),

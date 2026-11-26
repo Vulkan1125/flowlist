@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Custom notification schedules.** A task can carry its own alerts, each
+  anchored to Due, Defer/Available or Planned with a signed minute offset.
+  Examples: `due:-15m`, `defer`, `planned:+1h`. Tasks with alerts replace the
+  default due reminder; project/tag context is included in the notification.
+  The inspector has an **Alerts** field, and the CLI/MCP accept `alerts`.
+- **Rupee icon.** Projects can use the rupee symbol from the icon picker.
 - **Batch task editing.** Select two or more tasks and the inspector becomes a
   batch editor for project, tags, defer/planned/due, priority, flag and
   estimate. Empty fields stay unchanged, `none`/`clear` clears a value, and

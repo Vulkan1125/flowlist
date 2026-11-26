@@ -122,10 +122,14 @@ leaving the list.
   preview an image or PDF in the app; PDFs step with `←` / `→`. `open` hands the
   file to its default app. Removing an attachment asks first and leaves the
   file on disk; Undo restores the row.
-- **Tags**, **Project**, **Defer**, **Planned**, **Due**, **Estimate** and
-  **Repeat** are one click away. A date opens a calendar and a clock-face time
-  picker. A defer date after the due date is refused with a toast, so the
-  picker stays open for another choice. Planned never changes availability.
+- **Tags**, **Project**, **Defer**, **Planned**, **Due**, **Estimate**,
+  **Repeat** and **Alerts** are one click away. A date opens a calendar and a
+  clock-face time picker. A defer date after the due date is refused with a
+  toast, so the picker stays open for another choice. Planned never changes
+  availability.
+- **Alerts** controls custom notifications per task. Use `due:-15m`, `defer`,
+  `planned:+1h`, and so on, separated by commas. A task with alerts replaces the
+  default due reminder; `none` restores it.
 - **To project** converts the task and its subtasks into a project. **Delete**
   and **Complete** finish the task.
 
@@ -320,7 +324,9 @@ eight sections on the left (`⌘1`…`⌘8` jump between them):
 **Settings → Reminders** (its own sidebar item) can schedule a macOS notification for every
 task due in the next 30 days. Timestamped tasks remind at their time; date-only
 tasks remind at 09:00 local. Toggling it on asks macOS for permission, and
-**Send test** checks that banners are working. **Pause media on full-screen
+Tasks with custom **Alerts** schedule those instead of the default due reminder;
+the notification body includes the project, up to two tags and whether the
+alert is early, on time or late. **Send test** checks that banners are working. **Pause media on full-screen
 reminders** stops system playback when a reminder opens; Flowlist deliberately
 does not start it again when the reminder closes. macOS asks for **Device
 control and data access** for this; allow Flowlist under Privacy & Security.

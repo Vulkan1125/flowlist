@@ -60,6 +60,9 @@ tasks. `create_project` and `update_project` accept the same `attachments` and
 | `set_task_tags` | add or remove tag paths |
 | `list_tasks` | list by built-in view or filter |
 
+`capture`, `add_task` and `update_task` accept `alerts`, a compact string such
+as `due:-15m, defer, planned:+1h`; `none` restores the default due reminder.
+
 `list_tasks` accepts `view` (`inbox`, `today`, `projects`, `forecast`, `flagged`,
 `tags`, `completed`, `archive`, `changed`, `attachments`, `nearby`, `review`,
 `trash` or `custom` with `perspective`), plus `project`, `folder`, `tags`

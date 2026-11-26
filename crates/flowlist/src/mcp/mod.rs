@@ -17,7 +17,7 @@ use flowlist_core::db::{ContainerPosition, Db, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
     BuiltinPerspective, Condition, FilterNode, Geo, GroupBy, IconSpec, Perspective, Priority,
-    ProjectKind, ProjectStatus, SortBy, TagStatus, TaskStatus,
+    ProjectKind, ProjectStatus, SortBy, TagStatus, TaskAlert, TaskStatus,
 };
 use flowlist_core::parse::{parse_duration, parse_repeat, parse_stamp};
 use flowlist_core::paths::DataPaths;
@@ -257,6 +257,13 @@ impl Server {
         if let Some(priority) = string_arg(args, "priority") {
             new_task.priority = Some(parse_priority(&priority)?);
         }
+        if let Some(alerts) = string_arg(args, "alerts") {
+            new_task.alerts = if alerts.eq_ignore_ascii_case("none") {
+                Vec::new()
+            } else {
+                TaskAlert::parse_list(&alerts).map_err(|error| anyhow!(error))?
+            };
+        }
         if let Some(repeat) = string_arg(args, "repeat") {
             new_task.repeat = Some(parse_repeat(&repeat, reference)?);
         }
@@ -307,6 +314,13 @@ impl Server {
             } else {
                 Some(Some(parse_priority(&priority)?))
             };
+        }
+        if let Some(alerts) = string_arg(args, "alerts") {
+            patch.alerts = Some(if alerts.eq_ignore_ascii_case("none") {
+                Vec::new()
+            } else {
+                TaskAlert::parse_list(&alerts).map_err(|error| anyhow!(error))?
+            });
         }
         if let Some(repeat) = repeat_patch(args, reference)? {
             patch.repeat = Some(repeat);
@@ -1272,6 +1286,7 @@ fn tool_definitions() -> Vec<Value> {
                     "estimate_min": n("Estimated minutes"),
                     "flagged": b("Flag the task"),
                     "priority": s("low | medium | high, or null to clear"),
+                    "alerts": s("Alerts such as due:-15m, defer, planned:+1h"),
                     "repeat": s("Repeat rule, e.g. every 2 weeks after completion"),
                     "sequential": b("Work through subtasks in order"),
                     "attachments": arr("Local file paths or http(s) links to reference"),
@@ -1320,6 +1335,7 @@ fn tool_definitions() -> Vec<Value> {
                     "estimate": s("Duration string such as 1h30m"),
                     "flagged": b("Flag state"),
                     "priority": s("low | medium | high, or null to clear"),
+                    "alerts": s("Alerts such as due:-15m, defer; none restores the default"),
                     "repeat": s("Repeat rule, or null to clear"),
                     "project": s("Project path, or null to move to the inbox"),
                     "parent": s("Parent task id, or null to clear"),

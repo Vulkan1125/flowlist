@@ -11,7 +11,7 @@ use crate::error::{Error, Result};
 use crate::ids::{ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use crate::model::{
     ChecklistItem, Folder, Geo, IconSpec, Perspective, Priority, Project, ProjectKind,
-    ProjectStatus, RepeatRule, Tag, TagStatus, Task, increment_repeat_title,
+    ProjectStatus, RepeatRule, Tag, TagStatus, Task, TaskAlert, increment_repeat_title,
 };
 use crate::time::{Stamp, local_date, now};
 
@@ -62,6 +62,8 @@ pub struct NewTask {
     /// Follow the due date and time instead of `reminder_at`.
     #[serde(default = "default_true")]
     pub reminder_match_due: bool,
+    #[serde(default)]
+    pub alerts: Vec<TaskAlert>,
     pub priority: Option<Priority>,
     pub attachments: Vec<String>,
     pub repeat: Option<RepeatRule>,
@@ -88,6 +90,7 @@ impl NewTask {
             fullscreen_reminder: false,
             reminder_at: None,
             reminder_match_due: true,
+            alerts: Vec::new(),
             priority: None,
             attachments: Vec::new(),
             repeat: None,
@@ -146,6 +149,10 @@ pub struct TaskPatch {
     pub reminder_match_due: Option<bool>,
     #[serde(deserialize_with = "deserialize_double_option")]
     pub priority: Option<Option<Priority>>,
+    /// Replace the task's custom notification schedule. Empty means fall back
+    /// to the default due reminder.
+    #[serde(default)]
+    pub alerts: Option<Vec<TaskAlert>>,
     pub attachments: Option<Vec<String>>,
     #[serde(deserialize_with = "deserialize_double_option")]
     pub repeat: Option<Option<RepeatRule>>,
@@ -702,6 +709,7 @@ impl Command {
                 task.fullscreen_reminder = new_task.fullscreen_reminder;
                 task.reminder_at = new_task.reminder_at;
                 task.reminder_match_due = new_task.reminder_match_due;
+                task.alerts = new_task.alerts;
                 task.priority = new_task.priority;
                 task.attachments = new_task.attachments;
                 task.repeat = new_task.repeat;
@@ -825,6 +833,9 @@ impl Command {
                     }
                     if let Some(priority) = patch.priority {
                         task.priority = priority;
+                    }
+                    if let Some(alerts) = patch.alerts {
+                        task.alerts = alerts;
                     }
                     if let Some(attachments) = patch.attachments {
                         task.attachments = attachments

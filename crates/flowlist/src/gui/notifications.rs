@@ -11,7 +11,8 @@ use std::sync::{Mutex, OnceLock};
 
 use chrono::{Datelike, Duration, NaiveTime, Timelike};
 use flowlist_core::db::Db;
-use flowlist_core::time::{local_to_utc, now};
+use flowlist_core::model::{AlertEvent, TaskAlert};
+use flowlist_core::time::{Stamp, local_to_utc, now};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Permission {
@@ -251,7 +252,7 @@ pub fn schedule(db: &Db) -> usize {
                 triggerWithDateMatchingComponents: components
                 repeats: 0i8
             ];
-            let identifier = nsstring(&format!("flowlist.task.{}", reminder.id));
+            let identifier = nsstring(&format!("flowlist.task.{}", reminder.key));
             let request: *mut Object = msg_send![
                 class!(UNNotificationRequest),
                 requestWithIdentifier: identifier
@@ -334,14 +335,15 @@ pub fn open_settings() {
 }
 
 struct Reminder {
-    id: flowlist_core::ids::TaskId,
+    key: String,
     title: String,
     body: String,
     at: chrono::DateTime<chrono::Utc>,
 }
 
-/// The due tasks that should have a reminder between `reference` and the
-/// horizon. Pure, so the scheduling rules can be tested without macOS.
+/// The tasks that should have a reminder between `reference` and the horizon.
+/// A task with no custom alerts gets the default due reminder; otherwise its
+/// own schedules replace it. Pure, so the rules can be tested without macOS.
 fn reminders(db: &Db, reference: chrono::DateTime<chrono::Utc>) -> Vec<Reminder> {
     let horizon = reference + Duration::days(HORIZON_DAYS);
     let mut pending = Vec::new();
@@ -349,9 +351,6 @@ fn reminders(db: &Db, reference: chrono::DateTime<chrono::Utc>) -> Vec<Reminder>
         if task.completed || task.is_trashed() {
             continue;
         }
-        let Some(due) = task.due else {
-            continue;
-        };
         if db
             .effective_project(&task.id)
             .and_then(|project| db.projects.get(&project))
@@ -359,22 +358,71 @@ fn reminders(db: &Db, reference: chrono::DateTime<chrono::Utc>) -> Vec<Reminder>
         {
             continue;
         }
-        let at = reminder_at(due);
-        if at <= reference || at > horizon {
-            continue;
-        }
+        let alerts = if task.alerts.is_empty() {
+            vec![TaskAlert::new(AlertEvent::Due, 0)]
+        } else {
+            task.alerts.clone()
+        };
         let location = db
             .effective_project(&task.id)
             .map(|project| db.project_path(&project))
             .unwrap_or_else(|| "Inbox".to_string());
-        pending.push(Reminder {
-            id: task.id.clone(),
-            title: task.title.clone(),
-            body: format!("{location} · Due"),
-            at,
-        });
+        let tags: Vec<String> = task
+            .tags
+            .iter()
+            .filter_map(|tag| db.tags.get(tag).map(|tag| db.tag_path(&tag.id)))
+            .take(2)
+            .collect();
+        for alert in alerts {
+            let Some(stamp) = event_stamp(db, &task.id, alert.event) else {
+                continue;
+            };
+            let at = reminder_at(stamp) + Duration::minutes(alert.offset_minutes as i64);
+            if at <= reference || at > horizon {
+                continue;
+            }
+            let mut parts = vec![location.clone(), alert.event.label().to_string()];
+            if !tags.is_empty() {
+                parts.push(tags.join(", "));
+            }
+            parts.push(timing_label(alert.offset_minutes));
+            pending.push(Reminder {
+                key: format!("{}.{}.{}", task.id, alert.event.slug(), alert.offset_minutes),
+                title: task.title.clone(),
+                body: parts.join(" · "),
+                at,
+            });
+        }
     }
+    pending.sort_by_key(|reminder| reminder.at);
     pending
+}
+
+fn event_stamp(db: &Db, task: &flowlist_core::ids::TaskId, event: AlertEvent) -> Option<Stamp> {
+    match event {
+        AlertEvent::Due => db.effective_due(task),
+        AlertEvent::Defer => db.effective_defer(task),
+        AlertEvent::Planned => db.effective_planned(task),
+    }
+}
+
+fn timing_label(offset: i32) -> String {
+    if offset == 0 {
+        return "now".to_string();
+    }
+    let minutes = offset.unsigned_abs();
+    let duration = if minutes % 60 == 0 {
+        format!("{}h", minutes / 60)
+    } else if minutes < 60 {
+        format!("{minutes}m")
+    } else {
+        format!("{}h {}m", minutes / 60, minutes % 60)
+    };
+    if offset < 0 {
+        format!("in {duration}")
+    } else {
+        format!("{duration} ago")
+    }
 }
 
 pub(super) fn reminder_at(due: flowlist_core::time::Stamp) -> chrono::DateTime<chrono::Utc> {
@@ -496,7 +544,7 @@ mod tests {
     use super::*;
     use chrono::{NaiveDate, NaiveTime};
     use flowlist_core::db::Db;
-    use flowlist_core::model::{Project, ProjectStatus, Task};
+    use flowlist_core::model::{AlertEvent, Project, ProjectStatus, Task, TaskAlert};
     use flowlist_core::time::{Stamp, local_to_utc};
 
     fn task(title: &str, due: Stamp) -> Task {
@@ -544,6 +592,42 @@ mod tests {
             date_only_reminder.at.with_timezone(&chrono::Local).hour(),
             9
         );
+    }
+
+    #[test]
+    fn custom_alerts_replace_the_default_due_reminder() {
+        let mut db = Db::new();
+        let reference = local_to_utc(
+            NaiveDate::from_ymd_opt(2026, 11, 21).unwrap(),
+            NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
+        );
+        let mut custom = task(
+            "Custom alerts",
+            Stamp::on(
+                NaiveDate::from_ymd_opt(2026, 11, 21).unwrap(),
+                NaiveTime::from_hms_opt(10, 30, 0).unwrap(),
+            ),
+        );
+        custom.defer = Some(Stamp::on(
+            NaiveDate::from_ymd_opt(2026, 11, 21).unwrap(),
+            NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+        ));
+        custom.alerts = vec![
+            TaskAlert::new(AlertEvent::Due, -30),
+            TaskAlert::new(AlertEvent::Defer, 0),
+        ];
+        db.add_task_to_inbox(custom);
+
+        let pending = reminders(&db, reference);
+        assert_eq!(pending.len(), 2);
+        assert!(pending.iter().any(|reminder| reminder
+            .body
+            .contains("Due · in 30m")));
+        assert!(pending.iter().any(|reminder| reminder
+            .body
+            .contains("Available · now")));
+        assert!(pending[0].at < pending[1].at);
+        assert_ne!(pending[0].key, pending[1].key);
     }
 
     #[test]

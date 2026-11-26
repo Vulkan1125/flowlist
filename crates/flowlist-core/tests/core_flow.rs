@@ -2894,7 +2894,7 @@ fn every_project_icon_round_trips_by_slug() {
         assert_eq!(ProjectIcon::from_slug(icon.slug()), Some(icon));
         assert!(slugs.insert(icon.slug()), "duplicate icon slug");
     }
-    assert_eq!(ProjectIcon::ALL.len(), 54);
+    assert_eq!(ProjectIcon::ALL.len(), 55);
     // The retired running figure still resolves so old libraries load.
     assert_eq!(
         ProjectIcon::from_slug("running"),

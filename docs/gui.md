@@ -201,6 +201,13 @@ follows the pane that is actually visible, so it re-centres when the inspector
 closes (the search field keeps the inspector's column reserved instead).
 Settings previews each theme family as a miniature window.
 
+## Notifications
+
+Tasks can carry custom alerts edited from the inspector **Alerts** field:
+`due:-15m, defer, planned:+1h`. Each alert is anchored to Due, Defer/Available
+or Planned and uses signed minutes. Tasks with alerts replace the default due
+reminder; the body includes project and tag context.
+
 ## Batch editing
 
 Selecting more than one task turns the inspector into a batch editor. Project,

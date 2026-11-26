@@ -226,6 +226,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Multi-select, range select, keyboard navigation
 - [x] Batch task editing: project, tags, defer/planned/due, priority, flag and
       estimate apply to every selected task as one undo step
+- [x] Custom notification schedules per task: Due, Defer/Available and Planned
+      anchors with signed offsets, editable from the inspector, CLI and MCP
 - [x] Complete/reopen, flag/unflag, delete, undo/redo and post-delete focus
 - [x] Trash restore / delete forever, with retention set in Settings, plus a
       **Select all** button and `⌘A` for one-step restore or purge

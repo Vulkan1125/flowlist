@@ -977,6 +977,7 @@ pub fn icon_for_project(icon: ProjectIcon, size: f32, color: gpui::Hsla) -> impl
         ProjectIcon::Document => Icon::FileText,
         ProjectIcon::Dog => Icon::Dog,
         ProjectIcon::Money => Icon::DollarSign,
+        ProjectIcon::Rupee => Icon::Rupee,
         ProjectIcon::Mail => Icon::Mail,
         ProjectIcon::Smile => Icon::Smile,
         ProjectIcon::Flag => Icon::Flagged,

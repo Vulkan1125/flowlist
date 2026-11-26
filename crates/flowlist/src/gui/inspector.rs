@@ -1008,6 +1008,12 @@ impl FlowlistApp {
                 &repeat.unwrap_or_default(),
                 cx,
             ))
+            .child(self.inspector_text_field(
+                "Alerts",
+                EditField::Alerts,
+                &flowlist_core::model::TaskAlert::format_list(&task.alerts),
+                cx,
+            ))
             .child(widgets::divider(theme))
             .when(!draft, |this| {
                 this.child(
@@ -1197,6 +1203,7 @@ impl FlowlistApp {
             EditField::Reminder => "No reminder time",
             EditField::Estimate => "No estimate (e.g. 45m)",
             EditField::Repeat => "Does not repeat (e.g. every week)",
+            EditField::Alerts => "Default due reminder (e.g. due:-15m, defer)",
             EditField::Project => "Inbox",
             EditField::Notes => "Notes",
         };

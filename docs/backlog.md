@@ -132,9 +132,9 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Projects in Forecast** — project rows on their due/defer/planned dates,
       above the day's task rows, with status, progress, calendar pills and
       Past/Future support.
-- [ ] **Full notification model** — defer/available alerts, per-item custom
-      notification schedules, and richer notification payloads beyond due
-      reminders and full-screen reminders.
+- [x] **Full notification model** — per-task Due/Defer/Planned alerts with
+      signed offsets, inspector/CLI/MCP editing, and project/tag context in the
+      notification body.
 - [x] **Batch editing** — select several tasks and edit tags, project,
       defer/planned/due, priority, flag and estimate in the inspector as one
       undo step. Strict dates make the batch atomic.

@@ -86,6 +86,7 @@ pub enum Icon {
     FileText,
     Dog,
     DollarSign,
+    Rupee,
     Mail,
     Smile,
     Gift,
@@ -110,7 +111,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    pub const ALL: [Icon; 96] = [
+    pub const ALL: [Icon; 97] = [
         Icon::Inbox,
         Icon::Projects,
         Icon::Forecast,
@@ -186,6 +187,7 @@ impl Icon {
         Icon::FileText,
         Icon::Dog,
         Icon::DollarSign,
+        Icon::Rupee,
         Icon::Mail,
         Icon::Smile,
         Icon::Gift,
@@ -286,6 +288,7 @@ impl Icon {
             Icon::FileText => "icons/document.svg",
             Icon::Dog => "icons/dog.svg",
             Icon::DollarSign => "icons/money.svg",
+            Icon::Rupee => "icons/rupee.svg",
             Icon::Mail => "icons/mail.svg",
             Icon::Smile => "icons/smile.svg",
             Icon::Gift => "icons/gift.svg",
@@ -511,6 +514,9 @@ impl Icon {
             Icon::DollarSign => {
                 r#"<line x1="12" x2="12" y1="2" y2="22" /> <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />"#
             }
+            Icon::Rupee => {
+                r#"<path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/>"#
+            }
             Icon::Mail => {
                 r#"<rect width="20" height="16" x="2" y="4" rx="2" /> <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />"#
             }
@@ -619,7 +625,7 @@ mod tests {
 
     #[test]
     fn icon_set_is_complete_and_unique() {
-        assert_eq!(Icon::ALL.len(), 96);
+        assert_eq!(Icon::ALL.len(), 97);
         let mut paths: Vec<&str> = Icon::ALL.iter().map(|icon| icon.path()).collect();
         paths.sort_unstable();
         paths.dedup();

@@ -58,7 +58,9 @@ use flowlist_core::command::{
 };
 use flowlist_core::db::{ContainerPosition, DateConflict, Db, OrderKey, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
-use flowlist_core::model::{BuiltinPerspective, GroupBy, Priority, ProjectKind, SortBy, TagStatus};
+use flowlist_core::model::{
+    AlertEvent, BuiltinPerspective, GroupBy, Priority, ProjectKind, SortBy, TagStatus, TaskAlert,
+};
 use flowlist_core::parse::{parse_duration, parse_quick, parse_repeat, parse_stamp};
 use flowlist_core::paths::DataPaths;
 use flowlist_core::query::{self, Group, TaskRow};
@@ -106,6 +108,7 @@ pub enum EditField {
     Reminder,
     Estimate,
     Repeat,
+    Alerts,
 }
 
 impl EditField {
@@ -129,13 +132,14 @@ impl EditField {
             EditField::Due => EditField::Reminder,
             EditField::Reminder => EditField::Estimate,
             EditField::Estimate => EditField::Repeat,
-            EditField::Repeat => EditField::Title,
+            EditField::Repeat => EditField::Alerts,
+            EditField::Alerts => EditField::Title,
         }
     }
 
     fn previous(self) -> Self {
         match self {
-            EditField::Title => EditField::Repeat,
+            EditField::Title => EditField::Alerts,
             EditField::Notes => EditField::Title,
             EditField::Project => EditField::Notes,
             EditField::Planned => EditField::Defer,
@@ -144,6 +148,7 @@ impl EditField {
             EditField::Reminder => EditField::Due,
             EditField::Estimate => EditField::Reminder,
             EditField::Repeat => EditField::Estimate,
+            EditField::Alerts => EditField::Repeat,
         }
     }
 }
@@ -4022,6 +4027,7 @@ impl FlowlistApp {
                 .as_ref()
                 .map(|rule| rule.description())
                 .unwrap_or_default(),
+            EditField::Alerts => TaskAlert::format_list(&task.alerts),
         };
         self.field.set(value);
         if field == EditField::Project {
@@ -4174,6 +4180,14 @@ impl FlowlistApp {
                 };
                 patch.repeat = Some(repeat);
             }
+            EditField::Alerts => match TaskAlert::parse_list(&value) {
+                Ok(alerts) => patch.alerts = Some(alerts),
+                Err(error) => {
+                    self.field_error = Some(error);
+                    cx.notify();
+                    return false;
+                }
+            },
         }
         let conflicts =
             flowlist_core::command::date_conflicts_for_task_patch(self.store.db(), &id, &patch);
@@ -7090,7 +7104,7 @@ impl FlowlistApp {
                 };
                 // Enter on the last field finishes editing. Tab keeps cycling
                 // through the fields, so the keyboard never traps the focus.
-                if !wrap && !backwards && current == Some(EditField::Repeat) {
+                if !wrap && !backwards && current == Some(EditField::Alerts) {
                     // The first-time task stops being a draft only when the
                     // whole field session ends, not when its title is saved,
                     // so Delete/Complete stay out of the way while the user

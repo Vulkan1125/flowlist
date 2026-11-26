@@ -19,7 +19,7 @@ use flowlist_core::ids::{
 };
 use flowlist_core::model::{
     BuiltinPerspective, Condition, DueWindow, FilterNode, GroupBy, IconSpec, Perspective,
-    Priority, ProjectKind, ProjectStatus, RepeatRule, SortBy, TagStatus, TaskStatus,
+    Priority, ProjectKind, ProjectStatus, RepeatRule, SortBy, TagStatus, TaskAlert, TaskStatus,
 };
 use flowlist_core::parse::{
     parse_duration, parse_quick, parse_repeat, parse_stamp, with_default_time,
@@ -194,6 +194,9 @@ pub struct AddArgs {
     /// Attach a file path or http(s) link; repeat for several attachments.
     #[arg(long = "attach")]
     pub attachments: Vec<String>,
+    /// Alerts such as `due:-15m, defer` relative to the event.
+    #[arg(long)]
+    pub alerts: Option<String>,
 }
 
 #[derive(Args, Debug, Clone, Default)]
@@ -310,6 +313,9 @@ pub struct EditArgs {
     /// Remove every attachment.
     #[arg(long)]
     pub clear_attachments: bool,
+    /// Alerts such as `due:-15m, defer`; `none` restores the default due alert.
+    #[arg(long)]
+    pub alerts: Option<String>,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -1019,6 +1025,13 @@ fn cmd_add(cli: &Cli, args: AddArgs, paint: &Paint) -> Result<()> {
     if let Some(parent) = args.parent {
         task.parent = Some(store.db().resolve_task(&parent)?);
     }
+    if let Some(alerts) = args.alerts {
+        task.alerts = if alerts.eq_ignore_ascii_case("none") {
+            Vec::new()
+        } else {
+            TaskAlert::parse_list(&alerts).map_err(|error| anyhow!(error))?
+        };
+    }
     let outcome = store.execute(CoreCommand::CreateTask(task))?;
     let created = outcome
         .created
@@ -1400,6 +1413,13 @@ fn cmd_edit(cli: &Cli, args: EditArgs, paint: &Paint) -> Result<()> {
         } else {
             Some(Some(parse_priority(priority)?))
         };
+    }
+    if let Some(alerts) = &args.alerts {
+        patch.alerts = Some(if alerts.eq_ignore_ascii_case("none") {
+            Vec::new()
+        } else {
+            TaskAlert::parse_list(alerts).map_err(|error| anyhow!(error))?
+        });
     }
     if args.clear_attachments {
         patch.attachments = Some(Vec::new());

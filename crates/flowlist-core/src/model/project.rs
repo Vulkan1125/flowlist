@@ -148,6 +148,7 @@ pub enum ProjectIcon {
     Document,
     Dog,
     Money,
+    Rupee,
     Mail,
     Smile,
     Flag,
@@ -179,7 +180,7 @@ pub enum ProjectIcon {
 }
 
 impl ProjectIcon {
-    pub const ALL: [ProjectIcon; 54] = [
+    pub const ALL: [ProjectIcon; 55] = [
         ProjectIcon::Project,
         ProjectIcon::Folder,
         ProjectIcon::Star,
@@ -207,6 +208,7 @@ impl ProjectIcon {
         ProjectIcon::Document,
         ProjectIcon::Dog,
         ProjectIcon::Money,
+        ProjectIcon::Rupee,
         ProjectIcon::Mail,
         ProjectIcon::Smile,
         ProjectIcon::Flag,
@@ -265,6 +267,7 @@ impl ProjectIcon {
             ProjectIcon::Document => "document",
             ProjectIcon::Dog => "dog",
             ProjectIcon::Money => "money",
+            ProjectIcon::Rupee => "rupee",
             ProjectIcon::Mail => "mail",
             ProjectIcon::Smile => "smile",
             ProjectIcon::Flag => "flag",
@@ -325,6 +328,7 @@ impl ProjectIcon {
             ProjectIcon::Document => "Document",
             ProjectIcon::Dog => "Dog",
             ProjectIcon::Money => "Money",
+            ProjectIcon::Rupee => "Rupee",
             ProjectIcon::Mail => "Mail",
             ProjectIcon::Smile => "Smile",
             ProjectIcon::Flag => "Flag",

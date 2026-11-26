@@ -67,6 +67,127 @@ impl Priority {
     }
 }
 
+/// Which date a custom notification is anchored to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AlertEvent {
+    Due,
+    Defer,
+    Planned,
+}
+
+impl AlertEvent {
+    pub const ALL: [AlertEvent; 3] = [AlertEvent::Due, AlertEvent::Defer, AlertEvent::Planned];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            AlertEvent::Due => "Due",
+            AlertEvent::Defer => "Available",
+            AlertEvent::Planned => "Planned",
+        }
+    }
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            AlertEvent::Due => "due",
+            AlertEvent::Defer => "defer",
+            AlertEvent::Planned => "planned",
+        }
+    }
+}
+
+/// One per-task notification. `offset_minutes` is relative to the event:
+/// negative fires before it, zero at the event, positive after it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskAlert {
+    pub event: AlertEvent,
+    pub offset_minutes: i32,
+}
+
+impl TaskAlert {
+    pub fn new(event: AlertEvent, offset_minutes: i32) -> Self {
+        Self {
+            event,
+            offset_minutes,
+        }
+    }
+
+    /// Parse compact alert text such as `due:-15m, defer, planned:+1h`.
+    pub fn parse_list(value: &str) -> std::result::Result<Vec<Self>, String> {
+        let value = value.trim();
+        if value.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut alerts = Vec::new();
+        for token in value.split([',', ';']) {
+            let token = token.trim();
+            if token.is_empty() {
+                continue;
+            }
+            let (event, offset) = token.split_once(':').unwrap_or((token, "0"));
+            let event = match event.trim().to_lowercase().as_str() {
+                "due" => AlertEvent::Due,
+                "defer" | "available" => AlertEvent::Defer,
+                "planned" | "plan" => AlertEvent::Planned,
+                other => {
+                    return Err(format!(
+                        "Unknown alert event “{other}”; use due, defer or planned"
+                    ));
+                }
+            };
+            let offset = offset.trim();
+            let offset_minutes = if offset.is_empty() || offset == "0" || offset == "+0" {
+                0
+            } else {
+                let (sign, amount) = if let Some(amount) = offset.strip_prefix('-') {
+                    (-1, amount)
+                } else if let Some(amount) = offset.strip_prefix('+') {
+                    (1, amount)
+                } else {
+                    (1, offset)
+                };
+                let minutes = crate::parse::parse_duration(amount.trim())
+                    .map_err(|error| format!("Bad alert offset “{offset}”: {error}"))?;
+                (minutes as i32) * sign
+            };
+            alerts.push(Self::new(event, offset_minutes));
+        }
+        if alerts.len() > 12 {
+            return Err("Use at most 12 alerts per task".to_string());
+        }
+        Ok(alerts)
+    }
+
+    pub fn format_list(alerts: &[Self]) -> String {
+        alerts
+            .iter()
+            .map(|alert| {
+                if alert.offset_minutes == 0 {
+                    alert.event.slug().to_string()
+                } else {
+                    let sign = if alert.offset_minutes < 0 { "-" } else { "+" };
+                    format!(
+                        "{}:{sign}{}",
+                        alert.event.slug(),
+                        format_alert_minutes(alert.offset_minutes.unsigned_abs())
+                    )
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
+
+fn format_alert_minutes(minutes: u32) -> String {
+    if minutes % 60 == 0 {
+        format!("{}h", minutes / 60)
+    } else if minutes < 60 {
+        format!("{minutes}m")
+    } else {
+        format!("{}h{}m", minutes / 60, minutes % 60)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Task {
     pub id: TaskId,
@@ -104,6 +225,9 @@ pub struct Task {
     /// Use the due date and time instead of `reminder_at`.
     #[serde(default = "default_true")]
     pub reminder_match_due: bool,
+    /// Per-task notification schedules. Empty means the default due reminder.
+    #[serde(default)]
+    pub alerts: Vec<TaskAlert>,
     /// Optional importance, independent of the flag.
     #[serde(default)]
     pub priority: Option<Priority>,
@@ -160,6 +284,7 @@ impl Task {
             fullscreen_reminder: false,
             reminder_at: None,
             reminder_match_due: true,
+            alerts: Vec::new(),
             priority: None,
             completed: false,
             completed_at: None,
@@ -212,4 +337,23 @@ impl Task {
 
 fn default_true() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AlertEvent, TaskAlert};
+
+    #[test]
+    fn alerts_parse_format_and_reject_unknown_events() {
+        let alerts = TaskAlert::parse_list("due:-15m, defer, planned:+1h30m").unwrap();
+        assert_eq!(alerts.len(), 3);
+        assert_eq!(alerts[0], TaskAlert::new(AlertEvent::Due, -15));
+        assert_eq!(alerts[1], TaskAlert::new(AlertEvent::Defer, 0));
+        assert_eq!(alerts[2], TaskAlert::new(AlertEvent::Planned, 90));
+        assert_eq!(
+            TaskAlert::format_list(&alerts),
+            "due:-15m, defer, planned:+1h30m"
+        );
+        assert!(TaskAlert::parse_list("sometime:-5m").is_err());
+    }
 }
