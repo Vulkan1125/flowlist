@@ -280,7 +280,8 @@ these clicks can be replaced by named actions without changing the assertions.
 
 Set `FLOWLIST_TEST_FLOAT=1` so a tiling window manager leaves the window alone.
 Set `FLOWLIST_TEST_SHOT_DIR` to a directory, then press `F12` in the main window
-or the quick-capture panel. The app writes `shot-00.png`, `shot-01.png`, and so
+or the quick-capture panel. Set `FLOWLIST_TEST_CAPTURE_TEXT` to prefill the
+quick-capture panel with a parsed sample task. The app writes `shot-00.png`, `shot-01.png`, and so
 on into that directory from its own window, so no Screen Recording permission
 is needed. This works under OmniWM and other tiling managers because the capture
 is the app's own surface, not the display.

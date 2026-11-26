@@ -75,11 +75,15 @@ pub struct QuickCapture {
 
 impl QuickCapture {
     fn new(store: Store, theme: Theme, previous_app: Option<i32>, cx: &mut Context<Self>) -> Self {
+        let mut buffer = TextBuffer::empty();
+        if let Ok(text) = std::env::var("FLOWLIST_TEST_CAPTURE_TEXT") {
+            buffer.set(text);
+        }
         Self {
             store,
             theme,
             previous_app,
-            buffer: TextBuffer::empty(),
+            buffer,
             focus_handle: cx.focus_handle(),
             error: None,
             flash: None,
