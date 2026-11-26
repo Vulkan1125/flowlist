@@ -1,114 +1,109 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 — 2026-11-26
 
-- **OmniFocus perspective rules.** The saved-view editor is now one contents
-  tree: nested **All / Any / None** groups, every OmniFocus 4 rule from
-  **Status: Due Soon** through **Matches search terms**, comments, turning a
-  rule off without deleting it, drag reordering, and the top-level operator.
-  New views start with **Availability: Remaining**. Date-range rules cover
-  due, planned, defer, completed, dropped, added and changed dates with On,
-  Yesterday, Today, Tomorrow, In the past, In the next and Between. The phone
-  evaluates the same tree. **Due soon (days)** now lives in Settings →
-  Workflow → Forecast. Custom perspectives now include matching projects as
-  rows, so **Is a project**, project-status, project-tag and project-date
-  rules work. **First Available** now means one action per parallel project
-  (all of them in a single-actions list), and projects carry completed and
-  dropped timestamps for date-range rules. Dragging a rule onto a group nests
-  it, and date fields accept the same natural phrases as the rest of Flowlist.
-- **Two-tab view editor.** The previous simple editor is the first tab, with
-  its familiar checkbox and pop-up filters. **Comprehensive** is a single
-  quiet OmniFocus 4-style contents list: indented rule text with code-editor
-  guide lines, a right-side `⋯` menu, a hover plus, a faint Add a new rule,
+### Perspective rules
+
+- **OmniFocus rule tree.** Saved views now use one hierarchical contents tree:
+  nested **All / Any / None** groups, every OmniFocus 4 rule from **Status:
+  Due Soon** through **Matches search terms**, comments, disabled rules, drag
+  reordering and a top-level operator. New views start with **Availability:
+  Remaining**. Date ranges cover due, planned, defer, completed, dropped, added
+  and changed dates with On, Yesterday, Today, Tomorrow, In the past, In the
+  next and Between.
+- **Project rules and project rows.** Custom perspectives include matching
+  projects as rows. **Is a project**, project-status, project-tag and
+  project-date rules work. Projects now carry flagged, completed and dropped
+  state for rules and date ranges.
+- **First Available and availability accuracy.** First Available shows one
+  action per parallel project and every available action in a single-actions
+  list. Remaining and Due Soon no longer include tasks in completed or dropped
+  projects.
+- **Duration comparisons.** Estimated-duration rules include less than,
+  greater than and a custom between range, with a custom-minutes field.
+- **Date ranges and calendar picker.** On and Between date fields have a
+  calendar picker. Open-ended Between ranges use an empty start or end date.
+  Hour-based ranges compare timestamps rather than whole days.
+- **Inherited tags, search and comments.** Tag rules and tag grouping/sorting
+  see parent-action and project tags. Search terms match item, project, folder
+  and tag text. Comments annotate without filtering.
+
+### View editor
+
+- **Simple and Comprehensive tabs.** Simple restores the previous checkbox and
+  pop-up editor. Comprehensive is the OmniFocus-style rule tree. A new view
+  starts on Simple; advanced views open on Comprehensive so nothing is silently
+  flattened.
+- **Quiet OmniFocus 4 contents list.** Indented rule text with code-editor
+  guide lines, a right-side `⋯` menu, a hover plus, a faint **Add a new rule**,
   and a shared Presentation section. The icon background is square.
-- **More duration and view options.** Estimated-duration rules now include
-  **greater than** and **between**, with a custom-minutes field for less/greater.
-  Date-range rules have a calendar picker beside On/Between date fields.
-  Grouping adds Tags (combined), Completed, Dropped, Added, Changed and Next
-  Review. Sorting adds Due & Flagged, Tag, Added, Changed, Dropped and Next
-  Review. The catalogue itself
-  is indented, another Availability card is one plus-click away, and the sheet
-  resizes in both directions with a remembered size. Scrolling a rule menu or
-  an inline tag/project picker stays inside that control instead of moving the
-  sheet. **Cancel** sits left of **Save** in every sheet footer.
-- **Icons-only header by default.** A fresh session shows the toolbar icons
-  without the small titles. The titles are still available in Settings.
-- **Quieter empty notifications.** The full-screen hint appears only when a
-  task actually has a notification; an empty list just says “No notifications”.
-- **Perspective menus own their scrolling.** Scrolling the rule catalogue or a
-  layout menu no longer moves the whole sheet behind it.
-- **View audit fixes.** Tag grouping and sorting now see inherited parent and
-  project tags. Action groups still count as groups after their children are
-  completed. Remaining and Due Soon no longer include tasks in completed or
-  dropped projects. Tasks in dropped projects inherit the project's dropped
-  date. Hour-based date ranges compare timestamps instead of whole days, and
-  clearing a Between endpoint makes it genuinely open-ended.
-- **Calendar events in Forecast.** Calendar now has its own Settings section.
-  Turn on Forecast events, grant read-only access, and switch individual
-  calendars (holidays, birthdays and the rest) on or off. Events sit above each
-  day's tasks, the month grid shows event chips and the week strip counts them.
+- **Resizable, scrollable sheet.** The editor resizes in both directions and
+  remembers its size. Rule menus and tag/project pickers scroll inside
+  themselves without moving the sheet. Cancel sits left of Save.
+
+### Views and presentation
+
+- **More grouping.** Group by Tags (combined), Completed, Dropped, Added,
+  Changed and Next Review, alongside the existing project, folder, tag, dates,
+  flagged and estimate choices.
+- **More sorting.** Sort by Due & Flagged, Tag, Added, Changed, Dropped and Next
+  Review.
+- **Zero-match warning.** The editor calls out rule trees that cancel
+  themselves out, such as Available plus None of Available.
+- **View audit fixes.** Action groups remain groups after children complete,
+  dropped dates inherit from dropped projects, and Between endpoints clear to
+  open-ended ranges.
+
+### Calendar and Forecast
+
+- **Calendar events in Forecast.** Calendar has its own Settings section.
+  Read-only events sit above each day's tasks; the month grid shows event chips
+  and the week strip counts them.
 - **Forecast due-only mode and Later headings.** Settings → Workflow → Forecast
-  can show only due dates, hiding defer-only and planned-only entries. The
-  near horizon is **Later this month** and the far folded horizon is **Later**.
-- **Settings remembers its size.** The Settings sheet reopens at the size it was
-  last dragged to.
+  can show only due dates. The near horizon is **Later this month** and the far
+  folded horizon is **Later**.
 - **Calendar event times stay on one line.** Forecast shows the full
-  `start – end` range on one row instead of wrapping the end time below it.
-- **Calendar permission survives rebuilds.** Ad-hoc packages now use a stable
+  `start – end` range on one row.
+- **Calendar permission survives rebuilds.** Ad-hoc packages use a stable
   identifier-based designated requirement, so macOS does not treat every
-  rebuilt bundle as a different Calendar app.
+  rebuild as a new Calendar app.
+
+### Inspector and notifications
+
 - **Collapsible inspector sections.** Title, Action, Notes & Attachments, Dates,
-  Repeat, Tags and Notifications each fold from their header; the choice is
-  remembered per device. Project sections cover Project, Dates, Review,
-  Notifications, Tags and Attachments.
-- **OmniFocus-style Repeat and Review.** Repeat has a single editable interval
-  box with a day/week/month/year dropdown, a Sunday-to-Saturday strip when the
-  unit is Days, segmented choices for Due Date / Defer Until Date and
-  Completion / Assigned Dates, and a plain-language summary beneath them. With
-  weekdays selected, the interval box shows a greyed-out “custom”. Review shows
-  Next Review, an inline cadence stepper and Last Reviewed, with a sheet for the
-  exact date and interval.
-- **Sheets keep one action.** The footer hint and Cancel button are gone; Save
-  is the only footer button, and Escape still closes the sheet.
-- **Properties and Subtasks tabs.** A single task has two inspector tabs. The
-  first is **Properties**; Subtasks has its own page so the property sheet stays
-  short.
-- **One Notifications section.** The separate top Alerts field is gone.
-  Notifications are a chronological list; Add Notification restores a removed
-  default or adds a relative or custom alert. Every task notification has a
-  checkbox on its right that opens a full-screen reminder at that time (one at
-  a time); the section says “Check a notification to show it full screen
-  instead of as a banner”.
-- **OmniFocus-style Tags.** Tags are a separate section with a bordered chip
-  box, a `+` control and an inline add field. Project tags use the same chip
-  box without the input.
-- **Empty sections start folded.** Action, Notes & Attachments, Dates, Repeat,
-  Tags and Notifications open by default only when they have data. Populated
-  sections stay open.
-- **Notification parity, except date time zones.** Default notifications can be
-  enabled separately for Defer, Planned, Latest Start and Due. Each task or
-  project can remove or restore any default, add relative alerts or absolute
-  custom notifications, and see the schedule in the inspector. Latest Start is
-  due minus estimate. Custom notifications use a configurable default time.
-  CLI/MCP expose the same fields. Flowlist still schedules in the system time
-  zone; per-date floating/fixed time zones remain a date-model upgrade.
-- **Forecast tag and flagged contents.** Choose a Forecast tag in Settings →
-  Workflow; its undated actions get a Forecast section above Past. A new
-  **Show flagged undated tasks** switch adds a Flagged section. On-hold project
-  deadlines already appear with the project rows.
-- **Custom notification schedules.** A task can carry its own alerts, each
-  anchored to Due, Defer/Available or Planned with a signed minute offset.
-  Examples: `due:-15m`, `defer`, `planned:+1h`. Alerts are extra to the default
-  notifications, and project/tag context is included in the notification. The
-  inspector’s Notifications section adds them through **Add Notification**, and
-  the CLI/MCP accept `alerts`.
-- **Rupee icon.** Projects can use the rupee symbol from the icon picker.
-- **Batch task editing.** Select two or more tasks and the inspector becomes a
-  batch editor for project, tags, defer/planned/due, priority, flag and
-  estimate. Empty fields stay unchanged, `none`/`clear` clears a value, and
-  tags accept `+tag` or `-tag`. Apply sends one `BatchUpdateTasks` command, so
-  the whole batch either lands or rolls back together; Undo reverses it in one
-  step.
+  Repeat, Tags and Notifications fold from their headers; the choice is
+  remembered per device.
+- **OmniFocus-style Repeat and Review.** Repeat has an editable interval, unit
+  menu, weekday strip, anchored choices and a plain-language summary. Review
+  shows Next Review, an inline cadence stepper and Last Reviewed.
+- **Properties and Subtasks tabs.** A single task has separate Properties and
+  Subtasks pages.
+- **One Notifications section.** Notifications are a chronological list.
+  Defaults can be restored, relative and absolute alerts added, and any
+  notification can open full screen instead of as a banner.
+- **Notification parity, except date time zones.** Defer, Planned, Latest Start
+  and Due defaults can be enabled separately. Each task or project can remove
+  or restore defaults and add relative or absolute notifications. Flowlist
+  still schedules in the system time zone.
+- **OmniFocus-style Tags.** Tags use a bordered chip box, a `+` control and an
+  inline add field. Project tags use the same box without the input.
+- **Empty sections start folded.** Sections open by default only when they have
+  data.
+
+### Settings and interface
+
+- **Icons-only header by default.** A fresh session shows toolbar icons without
+  the small titles. Titles remain available in Settings.
+- **Settings remembers its size.** The Settings sheet reopens at its last
+  dragged size.
+- **Quieter empty notifications.** The full-screen hint appears only when a task
+  actually has a notification.
+- **Batch task editing.** Multi-selected tasks share a batch editor for project,
+  tags, dates, priority, flag and estimate. Apply is one undoable command.
+- **Forecast tag and flagged contents.** A chosen tag pulls undated actions into
+  Forecast, and flagged undated actions can join them.
+- **Custom notification schedules and rupee icon.** Per-task and per-project
+  alerts accept signed offsets, and projects can use the rupee symbol.
 
 ## 0.9.51 — 2026-11-26
 
