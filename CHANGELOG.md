@@ -20,7 +20,12 @@
   its familiar checkbox and pop-up filters. **Comprehensive** is a single
   quiet OmniFocus 4-style contents list: indented rule text with code-editor
   guide lines, a right-side `⋯` menu, a hover plus, a faint Add a new rule,
-  and a shared Presentation section. The icon background is a squircle. The catalogue itself
+  and a shared Presentation section. The icon background is a squircle.
+- **More duration and view options.** Estimated-duration rules now include
+  **greater than** and **between**, with a custom-minutes field for less/greater.
+  Grouping adds Tags (combined), Completed, Dropped, Added, Changed and Next
+  Review. Sorting adds Due & Flagged, Tag, Added, Changed, Dropped and Next
+  Review. The catalogue itself
   is indented, another Availability card is one plus-click away, and the sheet
   resizes in both directions with a remembered size. Scrolling a rule menu or
   an inline tag/project picker stays inside that control instead of moving the

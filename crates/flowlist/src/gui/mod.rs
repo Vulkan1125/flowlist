@@ -7673,6 +7673,12 @@ fn sort_slug(sort: SortBy) -> &'static str {
         SortBy::Estimate => "estimate",
         SortBy::Created => "created",
         SortBy::CompletedAt => "completed",
+        SortBy::DueFlagged => "due_flagged",
+        SortBy::Tag => "tag",
+        SortBy::AddedDate => "added",
+        SortBy::ChangedDate => "changed",
+        SortBy::DroppedDate => "dropped",
+        SortBy::NextReview => "review",
     }
 }
 
@@ -7688,6 +7694,12 @@ fn sort_from_slug(value: &str) -> Option<SortBy> {
         "estimate" => Some(SortBy::Estimate),
         "created" => Some(SortBy::Created),
         "completed" => Some(SortBy::CompletedAt),
+        "due_flagged" => Some(SortBy::DueFlagged),
+        "tag" => Some(SortBy::Tag),
+        "added" => Some(SortBy::AddedDate),
+        "changed" => Some(SortBy::ChangedDate),
+        "dropped" => Some(SortBy::DroppedDate),
+        "review" => Some(SortBy::NextReview),
         _ => None,
     }
 }
@@ -7705,6 +7717,12 @@ fn sort_label(sort: Option<SortBy>) -> &'static str {
         Some(SortBy::Estimate) => "Estimate",
         Some(SortBy::Created) => "Created",
         Some(SortBy::CompletedAt) => "Completed",
+        Some(SortBy::DueFlagged) => "Due & Flagged",
+        Some(SortBy::Tag) => "Tag",
+        Some(SortBy::AddedDate) => "Added",
+        Some(SortBy::ChangedDate) => "Changed",
+        Some(SortBy::DroppedDate) => "Dropped",
+        Some(SortBy::NextReview) => "Next Review",
     }
 }
 
@@ -7723,6 +7741,12 @@ fn group_slug(group: GroupBy) -> &'static str {
         GroupBy::DueDate => "due",
         GroupBy::DeferDate => "defer",
         GroupBy::PlannedDate => "planned",
+        GroupBy::CompletedDate => "completed",
+        GroupBy::DroppedDate => "dropped",
+        GroupBy::AddedDate => "added",
+        GroupBy::ChangedDate => "changed",
+        GroupBy::NextReview => "review",
+        GroupBy::TagsCombined => "tags",
         GroupBy::Flagged => "flagged",
         GroupBy::Estimate => "estimate",
     }
@@ -7737,6 +7761,12 @@ fn group_from_slug(value: &str) -> Option<GroupBy> {
         "due" => Some(GroupBy::DueDate),
         "defer" => Some(GroupBy::DeferDate),
         "planned" => Some(GroupBy::PlannedDate),
+        "completed" => Some(GroupBy::CompletedDate),
+        "dropped" => Some(GroupBy::DroppedDate),
+        "added" => Some(GroupBy::AddedDate),
+        "changed" => Some(GroupBy::ChangedDate),
+        "review" => Some(GroupBy::NextReview),
+        "tags" => Some(GroupBy::TagsCombined),
         "flagged" => Some(GroupBy::Flagged),
         "estimate" => Some(GroupBy::Estimate),
         _ => None,
@@ -7753,6 +7783,12 @@ fn group_label(group: Option<GroupBy>) -> &'static str {
         Some(GroupBy::DueDate) => "Due",
         Some(GroupBy::DeferDate) => "Defer",
         Some(GroupBy::PlannedDate) => "Planned",
+        Some(GroupBy::CompletedDate) => "Completed",
+        Some(GroupBy::DroppedDate) => "Dropped",
+        Some(GroupBy::AddedDate) => "Added",
+        Some(GroupBy::ChangedDate) => "Changed",
+        Some(GroupBy::NextReview) => "Next Review",
+        Some(GroupBy::TagsCombined) => "Tags (combined)",
         Some(GroupBy::Flagged) => "Flagged",
         Some(GroupBy::Estimate) => "Estimate",
     }

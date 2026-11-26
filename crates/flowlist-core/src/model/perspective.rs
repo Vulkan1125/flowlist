@@ -105,6 +105,12 @@ pub enum GroupBy {
     DueDate,
     DeferDate,
     PlannedDate,
+    CompletedDate,
+    DroppedDate,
+    AddedDate,
+    ChangedDate,
+    NextReview,
+    TagsCombined,
     Flagged,
     Estimate,
 }
@@ -119,6 +125,12 @@ impl GroupBy {
             GroupBy::DueDate => "due_date",
             GroupBy::DeferDate => "defer_date",
             GroupBy::PlannedDate => "planned_date",
+            GroupBy::CompletedDate => "completed_date",
+            GroupBy::DroppedDate => "dropped_date",
+            GroupBy::AddedDate => "added_date",
+            GroupBy::ChangedDate => "changed_date",
+            GroupBy::NextReview => "next_review",
+            GroupBy::TagsCombined => "tags_combined",
             GroupBy::Flagged => "flagged",
             GroupBy::Estimate => "estimate",
         }
@@ -133,6 +145,12 @@ impl GroupBy {
             GroupBy::DueDate,
             GroupBy::DeferDate,
             GroupBy::PlannedDate,
+            GroupBy::CompletedDate,
+            GroupBy::DroppedDate,
+            GroupBy::AddedDate,
+            GroupBy::ChangedDate,
+            GroupBy::NextReview,
+            GroupBy::TagsCombined,
             GroupBy::Flagged,
             GroupBy::Estimate,
         ]
@@ -155,6 +173,12 @@ pub enum SortBy {
     Estimate,
     Created,
     CompletedAt,
+    DueFlagged,
+    Tag,
+    AddedDate,
+    ChangedDate,
+    DroppedDate,
+    NextReview,
 }
 
 impl SortBy {
@@ -170,6 +194,12 @@ impl SortBy {
             SortBy::Estimate => "estimate",
             SortBy::Created => "created",
             SortBy::CompletedAt => "completed_at",
+            SortBy::DueFlagged => "due_flagged",
+            SortBy::Tag => "tag",
+            SortBy::AddedDate => "added_date",
+            SortBy::ChangedDate => "changed_date",
+            SortBy::DroppedDate => "dropped_date",
+            SortBy::NextReview => "next_review",
         }
     }
 
@@ -185,6 +215,12 @@ impl SortBy {
             SortBy::Estimate,
             SortBy::Created,
             SortBy::CompletedAt,
+            SortBy::DueFlagged,
+            SortBy::Tag,
+            SortBy::AddedDate,
+            SortBy::ChangedDate,
+            SortBy::DroppedDate,
+            SortBy::NextReview,
         ]
         .into_iter()
         .find(|sort| sort.slug() == value)
@@ -524,6 +560,9 @@ pub enum Condition {
         value: bool,
     },
     EstimateLessThan {
+        minutes: u32,
+    },
+    EstimateGreaterThan {
         minutes: u32,
     },
     HasDate {

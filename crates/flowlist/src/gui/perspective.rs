@@ -249,6 +249,12 @@ impl ViewChoice {
                 GroupBy::DueDate => "due",
                 GroupBy::DeferDate => "defer",
                 GroupBy::PlannedDate => "planned",
+                GroupBy::CompletedDate => "completed",
+                GroupBy::DroppedDate => "dropped",
+                GroupBy::AddedDate => "added",
+                GroupBy::ChangedDate => "changed",
+                GroupBy::NextReview => "review",
+                GroupBy::TagsCombined => "tags",
                 GroupBy::Flagged => "flagged",
                 GroupBy::Estimate => "estimate",
             }
@@ -264,6 +270,12 @@ impl ViewChoice {
                 SortBy::Estimate => "estimate",
                 SortBy::Created => "created",
                 SortBy::CompletedAt => "completed",
+                SortBy::DueFlagged => "due-flagged",
+                SortBy::Tag => "tag",
+                SortBy::AddedDate => "added",
+                SortBy::ChangedDate => "changed",
+                SortBy::DroppedDate => "dropped",
+                SortBy::NextReview => "review",
             }
             .to_string(),
         }
@@ -331,6 +343,8 @@ pub enum RuleTemplate {
     Availability,
     HasEstimate,
     EstimateLessThan,
+    EstimateGreaterThan,
+    EstimateRange,
     HasDue,
     HasPlanned,
     HasDefer,
@@ -353,12 +367,14 @@ pub enum RuleTemplate {
 }
 
 impl RuleTemplate {
-    pub const ALL: [RuleTemplate; 24] = [
+    pub const ALL: [RuleTemplate; 26] = [
         RuleTemplate::StatusDueSoon,
         RuleTemplate::StatusFlagged,
         RuleTemplate::Availability,
         RuleTemplate::HasEstimate,
         RuleTemplate::EstimateLessThan,
+        RuleTemplate::EstimateGreaterThan,
+        RuleTemplate::EstimateRange,
         RuleTemplate::HasDue,
         RuleTemplate::HasPlanned,
         RuleTemplate::HasDefer,
@@ -387,6 +403,8 @@ impl RuleTemplate {
             RuleTemplate::Availability => "Availability",
             RuleTemplate::HasEstimate => "Has an estimated duration",
             RuleTemplate::EstimateLessThan => "Has an estimated duration less than",
+            RuleTemplate::EstimateGreaterThan => "Has an estimated duration greater than",
+            RuleTemplate::EstimateRange => "Has an estimated duration between",
             RuleTemplate::HasDue => "Has a due date",
             RuleTemplate::HasPlanned => "Has a planned date",
             RuleTemplate::HasDefer => "Has a defer date",
@@ -415,6 +433,8 @@ impl RuleTemplate {
             RuleTemplate::Availability => "STATUS",
             RuleTemplate::HasEstimate
             | RuleTemplate::EstimateLessThan
+            | RuleTemplate::EstimateGreaterThan
+            | RuleTemplate::EstimateRange
             | RuleTemplate::HasDue
             | RuleTemplate::HasPlanned
             | RuleTemplate::HasDefer
@@ -450,6 +470,13 @@ impl RuleTemplate {
             RuleTemplate::HasEstimate => RuleKind::Condition(Condition::HasEstimate { value: true }),
             RuleTemplate::EstimateLessThan => RuleKind::Condition(Condition::EstimateLessThan {
                 minutes: 30,
+            }),
+            RuleTemplate::EstimateGreaterThan => {
+                RuleKind::Condition(Condition::EstimateGreaterThan { minutes: 30 })
+            }
+            RuleTemplate::EstimateRange => RuleKind::Condition(Condition::Estimate {
+                min_minutes: Some(15),
+                max_minutes: Some(60),
             }),
             RuleTemplate::HasDue => RuleKind::Condition(Condition::HasDate {
                 field: DateField::Due,
@@ -665,6 +692,12 @@ impl RuleNode {
                 min_minutes: parse_u32(&self.text.text()),
                 max_minutes: parse_u32(&self.text2.text()),
             },
+            Condition::EstimateLessThan { minutes } => Condition::EstimateLessThan {
+                minutes: parse_u32(&self.text.text()).unwrap_or(*minutes),
+            },
+            Condition::EstimateGreaterThan { minutes } => Condition::EstimateGreaterThan {
+                minutes: parse_u32(&self.text.text()).unwrap_or(*minutes),
+            },
             Condition::DateRange { field, range } => Condition::DateRange {
                 field: *field,
                 range: edited_range(range, &self.text.text(), &self.text2.text()),
@@ -745,6 +778,9 @@ fn condition_text(condition: &Condition) -> (String, String) {
             min_minutes.map(|value| value.to_string()).unwrap_or_default(),
             max_minutes.map(|value| value.to_string()).unwrap_or_default(),
         ),
+        Condition::EstimateLessThan { minutes } | Condition::EstimateGreaterThan { minutes } => {
+            (minutes.to_string(), String::new())
+        }
         Condition::DateRange { range, .. } => match range {
             DateRangeFilter::On { date } => (date.to_string(), String::new()),
             DateRangeFilter::Between { from, to } => (
@@ -1724,6 +1760,9 @@ pub fn condition_summary(db: &Db, condition: &Condition) -> String {
         Condition::EstimateLessThan { minutes } => {
             format!("Has an estimated duration less than {minutes} minutes")
         }
+        Condition::EstimateGreaterThan { minutes } => {
+            format!("Has an estimated duration greater than {minutes} minutes")
+        }
         Condition::HasDate { field, value } => {
             let verb = if *value { "Has" } else { "Has no" };
             format!("{verb} {}", date_field_phrase(*field))
@@ -1882,6 +1921,12 @@ fn group_label(group: GroupBy) -> &'static str {
         GroupBy::DueDate => "Due",
         GroupBy::DeferDate => "Defer",
         GroupBy::PlannedDate => "Planned",
+        GroupBy::CompletedDate => "Completed",
+        GroupBy::DroppedDate => "Dropped",
+        GroupBy::AddedDate => "Added",
+        GroupBy::ChangedDate => "Changed",
+        GroupBy::NextReview => "Next Review",
+        GroupBy::TagsCombined => "Tags (combined)",
         GroupBy::Flagged => "Flagged",
         GroupBy::Estimate => "Estimate",
     }
@@ -1899,6 +1944,12 @@ fn sort_label(sort: SortBy) -> &'static str {
         SortBy::Estimate => "Estimate",
         SortBy::Created => "Created",
         SortBy::CompletedAt => "Completed",
+        SortBy::DueFlagged => "Due & Flagged",
+        SortBy::Tag => "Tag",
+        SortBy::AddedDate => "Added",
+        SortBy::ChangedDate => "Changed",
+        SortBy::DroppedDate => "Dropped",
+        SortBy::NextReview => "Next Review",
     }
 }
 

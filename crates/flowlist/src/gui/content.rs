@@ -1691,7 +1691,7 @@ impl FlowlistApp {
             .border_color(theme.border)
             .bg(theme.raised)
             .shadow_lg();
-        let options: [Option<SortBy>; 10] = [
+        let options: Vec<Option<SortBy>> = vec![
             None,
             Some(SortBy::Manual),
             Some(SortBy::Due),
@@ -1702,6 +1702,12 @@ impl FlowlistApp {
             Some(SortBy::Estimate),
             Some(SortBy::Created),
             Some(SortBy::CompletedAt),
+            Some(SortBy::DueFlagged),
+            Some(SortBy::Tag),
+            Some(SortBy::AddedDate),
+            Some(SortBy::ChangedDate),
+            Some(SortBy::DroppedDate),
+            Some(SortBy::NextReview),
         ];
         for option in options {
             let selected = self.sort == option;
@@ -1752,14 +1758,20 @@ impl FlowlistApp {
             .border_color(theme.border)
             .bg(theme.raised)
             .shadow_lg();
-        let options: [Option<GroupBy>; 10] = [
+        let options: Vec<Option<GroupBy>> = vec![
             None,
             Some(GroupBy::Project),
             Some(GroupBy::Folder),
             Some(GroupBy::Tag),
+            Some(GroupBy::TagsCombined),
             Some(GroupBy::DueDate),
             Some(GroupBy::DeferDate),
             Some(GroupBy::PlannedDate),
+            Some(GroupBy::CompletedDate),
+            Some(GroupBy::DroppedDate),
+            Some(GroupBy::AddedDate),
+            Some(GroupBy::ChangedDate),
+            Some(GroupBy::NextReview),
             Some(GroupBy::Flagged),
             Some(GroupBy::Estimate),
             Some(GroupBy::None),

@@ -1161,6 +1161,98 @@ impl<'a> GroupContext<'a> {
                     i64::MAX,
                 ),
             },
+            GroupBy::CompletedDate => {
+                match task.completed_at {
+                    Some(at) => {
+                        let date = crate::time::local_date(at);
+                        (
+                            format!("completed:{}", date.format("%Y-%m-%d")),
+                            human_date(&Stamp::date_only(date), self.at),
+                            (date - crate::time::local_date(self.at)).num_days(),
+                        )
+                    }
+                    None => (
+                        "completed:none".to_string(),
+                        "Not Completed".to_string(),
+                        i64::MAX,
+                    ),
+                }
+            }
+            GroupBy::DroppedDate => {
+                match task.trashed_at {
+                    Some(at) => {
+                        let date = crate::time::local_date(at);
+                        (
+                            format!("dropped:{}", date.format("%Y-%m-%d")),
+                            human_date(&Stamp::date_only(date), self.at),
+                            (date - crate::time::local_date(self.at)).num_days(),
+                        )
+                    }
+                    None => (
+                        "dropped:none".to_string(),
+                        "Not Dropped".to_string(),
+                        i64::MIN,
+                    ),
+                }
+            }
+            GroupBy::AddedDate => {
+                let date = crate::time::local_date(task.created_at);
+                (
+                    format!("added:{}", date.format("%Y-%m-%d")),
+                    human_date(&Stamp::date_only(date), self.at),
+                    (date - crate::time::local_date(self.at)).num_days(),
+                )
+            }
+            GroupBy::ChangedDate => {
+                let date = crate::time::local_date(task.modified_at);
+                (
+                    format!("changed:{}", date.format("%Y-%m-%d")),
+                    human_date(&Stamp::date_only(date), self.at),
+                    (date - crate::time::local_date(self.at)).num_days(),
+                )
+            }
+            GroupBy::NextReview => {
+                match row
+                    .project
+                    .as_ref()
+                    .and_then(|id| db.projects.get(id))
+                {
+                    Some(project) => (
+                        format!("review:{}", project.next_review.format("%Y-%m-%d")),
+                        project.next_review.format("%Y-%m-%d").to_string(),
+                        (project.next_review - crate::time::local_date(self.at)).num_days(),
+                    ),
+                    None => (
+                        "review:none".to_string(),
+                        "No Project".to_string(),
+                        i64::MAX,
+                    ),
+                }
+            }
+            GroupBy::TagsCombined => {
+                let mut candidates: Vec<TagId> = task.tags.iter().cloned().collect();
+                if let Some(project_id) = &task.project {
+                    if let Some(project) = db.projects.get(project_id) {
+                        candidates.extend(project.tags.iter().cloned());
+                    }
+                }
+                let mut paths: Vec<(i64, String)> = candidates
+                    .into_iter()
+                    .filter_map(|id| self.tags.get(&id).cloned())
+                    .collect();
+                paths.sort_by_key(|(position, _)| *position);
+                if paths.is_empty() {
+                    ("untagged".to_string(), "No Tag".to_string(), i64::MAX)
+                } else {
+                    let title = paths
+                        .iter()
+                        .map(|(_, path)| path.clone())
+                        .collect::<Vec<_>>()
+                        .join(" · ");
+                    let position = paths.first().map(|(position, _)| *position).unwrap_or(0);
+                    (format!("tags:{title}"), title, position)
+                }
+            }
             GroupBy::Flagged => {
                 if task.flagged {
                     ("flagged".to_string(), "Flagged".to_string(), 0)

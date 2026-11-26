@@ -73,6 +73,71 @@ pub fn sort_rows(db: &Db, rows: &mut [TaskRow], sort: SortBy) {
             let right = db.tasks.get(&b.id).and_then(|task| task.completed_at);
             option_cmp(right, left)
         }),
+        SortBy::DueFlagged => rows.sort_by(|a, b| {
+            let rank = |id: &crate::ids::TaskId| {
+                let task = db.tasks.get(id);
+                let flagged = task.is_some_and(|task| task.flagged);
+                let due = db.effective_due(id);
+                match (flagged, due.is_some()) {
+                    (true, true) => 0u8,
+                    (true, false) => 1,
+                    (false, true) => 2,
+                    (false, false) => 3,
+                }
+            };
+            rank(&a.id)
+                .cmp(&rank(&b.id))
+                .then_with(|| {
+                    option_cmp(
+                        db.effective_due(&a.id).map(|stamp| stamp.at),
+                        db.effective_due(&b.id).map(|stamp| stamp.at),
+                    )
+                })
+        }),
+        SortBy::Tag => rows.sort_by_cached_key(|row| {
+            let mut names = db
+                .tasks
+                .get(&row.id)
+                .map(|task| task.tags.clone())
+                .unwrap_or_default();
+            if let Some(project_id) = &row.project {
+                if let Some(project) = db.projects.get(project_id) {
+                    names.extend(project.tags.iter().cloned());
+                }
+            }
+            let mut names: Vec<String> = names
+                .into_iter()
+                .filter_map(|id| db.tags.get(&id).map(|tag| tag.name.to_lowercase()))
+                .collect();
+            names.sort();
+            names.join(" · ")
+        }),
+        SortBy::AddedDate => rows.sort_by(|a, b| {
+            let left = db.tasks.get(&a.id).map(|task| task.created_at);
+            let right = db.tasks.get(&b.id).map(|task| task.created_at);
+            option_cmp(right, left)
+        }),
+        SortBy::ChangedDate => rows.sort_by(|a, b| {
+            let left = db.tasks.get(&a.id).map(|task| task.modified_at);
+            let right = db.tasks.get(&b.id).map(|task| task.modified_at);
+            option_cmp(right, left)
+        }),
+        SortBy::DroppedDate => rows.sort_by(|a, b| {
+            let left = db.tasks.get(&a.id).and_then(|task| task.trashed_at);
+            let right = db.tasks.get(&b.id).and_then(|task| task.trashed_at);
+            option_cmp(right, left)
+        }),
+        SortBy::NextReview => rows.sort_by(|a, b| {
+            let left = db
+                .effective_project(&a.id)
+                .and_then(|id| db.projects.get(&id))
+                .map(|project| project.next_review);
+            let right = db
+                .effective_project(&b.id)
+                .and_then(|id| db.projects.get(&id))
+                .map(|project| project.next_review);
+            option_cmp(left, right)
+        }),
     }
 }
 

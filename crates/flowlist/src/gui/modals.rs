@@ -3017,6 +3017,12 @@ impl FlowlistApp {
                 GroupBy::DueDate,
                 GroupBy::DeferDate,
                 GroupBy::PlannedDate,
+                GroupBy::CompletedDate,
+                GroupBy::DroppedDate,
+                GroupBy::AddedDate,
+                GroupBy::ChangedDate,
+                GroupBy::NextReview,
+                GroupBy::TagsCombined,
                 GroupBy::Flagged,
                 GroupBy::Estimate,
             ]
@@ -3034,6 +3040,12 @@ impl FlowlistApp {
                 SortBy::Estimate,
                 SortBy::Created,
                 SortBy::CompletedAt,
+                SortBy::DueFlagged,
+                SortBy::Tag,
+                SortBy::AddedDate,
+                SortBy::ChangedDate,
+                SortBy::DroppedDate,
+                SortBy::NextReview,
             ]
             .into_iter()
             .map(ViewChoice::Sort)
@@ -3539,6 +3551,17 @@ impl FlowlistApp {
             ))
             .child(widgets::divider(theme))
             .child(summary)
+            .when(matches == 0 && form.has_filters(), |this| {
+                this.child(
+                    div()
+                        .text_xs()
+                        .whitespace_normal()
+                        .text_color(theme.warning)
+                        .child(
+                            "No items match. A rule and a None group can cancel each other out — for example, Available plus None of Available.",
+                        ),
+                )
+            })
     }
 
     fn render_simple_perspective_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -4201,6 +4224,12 @@ impl FlowlistApp {
                     (GroupBy::DueDate, "Due"),
                     (GroupBy::DeferDate, "Defer"),
                     (GroupBy::PlannedDate, "Planned"),
+                    (GroupBy::CompletedDate, "Completed"),
+                    (GroupBy::DroppedDate, "Dropped"),
+                    (GroupBy::AddedDate, "Added"),
+                    (GroupBy::ChangedDate, "Changed"),
+                    (GroupBy::NextReview, "Next Review"),
+                    (GroupBy::TagsCombined, "Tags (combined)"),
                     (GroupBy::Flagged, "Flagged"),
                     (GroupBy::Estimate, "Estimate"),
                 ]
@@ -4218,6 +4247,12 @@ impl FlowlistApp {
                     (SortBy::Estimate, "Estimate"),
                     (SortBy::Created, "Created"),
                     (SortBy::CompletedAt, "Completed"),
+                    (SortBy::DueFlagged, "Due & Flagged"),
+                    (SortBy::Tag, "Tag"),
+                    (SortBy::AddedDate, "Added"),
+                    (SortBy::ChangedDate, "Changed"),
+                    (SortBy::DroppedDate, "Dropped"),
+                    (SortBy::NextReview, "Next Review"),
                 ]
                 .into_iter()
                 .map(|(sort, label)| (sort.slug().to_string(), label.to_string()))
@@ -4970,23 +5005,29 @@ impl FlowlistApp {
                 }
                 body = chip_row(body, chips);
             }
-            Condition::EstimateLessThan { minutes } => {
+            Condition::EstimateLessThan { minutes }
+            | Condition::EstimateGreaterThan { minutes } => {
+                let greater = matches!(condition, Condition::EstimateGreaterThan { .. });
                 let mut chips = Vec::new();
                 for choice in [5u32, 15, 30, 60] {
                     chips.push(self.rule_chip(
-                        format!("rule-estimate:{id}:{choice}"),
+                        format!(
+                            "rule-estimate:{}:{id}:{choice}",
+                            if greater { "gt" } else { "lt" }
+                        ),
                         format!("{choice} minutes"),
                         *minutes == choice,
                         move |this, cx| {
                             this.with_rule(
                                 id,
-                                |node| {
-                                    if let RuleKind::Condition(Condition::EstimateLessThan {
+                                |node| match &mut node.kind {
+                                    RuleKind::Condition(Condition::EstimateLessThan {
                                         minutes,
-                                    }) = &mut node.kind
-                                    {
-                                        *minutes = choice;
-                                    }
+                                    }) if !greater => *minutes = choice,
+                                    RuleKind::Condition(Condition::EstimateGreaterThan {
+                                        minutes,
+                                    }) if greater => *minutes = choice,
+                                    _ => {}
                                 },
                                 cx,
                             )
@@ -4995,6 +5036,19 @@ impl FlowlistApp {
                     ));
                 }
                 body = chip_row(body, chips);
+                body = body.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("Custom minutes"),
+                        )
+                        .child(self.rule_text_input(0, "e.g. 45", cx)),
+                );
             }
             Condition::HasDate { field, value } => {
                 let mut chips = Vec::new();

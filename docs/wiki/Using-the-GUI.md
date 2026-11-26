@@ -323,7 +323,11 @@ titles itself **Search** and ranks the closest matches first.
   Drag a row onto a group to nest it. Choose **Availability** again to create a
   second Availability row. **Comment** rows annotate the tree without filtering.
   The rule catalogue and its headings are indented, and the whole sheet can be
-  resized from its bottom-right grip; the size is remembered.
+  resized from its bottom-right grip; the size is remembered. Duration rules
+  include less than, greater than and a custom between range, with a
+  custom-minutes box. Grouping also covers Tags (combined), Completed, Dropped,
+  Added, Changed and Next Review; sorting also covers Due & Flagged, Tag,
+  Added, Changed, Dropped and Next Review.
   The catalogue covers **Status: Due Soon / Flagged**, all five
   **Availability** choices, **Has an estimated duration**, **less than**
   5/15/30/60 minutes, **Has a due / planned / defer date**, **Has date in

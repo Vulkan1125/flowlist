@@ -103,7 +103,7 @@ fn project_condition_matches(
             AvailabilityFilter::Dropped => project.status == ProjectStatus::Dropped,
         },
         Condition::HasEstimate { .. } => false,
-        Condition::EstimateLessThan { .. } => false,
+        Condition::EstimateLessThan { .. } | Condition::EstimateGreaterThan { .. } => false,
         Condition::HasDate { field, value } => {
             project_date_for(project, *field).is_some() == *value
         }
@@ -348,6 +348,9 @@ pub fn condition_matches(db: &Db, task: &Task, condition: &Condition, at: DateTi
         Condition::HasEstimate { value } => task.estimate_min.is_some() == *value,
         Condition::EstimateLessThan { minutes } => {
             task.estimate_min.is_some_and(|estimate| estimate < *minutes)
+        }
+        Condition::EstimateGreaterThan { minutes } => {
+            task.estimate_min.is_some_and(|estimate| estimate > *minutes)
         }
         Condition::HasDate { field, value } => date_for(db, task, *field, at).is_some() == *value,
         Condition::DateRange { field, range } => date_for(db, task, *field, at)
@@ -964,6 +967,22 @@ mod tests {
             Utc::now()
         ));
         assert_eq!(today, local_date(Utc::now()));
+    }
+
+    #[test]
+    fn estimate_greater_than_and_ranges_match() {
+        let mut task = Task::new("long");
+        task.estimate_min = Some(45);
+        let (db, task) = db_with_task(task);
+        let greater = FilterNode::condition(Condition::EstimateGreaterThan { minutes: 30 });
+        assert!(matches(&db, &task, &greater, Utc::now()));
+        let range = FilterNode::condition(Condition::Estimate {
+            min_minutes: Some(30),
+            max_minutes: Some(60),
+        });
+        assert!(matches(&db, &task, &range, Utc::now()));
+        let too_long = FilterNode::condition(Condition::EstimateGreaterThan { minutes: 60 });
+        assert!(!matches(&db, &task, &too_long, Utc::now()));
     }
 
     #[test]
