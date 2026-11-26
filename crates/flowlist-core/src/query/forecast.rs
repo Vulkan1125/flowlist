@@ -41,6 +41,10 @@ pub struct Forecast {
     /// Planned dates that have slipped: still open, still informative, and
     /// deliberately not rolled forward. Forecast keeps them in Past.
     pub past_planned: Vec<TaskId>,
+    /// Undated actions carrying the Forecast tag.
+    pub tagged: Vec<TaskId>,
+    /// Undated flagged actions when their Forecast option is on.
+    pub flagged: Vec<TaskId>,
     /// Project due/defer/planned dates, keyed by local day. Completed and
     /// dropped projects are excluded; on-hold projects keep their dates.
     pub projects: BTreeMap<NaiveDate, ForecastProjectDay>,
@@ -61,6 +65,8 @@ impl Forecast {
         out.extend(self.past_planned.iter().cloned());
         out.extend(self.later.iter().cloned());
         out.extend(self.next_month.iter().cloned());
+        out.extend(self.tagged.iter().cloned());
+        out.extend(self.flagged.iter().cloned());
         out
     }
 }
@@ -178,6 +184,43 @@ pub fn forecast(db: &Db, at: DateTime<Utc>) -> Forecast {
             }
         }
     }
+    for task in db.tasks.values() {
+        if task.completed || task.is_trashed() {
+            continue;
+        }
+        if db
+            .effective_project(&task.id)
+            .and_then(|project| db.projects.get(&project))
+            .is_some_and(|project| project.status != ProjectStatus::Active)
+        {
+            continue;
+        }
+        if db.effective_due(&task.id).is_some()
+            || db.effective_defer(&task.id).is_some()
+            || db.effective_planned(&task.id).is_some()
+        {
+            continue;
+        }
+        if db
+            .settings
+            .forecast_tag
+            .as_ref()
+            .is_some_and(|tag| task.tags.contains(tag))
+        {
+            result.tagged.push(task.id.clone());
+        } else if db.settings.forecast_flagged && task.flagged {
+            result.flagged.push(task.id.clone());
+        }
+    }
+    let by_title = |db: &Db, id: &TaskId| {
+        db.tasks
+            .get(id)
+            .map(|task| task.title.to_lowercase())
+            .unwrap_or_default()
+    };
+    result.tagged.sort_by_key(|id| by_title(db, id));
+    result.flagged.sort_by_key(|id| by_title(db, id));
+
     let project_key = |db: &Db, id: &ProjectId| {
         db.projects.get(id).map(|project| {
             (

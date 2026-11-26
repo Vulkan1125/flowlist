@@ -5439,6 +5439,8 @@ impl FlowlistApp {
                 wallpaper_opacity,
                 keep_completed_subtasks,
                 forecast_due_counts,
+                forecast_tag,
+                forecast_flagged,
                 focus_banner,
                 toolbar_labels,
                 hide_empty_views,
@@ -5476,6 +5478,17 @@ impl FlowlistApp {
                     .trim()
                     .parse::<u32>()
                     .map_err(|_| "Trash retention must be a number".to_string())?;
+                let tag_path = forecast_tag.text().trim().to_string();
+                let forecast_tag = if tag_path.is_empty() {
+                    None
+                } else {
+                    Some(
+                        self.store
+                            .db()
+                            .find_tag_path(&tag_path)
+                            .ok_or_else(|| format!("Tag not found: {tag_path}"))?,
+                    )
+                };
                 self.execute(Command::UpdateSettings(SettingsPatch {
                     default_review_days: Some(review),
                     show_completed_days: Some(completed),
@@ -5483,6 +5496,8 @@ impl FlowlistApp {
                     nearby_radius_km: Some(radius),
                     trash_retention_days: Some(trash),
                     forecast_due_counts: Some(*forecast_due_counts),
+                    forecast_tag: Some(forecast_tag),
+                    forecast_flagged: Some(*forecast_flagged),
                     sidebar: Some(sidebar.clone()),
                     ..Default::default()
                 }));
@@ -7407,28 +7422,26 @@ impl FlowlistApp {
                 })
                 .count(),
             BuiltinPerspective::Forecast => {
-                let today = local_date(at);
                 let due_counts = db.settings.forecast_due_counts;
-                db.tasks
-                    .values()
-                    .filter(|task| {
-                        if task.completed
-                            || task.is_trashed()
-                            || !self.focus_allows_task(&task.id)
-                        {
-                            return false;
-                        }
-                        let due = task.due.is_some_and(|stamp| stamp.local_date() <= today);
-                        if due_counts {
-                            return due;
-                        }
-                        due || task.defer.is_some_and(|stamp| stamp.local_date() <= today)
-                            || (self.forecast_planned
-                                && db
-                                    .effective_planned(&task.id)
-                                    .is_some_and(|stamp| stamp.local_date() <= today))
-                    })
-                    .count()
+                if due_counts {
+                    let today = local_date(at);
+                    db.tasks
+                        .values()
+                        .filter(|task| {
+                            !task.completed
+                                && !task.is_trashed()
+                                && self.focus_allows_task(&task.id)
+                                && task.due.is_some_and(|stamp| stamp.local_date() <= today)
+                        })
+                        .count()
+                } else {
+                    let data = query::forecast::forecast(db, at);
+                    data.all_ids()
+                        .into_iter()
+                        .filter(|id| self.focus_allows_task(id))
+                        .collect::<BTreeSet<_>>()
+                        .len()
+                }
             }
             BuiltinPerspective::Flagged => db
                 .tasks

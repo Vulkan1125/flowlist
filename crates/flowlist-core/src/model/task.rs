@@ -115,7 +115,10 @@ impl TaskAlert {
     /// Parse compact alert text such as `due:-15m, defer, planned:+1h`.
     pub fn parse_list(value: &str) -> std::result::Result<Vec<Self>, String> {
         let value = value.trim();
-        if value.is_empty() {
+        if value.is_empty()
+            || value.eq_ignore_ascii_case("none")
+            || value.eq_ignore_ascii_case("default")
+        {
             return Ok(Vec::new());
         }
         let mut alerts = Vec::new();
@@ -150,7 +153,10 @@ impl TaskAlert {
                     .map_err(|error| format!("Bad alert offset “{offset}”: {error}"))?;
                 (minutes as i32) * sign
             };
-            alerts.push(Self::new(event, offset_minutes));
+            let alert = Self::new(event, offset_minutes);
+            if !alerts.contains(&alert) {
+                alerts.push(alert);
+            }
         }
         if alerts.len() > 12 {
             return Err("Use at most 12 alerts per task".to_string());
@@ -355,5 +361,10 @@ mod tests {
             "due:-15m, defer, planned:+1h30m"
         );
         assert!(TaskAlert::parse_list("sometime:-5m").is_err());
+        assert!(TaskAlert::parse_list("none").unwrap().is_empty());
+        assert_eq!(
+            TaskAlert::parse_list("due:-5m, due:-5m").unwrap().len(),
+            1
+        );
     }
 }

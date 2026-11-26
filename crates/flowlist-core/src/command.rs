@@ -253,6 +253,9 @@ pub struct SettingsPatch {
     pub trash_retention_days: Option<u32>,
     pub changed_days: Option<u32>,
     pub forecast_due_counts: Option<bool>,
+    #[serde(deserialize_with = "deserialize_double_option")]
+    pub forecast_tag: Option<Option<TagId>>,
+    pub forecast_flagged: Option<bool>,
     pub sidebar: Option<crate::model::SidebarOptions>,
 }
 
@@ -952,6 +955,7 @@ impl Command {
                     let fullscreen_reminder = task.fullscreen_reminder;
                     let reminder_at = task.reminder_at;
                     let reminder_match_due = task.reminder_match_due;
+                    let alerts = task.alerts.clone();
                     let sequential = task.sequential;
                     {
                         let task = db.task_mut(&id)?;
@@ -996,6 +1000,7 @@ impl Command {
                                 spawned.fullscreen_reminder = fullscreen_reminder;
                                 spawned.reminder_at = reminder_at;
                                 spawned.reminder_match_due = reminder_match_due;
+                                spawned.alerts = alerts.clone();
                                 spawned.priority = series_priority;
                                 spawned.sequential = sequential;
                                 spawned.checklist = db
@@ -2062,6 +2067,12 @@ impl Command {
                 }
                 if let Some(value) = patch.forecast_due_counts {
                     settings.forecast_due_counts = value;
+                }
+                if let Some(tag) = patch.forecast_tag {
+                    settings.forecast_tag = tag;
+                }
+                if let Some(value) = patch.forecast_flagged {
+                    settings.forecast_flagged = value;
                 }
                 if let Some(sidebar) = patch.sidebar {
                     settings.sidebar = sidebar;

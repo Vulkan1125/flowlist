@@ -243,6 +243,10 @@ pub enum Modal {
         keep_completed_subtasks: bool,
         /// Count only due items in Forecast badges.
         forecast_due_counts: bool,
+        /// Tag whose undated actions enter Forecast.
+        forecast_tag: TextBuffer,
+        /// Show flagged undated actions in Forecast.
+        forecast_flagged: bool,
         /// Keep the Focus banner below the title bar.
         focus_banner: bool,
         /// Show button titles under the header icons.
@@ -348,7 +352,7 @@ impl SettingsSection {
     /// scoped to it, so typing in Appearance can never edit a hidden default.
     pub fn fields(self) -> &'static [usize] {
         match self {
-            SettingsSection::Workflow => &[0, 1, 2],
+            SettingsSection::Workflow => &[0, 1, 2, 5],
             SettingsSection::Nearby => &[3],
             SettingsSection::Trash => &[4],
             SettingsSection::Appearance
@@ -668,6 +672,16 @@ impl Modal {
             reminder_wallpaper_note: None,
             keep_completed_subtasks: app.keep_completed_subtasks,
             forecast_due_counts: app.store.db().settings.forecast_due_counts,
+            forecast_tag: TextBuffer::new(
+                app.store
+                    .db()
+                    .settings
+                    .forecast_tag
+                    .as_ref()
+                    .map(|tag| app.store.db().tag_path(tag))
+                    .unwrap_or_default(),
+            ),
+            forecast_flagged: app.store.db().settings.forecast_flagged,
             focus_banner: app.show_focus_banner,
             toolbar_labels: app.show_toolbar_labels,
             hide_empty_views: app.hide_empty_views,
@@ -912,7 +926,7 @@ impl Modal {
                 }
             }
             Modal::Import { .. } => 1,
-            Modal::Settings { .. } => 5,
+            Modal::Settings { .. } => 6,
             Modal::Location { .. } | Modal::TagLocation { .. } => 2,
             Modal::Help => 0,
         }
@@ -974,6 +988,7 @@ impl Modal {
                 changed_days,
                 radius,
                 trash_days,
+                forecast_tag,
                 section,
                 ..
             } => match index {
@@ -982,6 +997,7 @@ impl Modal {
                 2 if section.fields().contains(&2) => Some(changed_days),
                 3 if section.fields().contains(&3) => Some(radius),
                 4 if section.fields().contains(&4) => Some(trash_days),
+                5 if section.fields().contains(&5) => Some(forecast_tag),
                 _ => None,
             },
             Modal::Location { lat, lon } | Modal::TagLocation { lat, lon, .. } => match index {
@@ -1049,6 +1065,7 @@ impl Modal {
                 changed_days,
                 radius,
                 trash_days,
+                forecast_tag,
                 section,
                 ..
             } => match index {
@@ -1057,6 +1074,7 @@ impl Modal {
                 2 if section.fields().contains(&2) => Some(changed_days),
                 3 if section.fields().contains(&3) => Some(radius),
                 4 if section.fields().contains(&4) => Some(trash_days),
+                5 if section.fields().contains(&5) => Some(forecast_tag),
                 _ => None,
             },
             Modal::Location { lat, lon } | Modal::TagLocation { lat, lon, .. } => match index {
@@ -1113,6 +1131,7 @@ impl Modal {
                 2 => "Changed history (days)",
                 3 => "Nearby radius (km)",
                 4 => "Trash retention (days, 0 keeps forever)",
+                5 => "Forecast tag (a tag path, or empty for none)",
                 _ => "",
             },
             Modal::Location { .. } => match index {
@@ -5985,32 +6004,72 @@ impl FlowlistApp {
                 ..
             })
         );
+        let forecast_flagged = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                forecast_flagged: true,
+                ..
+            })
+        );
         let forecast_card = self.settings_card(
             "Forecast",
-            Some("Badges can count only due work, ignoring planned and deferred items."),
+            Some("The Forecast tag pulls undated actions into Forecast. Flagged undated actions can join them. Badges can count only due work."),
             div()
                 .flex()
-                .items_center()
-                .justify_between()
+                .flex_col()
                 .gap_2()
-                .child(div().flex_1().text_sm().child("Count only due items"))
+                .child(self.render_modal_field(5, cx))
                 .child(
                     div()
-                        .on_children_prepainted(
-                            self.theme_probe("forecast-due-counts-toggle".to_string()),
-                        )
-                        .id("forecast-due-counts-toggle")
-                        .child(widgets::switch(theme, due_counts))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            if let Some(Modal::Settings {
-                                forecast_due_counts,
-                                ..
-                            }) = &mut this.modal
-                            {
-                                *forecast_due_counts = !*forecast_due_counts;
-                            }
-                            cx.notify();
-                        })),
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(div().flex_1().text_sm().child("Show flagged undated tasks"))
+                        .child(
+                            div()
+                                .on_children_prepainted(
+                                    self.theme_probe("forecast-flagged-toggle".to_string()),
+                                )
+                                .id("forecast-flagged-toggle")
+                                .child(widgets::switch(theme, forecast_flagged))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Settings {
+                                        forecast_flagged,
+                                        ..
+                                    }) = &mut this.modal
+                                    {
+                                        *forecast_flagged = !*forecast_flagged;
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(div().flex_1().text_sm().child("Count only due items"))
+                        .child(
+                            div()
+                                .on_children_prepainted(
+                                    self.theme_probe("forecast-due-counts-toggle".to_string()),
+                                )
+                                .id("forecast-due-counts-toggle")
+                                .child(widgets::switch(theme, due_counts))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Settings {
+                                        forecast_due_counts,
+                                        ..
+                                    }) = &mut this.modal
+                                    {
+                                        *forecast_due_counts = !*forecast_due_counts;
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
                 ),
         );
         let focus_banner = matches!(

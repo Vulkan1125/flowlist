@@ -56,7 +56,7 @@ The sidebar's fixed perspectives are the backbone:
 | Inbox | tasks with no project and no due/defer date |
 | Today | due today, deferred to today, and overdue; overdue can be hidden |
 | Projects | open projects and their tasks |
-| Forecast | overdue / today / tomorrow / later, with a collapsible, resizable month calendar |
+| Forecast | overdue / today / tomorrow / later, with a collapsible, resizable month calendar; an optional Forecast tag and flagged-undated section sit above Past |
 | Flagged | flagged tasks |
 | Review | projects due for review |
 | Tags | tasks grouped by tag |
@@ -205,8 +205,12 @@ Settings previews each theme family as a miniature window.
 
 Tasks can carry custom alerts edited from the inspector **Alerts** field:
 `due:-15m, defer, planned:+1h`. Each alert is anchored to Due, Defer/Available
-or Planned and uses signed minutes. Tasks with alerts replace the default due
-reminder; the body includes project and tag context.
+or Planned and uses signed minutes. Date-only anchors use 9:00 local. Alert
+times follow inherited dates; completed, trashed and closed-project tasks are
+skipped, and the scheduler looks 30 days ahead. Tasks with alerts replace the
+default due reminder; the body includes project and tag context. `none` restores
+the default. Repeating tasks carry their alerts to the next occurrence.
+
 
 ## Batch editing
 

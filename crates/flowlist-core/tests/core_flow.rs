@@ -3411,3 +3411,63 @@ fn batch_task_updates_commit_once_and_roll_back_on_conflict() {
     assert_eq!(store.db().tasks[&one_id].project, None);
     assert_eq!(store.db().tasks[&two_id].project, None);
 }
+
+#[test]
+fn forecast_tag_and_flagged_undated_tasks_join_forecast() {
+    use flowlist_core::query;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let tag_id = store
+        .execute(Command::CreateTag {
+            name: "Forecast".to_string(),
+            parent: None,
+            status: TagStatus::Available,
+            location: None,
+            position: Position::End,
+        })
+        .unwrap()
+        .created[0]
+        .clone();
+    let tag_id = store.db().resolve_tag(&tag_id).unwrap();
+
+    let mut tagged = NewTask::new("Tagged undated");
+    let tagged_id = store
+        .execute(Command::CreateTask(tagged))
+        .unwrap()
+        .created[0]
+        .clone();
+    let tagged_id = store.db().resolve_task(&tagged_id).unwrap();
+    let mut flagged = NewTask::new("Flagged undated");
+    flagged.flagged = true;
+    let flagged_id = store
+        .execute(Command::CreateTask(flagged))
+        .unwrap()
+        .created[0]
+        .clone();
+    let flagged_id = store.db().resolve_task(&flagged_id).unwrap();
+    store
+        .execute(Command::SetTaskTags {
+            ids: vec![tagged_id.clone()],
+            add: vec![tag_id.clone()],
+            remove: Vec::new(),
+        })
+        .unwrap();
+    store
+        .execute(Command::UpdateSettings(
+            flowlist_core::command::SettingsPatch {
+                forecast_tag: Some(Some(tag_id)),
+                forecast_flagged: Some(true),
+                ..Default::default()
+            },
+        ))
+        .unwrap();
+
+    let groups = query::forecast_view(store.db(), Utc::now(), true);
+    let group = |key: &str| groups.iter().find(|group| group.key == key).unwrap();
+    assert!(group("forecast:tag").rows.iter().any(|row| row.id == tagged_id));
+    assert!(group("forecast:flagged")
+        .rows
+        .iter()
+        .any(|row| row.id == flagged_id));
+}

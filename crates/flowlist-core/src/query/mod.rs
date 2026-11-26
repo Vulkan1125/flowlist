@@ -775,6 +775,20 @@ fn forecast_groups(db: &Db, at: DateTime<Utc>, show_planned: bool) -> Vec<Group>
         past.extend(data.past_planned.iter().cloned());
         dedupe(&mut past);
     }
+    push(
+        "forecast:flagged",
+        "Flagged",
+        -6,
+        &data.flagged,
+        &[],
+    );
+    let tag_title = db
+        .settings
+        .forecast_tag
+        .as_ref()
+        .map(|tag| db.tag_path(tag))
+        .unwrap_or_else(|| "Forecast Tag".to_string());
+    push("forecast:tag", &tag_title, -5, &data.tagged, &[]);
     push("forecast:past", "Past", -4, &past, &project_past);
     let mut deferred_today = data.deferred_today.clone();
     deferred_today.retain(|id| !data.today.contains(id));

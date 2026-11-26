@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 use chrono::NaiveTime;
 use serde::{Deserialize, Serialize};
 
+use crate::ids::TagId;
 use super::tag::Geo;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -44,6 +45,12 @@ pub struct Settings {
     /// items.
     #[serde(default)]
     pub forecast_due_counts: bool,
+    /// A tag whose undated actions appear in Forecast.
+    #[serde(default)]
+    pub forecast_tag: Option<TagId>,
+    /// Show flagged undated actions in Forecast.
+    #[serde(default)]
+    pub forecast_flagged: bool,
     /// Whether the shipped Running saved view has been offered to this
     /// library. Once true it stays true, so renaming or deleting the view is
     /// permanent.
@@ -196,6 +203,8 @@ impl Default for Settings {
             trash_retention_days: default_trash_days(),
             sidebar: SidebarOptions::default(),
             forecast_due_counts: false,
+            forecast_tag: None,
+            forecast_flagged: false,
             seeded_running_view: false,
             cleared_running_icon: false,
         }

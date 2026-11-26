@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Forecast tag and flagged contents.** Choose a Forecast tag in Settings →
+  Workflow; its undated actions get a Forecast section above Past. A new
+  **Show flagged undated tasks** switch adds a Flagged section. On-hold project
+  deadlines already appear with the project rows.
 - **Custom notification schedules.** A task can carry its own alerts, each
   anchored to Due, Defer/Available or Planned with a signed minute offset.
   Examples: `due:-15m`, `defer`, `planned:+1h`. Tasks with alerts replace the

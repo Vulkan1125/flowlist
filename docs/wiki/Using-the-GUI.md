@@ -146,6 +146,35 @@ a batch editor for **Project**, **Tags**, **Defer**, **Planned**, **Due**,
   or parent dates reject any task, the entire batch rolls back and the reason
   stays in the inspector.
 
+## Alerts
+
+The inspector’s **Alerts** field is a compact per-task notification schedule.
+Separate rules with commas or semicolons:
+
+| Example | Meaning |
+| --- | --- |
+| `due` | At the due time |
+| `due:-15m` | 15 minutes before due |
+| `defer` | When the defer date makes the task available |
+| `planned:+1h` | One hour after the planned time |
+| `none` | Restore the default due reminder |
+
+Dates without a time use the same 9:00 local default as due reminders. Alerts
+follow inherited project/action dates, so a project deadline or defer date can
+place a task’s alert even when the task itself has no date.
+
+A task with one or more alerts replaces the default due reminder. Empty alerts
+restore it. Notifications include the project, up to two tags and whether they
+are early, on time or late. Completed tasks, Trash, closed projects and alerts
+outside the 30-day scheduling horizon are skipped. Repeating tasks carry their
+alerts to the next occurrence. Alerts can also be set with
+`flowlist edit ... --alerts 'due:-15m, defer'` or the MCP `alerts` argument.
+
+This is a simplified version of OmniFocus’s Notifications inspector. OmniFocus
+also supports a **Latest Start** notification (due minus estimate) and absolute
+custom notification times; Flowlist currently supports relative Due, Defer and
+Planned alerts only.
+
 ## Projects and reviews
 
 Create a project with `⇧⌘N` (or **＋ Project** at the bottom of the rail). A
@@ -190,7 +219,7 @@ The rail is the map of the library:
 | --- | --- |
 | **Inbox** | unscheduled tasks — no project, no due or defer date (a planned date does not count) |
 | **Today** | due or planned today (including inherited plans), deferred to today, overdue, and slipped plans |
-| **Forecast** | the month calendar and upcoming due, deferred and planned work; project rows sit above each day's tasks, the collapsed strip has **Past** and **Future** end tiles, the **Planned** chip hides planned-only rows, and work more than 30 days out sits under **Next month and later**, folded |
+| **Forecast** | the month calendar and upcoming due, deferred and planned work; project rows sit above each day's tasks, the collapsed strip has **Past** and **Future** end tiles, the **Planned** chip hides planned-only rows, and work more than 30 days out sits under **Next month and later**, folded. A designated **Forecast tag** and optional flagged undated actions appear above Past |
 | **Review** | projects whose review date has arrived |
 | **Projects** | every project at a glance |
 | **Tags** | tasks grouped by context |
@@ -271,6 +300,10 @@ titles itself **Search** and ranks the closest matches first.
   headings.
   **Available** keeps only tasks you can start now; **Priority** filters by
   priority. The choices are remembered per view.
+- **Settings → Workflow → Forecast tag** names a tag whose undated actions
+  appear in Forecast without needing a date. **Show flagged undated tasks** does
+  the same for flagged actions. A task that already has a due, defer or planned
+  date stays in its date section instead of duplicating.
 - Projects appear in Forecast on their own due, defer and planned dates. A
   project row shows its icon, name, status, dates and progress; clicking opens
   the project. The day’s **Tasks** section follows, with tasks from those
