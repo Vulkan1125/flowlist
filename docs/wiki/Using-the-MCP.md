@@ -7,7 +7,7 @@ same library you use in the window — no copy, no export, no plugin.
 Everything runs locally over stdio. The assistant sees only the tools below;
 the library never leaves the machine.
 
-## Start it
+## Start the server
 
 ```sh
 /Applications/Flowlist.app/Contents/MacOS/flowlist mcp
@@ -47,73 +47,12 @@ Add `env` if the library is not in the default folder:
 }
 ```
 
-Use an absolute path to the binary. The GUI, CLI and server can run at the same
-time; writes are serialised, and each side reloads when the library changes.
+Use an absolute path. The GUI, CLI and server can run at the same time; writes
+are serialised, and each side reloads when the library changes.
 
-## Tools
+## Quick start
 
-### Tasks
-
-| Tool | What it does |
-| --- | --- |
-| `capture` / `add_task` | add a task from quick-entry text or explicit fields |
-| `list_tasks` | list by view (`inbox`, `today`, `forecast`, `flagged`, `review`, …) or filter by project, tag, folder, due window, priority and search |
-| `get_task` | fetch one task by id or unique prefix |
-| `update_task` | change fields; omit to keep, send `null` to clear |
-| `complete_task` | complete or reopen; repeating tasks spawn the next occurrence |
-| `delete_task` | move a task and its subtasks to Trash; `series: true` takes a chain |
-| `move_task` | move to the Inbox, a project or another task |
-| `convert_task_to_project` | turn a task and its subtasks into a project |
-| `set_task_tags` | add or remove tag paths |
-
-### Checklist
-
-| Tool | What it does |
-| --- | --- |
-| `list_checklist` | steps with ids and completion state |
-| `add_checklist_item` | append a step, or insert at a position |
-| `update_checklist_item` | rename and/or complete a step |
-| `move_checklist_item` | reorder a step |
-| `delete_checklist_item` | remove a step |
-
-Checklist steps are not tasks and never appear as tasks in a list.
-
-### Projects, tags and folders
-
-| Tool | What it does |
-| --- | --- |
-| `list_projects` / `create_project` / `update_project` | projects, folders, dates, icons, review interval, attachments |
-| `set_project_status` | active, on hold, done or dropped |
-| `delete_project` | delete a project; its tasks move to Trash |
-| `list_tags` / `create_tag` / `delete_tag` | nested tags |
-| `list_folders` / `create_folder` | folders for projects |
-
-### Review, library and history
-
-| Tool | What it does |
-| --- | --- |
-| `review_list` | projects due for review |
-| `complete_review` | mark reviewed and schedule the next one |
-| `search` | tasks, projects, folders, tags and perspectives |
-| `stats` | library counters |
-| `undo` / `redo` | step through the shared history |
-| `export_library` / `import_library` | JSON or TaskPaper; replace or merge |
-| `library_info` | paths, revision, undo state and counters |
-
-### Trash
-
-| Tool | What it does |
-| --- | --- |
-| `list_trash` | tasks currently in Trash |
-| `restore_tasks` | restore tasks and their subtrees |
-| `purge_tasks` / `empty_trash` | delete forever |
-
-`delete_task` is a soft delete. Trash follows the retention setting in the app
-(**Settings → Trash**) and restoring is undoable too.
-
-## Example conversations
-
-Once the server is connected, ask in plain language:
+Once connected, ask in plain language:
 
 - *Add “Finish the launch brief” to Website relaunch, due Friday, tagged writing.*
 - *What is due today? Group it by project.*
@@ -123,22 +62,123 @@ Once the server is connected, ask in plain language:
 - *Undo the last change.*
 - *Export the library as TaskPaper to my Desktop.*
 
-The assistant chooses the tools; you can ask it to show what it changed. Ids
-may be full ULIDs, unambiguous prefixes or the short eight-character suffix.
+The assistant chooses the tools. Ask it to show what it changed; every result
+includes the affected ids.
+
+## Tools
+
+### Tasks
+
+| Tool | What it does |
+| --- | --- |
+| `capture` / `add_task` | Add a task from quick-entry text or explicit fields. |
+| `list_tasks` | List by a built-in view or custom perspective, or filter by project, tag, folder, due window, priority, search, availability and completion. |
+| `get_task` | Fetch one task by id or unique prefix. |
+| `update_task` | Change fields. Omit to keep; send `null` or `"none"` to clear a date, estimate, project or parent. |
+| `complete_task` | Complete or reopen. Repeating tasks spawn the next occurrence. |
+| `delete_task` | Move a task and its subtasks to Trash. `series: true` takes the whole repeating chain. |
+| `move_task` | Move to the Inbox, a project or another task, with before/after placement. |
+| `convert_task_to_project` | Turn a task and its top-level subtasks into a project. |
+| `set_task_tags` | Add or remove tag paths. |
+
+`update_task` also accepts notes, flag, priority, alerts, default notification
+removals, custom notifications, repeat, sequential mode, attachments and
+attachment clearing.
+
+### List and filter values
+
+`list_tasks` accepts:
+
+| Field | Values |
+| --- | --- |
+| `view` | `all`, `inbox`, `today`, `projects`, `forecast`, `flagged`, `tags`, `completed`, `changed`, `attachments`, `nearby`, `review`, `trash`, `custom`. |
+| `perspective` | Saved perspective name or id when `view` is `custom`. |
+| `tags` | Tag paths; every listed tag must match. |
+| `due` | `today`, `overdue`, `tomorrow`, `next7`, `next30`, `none`, or a date. |
+| `priority` | `low`, `medium`, `high`. |
+| `sort` | `manual`, `due`, `defer`, `planned`, `name`, `priority`, `flagged`, `estimate`, `created`, `completed`, `due_flagged`, `tag`, `added`, `changed`, `dropped`, `review`. |
+| `group` | `none`, `project`, `folder`, `tag`, `tags_combined`, `due`, `defer`, `planned`, `completed`, `dropped`, `added`, `changed`, `review`, `flagged`, `estimate`. |
+
+`available`, `flagged`, `inbox` and `completed` are booleans. `show_completed`
+and `limit` control completed rows and the maximum result count.
+
+### Checklist
+
+| Tool | What it does |
+| --- | --- |
+| `list_checklist` | Steps with ids and completion state. |
+| `add_checklist_item` | Append a step, or insert before an index. |
+| `update_checklist_item` | Rename and/or complete a step. |
+| `move_checklist_item` | Reorder a step. |
+| `delete_checklist_item` | Remove a step. |
+
+Checklist steps are not tasks and never appear as tasks in a list.
+
+### Projects
+
+| Tool | What it does |
+| --- | --- |
+| `list_projects` | Projects in library order. |
+| `create_project` | Create a project, optionally inside a folder path. |
+| `update_project` | Name, notes, folder, dates, review interval, kind, icon, attachments and notifications. |
+| `set_project_status` | `active`, `on-hold`, `done` or `dropped`. |
+| `delete_project` | Delete a project; its tasks move to Trash. |
+
+### Tags and folders
+
+| Tool | What it does |
+| --- | --- |
+| `list_tags` | Tags with usage counts. |
+| `create_tag` | Create a nested tag, with status and optional coordinates. |
+| `delete_tag` | Delete a tag and remove it from tasks. |
+| `list_folders` | Folders and their project counts. |
+| `create_folder` | Create a folder, including nested paths. |
+
+### Review, search and history
+
+| Tool | What it does |
+| --- | --- |
+| `review_list` | Projects due for review. |
+| `complete_review` | Mark reviewed and schedule the next date. |
+| `search` | Tasks, projects, folders, tags and perspectives. |
+| `stats` | Open, available, flagged, due, overdue, projects and review counts. |
+| `undo` / `redo` | Step through the shared history. |
+| `export_library` | Export JSON or TaskPaper. |
+| `import_library` | Import JSON or TaskPaper, replacing or merging. |
+| `library_info` | Paths, schema revision, undo state, counters and built-in views. |
+
+### Trash
+
+| Tool | What it does |
+| --- | --- |
+| `list_trash` | Tasks currently in Trash. |
+| `restore_tasks` | Restore tasks and their subtrees. |
+| `purge_tasks` | Permanently delete selected tasks. |
+| `empty_trash` | Permanently delete everything in Trash. |
+
+`delete_task` is a soft delete. Trash follows **Settings → Trash**, and
+restoring is undoable too.
+
+## Resources
+
+The server exposes a read-only resource:
+
+```text
+flowlist://library/summary
+```
+
+It returns counts, the review queue and the library location.
+
+## Tool schemas
+
+The full input schemas are available from the server with the MCP `tools/list`
+request. The source reference lives in
+[docs/mcp.md](https://github.com/Vulkan1125/flowlist/blob/main/docs/mcp.md).
 
 ## Safety
 
-- Every tool call reads and writes the same local library as the GUI and CLI.
-- Every mutation lands in the same undo history: `⌘Z` in the window or
-  `flowlist undo` in a terminal reverses it.
+- Every tool reads and writes the same local library as the GUI and CLI.
+- Every mutation lands in the same undo history.
 - Invalid dates, unknown projects and ambiguous ids fail before anything is
   written.
-- There is a read-only `flowlist://library/summary` resource with counts, the
-  review queue and the library location.
-
-## More
-
-The full tool schemas are available from the server with the MCP `tools/list`
-request, and in the
-[MCP reference](https://github.com/Vulkan1125/flowlist/blob/main/docs/mcp.md)
-in the repository.
+- The server binds to stdio. It does not open a network port.

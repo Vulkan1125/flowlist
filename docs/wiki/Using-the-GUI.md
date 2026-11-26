@@ -80,13 +80,15 @@ The right edge of each row reads in one order: attachments, project, `#tag`
 chips, estimate, planned date, due date, deferred date and repeat. A plan that
 has slipped shows its original date in the Past plans group rather than moving
 forward. Each date
-carries its own mark, matching OmniFocus: a signpost for Planned, a clock on a
-calendar for Due and a turning arrow for Defer; hovering names the field.
+carries its own mark: a signpost for Planned, a clock on a calendar for Due and
+a turning arrow for Defer; hovering names the field.
 
 ## The inspector
 
 Toggle the inspector with `i` or `⌘I`. It edits the selected task without
 leaving the list.
+
+![The task inspector](images/gui-inspector.png)
 
 ![A project task selected with the inspector open](images/gui-inspector.png)
 
@@ -133,7 +135,7 @@ leaving the list.
   and a clock-face time picker. A defer date after the due date is refused with
   a toast, so the picker stays open for another choice. Planned never changes
   availability.
-- **Repeat** uses OmniFocus-style controls: a repeat checkbox, one interval box
+- **Repeat** uses compact controls: a repeat checkbox, one interval box
   with an editable number and a day/week/month/year dropdown, and segmented
   choices for **Due Date** or **Defer Until Date** and for **Completion** or
   **Assigned Dates**. When the unit is **Days**, a single Sunday-to-Saturday
@@ -204,16 +206,17 @@ The inspector lists default, relative and custom notifications and lets you
 remove them or add more. Projects, not only tasks, use the same schedule. CLI/MCP
 can set the same fields, including on `add` and `project edit`.
 
-Flowlist still uses the system local time zone. OmniFocus can attach a floating
-or fixed time zone to each date; that changes the date model, sync and Android
-storage, so it remains a separate upgrade rather than a notification-only
-change. Apart from that setting, the date-based notification model matches
-OmniFocus.
+Flowlist uses the system local time zone. Attaching a floating or fixed time
+zone to each date would change the date model, sync and Android storage, so it
+remains a separate upgrade rather than a notification-only change.
 
 ## Projects and reviews
 
-Create a project with `⇧⌘N` (or **＋ Project** at the bottom of the rail). A
-project can be **Parallel** (all tasks available), **Sequential** (one at a
+Create a project with `⇧⌘N` (or **＋ Project** at the bottom of the rail).
+
+![A project outline](images/gui-project.png)
+
+A project can be **Parallel** (all tasks available), **Sequential** (one at a
 time) or single-action, and Active, On hold, Done or Dropped. Projects live in
 folders and can carry their own tags, dates, attachments and icon.
 
@@ -245,6 +248,8 @@ Trash stay global, and opening a project or folder outside every focused branch
 leaves focus.
 
 ## Views
+
+![Today](images/gui-today.png)
 
 Button titles under the header icons can be turned off in **Settings →
 Workflow → Show button titles**. Search has no title.
@@ -311,29 +316,31 @@ titles itself **Search** and ranks the closest matches first.
 - **Saved perspectives have two tabs.** **Simple** is the original editor:
   the common checkboxes and pop-up filters for Inbox, Flagged, Status,
   Projects, Tags, Priorities, dates, full-screen reminders, estimate and text.
-  **Comprehensive** is the OmniFocus-style rule table. A new view starts on
+  **Comprehensive** is the full rule tree. A new view starts on
   Simple; a view with nested or advanced rules opens on Comprehensive so
   nothing is flattened silently. Both tabs share the icon, Group actions by
   and Sort actions by controls.
-- **Comprehensive rules** use a quiet OmniFocus 4-style contents list: indented
+- **Comprehensive rules** use a quiet contents list: indented
   rule text in one soft rounded panel, with a faint **Add a new rule** at the
   bottom. Click a row to edit it. Hover a row for a small plus and a `⋯` menu;
   the menu has Edit, Add Rule After/Inside, Turn Off, Duplicate, Move and
   Delete. **All / Any / None** rows end with a colon and indent their children.
-  Drag a row onto a group to nest it. Choose **Availability** again to create a
-  second Availability row. **Comment** rows annotate the tree without filtering.
-  The rule catalogue and its headings are indented, and the whole sheet can be
-  resized from its bottom-right grip; the size is remembered. Duration rules
+  Guide lines mark each depth. Drag a row onto a group to nest it. Choose
+  **Availability** again to create a second Availability row. **Comment** rows
+  annotate the tree without filtering. The rule catalogue and its headings are
+  indented, and the whole sheet can be resized from its bottom-right grip; the
+  size is remembered. Duration rules
   include less than, greater than and a custom between range, with a
   custom-minutes box. Grouping also covers Tags (combined), Completed, Dropped,
   Added, Changed and Next Review; sorting also covers Due & Flagged, Tag,
   Added, Changed, Dropped and Next Review.
   The catalogue covers **Status: Due Soon / Flagged**, all five
-  **Availability** choices, **Has an estimated duration**, **less than**
-  5/15/30/60 minutes, **Has a due / planned / defer date**, **Has date in
+  **Availability** choices, **Has an estimated duration**, **less than**,
+  **greater than** and **between** with 5/15/30/60-minute shortcuts and a
+  custom-minutes box, **Has a due / planned / defer date**, **Has date in
   range** (due, planned, defer, completed, dropped, added or changed; On,
-  Yesterday, Today, Tomorrow, In the past, In the next or Between),
-  **Is repeating**, **Is untagged**, all five **Has a tag that…** choices,
+  Yesterday, Today, Tomorrow, In the past, In the next or Between), with a
+  calendar picker beside On and Between dates, **Is repeating**, **Is untagged**, all five **Has a tag that…** choices,
   **Is tagged with any of / all of**, **Is a project, group, or neither**,
   **Is in the Inbox**, **Is in a single actions list**, all seven
   **Has a project that…** choices, **Is contained within project or folder**,
@@ -354,11 +361,13 @@ titles itself **Search** and ranks the closest matches first.
   `--icon 🏃`). A shipped **Running** view lists started work that is not due
   yet. It can be edited or deleted like any other saved view. Folding SAVED
   hides every saved view, pinned or not.
-  Both platforms offer project/folder/tag/due/defer/flagged/estimate
-  grouping and manual/due/defer/name/priority/flagged/estimate/created
-  sorting; the Mac editor also offers Planned grouping and sorting.
-  Project grouping puts tasks with no project under **No project** instead of an
-  Inbox heading.
+  The Mac editor covers project, folder, tag, tags-combined, due, defer,
+  planned, completed, dropped, added, changed, next-review, flagged and
+  estimate grouping, and manual, due, defer, planned, name, priority, flagged,
+  estimate, created, completed, due-&-flagged, tag, added, changed, dropped and
+  next-review sorting. The phone keeps the original flat editor but evaluates
+  the full nested rule tree from the Mac. Project grouping puts tasks with no
+  project under **No project** instead of an Inbox heading.
 - Right-click a sidebar row for Open, Rename, Delete, New child, project status
   and tag location. Rename is also `⌘R`.
 - Drag tasks between projects, tags and parents; drag projects into folders.
@@ -403,6 +412,8 @@ theme change. Press `⌘Z`, or use the arrow in the title bar. `⇧⌘Z` redoes.
 The status bar names the last action and its Undo until the next one.
 
 ## Settings
+
+![Settings](images/gui-settings.png)
 
 Press `⌘,`. The sheet opens at a fixed size and can be resized from the grip in
 its bottom-right corner. When the content no longer fits, a thin Zed-style

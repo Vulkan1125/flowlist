@@ -1,6 +1,6 @@
 ### Flowlist
 
-- [Home](Home)
+- [Overview & GTD](Home)
 - [Using the GUI](Using-the-GUI)
 - [Using the CLI](Using-the-CLI)
 - [Using the phone](Using-the-Phone)
