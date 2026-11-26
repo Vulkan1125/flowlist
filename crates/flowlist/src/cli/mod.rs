@@ -18,8 +18,9 @@ use flowlist_core::ids::{
     ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId,
 };
 use flowlist_core::model::{
-    BuiltinPerspective, Condition, DueWindow, FilterNode, GroupBy, IconSpec, Perspective,
-    Priority, ProjectKind, ProjectStatus, RepeatRule, SortBy, TagStatus, TaskAlert, TaskStatus,
+    BuiltinPerspective, Condition, DefaultNotification, DueWindow, FilterNode, GroupBy, IconSpec,
+    Perspective, Priority, ProjectKind, ProjectStatus, RepeatRule, SortBy, TagStatus, TaskAlert,
+    TaskStatus,
 };
 use flowlist_core::parse::{
     parse_duration, parse_quick, parse_repeat, parse_stamp, with_default_time,
@@ -197,6 +198,12 @@ pub struct AddArgs {
     /// Alerts such as `due:-15m, defer` relative to the event.
     #[arg(long)]
     pub alerts: Option<String>,
+    /// Remove a default notification: defer, planned, latest_start or due.
+    #[arg(long = "remove-notification")]
+    pub remove_notifications: Vec<String>,
+    /// Add an absolute custom notification date/time.
+    #[arg(long = "custom-notification")]
+    pub custom_notifications: Vec<String>,
 }
 
 #[derive(Args, Debug, Clone, Default)]
@@ -313,9 +320,21 @@ pub struct EditArgs {
     /// Remove every attachment.
     #[arg(long)]
     pub clear_attachments: bool,
-    /// Alerts such as `due:-15m, defer`; `none` restores the default due alert.
+    /// Extra relative alerts such as `due:-15m, defer`; `none` clears them.
     #[arg(long)]
     pub alerts: Option<String>,
+    /// Remove a default notification: defer, planned, latest_start or due.
+    #[arg(long = "remove-notification")]
+    pub remove_notifications: Vec<String>,
+    /// Restore a previously removed default notification.
+    #[arg(long = "restore-notification")]
+    pub restore_notifications: Vec<String>,
+    /// Add an absolute custom notification date/time.
+    #[arg(long = "custom-notification")]
+    pub custom_notifications: Vec<String>,
+    /// Remove every absolute custom notification.
+    #[arg(long)]
+    pub clear_custom_notifications: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -588,6 +607,21 @@ pub struct ProjectEditArgs {
     /// Remove every attachment.
     #[arg(long)]
     pub clear_attachments: bool,
+    /// Alerts such as `due:-15m, defer`; `none` clears them.
+    #[arg(long)]
+    pub alerts: Option<String>,
+    /// Remove a default notification: defer, planned, latest_start or due.
+    #[arg(long = "remove-notification")]
+    pub remove_notifications: Vec<String>,
+    /// Restore a previously removed default notification.
+    #[arg(long = "restore-notification")]
+    pub restore_notifications: Vec<String>,
+    /// Add an absolute custom notification date/time.
+    #[arg(long = "custom-notification")]
+    pub custom_notifications: Vec<String>,
+    /// Remove every absolute custom notification.
+    #[arg(long)]
+    pub clear_custom_notifications: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -1032,6 +1066,22 @@ fn cmd_add(cli: &Cli, args: AddArgs, paint: &Paint) -> Result<()> {
             TaskAlert::parse_list(&alerts).map_err(|error| anyhow!(error))?
         };
     }
+    for slug in &args.remove_notifications {
+        let kind = DefaultNotification::from_slug(slug)
+            .ok_or_else(|| anyhow!("Unknown notification type: {slug}"))?;
+        task.removed_notifications.insert(kind);
+    }
+    for value in &args.custom_notifications {
+        let stamp = parse_stamp(value, reference)?;
+        if !task
+            .custom_notifications
+            .iter()
+            .any(|existing| existing.at == stamp.at)
+        {
+            task.custom_notifications.push(stamp);
+        }
+    }
+    task.custom_notifications.sort_by_key(|stamp| stamp.at);
     let outcome = store.execute(CoreCommand::CreateTask(task))?;
     let created = outcome
         .created
@@ -1420,6 +1470,45 @@ fn cmd_edit(cli: &Cli, args: EditArgs, paint: &Paint) -> Result<()> {
         } else {
             TaskAlert::parse_list(alerts).map_err(|error| anyhow!(error))?
         });
+    }
+    if !args.remove_notifications.is_empty() || !args.restore_notifications.is_empty() {
+        let mut removed = store
+            .db()
+            .tasks
+            .get(&id)
+            .map(|task| task.removed_notifications.clone())
+            .unwrap_or_default();
+        for slug in &args.remove_notifications {
+            let kind = DefaultNotification::from_slug(slug)
+                .ok_or_else(|| anyhow!("Unknown notification type: {slug}"))?;
+            removed.insert(kind);
+        }
+        for slug in &args.restore_notifications {
+            let kind = DefaultNotification::from_slug(slug)
+                .ok_or_else(|| anyhow!("Unknown notification type: {slug}"))?;
+            removed.remove(&kind);
+        }
+        patch.removed_notifications = Some(removed);
+    }
+    if args.clear_custom_notifications || !args.custom_notifications.is_empty() {
+        let mut custom = if args.clear_custom_notifications {
+            Vec::new()
+        } else {
+            store
+                .db()
+                .tasks
+                .get(&id)
+                .map(|task| task.custom_notifications.clone())
+                .unwrap_or_default()
+        };
+        for value in &args.custom_notifications {
+            let stamp = parse_stamp(value, reference)?;
+            if !custom.iter().any(|existing| existing.at == stamp.at) {
+                custom.push(stamp);
+            }
+        }
+        custom.sort_by_key(|stamp| stamp.at);
+        patch.custom_notifications = Some(custom);
     }
     if args.clear_attachments {
         patch.attachments = Some(Vec::new());
@@ -2160,6 +2249,52 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
                 }
                 patch.attachments = Some(attachments);
             }
+            if let Some(alerts) = &args.alerts {
+                patch.alerts = Some(if alerts.eq_ignore_ascii_case("none") {
+                    Vec::new()
+                } else {
+                    TaskAlert::parse_list(alerts).map_err(|error| anyhow!(error))?
+                });
+            }
+            if !args.remove_notifications.is_empty() || !args.restore_notifications.is_empty() {
+                let mut removed = store
+                    .db()
+                    .projects
+                    .get(&id)
+                    .map(|project| project.removed_notifications.clone())
+                    .unwrap_or_default();
+                for slug in &args.remove_notifications {
+                    let kind = DefaultNotification::from_slug(slug)
+                        .ok_or_else(|| anyhow!("Unknown notification type: {slug}"))?;
+                    removed.insert(kind);
+                }
+                for slug in &args.restore_notifications {
+                    let kind = DefaultNotification::from_slug(slug)
+                        .ok_or_else(|| anyhow!("Unknown notification type: {slug}"))?;
+                    removed.remove(&kind);
+                }
+                patch.removed_notifications = Some(removed);
+            }
+            if args.clear_custom_notifications || !args.custom_notifications.is_empty() {
+                let mut custom = if args.clear_custom_notifications {
+                    Vec::new()
+                } else {
+                    store
+                        .db()
+                        .projects
+                        .get(&id)
+                        .map(|project| project.custom_notifications.clone())
+                        .unwrap_or_default()
+                };
+                for value in &args.custom_notifications {
+                    let stamp = parse_stamp(value, reference)?;
+                    if !custom.iter().any(|existing| existing.at == stamp.at) {
+                        custom.push(stamp);
+                    }
+                }
+                custom.sort_by_key(|stamp| stamp.at);
+                patch.custom_notifications = Some(custom);
+            }
             store.execute(CoreCommand::UpdateProject {
                 id: id.clone(),
                 patch,
@@ -2289,9 +2424,8 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
                 perspective.description = description;
             }
             if let Some(icon) = args.icon {
-                perspective.icon = Some(
-                    IconSpec::parse(&icon).map_err(|message| anyhow!(message))?,
-                );
+                perspective.icon =
+                    Some(IconSpec::parse(&icon).map_err(|message| anyhow!(message))?);
             }
             let outcome = store.execute(CoreCommand::SavePerspective {
                 perspective: perspective.clone(),

@@ -146,10 +146,22 @@ a batch editor for **Project**, **Tags**, **Defer**, **Planned**, **Due**,
   or parent dates reject any task, the entire batch rolls back and the reason
   stays in the inspector.
 
-## Alerts
+## Notifications
 
-The inspector’s **Alerts** field is a compact per-task notification schedule.
-Separate rules with commas or semicolons:
+Notifications are built from three layers:
+
+1. **Default notifications** in Settings → Reminders:
+   - Defer
+   - Planned
+   - Latest start (due minus estimate)
+   - Due
+2. **Per-item defaults**, shown in the inspector’s Notifications section. Each
+   default can be removed from a task or project and restored later.
+3. **Extra alerts**:
+   - relative alerts anchored to Due, Defer/Available or Planned,
+   - absolute custom notifications for a specific date and time.
+
+The inspector’s **Alerts** field is the compact relative form:
 
 | Example | Meaning |
 | --- | --- |
@@ -157,23 +169,23 @@ Separate rules with commas or semicolons:
 | `due:-15m` | 15 minutes before due |
 | `defer` | When the defer date makes the task available |
 | `planned:+1h` | One hour after the planned time |
-| `none` | Restore the default due reminder |
 
-Dates without a time use the same 9:00 local default as due reminders. Alerts
-follow inherited project/action dates, so a project deadline or defer date can
-place a task’s alert even when the task itself has no date.
+Date-only relative alerts use 9:00 local. Date-only custom notifications use the
+custom-notification default time from Settings. Alerts follow inherited
+project/action dates. Completed tasks, Trash and closed projects are skipped.
+Latest Start requires both a due date and an estimate. Repeating tasks carry
+relative alerts to the next occurrence; absolute custom notifications are
+removed from the generated next occurrence.
 
-A task with one or more alerts replaces the default due reminder. Empty alerts
-restore it. Notifications include the project, up to two tags and whether they
-are early, on time or late. Completed tasks, Trash, closed projects and alerts
-outside the 30-day scheduling horizon are skipped. Repeating tasks carry their
-alerts to the next occurrence. Alerts can also be set with
-`flowlist edit ... --alerts 'due:-15m, defer'` or the MCP `alerts` argument.
+The inspector lists default, relative and custom notifications and lets you
+remove them or add a custom one. Projects, not only tasks, use the same schedule.
+CLI/MCP can set the same fields, including on `add` and `project edit`.
 
-This is a simplified version of OmniFocus’s Notifications inspector. OmniFocus
-also supports a **Latest Start** notification (due minus estimate) and absolute
-custom notification times; Flowlist currently supports relative Due, Defer and
-Planned alerts only.
+Flowlist still uses the system local time zone. OmniFocus can attach a floating
+or fixed time zone to each date; that changes the date model, sync and Android
+storage, so it remains a separate upgrade rather than a notification-only
+change. Apart from that setting, the date-based notification model matches
+OmniFocus.
 
 ## Projects and reviews
 

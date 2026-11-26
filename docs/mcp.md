@@ -61,7 +61,9 @@ tasks. `create_project` and `update_project` accept the same `attachments` and
 | `list_tasks` | list by built-in view or filter |
 
 `capture`, `add_task` and `update_task` accept `alerts`, a compact string such
-as `due:-15m, defer, planned:+1h`; `none` restores the default due reminder.
+as `due:-15m, defer, planned:+1h`. They also accept `removed_notifications`
+(default types to remove) and `custom_notifications` (absolute date/time
+strings). `update_project` accepts the same three fields.
 
 `list_tasks` accepts `view` (`inbox`, `today`, `projects`, `forecast`, `flagged`,
 `tags`, `completed`, `archive`, `changed`, `attachments`, `nearby`, `review`,

@@ -6,8 +6,8 @@ use std::collections::BTreeSet;
 use chrono::NaiveTime;
 use serde::{Deserialize, Serialize};
 
-use crate::ids::TagId;
 use super::tag::Geo;
+use crate::ids::TagId;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Settings {
@@ -51,6 +51,21 @@ pub struct Settings {
     /// Show flagged undated actions in Forecast.
     #[serde(default)]
     pub forecast_flagged: bool,
+    /// Automatic notifications for defer dates.
+    #[serde(default)]
+    pub default_defer_notification: bool,
+    /// Automatic notifications for planned dates.
+    #[serde(default)]
+    pub default_planned_notification: bool,
+    /// Automatic notifications for the latest start time.
+    #[serde(default)]
+    pub default_latest_start_notification: bool,
+    /// Automatic notifications for due dates.
+    #[serde(default = "default_true")]
+    pub default_due_notification: bool,
+    /// Time used by a date-only absolute custom notification.
+    #[serde(default = "default_custom_notification_time")]
+    pub default_custom_notification_time: Option<NaiveTime>,
     /// Whether the shipped Running saved view has been offered to this
     /// library. Once true it stays true, so renaming or deleting the view is
     /// permanent.
@@ -177,6 +192,10 @@ fn default_changed_days() -> u32 {
     7
 }
 
+fn default_custom_notification_time() -> Option<NaiveTime> {
+    NaiveTime::from_hms_opt(9, 0, 0)
+}
+
 fn default_due_time() -> Option<NaiveTime> {
     NaiveTime::from_hms_opt(17, 0, 0)
 }
@@ -205,6 +224,11 @@ impl Default for Settings {
             forecast_due_counts: false,
             forecast_tag: None,
             forecast_flagged: false,
+            default_defer_notification: false,
+            default_planned_notification: false,
+            default_latest_start_notification: false,
+            default_due_notification: true,
+            default_custom_notification_time: default_custom_notification_time(),
             seeded_running_view: false,
             cleared_running_icon: false,
         }

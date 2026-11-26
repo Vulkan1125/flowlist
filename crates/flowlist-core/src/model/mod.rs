@@ -22,4 +22,4 @@ pub use repeat::{
 pub use settings::{Settings, SidebarOptions};
 pub use tag::{Geo, Tag, TagStatus};
 pub use task::ChecklistItem;
-pub use task::{AlertEvent, Priority, Task, TaskAlert};
+pub use task::{AlertEvent, DefaultNotification, Priority, Task, TaskAlert};

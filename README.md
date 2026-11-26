@@ -51,10 +51,12 @@ uploaded; there is no account, no sync service and no telemetry.
   edit, drag, import and tool call is one `⌘Z` away.
 - **Updates in the app.** Settings → About checks the latest release and
   installs it in place.
-- **Due reminders.** Settings → Workflow schedules macOS notifications for
-  upcoming due dates. macOS only grants notification permission to a signed
-  build; the ad-hoc download explains this in place, and packaging with an
-  Apple Development or Developer ID identity enables it.
+- **Notifications.** Settings → Reminders switches macOS alerts on per type
+  (Defer, Planned, Latest Start, Due); each task or project can remove a
+  default, add relative alerts or set an absolute custom notification. macOS
+  only grants notification permission to a signed build; the ad-hoc download
+  explains this in place, and packaging with an Apple Development or Developer
+  ID identity enables it.
 
 ## Three ways to use it
 

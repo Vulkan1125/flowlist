@@ -8,6 +8,7 @@ use crate::ids::{FolderId, TagId, TaskId};
 use crate::time::{Stamp, local_date, now};
 
 use super::icon::IconSpec;
+use super::task::{DefaultNotification, TaskAlert};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -412,6 +413,15 @@ pub struct Project {
     /// one emoji.
     #[serde(default)]
     pub icon: IconSpec,
+    /// Extra relative notification schedules.
+    #[serde(default)]
+    pub alerts: Vec<TaskAlert>,
+    /// Default notifications removed from this project.
+    #[serde(default)]
+    pub removed_notifications: BTreeSet<DefaultNotification>,
+    /// Absolute custom notifications.
+    #[serde(default)]
+    pub custom_notifications: Vec<Stamp>,
     /// Local file paths for briefs, images or PDFs that belong to the
     /// project. Like task attachments these are referenced, never copied.
     #[serde(default)]
@@ -451,6 +461,9 @@ impl Project {
             sequential: false,
             kind: ProjectKind::Parallel,
             icon: IconSpec::default(),
+            alerts: Vec::new(),
+            removed_notifications: BTreeSet::new(),
+            custom_notifications: Vec::new(),
             attachments: Vec::new(),
             task_order: Vec::new(),
             created_at: at,

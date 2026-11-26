@@ -11,7 +11,7 @@ use std::sync::{Mutex, OnceLock};
 
 use chrono::{Datelike, Duration, NaiveTime, Timelike};
 use flowlist_core::db::Db;
-use flowlist_core::model::{AlertEvent, TaskAlert};
+use flowlist_core::model::{AlertEvent, DefaultNotification, Settings, TaskAlert};
 use flowlist_core::time::{Stamp, local_to_utc, now};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -341,11 +341,12 @@ struct Reminder {
     at: chrono::DateTime<chrono::Utc>,
 }
 
-/// The tasks that should have a reminder between `reference` and the horizon.
-/// A task with no custom alerts gets the default due reminder; otherwise its
-/// own schedules replace it. Pure, so the rules can be tested without macOS.
+/// The notifications that should be pending right now. A notification is
+/// generated from the global default switches, per-item removals, relative
+/// alerts and absolute custom times. Pure, so the rules can be tested without
+/// macOS.
 fn reminders(db: &Db, reference: chrono::DateTime<chrono::Utc>) -> Vec<Reminder> {
-    let horizon = reference + Duration::days(HORIZON_DAYS);
+    let settings = &db.settings;
     let mut pending = Vec::new();
     for task in db.tasks.values() {
         if task.completed || task.is_trashed() {
@@ -358,51 +359,158 @@ fn reminders(db: &Db, reference: chrono::DateTime<chrono::Utc>) -> Vec<Reminder>
         {
             continue;
         }
-        let alerts = if task.alerts.is_empty() {
-            vec![TaskAlert::new(AlertEvent::Due, 0)]
-        } else {
-            task.alerts.clone()
-        };
         let location = db
             .effective_project(&task.id)
             .map(|project| db.project_path(&project))
             .unwrap_or_else(|| "Inbox".to_string());
-        let tags: Vec<String> = task
-            .tags
-            .iter()
-            .filter_map(|tag| db.tags.get(tag).map(|tag| db.tag_path(&tag.id)))
-            .take(2)
-            .collect();
-        for alert in alerts {
-            let Some(stamp) = event_stamp(db, &task.id, alert.event) else {
-                continue;
-            };
-            let at = reminder_at(stamp) + Duration::minutes(alert.offset_minutes as i64);
-            if at <= reference || at > horizon {
-                continue;
-            }
-            let mut parts = vec![location.clone(), alert.event.label().to_string()];
-            if !tags.is_empty() {
-                parts.push(tags.join(", "));
-            }
-            parts.push(timing_label(alert.offset_minutes));
-            pending.push(Reminder {
-                key: format!("{}.{}.{}", task.id, alert.event.slug(), alert.offset_minutes),
-                title: task.title.clone(),
-                body: parts.join(" · "),
-                at,
-            });
+        let tags = item_tags(db, &task.tags);
+        push_item_notifications(
+            &mut pending,
+            settings,
+            &format!("task.{}", task.id),
+            &task.title,
+            &location,
+            &tags,
+            db.effective_due(&task.id),
+            db.effective_defer(&task.id),
+            db.effective_planned(&task.id),
+            task.estimate_min,
+            &task.alerts,
+            &task.removed_notifications,
+            &task.custom_notifications,
+            reference,
+        );
+    }
+    for project in db.projects.values() {
+        if project.status.is_closed() {
+            continue;
         }
+        let location = db.project_path(&project.id);
+        let tags = item_tags(db, &project.tags);
+        push_item_notifications(
+            &mut pending,
+            settings,
+            &format!("project.{}", project.id),
+            &project.name,
+            &location,
+            &tags,
+            project.due,
+            project.defer,
+            project.planned,
+            None,
+            &project.alerts,
+            &project.removed_notifications,
+            &project.custom_notifications,
+            reference,
+        );
     }
     pending.sort_by_key(|reminder| reminder.at);
     pending
 }
 
-fn event_stamp(db: &Db, task: &flowlist_core::ids::TaskId, event: AlertEvent) -> Option<Stamp> {
-    match event {
-        AlertEvent::Due => db.effective_due(task),
-        AlertEvent::Defer => db.effective_defer(task),
-        AlertEvent::Planned => db.effective_planned(task),
+fn item_tags(db: &Db, tags: &std::collections::BTreeSet<flowlist_core::ids::TagId>) -> Vec<String> {
+    tags.iter()
+        .filter_map(|tag| db.tags.get(tag).map(|tag| db.tag_path(&tag.id)))
+        .take(2)
+        .collect()
+}
+
+fn push_item_notifications(
+    pending: &mut Vec<Reminder>,
+    settings: &Settings,
+    item_key: &str,
+    title: &str,
+    location: &str,
+    tags: &[String],
+    due: Option<Stamp>,
+    defer: Option<Stamp>,
+    planned: Option<Stamp>,
+    estimate: Option<u32>,
+    alerts: &[TaskAlert],
+    removed: &std::collections::BTreeSet<DefaultNotification>,
+    custom: &[Stamp],
+    reference: chrono::DateTime<chrono::Utc>,
+) {
+    let mut push = |at, label: &str, timing: String, key: String| {
+        if at <= reference {
+            return;
+        }
+        let mut parts = vec![location.to_string(), label.to_string()];
+        if !tags.is_empty() {
+            parts.push(tags.join(", "));
+        }
+        parts.push(timing);
+        pending.push(Reminder {
+            key: format!("{item_key}.{key}"),
+            title: title.to_string(),
+            body: parts.join(" · "),
+            at,
+        });
+    };
+    for kind in DefaultNotification::ALL {
+        if removed.contains(&kind) {
+            continue;
+        }
+        let enabled = match kind {
+            DefaultNotification::Defer => settings.default_defer_notification,
+            DefaultNotification::Planned => settings.default_planned_notification,
+            DefaultNotification::LatestStart => settings.default_latest_start_notification,
+            DefaultNotification::Due => settings.default_due_notification,
+        };
+        if !enabled {
+            continue;
+        }
+        let at = match kind {
+            DefaultNotification::Defer => defer.map(reminder_at),
+            DefaultNotification::Planned => planned.map(reminder_at),
+            DefaultNotification::Due => due.map(reminder_at),
+            DefaultNotification::LatestStart => due
+                .zip(estimate)
+                .map(|(due, estimate)| reminder_at(due) - Duration::minutes(estimate as i64)),
+        };
+        if let Some(at) = at {
+            push(
+                at,
+                if kind == DefaultNotification::Defer {
+                    "Available"
+                } else {
+                    kind.label()
+                },
+                "now".to_string(),
+                format!("default.{}", kind.slug()),
+            );
+        }
+    }
+    for (index, alert) in alerts.iter().enumerate() {
+        let base = match alert.event {
+            AlertEvent::Due => due,
+            AlertEvent::Defer => defer,
+            AlertEvent::Planned => planned,
+        };
+        if let Some(stamp) = base {
+            let at = reminder_at(stamp) + Duration::minutes(alert.offset_minutes as i64);
+            push(
+                at,
+                alert.event.label(),
+                timing_label(alert.offset_minutes),
+                format!("alert.{index}"),
+            );
+        }
+    }
+    for (index, stamp) in custom.iter().enumerate() {
+        let at = custom_reminder_at(*stamp, settings);
+        push(at, "Custom", "now".to_string(), format!("custom.{index}"));
+    }
+}
+
+fn custom_reminder_at(stamp: Stamp, settings: &Settings) -> chrono::DateTime<chrono::Utc> {
+    if stamp.has_time {
+        stamp.at
+    } else {
+        let time = settings
+            .default_custom_notification_time
+            .unwrap_or_else(|| NaiveTime::from_hms_opt(9, 0, 0).unwrap_or(NaiveTime::MIN));
+        local_to_utc(stamp.local_date(), time)
     }
 }
 
@@ -595,8 +703,9 @@ mod tests {
     }
 
     #[test]
-    fn custom_alerts_replace_the_default_due_reminder() {
+    fn custom_alerts_schedule_alongside_default_notifications() {
         let mut db = Db::new();
+        db.settings.default_due_notification = true;
         let reference = local_to_utc(
             NaiveDate::from_ymd_opt(2026, 11, 21).unwrap(),
             NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
@@ -619,15 +728,112 @@ mod tests {
         db.add_task_to_inbox(custom);
 
         let pending = reminders(&db, reference);
-        assert_eq!(pending.len(), 2);
-        assert!(pending.iter().any(|reminder| reminder
-            .body
-            .contains("Due · in 30m")));
-        assert!(pending.iter().any(|reminder| reminder
-            .body
-            .contains("Available · now")));
-        assert!(pending[0].at < pending[1].at);
-        assert_ne!(pending[0].key, pending[1].key);
+        assert_eq!(pending.len(), 3);
+        assert!(
+            pending
+                .iter()
+                .any(|reminder| reminder.body.contains("Due · in 30m"))
+        );
+        assert!(
+            pending
+                .iter()
+                .any(|reminder| reminder.body.contains("Available · now"))
+        );
+        assert!(
+            pending
+                .iter()
+                .any(|reminder| reminder.body.contains("Due · now"))
+        );
+
+        // Removing the default due notification leaves the relative alerts.
+        db.tasks
+            .values_mut()
+            .next()
+            .unwrap()
+            .removed_notifications
+            .insert(DefaultNotification::Due);
+        let remaining = reminders(&db, reference);
+        assert_eq!(remaining.len(), 2);
+        assert!(
+            remaining
+                .iter()
+                .all(|reminder| !reminder.key.contains("default.due"))
+        );
+    }
+
+    #[test]
+    fn default_notifications_cover_defer_planned_latest_start_and_due() {
+        let mut db = Db::new();
+        db.settings.default_defer_notification = true;
+        db.settings.default_planned_notification = true;
+        db.settings.default_latest_start_notification = true;
+        db.settings.default_due_notification = true;
+        let reference = local_to_utc(
+            NaiveDate::from_ymd_opt(2026, 11, 21).unwrap(),
+            NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
+        );
+        let mut item = task(
+            "All defaults",
+            Stamp::on(
+                NaiveDate::from_ymd_opt(2026, 11, 21).unwrap(),
+                NaiveTime::from_hms_opt(10, 30, 0).unwrap(),
+            ),
+        );
+        item.defer = Some(Stamp::on(
+            NaiveDate::from_ymd_opt(2026, 11, 21).unwrap(),
+            NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+        ));
+        item.planned = Some(Stamp::on(
+            NaiveDate::from_ymd_opt(2026, 11, 21).unwrap(),
+            NaiveTime::from_hms_opt(9, 30, 0).unwrap(),
+        ));
+        item.estimate_min = Some(30);
+        db.add_task_to_inbox(item);
+
+        let pending = reminders(&db, reference);
+        assert_eq!(pending.len(), 4);
+        assert!(pending.iter().any(|r| r.body.contains("Latest start")));
+        assert!(pending.iter().any(|r| r.body.contains("Available")));
+        assert!(pending.iter().any(|r| r.body.contains("Planned")));
+        assert!(pending.iter().any(|r| r.body.contains("Due")));
+
+        let task_id = db.tasks.keys().next().unwrap().clone();
+        let task = db.tasks.get_mut(&task_id).unwrap();
+        task.removed_notifications
+            .insert(flowlist_core::model::DefaultNotification::Due);
+        assert!(
+            !reminders(&db, reference)
+                .iter()
+                .any(|r| r.body.contains("Due"))
+        );
+    }
+
+    #[test]
+    fn project_and_custom_notifications_are_scheduled() {
+        let mut db = Db::new();
+        db.settings.default_due_notification = true;
+        let reference = local_to_utc(
+            NaiveDate::from_ymd_opt(2026, 11, 21).unwrap(),
+            NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
+        );
+        let mut project = Project::new("Notify project");
+        project.due = Some(Stamp::on(
+            NaiveDate::from_ymd_opt(2026, 11, 21).unwrap(),
+            NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+        ));
+        project.custom_notifications.push(Stamp::date_only(
+            NaiveDate::from_ymd_opt(2026, 11, 22).unwrap(),
+        ));
+        db.add_project(project);
+
+        let pending = reminders(&db, reference);
+        assert!(
+            pending
+                .iter()
+                .any(|r| r.title == "Notify project" && r.body.contains("Due"))
+        );
+        let custom = pending.iter().find(|r| r.body.contains("Custom")).unwrap();
+        assert_eq!(custom.at.with_timezone(&chrono::Local).hour(), 9);
     }
 
     #[test]

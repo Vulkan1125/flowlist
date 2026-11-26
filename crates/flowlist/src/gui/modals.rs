@@ -15,8 +15,7 @@ use flowlist_core::db::DateConflict;
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
     BuiltinPerspective, GroupBy, IconSpec, Priority, ProjectIcon, ProjectKind, SidebarOptions,
-    SortBy,
-    TaskStatus,
+    SortBy, TaskStatus,
 };
 use flowlist_core::query;
 use flowlist_core::time::now;
@@ -25,9 +24,7 @@ use super::drag::{
     DragSettingsResize, DragSettingsScroll, settings_resize_ghost, settings_scroll_ghost,
 };
 use super::icons::Icon;
-use super::perspective::{
-    DeferChoice, DueChoice, IconTab, PerspectiveForm, ViewChoice, ViewField,
-};
+use super::perspective::{DeferChoice, DueChoice, IconTab, PerspectiveForm, ViewChoice, ViewField};
 use super::screen_picker;
 use super::text::TextBuffer;
 use super::theme::{self, Appearance, PLAIN_ACCENTS, Theme, ThemeKind};
@@ -139,6 +136,11 @@ pub enum Modal {
         id: FolderId,
         name: String,
     },
+    /// Add one absolute custom notification to a task or project.
+    CustomNotification {
+        target: super::NotificationTarget,
+        at: TextBuffer,
+    },
     /// Delete several selected projects and folders in one undo step.
     DeleteContainers {
         projects: Vec<ProjectId>,
@@ -247,6 +249,12 @@ pub enum Modal {
         forecast_tag: TextBuffer,
         /// Show flagged undated actions in Forecast.
         forecast_flagged: bool,
+        default_defer_notification: bool,
+        default_planned_notification: bool,
+        default_latest_start_notification: bool,
+        default_due_notification: bool,
+        /// Time used by date-only absolute custom notifications.
+        custom_notification_time: TextBuffer,
         /// Keep the Focus banner below the title bar.
         focus_banner: bool,
         /// Show button titles under the header icons.
@@ -353,6 +361,7 @@ impl SettingsSection {
     pub fn fields(self) -> &'static [usize] {
         match self {
             SettingsSection::Workflow => &[0, 1, 2, 5],
+            SettingsSection::Reminders => &[6],
             SettingsSection::Nearby => &[3],
             SettingsSection::Trash => &[4],
             SettingsSection::Appearance
@@ -533,6 +542,13 @@ impl Modal {
         }
     }
 
+    pub fn custom_notification(target: super::NotificationTarget) -> Self {
+        Modal::CustomNotification {
+            target,
+            at: TextBuffer::empty(),
+        }
+    }
+
     pub fn delete_containers(projects: Vec<ProjectId>, folders: Vec<FolderId>) -> Self {
         Modal::DeleteContainers { projects, folders }
     }
@@ -573,11 +589,7 @@ impl Modal {
             .task_subtree(&id)
             .into_iter()
             .skip(1)
-            .filter(|child| {
-                db.tasks
-                    .get(child)
-                    .is_some_and(|task| !task.is_trashed())
-            })
+            .filter(|child| db.tasks.get(child).is_some_and(|task| !task.is_trashed()))
             .count();
         Modal::HideSubtasks { id, title, count }
     }
@@ -682,6 +694,22 @@ impl Modal {
                     .unwrap_or_default(),
             ),
             forecast_flagged: app.store.db().settings.forecast_flagged,
+            default_defer_notification: app.store.db().settings.default_defer_notification,
+            default_planned_notification: app.store.db().settings.default_planned_notification,
+            default_latest_start_notification: app
+                .store
+                .db()
+                .settings
+                .default_latest_start_notification,
+            default_due_notification: app.store.db().settings.default_due_notification,
+            custom_notification_time: TextBuffer::new(
+                app.store
+                    .db()
+                    .settings
+                    .default_custom_notification_time
+                    .map(|time| time.format("%H:%M").to_string())
+                    .unwrap_or_default(),
+            ),
             focus_banner: app.show_focus_banner,
             toolbar_labels: app.show_toolbar_labels,
             hide_empty_views: app.hide_empty_views,
@@ -755,6 +783,7 @@ impl Modal {
             Modal::CreateProject { .. } => "Create project",
             Modal::DeleteProject { .. } => "Delete project",
             Modal::DeleteFolder { .. } => "Delete folder",
+            Modal::CustomNotification { .. } => "Custom notification",
             Modal::DeleteContainers { .. } => "Delete selected items",
             Modal::DeleteTag { .. } => "Delete tag",
             Modal::DeleteTask { .. } => "Delete repeating task",
@@ -792,9 +821,7 @@ impl Modal {
                     "Projects hold an outline of tasks; folders keep projects together."
                 }
             }
-            Modal::IconPicker { .. } => {
-                "Choose a named icon or an emoji for this project."
-            }
+            Modal::IconPicker { .. } => "Choose a named icon or an emoji for this project.",
             Modal::AdjustDates { command, .. } => match command {
                 Command::UpdateTaskAdjusted { .. } => {
                     "If you continue, the task date will be adjusted to fit the project."
@@ -814,6 +841,9 @@ impl Modal {
             }
             Modal::DeleteFolder { .. } => {
                 "Its projects and their tasks move to Trash with it. Undo restores everything."
+            }
+            Modal::CustomNotification { .. } => {
+                "An absolute date and time for this item. It does not follow the item's dates."
             }
             Modal::DeleteContainers { .. } => {
                 "Their tasks move to Trash. Undo restores everything in one step."
@@ -877,6 +907,7 @@ impl Modal {
             Modal::CreateProject { .. } => "Create",
             Modal::DeleteProject { .. } | Modal::DeleteTag { .. } => "Delete",
             Modal::DeleteFolder { .. } | Modal::DeleteContainers { .. } => "Delete",
+            Modal::CustomNotification { .. } => "Add",
             Modal::DeleteTask { .. } => "Delete",
             Modal::HideSubtasks { .. } => "Convert",
             Modal::PriorityScope { .. } => "Apply",
@@ -910,7 +941,10 @@ impl Modal {
             Modal::AdjustDates { .. } => 0,
             Modal::CreateProject { .. } => 0,
             Modal::DeleteProject { .. } => 0,
-            Modal::DeleteFolder { .. } | Modal::DeleteContainers { .. } | Modal::DeleteTag { .. } => 0,
+            Modal::CustomNotification { .. } => 1,
+            Modal::DeleteFolder { .. }
+            | Modal::DeleteContainers { .. }
+            | Modal::DeleteTag { .. } => 0,
             Modal::DeleteTask { .. } => 0,
             Modal::HideSubtasks { .. } => 0,
             Modal::PriorityScope { .. } => 0,
@@ -926,7 +960,7 @@ impl Modal {
                 }
             }
             Modal::Import { .. } => 1,
-            Modal::Settings { .. } => 6,
+            Modal::Settings { .. } => 7,
             Modal::Location { .. } | Modal::TagLocation { .. } => 2,
             Modal::Help => 0,
         }
@@ -957,6 +991,7 @@ impl Modal {
             },
             Modal::IconPicker { query, .. } => (index == 0).then_some(query),
             Modal::AdjustDates { .. } => None,
+            Modal::CustomNotification { at, .. } => (index == 0).then_some(at),
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. }
@@ -989,6 +1024,7 @@ impl Modal {
                 radius,
                 trash_days,
                 forecast_tag,
+                custom_notification_time,
                 section,
                 ..
             } => match index {
@@ -998,6 +1034,7 @@ impl Modal {
                 3 if section.fields().contains(&3) => Some(radius),
                 4 if section.fields().contains(&4) => Some(trash_days),
                 5 if section.fields().contains(&5) => Some(forecast_tag),
+                6 if section.fields().contains(&6) => Some(custom_notification_time),
                 _ => None,
             },
             Modal::Location { lat, lon } | Modal::TagLocation { lat, lon, .. } => match index {
@@ -1034,6 +1071,7 @@ impl Modal {
             },
             Modal::IconPicker { query, .. } => (index == 0).then_some(query),
             Modal::AdjustDates { .. } => None,
+            Modal::CustomNotification { at, .. } => (index == 0).then_some(at),
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. }
@@ -1066,6 +1104,7 @@ impl Modal {
                 radius,
                 trash_days,
                 forecast_tag,
+                custom_notification_time,
                 section,
                 ..
             } => match index {
@@ -1075,6 +1114,7 @@ impl Modal {
                 3 if section.fields().contains(&3) => Some(radius),
                 4 if section.fields().contains(&4) => Some(trash_days),
                 5 if section.fields().contains(&5) => Some(forecast_tag),
+                6 if section.fields().contains(&6) => Some(custom_notification_time),
                 _ => None,
             },
             Modal::Location { lat, lon } | Modal::TagLocation { lat, lon, .. } => match index {
@@ -1102,9 +1142,12 @@ impl Modal {
             },
             Modal::IconPicker { .. } => "Search icons",
             Modal::AdjustDates { .. } => "",
+            Modal::CustomNotification { .. } => "Date and time",
             Modal::CreateProject { .. } => "",
             Modal::DeleteProject { .. } => "",
-            Modal::DeleteFolder { .. } | Modal::DeleteContainers { .. } | Modal::DeleteTag { .. } => "",
+            Modal::DeleteFolder { .. }
+            | Modal::DeleteContainers { .. }
+            | Modal::DeleteTag { .. } => "",
             Modal::DeleteTask { .. } => "",
             Modal::HideSubtasks { .. } => "",
             Modal::PriorityScope { .. } => "",
@@ -1132,6 +1175,7 @@ impl Modal {
                 3 => "Nearby radius (km)",
                 4 => "Trash retention (days, 0 keeps forever)",
                 5 => "Forecast tag (a tag path, or empty for none)",
+                6 => "Custom notification time (HH:MM)",
                 _ => "",
             },
             Modal::Location { .. } => match index {
@@ -1162,6 +1206,7 @@ impl Modal {
             Modal::IconPicker { .. } => 540.0,
             Modal::AdjustDates { .. } => 560.0,
             Modal::DeleteContainers { .. } => 520.0,
+            Modal::CustomNotification { .. } => 520.0,
             Modal::Settings { .. } => 880.0,
             Modal::Uninstall { .. } => 560.0,
             _ => 460.0,
@@ -1179,7 +1224,9 @@ fn view_checkbox(theme: super::theme::Theme, selected: bool) -> gpui::Div {
         .flex()
         .items_center()
         .justify_center()
-        .when(selected, |this| this.child(icons::icon(Icon::Check, 9.0, theme.bg)))
+        .when(selected, |this| {
+            this.child(icons::icon(Icon::Check, 9.0, theme.bg))
+        })
 }
 
 /// Where a picker's selection goes.
@@ -1383,11 +1430,7 @@ impl FlowlistApp {
                     let mut lines = div().flex().flex_col().gap_0p5();
                     if let Some((from, to)) = conflict.due {
                         lines = lines.child(div().text_xs().text_color(theme.text_faint).child(
-                            format!(
-                                "Due: {} → {}",
-                                from.to_input_string(),
-                                to.to_input_string()
-                            ),
+                            format!("Due: {} → {}", from.to_input_string(), to.to_input_string()),
                         ));
                     }
                     if let Some((from, to)) = conflict.defer {
@@ -1409,7 +1452,12 @@ impl FlowlistApp {
                             .border_1()
                             .border_color(theme.border)
                             .bg(theme.field)
-                            .child(div().text_sm().text_color(theme.text).child(conflict.title.clone()))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(theme.text)
+                                    .child(conflict.title.clone()),
+                            )
                             .child(lines),
                     );
                 }
@@ -1429,26 +1477,24 @@ impl FlowlistApp {
                     }
                 }
                 let more = projects.len() + folders.len();
-                body = body.child(
-                    div()
-                        .p_2()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(theme.danger)
-                        .bg(theme.field)
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .text_sm()
-                        .text_color(theme.text)
-                        .child(format!(
-                            "{} selected",
-                            super::plural(more, "item", "items")
-                        ))
-                        .children(names.into_iter().map(|name| {
-                            div().text_xs().text_color(theme.text_faint).child(name)
-                        })),
-                );
+                body =
+                    body.child(
+                        div()
+                            .p_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(theme.danger)
+                            .bg(theme.field)
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .text_sm()
+                            .text_color(theme.text)
+                            .child(format!("{} selected", super::plural(more, "item", "items")))
+                            .children(names.into_iter().map(|name| {
+                                div().text_xs().text_color(theme.text_faint).child(name)
+                            })),
+                    );
             }
             if let Modal::DeleteTag { name, .. } = modal {
                 body = body.child(
@@ -1561,10 +1607,7 @@ impl FlowlistApp {
                     },
                 ));
             }
-            if let Modal::HideSubtasks {
-                title, count, ..
-            } = modal
-            {
+            if let Modal::HideSubtasks { title, count, .. } = modal {
                 body = body.child(
                     div()
                         .flex()
@@ -1636,7 +1679,8 @@ impl FlowlistApp {
                         .child(
                             chip("This occurrence", !all, "priority-occurrence").on_click(
                                 cx.listener(|this, _, _, cx| {
-                                    if let Some(Modal::PriorityScope { all, .. }) = &mut this.modal {
+                                    if let Some(Modal::PriorityScope { all, .. }) = &mut this.modal
+                                    {
                                         *all = false;
                                     }
                                     cx.notify();
@@ -1644,14 +1688,15 @@ impl FlowlistApp {
                             ),
                         )
                         .child(
-                            chip("Whole series", all, "priority-series").on_click(
-                                cx.listener(|this, _, _, cx| {
-                                    if let Some(Modal::PriorityScope { all, .. }) = &mut this.modal {
+                            chip("Whole series", all, "priority-series").on_click(cx.listener(
+                                |this, _, _, cx| {
+                                    if let Some(Modal::PriorityScope { all, .. }) = &mut this.modal
+                                    {
                                         *all = true;
                                     }
                                     cx.notify();
-                                }),
-                            ),
+                                },
+                            )),
                         ),
                 );
                 body = body.child(div().text_xs().text_color(theme.text_faint).child(
@@ -2019,9 +2064,7 @@ impl FlowlistApp {
                     let pointer = f32::from(event.position.y);
                     // A click on the thumb belongs to the drag handler; a
                     // click on the rest of the track jumps the thumb there.
-                    if pointer >= thumb_top_window
-                        && pointer <= thumb_top_window + thumb_height
-                    {
+                    if pointer >= thumb_top_window && pointer <= thumb_top_window + thumb_height {
                         return;
                     }
                     let bounds = this.modal_scroll.bounds();
@@ -2031,8 +2074,8 @@ impl FlowlistApp {
                         return;
                     }
                     let content = viewport + max_offset;
-                    let thumb_height = (viewport * viewport / content)
-                        .clamp(SETTINGS_SCROLL_MIN_THUMB, viewport);
+                    let thumb_height =
+                        (viewport * viewport / content).clamp(SETTINGS_SCROLL_MIN_THUMB, viewport);
                     let travel = (viewport - thumb_height).max(1.0);
                     let pointer = f32::from(event.position.y - bounds.origin.y);
                     let thumb_top = (pointer - thumb_height / 2.0).clamp(0.0, travel);
@@ -2158,13 +2201,7 @@ impl FlowlistApp {
                 focused,
                 180.0,
                 cx.listener(move |this, hit: &widgets::TextHit, _, cx| {
-                    this.set_modal_cursor(
-                        index,
-                        hit.index,
-                        hit.extend,
-                        hit.click_count,
-                        cx,
-                    );
+                    this.set_modal_cursor(index, hit.index, hit.extend, hit.click_count, cx);
                 }),
             )
             .into_any_element()
@@ -2175,13 +2212,7 @@ impl FlowlistApp {
                 "",
                 focused,
                 cx.listener(move |this, hit: &widgets::TextHit, _, cx| {
-                    this.set_modal_cursor(
-                        index,
-                        hit.index,
-                        hit.extend,
-                        hit.click_count,
-                        cx,
-                    );
+                    this.set_modal_cursor(index, hit.index, hit.extend, hit.click_count, cx);
                 }),
             )
             .into_any_element()
@@ -2209,7 +2240,6 @@ impl FlowlistApp {
             }))
             .into_any_element()
     }
-
 
     /// A searchable card of named icons and emoji. The search field is a
     /// normal modal field so typing, selection and tab order keep working.
@@ -2243,16 +2273,18 @@ impl FlowlistApp {
                     }
                     count += 1;
                     let active = current == Some(&IconSpec::builtin(candidate));
-                    grid = grid.child(self.icon_choice_cell(
-                        format!("picker-icon:{}", candidate.slug()),
-                        active,
-                        widgets::icon_for_project(candidate, 14.0, theme.text_dim)
-                            .into_any_element(),
-                        candidate.label(),
-                        target.clone(),
-                        IconSpec::builtin(candidate),
-                        cx,
-                    ));
+                    grid = grid.child(
+                        self.icon_choice_cell(
+                            format!("picker-icon:{}", candidate.slug()),
+                            active,
+                            widgets::icon_for_project(candidate, 14.0, theme.text_dim)
+                                .into_any_element(),
+                            candidate.label(),
+                            target.clone(),
+                            IconSpec::builtin(candidate),
+                            cx,
+                        ),
+                    );
                 }
             }
             IconTab::Emoji => {
@@ -2263,18 +2295,20 @@ impl FlowlistApp {
                 {
                     count += 1;
                     let active = current == Some(&IconSpec::Emoji(raw_query.clone()));
-                    grid = grid.child(self.icon_choice_cell(
-                        format!("picker-emoji:{}", raw_query),
-                        active,
-                        div()
-                            .text_size(px(17.))
-                            .child(raw_query.clone())
-                            .into_any_element(),
-                        "Use this emoji",
-                        target.clone(),
-                        IconSpec::Emoji(raw_query.clone()),
-                        cx,
-                    ));
+                    grid = grid.child(
+                        self.icon_choice_cell(
+                            format!("picker-emoji:{}", raw_query),
+                            active,
+                            div()
+                                .text_size(px(17.))
+                                .child(raw_query.clone())
+                                .into_any_element(),
+                            "Use this emoji",
+                            target.clone(),
+                            IconSpec::Emoji(raw_query.clone()),
+                            cx,
+                        ),
+                    );
                 }
                 for item in super::emoji::ALL {
                     if query.is_empty() && count >= 48 {
@@ -2290,18 +2324,20 @@ impl FlowlistApp {
                     count += 1;
                     let spec = IconSpec::Emoji(item.glyph.to_string());
                     let active = current == Some(&spec);
-                    grid = grid.child(self.icon_choice_cell(
-                        format!("picker-emoji:{}", item.glyph),
-                        active,
-                        div()
-                            .text_size(px(17.))
-                            .child(item.glyph)
-                            .into_any_element(),
-                        item.name,
-                        target.clone(),
-                        spec,
-                        cx,
-                    ));
+                    grid = grid.child(
+                        self.icon_choice_cell(
+                            format!("picker-emoji:{}", item.glyph),
+                            active,
+                            div()
+                                .text_size(px(17.))
+                                .child(item.glyph)
+                                .into_any_element(),
+                            item.name,
+                            target.clone(),
+                            spec,
+                            cx,
+                        ),
+                    );
                 }
             }
         }
@@ -2309,44 +2345,29 @@ impl FlowlistApp {
         let icons_target = target.clone();
         let emoji_target = target.clone();
         let icons_tab = div()
-            .on_children_prepainted(
-                self.theme_probe("picker-tab-icons".to_string()),
-            )
+            .on_children_prepainted(self.theme_probe("picker-tab-icons".to_string()))
             .id("picker-tab-icons")
-            .child(widgets::toggle_chip(
-                theme,
-                "Icons",
-                tab == IconTab::Icons,
-            ))
+            .child(widgets::toggle_chip(theme, "Icons", tab == IconTab::Icons))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.set_icon_tab(icons_target.clone(), IconTab::Icons, cx);
             }));
         let emoji_tab = div()
-            .on_children_prepainted(
-                self.theme_probe("picker-tab-emoji".to_string()),
-            )
+            .on_children_prepainted(self.theme_probe("picker-tab-emoji".to_string()))
             .id("picker-tab-emoji")
-            .child(widgets::toggle_chip(
-                theme,
-                "Emoji",
-                tab == IconTab::Emoji,
-            ))
+            .child(widgets::toggle_chip(theme, "Emoji", tab == IconTab::Emoji))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.set_icon_tab(emoji_target.clone(), IconTab::Emoji, cx);
             }));
 
         let mut results = div().flex().flex_col().gap_2();
         if count == 0 {
-            results = results.child(
-                div()
-                    .text_sm()
-                    .text_color(theme.text_faint)
-                    .child(if query.is_empty() {
-                        "Nothing here yet."
-                    } else {
-                        "No matches in this tab."
-                    }),
-            );
+            results = results.child(div().text_sm().text_color(theme.text_faint).child(
+                if query.is_empty() {
+                    "Nothing here yet."
+                } else {
+                    "No matches in this tab."
+                },
+            ));
         } else {
             results = results.child(grid);
             if tab == IconTab::Emoji && query.is_empty() && super::emoji::ALL.len() > 48 {
@@ -2514,9 +2535,9 @@ impl FlowlistApp {
             Some(Modal::Perspective { form }) if form.icon_open => {
                 Some((IconTarget::Perspective, 5))
             }
-            Some(Modal::NewProject { icon_open: true, .. }) => {
-                Some((IconTarget::NewProject, 6))
-            }
+            Some(Modal::NewProject {
+                icon_open: true, ..
+            }) => Some((IconTarget::NewProject, 6)),
             Some(Modal::IconPicker { project, .. }) => {
                 Some((IconTarget::Project(project.clone()), 0))
             }
@@ -2609,7 +2630,12 @@ impl FlowlistApp {
         };
         let due_label = match form.dues.len() {
             0 => "Any".to_string(),
-            1 => form.dues.first().expect("length checked").label().to_string(),
+            1 => form
+                .dues
+                .first()
+                .expect("length checked")
+                .label()
+                .to_string(),
             count => format!("{count} date filters"),
         };
         let planned_label = match form.planned.len() {
@@ -2624,7 +2650,12 @@ impl FlowlistApp {
         };
         let defer_label = match form.defers.len() {
             0 => "Any".to_string(),
-            1 => form.defers.first().expect("length checked").label().to_string(),
+            1 => form
+                .defers
+                .first()
+                .expect("length checked")
+                .label()
+                .to_string(),
             count => format!("{count} defer filters"),
         };
         let fullscreen_label = match form.fullscreen {
@@ -2657,9 +2688,7 @@ impl FlowlistApp {
             .gap_1()
             .child(
                 div()
-                    .on_children_prepainted(
-                        self.theme_probe("modal-inbox".to_string()),
-                    )
+                    .on_children_prepainted(self.theme_probe("modal-inbox".to_string()))
                     .id("modal-inbox-wrap")
                     .child(toggle("Inbox only", form.inbox_only, "modal-inbox"))
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -2723,9 +2752,7 @@ impl FlowlistApp {
             .child(div().text_xs().text_color(theme.text_faint).child("Icon"))
             .child(
                 div()
-                    .on_children_prepainted(
-                        self.theme_probe("perspective-icon-row".to_string()),
-                    )
+                    .on_children_prepainted(self.theme_probe("perspective-icon-row".to_string()))
                     .id("modal-perspective-icon")
                     .flex()
                     .items_center()
@@ -2847,14 +2874,17 @@ impl FlowlistApp {
                     ))),
             );
 
-        let fullscreen_row = div().flex().items_start().gap_2().child(
-            div().flex_1().min_w_0().child(self.perspective_select(
-                ViewField::Fullscreen,
-                fullscreen_label,
-                form.fullscreen.is_some(),
-                cx,
-            )),
-        );
+        let fullscreen_row =
+            div()
+                .flex()
+                .items_start()
+                .gap_2()
+                .child(div().flex_1().min_w_0().child(self.perspective_select(
+                    ViewField::Fullscreen,
+                    fullscreen_label,
+                    form.fullscreen.is_some(),
+                    cx,
+                )));
 
         let layout_row = div()
             .flex()
@@ -3986,7 +4016,11 @@ impl FlowlistApp {
                         }
                     }
                     Err(error) => {
-                        if let Some(Modal::Settings { reminder_wallpaper_note, .. }) = &mut this.modal {
+                        if let Some(Modal::Settings {
+                            reminder_wallpaper_note,
+                            ..
+                        }) = &mut this.modal
+                        {
                             *reminder_wallpaper_note = Some(error.to_string());
                         }
                         this.toast = Some(error.to_string());
@@ -4378,20 +4412,10 @@ impl FlowlistApp {
                                 .flex_col()
                                 .gap_0p5()
                                 .child(div().text_sm().child(title))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(theme.text_faint)
-                                        .child(hint),
-                                ),
+                                .child(div().text_xs().text_color(theme.text_faint).child(hint)),
                         )
                         .when(on_screen, |this| {
-                            this.child(
-                                div()
-                                    .text_xs()
-                                    .text_color(theme.accent)
-                                    .child("On screen"),
-                            )
+                            this.child(div().text_xs().text_color(theme.accent).child("On screen"))
                         }),
                 )
                 .child(
@@ -4433,8 +4457,7 @@ impl FlowlistApp {
                                                 Appearance::Light => *wallpaper_light = None,
                                                 Appearance::Dark => *wallpaper_dark = None,
                                             }
-                                            if wallpaper_light.is_none()
-                                                && wallpaper_dark.is_none()
+                                            if wallpaper_light.is_none() && wallpaper_dark.is_none()
                                             {
                                                 *use_wallpaper = false;
                                             }
@@ -4479,15 +4502,10 @@ impl FlowlistApp {
                     div()
                         .id(super::sid(key))
                         .cursor_pointer()
-                        .child(widgets::toggle_chip(
-                            theme,
-                            format!("{percent}%"),
-                            active,
-                        ))
+                        .child(widgets::toggle_chip(theme, format!("{percent}%"), active))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if let Some(Modal::Settings {
-                                wallpaper_opacity,
-                                ..
+                                wallpaper_opacity, ..
                             }) = &mut this.modal
                             {
                                 *wallpaper_opacity = value;
@@ -4497,12 +4515,15 @@ impl FlowlistApp {
                 );
             }
             background_body = background_body
-                .child(div().text_xs().text_color(theme.text_faint).child("Background opacity"))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .child("Background opacity"),
+                )
                 .child(opacity_row);
         }
-        if use_app_wallpaper
-            && let Some(note) = &app_wallpaper_note
-        {
+        if use_app_wallpaper && let Some(note) = &app_wallpaper_note {
             let success = {
                 let lower = note.to_lowercase();
                 lower.contains("saved") || lower.contains("selected")
@@ -4523,76 +4544,72 @@ impl FlowlistApp {
         let boxes = self.settings_toggle_boxes.clone();
         // One slim row rather than a full card: the toggle belongs with the
         // window's appearance, but it does not need its own heading.
-        let window_card =
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .p_2()
-                .rounded_lg()
-                .border_1()
-                .border_color(theme.border_soft)
-                .bg(theme.field)
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_0p5()
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .child(div().text_sm().child("Window controls"))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(theme.text_faint)
-                                        .child(if traffic_lights {
-                                            "· shown in the header"
-                                        } else {
-                                            "· hidden"
-                                        }),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(theme.text_faint)
-                                .child("Close, minimise and zoom in the header. W toggles them."),
-                        ),
-                )
-                .child(
-                    div()
-                        .on_children_prepainted(move |bounds, _, _| {
-                            if let Some(bounds) = bounds.first() {
-                                boxes.borrow_mut().insert(
-                                    "settings-window-controls".to_string(),
-                                    [
-                                        f32::from(bounds.origin.x),
-                                        f32::from(bounds.origin.y),
-                                        f32::from(bounds.size.width),
-                                        f32::from(bounds.size.height),
-                                    ],
-                                );
-                            }
-                        })
-                        .id("settings-window-controls")
-                        .flex()
-                        .items_center()
-                        .cursor_pointer()
-                        .child(widgets::switch(theme, traffic_lights))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            if let Some(Modal::Settings { traffic_lights, .. }) = &mut this.modal {
-                                *traffic_lights = !*traffic_lights;
-                                // Preview the choice on the window; Cancel
-                                // restores the value the sheet opened with.
-                                this.traffic_lights_visible = *traffic_lights;
-                            }
-                            cx.notify();
-                        })),
-                );
+        let window_card = div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .p_2()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border_soft)
+            .bg(theme.field)
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_0p5()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(div().text_sm().child("Window controls"))
+                            .child(div().text_xs().text_color(theme.text_faint).child(
+                                if traffic_lights {
+                                    "· shown in the header"
+                                } else {
+                                    "· hidden"
+                                },
+                            )),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child("Close, minimise and zoom in the header. W toggles them."),
+                    ),
+            )
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            boxes.borrow_mut().insert(
+                                "settings-window-controls".to_string(),
+                                [
+                                    f32::from(bounds.origin.x),
+                                    f32::from(bounds.origin.y),
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
+                                ],
+                            );
+                        }
+                    })
+                    .id("settings-window-controls")
+                    .flex()
+                    .items_center()
+                    .cursor_pointer()
+                    .child(widgets::switch(theme, traffic_lights))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Settings { traffic_lights, .. }) = &mut this.modal {
+                            *traffic_lights = !*traffic_lights;
+                            // Preview the choice on the window; Cancel
+                            // restores the value the sheet opened with.
+                            this.traffic_lights_visible = *traffic_lights;
+                        }
+                        cx.notify();
+                    })),
+            );
 
         div()
             .flex()
@@ -5171,9 +5188,7 @@ impl FlowlistApp {
         let draft_backdrop = if reminder_use_wallpaper {
             reminder_wallpaper
                 .clone()
-                .map(|path| {
-                    super::reminder::ReminderBackdrop::Wallpaper(path, reminder_opacity)
-                })
+                .map(|path| super::reminder::ReminderBackdrop::Wallpaper(path, reminder_opacity))
                 .unwrap_or_else(|| {
                     super::reminder::ReminderBackdrop::Abstract(if reminder_match {
                         super::background::AbstractStyle::for_theme(theme.kind())
@@ -5227,9 +5242,7 @@ impl FlowlistApp {
         if fullscreen_reminders {
             actions = actions.child(
                 div()
-                    .on_children_prepainted(
-                        self.theme_probe("fullscreen-test".to_string()),
-                    )
+                    .on_children_prepainted(self.theme_probe("fullscreen-test".to_string()))
                     .id("fullscreen-test")
                     .child(widgets::button(theme, "Send full-screen test", false))
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -5517,7 +5530,12 @@ impl FlowlistApp {
                             })),
                     ),
             )
-            .child(div().text_xs().text_color(theme.text_faint).child("Abstract style"));
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("Abstract style"),
+            );
         let mut styles = div().flex().flex_wrap().items_center().gap_1();
         for style in super::background::AbstractStyle::ALL {
             let active = !reminder_match && reminder_style == style;
@@ -5668,8 +5686,7 @@ impl FlowlistApp {
                                         ..
                                     }) = &mut this.modal
                                     {
-                                        *reminder_use_wallpaper =
-                                            !*reminder_use_wallpaper;
+                                        *reminder_use_wallpaper = !*reminder_use_wallpaper;
                                         if *reminder_use_wallpaper {
                                             *reminder_match_theme = false;
                                         }
@@ -5688,11 +5705,7 @@ impl FlowlistApp {
                             div()
                                 .id(super::sid(key))
                                 .cursor_pointer()
-                                .child(widgets::toggle_chip(
-                                    theme,
-                                    format!("{percent}%"),
-                                    active,
-                                ))
+                                .child(widgets::toggle_chip(theme, format!("{percent}%"), active))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     if let Some(Modal::Settings {
                                         reminder_wallpaper_opacity,
@@ -5768,21 +5781,13 @@ impl FlowlistApp {
                                 .flex_col()
                                 .gap_0p5()
                                 .child(div().text_sm().child(title))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(theme.text_faint)
-                                        .child(hint),
-                                ),
+                                .child(div().text_xs().text_color(theme.text_faint).child(hint)),
                         )
                         .when(
                             reminder_wallpaper_separate && theme.appearance() == mode,
                             |this| {
                                 this.child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(theme.accent)
-                                        .child("On screen"),
+                                    div().text_xs().text_color(theme.accent).child("On screen"),
                                 )
                             },
                         ),
@@ -5827,9 +5832,7 @@ impl FlowlistApp {
                                                 Appearance::Light => {
                                                     *reminder_wallpaper_light = None
                                                 }
-                                                Appearance::Dark => {
-                                                    *reminder_wallpaper_dark = None
-                                                }
+                                                Appearance::Dark => *reminder_wallpaper_dark = None,
                                             }
                                             let left = reminder_wallpaper_light.is_some()
                                                 || (*reminder_wallpaper_separate
@@ -5879,6 +5882,93 @@ impl FlowlistApp {
                     .child(note.clone()),
             );
         }
+        let default_defer = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                default_defer_notification: true,
+                ..
+            })
+        );
+        let default_planned = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                default_planned_notification: true,
+                ..
+            })
+        );
+        let default_latest = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                default_latest_start_notification: true,
+                ..
+            })
+        );
+        let default_due = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                default_due_notification: true,
+                ..
+            })
+        );
+        let mut defaults_body = div().flex().flex_col().gap_2();
+        for (id, label, enabled) in [
+            ("default-defer-notification", "Defer", default_defer),
+            ("default-planned-notification", "Planned", default_planned),
+            (
+                "default-latest-start-notification",
+                "Latest start",
+                default_latest,
+            ),
+            ("default-due-notification", "Due", default_due),
+        ] {
+            defaults_body = defaults_body.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(div().flex_1().text_sm().child(label))
+                    .child(
+                        div()
+                            .on_children_prepainted(self.theme_probe(id.to_string()))
+                            .id(id)
+                            .child(widgets::switch(theme, enabled))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(Modal::Settings {
+                                    default_defer_notification,
+                                    default_planned_notification,
+                                    default_latest_start_notification,
+                                    default_due_notification,
+                                    ..
+                                }) = &mut this.modal
+                                {
+                                    match id {
+                                        "default-defer-notification" => {
+                                            *default_defer_notification =
+                                                !*default_defer_notification
+                                        }
+                                        "default-planned-notification" => {
+                                            *default_planned_notification =
+                                                !*default_planned_notification
+                                        }
+                                        "default-latest-start-notification" => {
+                                            *default_latest_start_notification =
+                                                !*default_latest_start_notification
+                                        }
+                                        _ => *default_due_notification = !*default_due_notification,
+                                    }
+                                }
+                                cx.notify();
+                            })),
+                    ),
+            );
+        }
+        defaults_body = defaults_body.child(self.render_modal_field(6, cx));
+        let default_notifications_card = self.settings_card(
+            "Default notifications",
+            Some("Automatic alerts for every item, unless removed from that item. Latest start is due minus estimate. The time applies to date-only custom notifications."),
+            defaults_body,
+        );
         let reminder_background_card = self.settings_card(
             "Reminder background",
             Some(
@@ -5891,6 +5981,7 @@ impl FlowlistApp {
             .flex_col()
             .gap_3()
             .child(reminders_card)
+            .child(default_notifications_card)
             .child(reminder_background_card)
             .into_any_element()
     }
@@ -6306,19 +6397,14 @@ impl FlowlistApp {
             let mut body = div().flex().flex_col().gap_3();
             if let Some(qr) = payload.as_deref().and_then(qr_code_block) {
                 body = body.child(
-                    div()
-                        .flex()
-                        .items_start()
-                        .gap_4()
-                        .child(qr)
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_2()
-                                .child(code_row)
-                                .child(addresses_column),
-                        ),
+                    div().flex().items_start().gap_4().child(qr).child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(code_row)
+                            .child(addresses_column),
+                    ),
                 );
             } else {
                 body = body.child(code_row).child(addresses_column);
@@ -6644,12 +6730,7 @@ impl FlowlistApp {
                     ))
                 })
                 .when(!tag_items.is_empty(), |this| {
-                    this.child(self.sidebar_matrix_group(
-                        SidebarGroup::Tags,
-                        "TAGS",
-                        tag_items,
-                        cx,
-                    ))
+                    this.child(self.sidebar_matrix_group(SidebarGroup::Tags, "TAGS", tag_items, cx))
                 }),
         )
         .into_any_element()
@@ -6733,8 +6814,7 @@ impl FlowlistApp {
             .child(row);
         if open {
             for (key, label, related, ancestors) in items {
-                let parent_hidden =
-                    ancestors.iter().any(|ancestor| sidebar.is_hidden(ancestor));
+                let parent_hidden = ancestors.iter().any(|ancestor| sidebar.is_hidden(ancestor));
                 let visible = !sidebar.is_hidden(&key) && !parent_hidden;
                 let enabled = SidebarOptions::can_hide(&key) && !parent_hidden;
                 container = container.child(self.sidebar_matrix_row(
@@ -6824,9 +6904,7 @@ impl FlowlistApp {
             theme.text
         };
         div()
-            .id(gpui::ElementId::Name(
-                format!("sidebar-row-{key}").into(),
-            ))
+            .id(gpui::ElementId::Name(format!("sidebar-row-{key}").into()))
             .w_full()
             .flex()
             .items_center()
@@ -6893,7 +6971,9 @@ impl FlowlistApp {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .when(checked, |this| this.child(icons::icon(Icon::Check, 10.0, color))),
+                    .when(checked, |this| {
+                        this.child(icons::icon(Icon::Check, 10.0, color))
+                    }),
             )
             .id(gpui::ElementId::Name(key_for_id.into()))
     }
@@ -7251,17 +7331,13 @@ fn qr_code_block(payload: &str) -> Option<AnyElement> {
         .h(px(modules as f32 * cell));
     for y in 0..modules {
         for x in 0..modules {
-            grid = grid.child(
-                div()
-                    .w(px(cell))
-                    .h(px(cell))
-                    .flex_shrink_0()
-                    .bg(if code.get_module(x, y) {
-                        gpui::black()
-                    } else {
-                        gpui::white()
-                    }),
-            );
+            grid = grid.child(div().w(px(cell)).h(px(cell)).flex_shrink_0().bg(
+                if code.get_module(x, y) {
+                    gpui::black()
+                } else {
+                    gpui::white()
+                },
+            ));
         }
     }
     Some(

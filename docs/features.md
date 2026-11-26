@@ -226,8 +226,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Multi-select, range select, keyboard navigation
 - [x] Batch task editing: project, tags, defer/planned/due, priority, flag and
       estimate apply to every selected task as one undo step
-- [x] Custom notification schedules per task: Due, Defer/Available and Planned
-      anchors with signed offsets, editable from the inspector, CLI and MCP
+- [x] Full notification model: per-type defaults for Defer, Planned, Latest
+      Start and Due; per-item remove/restore; relative alerts; absolute custom
+      notifications; project and action-group schedules; CLI/MCP access.
+      Per-date floating/fixed time zones are still a date-model gap.
 - [x] Forecast tag and flagged undated actions: a designated tag and an
       optional Flagged section above the usual Forecast buckets
 - [x] Complete/reopen, flag/unflag, delete, undo/redo and post-delete focus

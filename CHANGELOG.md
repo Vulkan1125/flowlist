@@ -2,15 +2,22 @@
 
 ## Unreleased
 
+- **Notification parity, except date time zones.** Default notifications can be
+  enabled separately for Defer, Planned, Latest Start and Due. Each task or
+  project can remove or restore any default, add relative alerts or absolute
+  custom notifications, and see the schedule in the inspector. Latest Start is
+  due minus estimate. Custom notifications use a configurable default time.
+  CLI/MCP expose the same fields. Flowlist still schedules in the system time
+  zone; per-date floating/fixed time zones remain a date-model upgrade.
 - **Forecast tag and flagged contents.** Choose a Forecast tag in Settings →
   Workflow; its undated actions get a Forecast section above Past. A new
   **Show flagged undated tasks** switch adds a Flagged section. On-hold project
   deadlines already appear with the project rows.
 - **Custom notification schedules.** A task can carry its own alerts, each
   anchored to Due, Defer/Available or Planned with a signed minute offset.
-  Examples: `due:-15m`, `defer`, `planned:+1h`. Tasks with alerts replace the
-  default due reminder; project/tag context is included in the notification.
-  The inspector has an **Alerts** field, and the CLI/MCP accept `alerts`.
+  Examples: `due:-15m`, `defer`, `planned:+1h`. Alerts are extra to the default
+  notifications, and project/tag context is included in the notification. The
+  inspector has an **Alerts** field, and the CLI/MCP accept `alerts`.
 - **Rupee icon.** Projects can use the rupee symbol from the icon picker.
 - **Batch task editing.** Select two or more tasks and the inspector becomes a
   batch editor for project, tags, defer/planned/due, priority, flag and

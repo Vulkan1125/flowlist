@@ -132,9 +132,10 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Projects in Forecast** — project rows on their due/defer/planned dates,
       above the day's task rows, with status, progress, calendar pills and
       Past/Future support.
-- [x] **Full notification model** — per-task Due/Defer/Planned alerts with
-      signed offsets, inspector/CLI/MCP editing, and project/tag context in the
-      notification body.
+- [x] **Full notification model** — per-type Defer/Planned/Latest Start/Due
+      defaults, per-item remove/restore, relative alerts, absolute custom
+      notifications, project/action-group schedules and CLI/MCP access. Per-date
+      floating/fixed time zones remain a date-model gap.
 - [x] **Batch editing** — select several tasks and edit tags, project,
       defer/planned/due, priority, flag and estimate in the inspector as one
       undo step. Strict dates make the batch atomic.
@@ -615,8 +616,9 @@ product comparison, not a claim of feature parity.
 - **Review sidebar calendar** — the Review perspective pairs a calendar of
   upcoming review dates with the project list. Add a mini calendar to our
   review dashboard.
-- **Latest Start Date** — derived from due date minus estimated duration.
-  Useful in Forecast and as a sort key; depends on reliable estimates.
+- **Latest Start in Forecast and sorting** — the notification already fires at
+  due minus estimate. The same derived date is not yet a Forecast filter or a
+  sort key.
 - **Custom layouts / compact rows** — per-perspective density, columns and row
   fields. Keep this behind the design pass so it does not fragment the one
   visual language.
@@ -629,8 +631,10 @@ product comparison, not a claim of feature parity.
 - **System capture surfaces** — Quick Entry, Mail Drop, clippings and
   share-sheet capture. Background capture is already in the backlog; treat
   Mail Drop as a separate import path.
-- **Notifications and due reminders** — the reference app alerts on due/defer
-  times. Flowlist is local-first and has no notification scheduler yet.
+- **Per-date time zones** — OmniFocus dates can float with the wall clock or be
+  fixed to a time zone. Flowlist stores one instant and schedules in the system
+  time zone. This needs a date-model and sync change across macOS and Android,
+  not only a notification change.
 
 ### Explicitly skipped for now
 

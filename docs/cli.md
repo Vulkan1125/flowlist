@@ -51,10 +51,13 @@ flowlist add [OPTIONS] [TEXT]...
 ```
 
 Useful flags: `-p/--project`, `-t/--tag` (repeatable), `--due`, `--defer`,
-`--estimate`, `--repeat`, `--note`, `--flag`, `--parent`, `--alerts` and
-`--attach` (repeatable; stores a reference to a local file path or an http(s)
-link). Alerts use `due` / `defer` / `planned` with signed offsets, for example
-`--alerts 'due:-15m, defer, planned:+1h'`.
+`--estimate`, `--repeat`, `--note`, `--flag`, `--parent`, `--alerts`,
+`--remove-notification`, `--custom-notification` and `--attach` (repeatable;
+stores a reference to a local file path or an http(s) link). Alerts use `due` /
+`defer` / `planned` with signed offsets, for example
+`--alerts 'due:-15m, defer, planned:+1h'`. Alerts are extra to the default
+notifications; `--remove-notification due` removes a default. Absolute custom
+notifications accept a date or date/time.
 
 ### `list`
 
@@ -98,11 +101,16 @@ flowlist remove <ID>... [--series]   # move to Trash; --series takes the chain
 flowlist edit <ID> [--title ...] [--notes ...] [--due ...] [--defer ...] \
   [--estimate ...] [--flag|--unflag] [--repeat ...] [--project ...] \
   [--parent ...] [--sequential] [--priority ...] [--alerts ...] \
+  [--remove-notification TYPE]... [--restore-notification TYPE]... \
+  [--custom-notification DATE]... [--clear-custom-notifications] \
   [--attach <PATH>]... [--clear-attachments]
 ```
 
 Use `none` to clear dates, estimates, repeat rules, projects or parents.
-`--alerts none` restores the default due reminder.
+`--alerts none` clears extra relative alerts. Notification types are `defer`,
+`planned`, `latest_start` and `due`. Custom notifications accept a date or
+date/time; date-only values use the custom-notification default time. The same
+notification flags work on `task edit` and `project edit`.
 Completing a repeating task increments the last number in its title, so
 `Week 3 review` spawns `Week 4 review`; `--series` on `remove` moves every
 occurrence of that chain to Trash instead of only the named one.
@@ -179,7 +187,9 @@ flowlist project list [--closed]
 flowlist project edit <ID> [--name ...] [--note ...] [--folder <PATH>|none] \
   [--planned ...] \
   [--due ...] [--defer ...] [--review-days N] [--next-review DATE] \
-  [--sequential] [--icon <ICON>]
+  [--sequential] [--icon <ICON>] [--alerts ...] \
+  [--remove-notification TYPE]... [--restore-notification TYPE]... \
+  [--custom-notification DATE]... [--clear-custom-notifications]
 flowlist project status <ID> active|on-hold|done|dropped
 flowlist project delete <ID>      # tasks move to Trash; undo restores both
 flowlist project review <ID> [--on DATE]

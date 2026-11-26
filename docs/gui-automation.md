@@ -296,6 +296,9 @@ library:
 - `scripts/gui/settings-probe.sh` checks the sectioned sheet, the `⌘1`–`⌘7`
   section shortcuts, Plain's keyboard accent presets, Cancel's undo pair, the
   saved accent pair, relaunch persistence and Reset to ink.
+- `scripts/gui/notification-parity-probe.sh` removes and restores a default
+  notification, adds an absolute custom notification through the sheet, and
+  removes it again from the task inspector.
 
 Both build the release binary first (`cargo build --release`) and compile the
 Swift helpers themselves.

@@ -67,6 +67,47 @@ impl Priority {
     }
 }
 
+/// Built-in notification types derived from an item's dates and estimate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DefaultNotification {
+    Defer,
+    Planned,
+    LatestStart,
+    Due,
+}
+
+impl DefaultNotification {
+    pub const ALL: [DefaultNotification; 4] = [
+        DefaultNotification::Defer,
+        DefaultNotification::Planned,
+        DefaultNotification::LatestStart,
+        DefaultNotification::Due,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            DefaultNotification::Defer => "Defer",
+            DefaultNotification::Planned => "Planned",
+            DefaultNotification::LatestStart => "Latest start",
+            DefaultNotification::Due => "Due",
+        }
+    }
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            DefaultNotification::Defer => "defer",
+            DefaultNotification::Planned => "planned",
+            DefaultNotification::LatestStart => "latest_start",
+            DefaultNotification::Due => "due",
+        }
+    }
+
+    pub fn from_slug(value: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.slug() == value)
+    }
+}
+
 /// Which date a custom notification is anchored to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -231,9 +272,15 @@ pub struct Task {
     /// Use the due date and time instead of `reminder_at`.
     #[serde(default = "default_true")]
     pub reminder_match_due: bool,
-    /// Per-task notification schedules. Empty means the default due reminder.
+    /// Extra relative notification schedules.
     #[serde(default)]
     pub alerts: Vec<TaskAlert>,
+    /// Default notifications removed from this item.
+    #[serde(default)]
+    pub removed_notifications: BTreeSet<DefaultNotification>,
+    /// Absolute custom notifications.
+    #[serde(default)]
+    pub custom_notifications: Vec<Stamp>,
     /// Optional importance, independent of the flag.
     #[serde(default)]
     pub priority: Option<Priority>,
@@ -291,6 +338,8 @@ impl Task {
             reminder_at: None,
             reminder_match_due: true,
             alerts: Vec::new(),
+            removed_notifications: BTreeSet::new(),
+            custom_notifications: Vec::new(),
             priority: None,
             completed: false,
             completed_at: None,
@@ -362,9 +411,6 @@ mod tests {
         );
         assert!(TaskAlert::parse_list("sometime:-5m").is_err());
         assert!(TaskAlert::parse_list("none").unwrap().is_empty());
-        assert_eq!(
-            TaskAlert::parse_list("due:-5m, due:-5m").unwrap().len(),
-            1
-        );
+        assert_eq!(TaskAlert::parse_list("due:-5m, due:-5m").unwrap().len(), 1);
     }
 }

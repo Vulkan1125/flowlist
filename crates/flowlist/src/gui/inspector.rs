@@ -5,10 +5,11 @@ use chrono::{Datelike, Duration, Timelike};
 use gpui::{
     AnyElement, Context, CursorStyle, IntoElement, MouseButton, Window, div, prelude::*, px,
 };
+use std::collections::BTreeSet;
 
 use flowlist_core::command::{Command, TaskPatch};
 use flowlist_core::ids::{ChecklistId, TaskId};
-use flowlist_core::model::{IconSpec, Priority, ProjectStatus};
+use flowlist_core::model::{DefaultNotification, IconSpec, Priority, ProjectStatus};
 use flowlist_core::parse::{parse_duration, parse_stamp};
 use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
 
@@ -19,8 +20,8 @@ use super::drag::{
 use super::icons::Icon;
 use super::widgets::TipExt;
 use super::{
-    BatchDraft, BatchField, ClockUnit, DateField, DatePickerStep, EditField, FlowlistApp, View,
-    icons, widgets,
+    BatchDraft, BatchField, ClockUnit, DateField, DatePickerStep, EditField, FlowlistApp,
+    NotificationTarget, View, icons, widgets,
 };
 
 fn batch_choice(
@@ -135,7 +136,9 @@ fn inherited_date_suffix(
         }
         parent = ancestor.parent.clone();
     }
-    let project = db.effective_project(&task.id).and_then(|id| db.projects.get(&id));
+    let project = db
+        .effective_project(&task.id)
+        .and_then(|id| db.projects.get(&id));
     let value = project.and_then(|project| match field {
         DateField::Defer => project.defer,
         DateField::Planned => project.planned,
@@ -184,11 +187,11 @@ impl FlowlistApp {
                         .font_weight(gpui::FontWeight::SEMIBOLD)
                         .text_color(theme.text_faint)
                         .child("INSPECTOR"),
-                )
+                ),
         );
 
-        panel = panel.on_drag_move::<DragInspectorScroll>(
-            cx.listener(|this, event: &gpui::DragMoveEvent<DragInspectorScroll>, _, cx| {
+        panel = panel.on_drag_move::<DragInspectorScroll>(cx.listener(
+            |this, event: &gpui::DragMoveEvent<DragInspectorScroll>, _, cx| {
                 let Some(drag_offset) = this.inspector_scroll_drag_grab.get() else {
                     return;
                 };
@@ -207,8 +210,8 @@ impl FlowlistApp {
                 this.inspector_scroll
                     .set_offset(gpui::point(px(0.), px(-scroll)));
                 cx.notify();
-            }),
-        );
+            },
+        ));
 
         let content = if self.selected.len() > 1 {
             self.render_batch_inspector(cx).into_any_element()
@@ -297,9 +300,7 @@ impl FlowlistApp {
                 MouseButton::Left,
                 cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
                     let pointer = f32::from(event.position.y);
-                    if pointer >= thumb_top_window
-                        && pointer <= thumb_top_window + thumb_height
-                    {
+                    if pointer >= thumb_top_window && pointer <= thumb_top_window + thumb_height {
                         return;
                     }
                     let bounds = this.inspector_scroll.bounds();
@@ -308,8 +309,8 @@ impl FlowlistApp {
                     if viewport <= 0.0 || max_offset <= 0.0 {
                         return;
                     }
-                    let thumb_height = (viewport * viewport / (viewport + max_offset))
-                        .clamp(MIN_THUMB, viewport);
+                    let thumb_height =
+                        (viewport * viewport / (viewport + max_offset)).clamp(MIN_THUMB, viewport);
                     let travel = (viewport - thumb_height).max(1.0);
                     let pointer = f32::from(event.position.y - bounds.origin.y);
                     let thumb_top = (pointer - thumb_height / 2.0).clamp(0.0, travel);
@@ -361,31 +362,29 @@ impl FlowlistApp {
     fn render_batch_inspector(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let count = self.selected.len();
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .p_3()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .child(format!("{count} tasks selected")),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child("Set a field to change every selected task. Empty fields stay unchanged."),
-            )
-            .child(self.batch_text_field(BatchField::Project, &self.batch_draft.project, cx))
-            .child(self.batch_text_field(BatchField::Tags, &self.batch_draft.tags, cx))
-            .child(self.batch_priority(cx))
-            .child(self.batch_text_field(BatchField::Defer, &self.batch_draft.defer, cx))
-            .child(self.batch_text_field(BatchField::Planned, &self.batch_draft.planned, cx))
-            .child(self.batch_text_field(BatchField::Due, &self.batch_draft.due, cx))
-            .child(self.batch_flag(cx))
-            .child(self.batch_text_field(BatchField::Estimate, &self.batch_draft.estimate, cx));
+        let mut body =
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .p_3()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .child(format!("{count} tasks selected")),
+                )
+                .child(div().text_xs().text_color(theme.text_faint).child(
+                    "Set a field to change every selected task. Empty fields stay unchanged.",
+                ))
+                .child(self.batch_text_field(BatchField::Project, &self.batch_draft.project, cx))
+                .child(self.batch_text_field(BatchField::Tags, &self.batch_draft.tags, cx))
+                .child(self.batch_priority(cx))
+                .child(self.batch_text_field(BatchField::Defer, &self.batch_draft.defer, cx))
+                .child(self.batch_text_field(BatchField::Planned, &self.batch_draft.planned, cx))
+                .child(self.batch_text_field(BatchField::Due, &self.batch_draft.due, cx))
+                .child(self.batch_flag(cx))
+                .child(self.batch_text_field(BatchField::Estimate, &self.batch_draft.estimate, cx));
         if let Some(error) = &self.batch_draft.error {
             body = body.child(
                 div()
@@ -413,25 +412,24 @@ impl FlowlistApp {
                         .child("Clear")
                         .on_click(cx.listener(|this, _, _, cx| this.clear_batch(cx))),
                 )
-                .child(
-                    {
-                        let boxes = self.batch_boxes.clone();
-                        div()
-                            .on_children_prepainted(move |bounds, _, _| {
-                                if let Some(bounds) = bounds.first() {
-                                    boxes.borrow_mut().insert(
-                                        "batch-apply".to_string(),
-                                        [
-                                            f32::from(bounds.origin.x),
-                                            f32::from(bounds.origin.y),
-                                            f32::from(bounds.size.width),
-                                            f32::from(bounds.size.height),
-                                        ],
-                                    );
-                                }
-                            })
-                            .id("batch-apply")
-                            .px_2()
+                .child({
+                    let boxes = self.batch_boxes.clone();
+                    div()
+                        .on_children_prepainted(move |bounds, _, _| {
+                            if let Some(bounds) = bounds.first() {
+                                boxes.borrow_mut().insert(
+                                    "batch-apply".to_string(),
+                                    [
+                                        f32::from(bounds.origin.x),
+                                        f32::from(bounds.origin.y),
+                                        f32::from(bounds.size.width),
+                                        f32::from(bounds.size.height),
+                                    ],
+                                );
+                            }
+                        })
+                        .id("batch-apply")
+                        .px_2()
                         .py_1()
                         .rounded_md()
                         .border_1()
@@ -440,10 +438,9 @@ impl FlowlistApp {
                         .text_color(theme.accent)
                         .cursor_pointer()
                         .hover(|style| style.bg(theme.selection))
-                            .child(format!("Apply to {count} tasks"))
-                            .on_click(cx.listener(|this, _, _, cx| this.apply_batch(cx)))
-                    },
-                ),
+                        .child(format!("Apply to {count} tasks"))
+                        .on_click(cx.listener(|this, _, _, cx| this.apply_batch(cx)))
+                }),
         )
     }
 
@@ -454,8 +451,7 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
-        let editing =
-            self.batch_editing == Some(field) && self.focus == super::FocusArea::Field;
+        let editing = self.batch_editing == Some(field) && self.focus == super::FocusArea::Field;
         let icon = match field {
             BatchField::Project => Icon::Project,
             BatchField::Tags => Icon::Tag,
@@ -529,9 +525,7 @@ impl FlowlistApp {
                     } else {
                         value.to_string()
                     })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.begin_batch_edit(field, cx)
-                    }))
+                    .on_click(cx.listener(move |this, _, _, cx| this.begin_batch_edit(field, cx)))
                     .into_any_element()
             });
         if editing {
@@ -750,8 +744,7 @@ impl FlowlistApp {
                 match found {
                     Some(project) => patch.project = Some(Some(project)),
                     None => {
-                        self.batch_draft.error =
-                            Some(format!("Project not found: {project_text}"));
+                        self.batch_draft.error = Some(format!("Project not found: {project_text}"));
                         cx.notify();
                         return;
                     }
@@ -830,6 +823,278 @@ impl FlowlistApp {
         cx.notify();
     }
 
+    fn inspector_notifications(
+        &self,
+        target: NotificationTarget,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let db = self.store.db();
+        let settings = &db.settings;
+        let (due, defer, planned, estimate, removed, custom, alerts) = match &target {
+            NotificationTarget::Task(id) => {
+                let task = db.tasks.get(id);
+                (
+                    db.effective_due(id),
+                    db.effective_defer(id),
+                    db.effective_planned(id),
+                    task.and_then(|task| task.estimate_min),
+                    task.map(|task| task.removed_notifications.clone())
+                        .unwrap_or_default(),
+                    task.map(|task| task.custom_notifications.clone())
+                        .unwrap_or_default(),
+                    task.map(|task| task.alerts.clone()).unwrap_or_default(),
+                )
+            }
+            NotificationTarget::Project(id) => {
+                let project = db.projects.get(id);
+                (
+                    project.and_then(|project| project.due),
+                    project.and_then(|project| project.defer),
+                    project.and_then(|project| project.planned),
+                    None,
+                    project
+                        .map(|project| project.removed_notifications.clone())
+                        .unwrap_or_default(),
+                    project
+                        .map(|project| project.custom_notifications.clone())
+                        .unwrap_or_default(),
+                    project
+                        .map(|project| project.alerts.clone())
+                        .unwrap_or_default(),
+                )
+            }
+        };
+        let mut body = div().flex().flex_col().gap_1().child(
+            div()
+                .text_xs()
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(theme.text_faint)
+                .child("NOTIFICATIONS"),
+        );
+        for kind in DefaultNotification::ALL {
+            let global = match kind {
+                DefaultNotification::Defer => settings.default_defer_notification,
+                DefaultNotification::Planned => settings.default_planned_notification,
+                DefaultNotification::LatestStart => settings.default_latest_start_notification,
+                DefaultNotification::Due => settings.default_due_notification,
+            };
+            let stamp = match kind {
+                DefaultNotification::Defer => defer,
+                DefaultNotification::Planned => planned,
+                DefaultNotification::LatestStart => {
+                    due.zip(estimate).map(|(due, estimate)| Stamp {
+                        at: due.at - chrono::Duration::minutes(estimate as i64),
+                        has_time: due.has_time,
+                    })
+                }
+                DefaultNotification::Due => due,
+            };
+            let is_removed = removed.contains(&kind);
+            let active = global && !is_removed && stamp.is_some();
+            let status = if !global {
+                "Off in Settings".to_string()
+            } else if is_removed {
+                "Removed".to_string()
+            } else if let Some(stamp) = stamp {
+                human_date(&stamp, now())
+            } else if kind == DefaultNotification::LatestStart {
+                "Needs due and estimate".to_string()
+            } else {
+                "No date".to_string()
+            };
+            let icon = match kind {
+                DefaultNotification::Defer => Icon::DeferDate,
+                DefaultNotification::Planned => Icon::PlannedDate,
+                DefaultNotification::LatestStart => Icon::Clock,
+                DefaultNotification::Due => Icon::DueDate,
+            };
+            let next_target = target.clone();
+            let next_removed = removed.clone();
+            body = body.child(
+                div()
+                    .on_children_prepainted(
+                        self.notification_probe(format!("notification-default:{}", kind.slug())),
+                    )
+                    .id(super::sid(format!("notification-default:{}", kind.slug())))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .opacity(if global { 1.0 } else { 0.55 })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(icons::icon(icon, 11.0, theme.text_faint))
+                    .child(div().flex_1().min_w_0().text_xs().child(kind.label()))
+                    .child(
+                        div()
+                            .truncate()
+                            .text_xs()
+                            .text_color(if active {
+                                theme.text_dim
+                            } else {
+                                theme.text_faint
+                            })
+                            .child(status),
+                    )
+                    .child(widgets::switch(theme, active))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if !global {
+                            this.toast = Some(
+                                "Enable this notification type in Settings → Reminders".into(),
+                            );
+                            cx.notify();
+                            return;
+                        }
+                        let mut next = next_removed.clone();
+                        if is_removed {
+                            next.remove(&kind);
+                        } else {
+                            next.insert(kind);
+                        }
+                        this.update_notifications(next_target.clone(), Some(next), None, None, cx);
+                    })),
+            );
+        }
+        if !alerts.is_empty() {
+            for (index, alert) in alerts.iter().enumerate() {
+                let next_target = target.clone();
+                let mut next_alerts = alerts.clone();
+                next_alerts.remove(index);
+                let next_alerts = next_alerts;
+                let label = format!(
+                    "{} {}",
+                    alert.event.label(),
+                    match alert.offset_minutes {
+                        0 => "now".to_string(),
+                        n if n < 0 => format!("in {}m", n.unsigned_abs()),
+                        n => format!("{}m ago", n),
+                    }
+                );
+                body = body.child(
+                    div()
+                        .on_children_prepainted(
+                            self.notification_probe(format!("notification-alert:{index}")),
+                        )
+                        .id(super::sid(format!("notification-alert:{index}")))
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(icons::icon(Icon::Clock, 11.0, theme.text_faint))
+                        .child(div().flex_1().text_xs().child(label))
+                        .child(
+                            div()
+                                .on_children_prepainted(self.notification_probe(format!(
+                                    "notification-alert-remove:{index}"
+                                )))
+                                .id(super::sid(format!("notification-alert-remove:{index}")))
+                                .cursor_pointer()
+                                .text_color(theme.text_faint)
+                                .hover(|style| style.text_color(theme.text))
+                                .child(icons::icon(Icon::Close, 11.0, theme.text_faint))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.update_notifications(
+                                        next_target.clone(),
+                                        None,
+                                        None,
+                                        Some(next_alerts.clone()),
+                                        cx,
+                                    );
+                                })),
+                        ),
+                );
+            }
+        }
+        if !custom.is_empty() {
+            for (index, stamp) in custom.iter().enumerate() {
+                let next_target = target.clone();
+                let mut next_custom = custom.clone();
+                next_custom.remove(index);
+                let next_custom = next_custom;
+                body = body.child(
+                    div()
+                        .on_children_prepainted(
+                            self.notification_probe(format!("notification-custom:{index}")),
+                        )
+                        .id(super::sid(format!("notification-custom:{index}")))
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(icons::icon(Icon::Calendar, 11.0, theme.text_faint))
+                        .child(div().flex_1().text_xs().child(human_date(stamp, now())))
+                        .child(
+                            div()
+                                .on_children_prepainted(self.notification_probe(format!(
+                                    "notification-custom-remove:{index}"
+                                )))
+                                .id(super::sid(format!("notification-custom-remove:{index}")))
+                                .cursor_pointer()
+                                .text_color(theme.text_faint)
+                                .hover(|style| style.text_color(theme.text))
+                                .child(icons::icon(Icon::Close, 11.0, theme.text_faint))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.update_notifications(
+                                        next_target.clone(),
+                                        None,
+                                        Some(next_custom.clone()),
+                                        None,
+                                        cx,
+                                    );
+                                })),
+                        ),
+                );
+            }
+        }
+        let add_target = target.clone();
+        body = body.child(
+            div()
+                .on_children_prepainted(self.notification_probe("notification-add-custom".into()))
+                .id("notification-add-custom")
+                .text_xs()
+                .text_color(theme.accent)
+                .cursor_pointer()
+                .hover(|style| style.text_color(theme.text))
+                .child("Add custom…")
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.open_modal(
+                        super::modals::Modal::custom_notification(add_target.clone()),
+                        cx,
+                    );
+                })),
+        );
+        body.into_any_element()
+    }
+
+    fn update_notifications(
+        &mut self,
+        target: NotificationTarget,
+        removed: Option<BTreeSet<DefaultNotification>>,
+        custom: Option<Vec<Stamp>>,
+        alerts: Option<Vec<flowlist_core::model::TaskAlert>>,
+        cx: &mut Context<Self>,
+    ) {
+        match target {
+            NotificationTarget::Task(id) => {
+                let patch = TaskPatch {
+                    removed_notifications: removed,
+                    custom_notifications: custom,
+                    alerts,
+                    ..Default::default()
+                };
+                self.execute(Command::UpdateTask { id, patch });
+            }
+            NotificationTarget::Project(id) => {
+                let patch = flowlist_core::command::ProjectPatch {
+                    removed_notifications: removed,
+                    custom_notifications: custom,
+                    alerts,
+                    ..Default::default()
+                };
+                self.execute(Command::UpdateProject { id, patch });
+            }
+        }
+        cx.notify();
+    }
+
     fn render_task_inspector(
         &self,
         id: &TaskId,
@@ -875,9 +1140,7 @@ impl FlowlistApp {
         let planned = db
             .effective_planned(&id)
             .map(|stamp| human_date(&stamp, now()));
-        let due = db
-            .effective_due(&id)
-            .map(|stamp| human_date(&stamp, now()));
+        let due = db.effective_due(&id).map(|stamp| human_date(&stamp, now()));
         let defer_suffix = inherited_date_suffix(db, task, DateField::Defer);
         let planned_suffix = inherited_date_suffix(db, task, DateField::Planned);
         let due_suffix = inherited_date_suffix(db, task, DateField::Due);
@@ -1014,6 +1277,7 @@ impl FlowlistApp {
                 &flowlist_core::model::TaskAlert::format_list(&task.alerts),
                 cx,
             ))
+            .child(self.inspector_notifications(NotificationTarget::Task(id.clone()), cx))
             .child(widgets::divider(theme))
             .when(!draft, |this| {
                 this.child(
@@ -1270,15 +1534,13 @@ impl FlowlistApp {
                     } else {
                         theme.text
                     })
-                    .child(
-                        div()
-                            .when(is_title, |this| this.line_clamp(2))
-                            .child(if value.is_empty() {
-                                placeholder.to_string()
-                            } else {
-                                value.to_string()
-                            }),
-                    )
+                    .child(div().when(is_title, |this| this.line_clamp(2)).child(
+                        if value.is_empty() {
+                            placeholder.to_string()
+                        } else {
+                            value.to_string()
+                        },
+                    ))
                     .on_click(cx.listener(move |this, _, _, cx| this.begin_edit(field, cx)));
                 // A task title gets two lines in the inspector instead of
                 // running off the card; every other field stays one line tall.
@@ -1435,6 +1697,27 @@ impl FlowlistApp {
             );
         }
         row
+    }
+
+    /// Record a notification control's painted bounds for the GUI probe.
+    fn notification_probe(
+        &self,
+        key: String,
+    ) -> impl Fn(Vec<gpui::Bounds<gpui::Pixels>>, &mut Window, &mut gpui::App) + 'static {
+        let boxes = self.notification_boxes.clone();
+        move |bounds, _, _| {
+            if let Some(bounds) = bounds.first() {
+                boxes.borrow_mut().insert(
+                    key.clone(),
+                    [
+                        f32::from(bounds.origin.x),
+                        f32::from(bounds.origin.y),
+                        f32::from(bounds.size.width),
+                        f32::from(bounds.size.height),
+                    ],
+                );
+            }
+        }
     }
 
     /// Record the open field editor's painted bounds for the GUI probe.
@@ -1603,11 +1886,9 @@ impl FlowlistApp {
                             .child(date.day().to_string()),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        if this.date_picker == Some(DateField::Reminder)
-                            && date < local_date(now())
+                        if this.date_picker == Some(DateField::Reminder) && date < local_date(now())
                         {
-                            this.toast =
-                                Some("A reminder must be in the future".to_string());
+                            this.toast = Some("A reminder must be in the future".to_string());
                             cx.notify();
                             return;
                         }
@@ -2128,15 +2409,11 @@ impl FlowlistApp {
                                         format!("Matches due · {due}")
                                     }),
                             )
-                            .child(
-                                div()
-                                    .px_2()
-                                    .child(icons::icon(
-                                        Icon::Calendar,
-                                        12.0,
-                                        theme.text_faint,
-                                    )),
-                            ),
+                            .child(div().px_2().child(icons::icon(
+                                Icon::Calendar,
+                                12.0,
+                                theme.text_faint,
+                            ))),
                     )
                     .child(
                         div()
@@ -2350,9 +2627,7 @@ impl FlowlistApp {
                     &self.field,
                     "Project path",
                     true,
-                    cx.listener(|this, hit: &widgets::TextHit, _, cx| {
-                        this.field_text_hit(hit, cx)
-                    }),
+                    cx.listener(|this, hit: &widgets::TextHit, _, cx| this.field_text_hit(hit, cx)),
                 ))
                 .into_any_element()
         } else {
@@ -2590,6 +2865,7 @@ impl FlowlistApp {
             .when(!tags.is_empty(), |this| {
                 this.child(self.inspector_readonly("Tags", &tags.join(", ")))
             })
+            .child(self.inspector_notifications(NotificationTarget::Project(id.clone()), cx))
             .child(self.inspector_attachments(
                 &attachments,
                 super::modals::AttachmentTarget::Project(id.clone()),
@@ -2777,113 +3053,146 @@ impl FlowlistApp {
 
         if !one_off {
             for (child_id, title, completed, priority) in children {
-            let blocked_by = if completed {
-                None
-            } else {
-                flowlist_core::query::availability::sequence_blocker(db, &child_id)
-                    .and_then(|id| db.tasks.get(&id))
-                    .map(|task| task.title.clone())
-            };
-            let select_id = child_id.clone();
-            let toggle_id = child_id.clone();
-            let separate_id = child_id.clone();
-            let trash_id = child_id.clone();
-            let drag_id = child_id.clone();
-            let drag_title = title.clone();
-            let drop_parent = parent.clone();
-            let drop_target = child_id.clone();
-            let box_id = format!("subtask:{child_id}");
-            let boxes = self.inspector_boxes.clone();
-            let separate_boxes = self.inspector_boxes.clone();
-            let separate_key = format!("separate:{child_id}");
-            let delete_boxes = self.inspector_boxes.clone();
-            let delete_key = format!("delete:{child_id}");
-            let grip_boxes = self.inspector_boxes.clone();
-            let grip_key = format!("grip:{child_id}");
-            let blocked = blocked_by.clone();
-            let toggle_tip = if let Some(blocker) = &blocked_by {
-                format!("Finish “{blocker}” first — this is a sequential list")
-            } else if completed {
-                "Mark subtask incomplete".to_string()
-            } else {
-                "Mark subtask complete".to_string()
-            };
-            let row = div()
-                .on_children_prepainted(move |bounds, _, _| {
-                    if let Some(bounds) = bounds.first() {
-                        boxes.borrow_mut().insert(
-                            box_id.clone(),
-                            [
-                                f32::from(bounds.origin.x),
-                                f32::from(bounds.origin.y),
-                                f32::from(bounds.size.width),
-                                f32::from(bounds.size.height),
-                            ],
-                        );
-                    }
-                })
-                .id(super::sid(format!("subtask:{child_id}")))
-                .flex()
-                .items_center()
-                .gap_2()
-                .min_h(px(26.))
-                .px_1()
-                .rounded_sm()
-                .hover(|style| style.bg(theme.hover))
-                .child(
-                    div()
-                        .id(super::sid(format!("subtask-toggle:{child_id}")))
-                        .flex_shrink_0()
-                        .when(blocked_by.is_some(), |this| this.opacity(0.45))
-                        .flow_tip(self, cx, theme, toggle_tip)
-                        .child(widgets::checkbox(
-                            theme,
-                            completed,
-                            theme.accent,
-                            priority.map(|priority| {
-                                super::theme::priority_color(theme, priority)
-                            }),
-                        ))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            cx.stop_propagation();
-                            if let Some(blocker) = blocked.clone() {
-                                this.toast = Some(format!(
-                                    "Finish “{blocker}” first — this is a sequential list"
-                                ));
+                let blocked_by = if completed {
+                    None
+                } else {
+                    flowlist_core::query::availability::sequence_blocker(db, &child_id)
+                        .and_then(|id| db.tasks.get(&id))
+                        .map(|task| task.title.clone())
+                };
+                let select_id = child_id.clone();
+                let toggle_id = child_id.clone();
+                let separate_id = child_id.clone();
+                let trash_id = child_id.clone();
+                let drag_id = child_id.clone();
+                let drag_title = title.clone();
+                let drop_parent = parent.clone();
+                let drop_target = child_id.clone();
+                let box_id = format!("subtask:{child_id}");
+                let boxes = self.inspector_boxes.clone();
+                let separate_boxes = self.inspector_boxes.clone();
+                let separate_key = format!("separate:{child_id}");
+                let delete_boxes = self.inspector_boxes.clone();
+                let delete_key = format!("delete:{child_id}");
+                let grip_boxes = self.inspector_boxes.clone();
+                let grip_key = format!("grip:{child_id}");
+                let blocked = blocked_by.clone();
+                let toggle_tip = if let Some(blocker) = &blocked_by {
+                    format!("Finish “{blocker}” first — this is a sequential list")
+                } else if completed {
+                    "Mark subtask incomplete".to_string()
+                } else {
+                    "Mark subtask complete".to_string()
+                };
+                let row = div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            boxes.borrow_mut().insert(
+                                box_id.clone(),
+                                [
+                                    f32::from(bounds.origin.x),
+                                    f32::from(bounds.origin.y),
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
+                                ],
+                            );
+                        }
+                    })
+                    .id(super::sid(format!("subtask:{child_id}")))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .min_h(px(26.))
+                    .px_1()
+                    .rounded_sm()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(
+                        div()
+                            .id(super::sid(format!("subtask-toggle:{child_id}")))
+                            .flex_shrink_0()
+                            .when(blocked_by.is_some(), |this| this.opacity(0.45))
+                            .flow_tip(self, cx, theme, toggle_tip)
+                            .child(widgets::checkbox(
+                                theme,
+                                completed,
+                                theme.accent,
+                                priority
+                                    .map(|priority| super::theme::priority_color(theme, priority)),
+                            ))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                if let Some(blocker) = blocked.clone() {
+                                    this.toast = Some(format!(
+                                        "Finish “{blocker}” first — this is a sequential list"
+                                    ));
+                                    cx.notify();
+                                    return;
+                                }
+                                this.toggle_complete(toggle_id.clone(), cx);
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id(super::sid(format!("subtask-title:{child_id}")))
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_sm()
+                            .text_color(if completed {
+                                theme.text_faint
+                            } else {
+                                theme.text
+                            })
+                            .when(completed, |this| this.line_through())
+                            .child(title)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.select_only(select_id.clone());
+                                this.show_inspector = true;
                                 cx.notify();
-                                return;
-                            }
-                            this.toggle_complete(toggle_id.clone(), cx);
-                        })),
-                )
-                .child(
-                    div()
-                        .id(super::sid(format!("subtask-title:{child_id}")))
-                        .flex_1()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .text_sm()
-                        .text_color(if completed {
-                            theme.text_faint
-                        } else {
-                            theme.text
-                        })
-                        .when(completed, |this| this.line_through())
-                        .child(title)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.select_only(select_id.clone());
-                            this.show_inspector = true;
-                            cx.notify();
-                        })),
-                )
-                .when(!one_off, |this| {
-                    this.child(
+                            })),
+                    )
+                    .when(!one_off, |this| {
+                        this.child(
+                            div()
+                                .on_children_prepainted(move |bounds, _, _| {
+                                    if let Some(bounds) = bounds.first() {
+                                        separate_boxes.borrow_mut().insert(
+                                            separate_key.clone(),
+                                            [
+                                                f32::from(bounds.origin.x),
+                                                f32::from(bounds.origin.y),
+                                                f32::from(bounds.size.width),
+                                                f32::from(bounds.size.height),
+                                            ],
+                                        );
+                                    }
+                                })
+                                .id(super::sid(format!("separate-subtask:{child_id}")))
+                                .flex_shrink_0()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .cursor_pointer()
+                                .hover(|style| style.text_color(theme.text))
+                                .flow_tip(
+                                    self,
+                                    cx,
+                                    theme,
+                                    "Move this task out from under its parent",
+                                )
+                                .child("Separate")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.promote_subtask(separate_id.clone(), cx);
+                                })),
+                        )
+                    })
+                    .child(
                         div()
                             .on_children_prepainted(move |bounds, _, _| {
                                 if let Some(bounds) = bounds.first() {
-                                    separate_boxes.borrow_mut().insert(
-                                        separate_key.clone(),
+                                    delete_boxes.borrow_mut().insert(
+                                        delete_key.clone(),
                                         [
                                             f32::from(bounds.origin.x),
                                             f32::from(bounds.origin.y),
@@ -2893,99 +3202,65 @@ impl FlowlistApp {
                                     );
                                 }
                             })
-                            .id(super::sid(format!("separate-subtask:{child_id}")))
+                            .id(super::sid(format!("delete-subtask:{child_id}")))
                             .flex_shrink_0()
+                            .ml(px(10.))
+                            .w(px(18.))
+                            .text_center()
                             .text_xs()
                             .text_color(theme.text_faint)
                             .cursor_pointer()
-                            .hover(|style| style.text_color(theme.text))
-                            .flow_tip(
-                                self,
-                                cx,
-                                theme,
-                                "Move this task out from under its parent",
-                            )
-                            .child("Separate")
+                            .hover(|style| style.text_color(theme.danger))
+                            .flow_tip(self, cx, theme, "Move subtask to Trash")
+                            .child(icons::icon(Icon::Close, 12.0, theme.text_faint))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
-                                this.promote_subtask(separate_id.clone(), cx);
+                                this.trash_subtask(trash_id.clone(), cx);
                             })),
                     )
-                })
-                .child(
-                    div()
-                        .on_children_prepainted(move |bounds, _, _| {
-                            if let Some(bounds) = bounds.first() {
-                                delete_boxes.borrow_mut().insert(
-                                    delete_key.clone(),
-                                    [
-                                        f32::from(bounds.origin.x),
-                                        f32::from(bounds.origin.y),
-                                        f32::from(bounds.size.width),
-                                        f32::from(bounds.size.height),
-                                    ],
-                                );
-                            }
-                        })
-                        .id(super::sid(format!("delete-subtask:{child_id}")))
-                        .flex_shrink_0()
-                        .ml(px(10.))
-                        .w(px(18.))
-                        .text_center()
-                        .text_xs()
-                        .text_color(theme.text_faint)
-                        .cursor_pointer()
-                        .hover(|style| style.text_color(theme.danger))
-                        .flow_tip(self, cx, theme, "Move subtask to Trash")
-                        .child(icons::icon(Icon::Close, 12.0, theme.text_faint))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            cx.stop_propagation();
-                            this.trash_subtask(trash_id.clone(), cx);
-                        })),
-                )
-                .child(
-                    div()
-                        .on_children_prepainted(move |bounds, _, _| {
-                            if let Some(bounds) = bounds.first() {
-                                grip_boxes.borrow_mut().insert(
-                                    grip_key.clone(),
-                                    [
-                                        f32::from(bounds.origin.x),
-                                        f32::from(bounds.origin.y),
-                                        f32::from(bounds.size.width),
-                                        f32::from(bounds.size.height),
-                                    ],
-                                );
-                            }
-                        })
-                        .id(super::sid(format!("subtask-grip:{child_id}")))
-                        .flex_shrink_0()
-                        .w(px(22.))
-                        .h(px(22.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor(CursorStyle::OpenHand)
-                        .text_xs()
-                        .text_color(theme.text_faint)
-                        .flow_tip(self, cx, theme, "Drag to reorder")
-                        .child("⠿"),
-                )
-                .on_drag(
-                    DragTask::task(drag_id, drag_title),
-                    move |payload, position, window, cx| {
-                        super::drag::ghost(payload, position, window, cx, theme)
-                    },
-                )
-                .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
-                    this.drop_subtask_beside(
-                        drop_parent.clone(),
-                        drop_target.clone(),
-                        payload,
-                        cx,
+                    .child(
+                        div()
+                            .on_children_prepainted(move |bounds, _, _| {
+                                if let Some(bounds) = bounds.first() {
+                                    grip_boxes.borrow_mut().insert(
+                                        grip_key.clone(),
+                                        [
+                                            f32::from(bounds.origin.x),
+                                            f32::from(bounds.origin.y),
+                                            f32::from(bounds.size.width),
+                                            f32::from(bounds.size.height),
+                                        ],
+                                    );
+                                }
+                            })
+                            .id(super::sid(format!("subtask-grip:{child_id}")))
+                            .flex_shrink_0()
+                            .w(px(22.))
+                            .h(px(22.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .cursor(CursorStyle::OpenHand)
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .flow_tip(self, cx, theme, "Drag to reorder")
+                            .child("⠿"),
                     )
-                }));
-            section = section.child(row);
+                    .on_drag(
+                        DragTask::task(drag_id, drag_title),
+                        move |payload, position, window, cx| {
+                            super::drag::ghost(payload, position, window, cx, theme)
+                        },
+                    )
+                    .on_drop::<DragTask>(cx.listener(move |this, payload: &DragTask, _, cx| {
+                        this.drop_subtask_beside(
+                            drop_parent.clone(),
+                            drop_target.clone(),
+                            payload,
+                            cx,
+                        )
+                    }));
+                section = section.child(row);
             }
         }
 
@@ -3027,12 +3302,7 @@ impl FlowlistApp {
                                         "Mark one-off complete"
                                     },
                                 )
-                                .child(widgets::checkbox(
-                                    theme,
-                                    *completed,
-                                    theme.accent,
-                                    None,
-                                ))
+                                .child(widgets::checkbox(theme, *completed, theme.accent, None))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
                                     this.toggle_checklist_item(
@@ -3127,16 +3397,13 @@ impl FlowlistApp {
         }
 
         if total == 0 {
-            section = section.child(
-                div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child(if one_off {
-                        "No one-off steps yet."
-                    } else {
-                        "No subtasks yet."
-                    }),
-            );
+            section = section.child(div().text_xs().text_color(theme.text_faint).child(
+                if one_off {
+                    "No one-off steps yet."
+                } else {
+                    "No subtasks yet."
+                },
+            ));
         }
 
         // And separate the last subtask from the add field.
@@ -3201,10 +3468,9 @@ impl FlowlistApp {
                 this.favicon_requests.borrow_mut().remove(&host);
                 match image {
                     Some(image) => {
-                        this.favicons.borrow_mut().insert(
-                            host.clone(),
-                            std::sync::Arc::new(image),
-                        );
+                        this.favicons
+                            .borrow_mut()
+                            .insert(host.clone(), std::sync::Arc::new(image));
                     }
                     None => {
                         this.favicon_misses.borrow_mut().insert(host.clone());

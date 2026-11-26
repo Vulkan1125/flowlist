@@ -89,3 +89,85 @@ fn the_cli_sees_a_write_from_a_long_lived_store() {
     gui.undo().unwrap();
     assert!(!gui.db().tasks.values().next().unwrap().completed);
 }
+#[test]
+fn notification_flags_round_trip_through_the_cli() {
+    let (_dir, paths) = library();
+    let date = (chrono::Utc::now() + chrono::Duration::days(2))
+        .format("%Y-%m-%d 10:00")
+        .to_string();
+    let created = json(&run_cli(
+        &paths.root,
+        &[
+            "add",
+            "Notify me",
+            "--due",
+            "2026-12-01 17:00",
+            "--estimate",
+            "1h",
+            "--alerts",
+            "due:-30m, defer",
+            "--remove-notification",
+            "planned",
+            "--custom-notification",
+            &date,
+            "--json",
+        ],
+    ));
+    assert_eq!(created["alerts_text"], "due:-30m, defer");
+    assert_eq!(
+        created["removed_notifications"],
+        serde_json::json!(["planned"])
+    );
+    assert!(
+        created["custom_notifications"][0]
+            .as_str()
+            .unwrap()
+            .contains("10:00")
+    );
+
+    let id = created["id"].as_str().unwrap().to_string();
+    let restored = json(&run_cli(
+        &paths.root,
+        &[
+            "edit",
+            &id,
+            "--restore-notification",
+            "planned",
+            "--clear-custom-notifications",
+            "--json",
+        ],
+    ));
+    assert_eq!(restored["removed_notifications"], serde_json::json!([]));
+    assert_eq!(restored["custom_notifications"], serde_json::json!([]));
+
+    let project = json(&run_cli(
+        &paths.root,
+        &["project", "add", "Notify project", "--json"],
+    ));
+    let project_id = project["id"].as_str().unwrap().to_string();
+    let edited = json(&run_cli(
+        &paths.root,
+        &[
+            "project",
+            "edit",
+            &project_id,
+            "--due",
+            "2026-12-02 09:00",
+            "--remove-notification",
+            "due",
+            "--custom-notification",
+            "2026-12-03",
+            "--alerts",
+            "due:+15m",
+            "--json",
+        ],
+    ));
+    assert_eq!(edited["removed_notifications"], serde_json::json!(["due"]));
+    assert_eq!(edited["alerts_text"], "due:+15m");
+    assert!(
+        edited["custom_notifications"][0]
+            .as_str()
+            .unwrap()
+            .starts_with("2026-12-03")
+    );
+}

@@ -16,8 +16,8 @@ use flowlist_core::command::{
 use flowlist_core::db::{ContainerPosition, Db, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    BuiltinPerspective, Condition, FilterNode, Geo, GroupBy, IconSpec, Perspective, Priority,
-    ProjectKind, ProjectStatus, SortBy, TagStatus, TaskAlert, TaskStatus,
+    BuiltinPerspective, Condition, DefaultNotification, FilterNode, Geo, GroupBy, IconSpec,
+    Perspective, Priority, ProjectKind, ProjectStatus, SortBy, TagStatus, TaskAlert, TaskStatus,
 };
 use flowlist_core::parse::{parse_duration, parse_repeat, parse_stamp};
 use flowlist_core::paths::DataPaths;
@@ -264,6 +264,27 @@ impl Server {
                 TaskAlert::parse_list(&alerts).map_err(|error| anyhow!(error))?
             };
         }
+        if let Some(values) = args.get("removed_notifications").and_then(Value::as_array) {
+            for value in values {
+                let slug = value
+                    .as_str()
+                    .ok_or_else(|| anyhow!("removed_notifications values must be strings"))?;
+                let kind = DefaultNotification::from_slug(slug)
+                    .ok_or_else(|| anyhow!("Unknown notification type: {slug}"))?;
+                new_task.removed_notifications.insert(kind);
+            }
+        }
+        if let Some(values) = args.get("custom_notifications").and_then(Value::as_array) {
+            for value in values {
+                let text = value
+                    .as_str()
+                    .ok_or_else(|| anyhow!("custom_notifications values must be strings"))?;
+                new_task
+                    .custom_notifications
+                    .push(parse_stamp(text, reference)?);
+            }
+            new_task.custom_notifications.sort_by_key(|stamp| stamp.at);
+        }
         if let Some(repeat) = string_arg(args, "repeat") {
             new_task.repeat = Some(parse_repeat(&repeat, reference)?);
         }
@@ -321,6 +342,29 @@ impl Server {
             } else {
                 TaskAlert::parse_list(&alerts).map_err(|error| anyhow!(error))?
             });
+        }
+        if let Some(values) = args.get("removed_notifications").and_then(Value::as_array) {
+            let mut removed = std::collections::BTreeSet::new();
+            for value in values {
+                let slug = value
+                    .as_str()
+                    .ok_or_else(|| anyhow!("removed_notifications values must be strings"))?;
+                let kind = DefaultNotification::from_slug(slug)
+                    .ok_or_else(|| anyhow!("Unknown notification type: {slug}"))?;
+                removed.insert(kind);
+            }
+            patch.removed_notifications = Some(removed);
+        }
+        if let Some(values) = args.get("custom_notifications").and_then(Value::as_array) {
+            let mut custom = Vec::new();
+            for value in values {
+                let text = value
+                    .as_str()
+                    .ok_or_else(|| anyhow!("custom_notifications values must be strings"))?;
+                custom.push(parse_stamp(text, reference)?);
+            }
+            custom.sort_by_key(|stamp| stamp.at);
+            patch.custom_notifications = Some(custom);
         }
         if let Some(repeat) = repeat_patch(args, reference)? {
             patch.repeat = Some(repeat);
@@ -851,6 +895,36 @@ impl Server {
         } else if args.get("attachments").is_some() {
             patch.attachments = Some(string_array(args, "attachments"));
         }
+        if let Some(alerts) = string_arg(args, "alerts") {
+            patch.alerts = Some(if alerts.eq_ignore_ascii_case("none") {
+                Vec::new()
+            } else {
+                TaskAlert::parse_list(&alerts).map_err(|error| anyhow!(error))?
+            });
+        }
+        if let Some(values) = args.get("removed_notifications").and_then(Value::as_array) {
+            let mut removed = std::collections::BTreeSet::new();
+            for value in values {
+                let slug = value
+                    .as_str()
+                    .ok_or_else(|| anyhow!("removed_notifications values must be strings"))?;
+                let kind = DefaultNotification::from_slug(slug)
+                    .ok_or_else(|| anyhow!("Unknown notification type: {slug}"))?;
+                removed.insert(kind);
+            }
+            patch.removed_notifications = Some(removed);
+        }
+        if let Some(values) = args.get("custom_notifications").and_then(Value::as_array) {
+            let mut custom = Vec::new();
+            for value in values {
+                let text = value
+                    .as_str()
+                    .ok_or_else(|| anyhow!("custom_notifications values must be strings"))?;
+                custom.push(parse_stamp(text, reference)?);
+            }
+            custom.sort_by_key(|stamp| stamp.at);
+            patch.custom_notifications = Some(custom);
+        }
         self.store.execute(CoreCommand::UpdateProject {
             id: id.clone(),
             patch,
@@ -1310,6 +1384,9 @@ fn tool_definitions() -> Vec<Value> {
                     "estimate_min": n("Estimated minutes"),
                     "flagged": b("Flag the task"),
                     "priority": s("low | medium | high"),
+                    "alerts": s("Extra relative alerts such as due:-15m, defer"),
+                    "removed_notifications": arr("Default notification types to remove: defer, planned, latest_start, due"),
+                    "custom_notifications": arr("Absolute custom notification dates"),
                     "repeat": s("Repeat rule"),
                 }),
                 &["title"],
@@ -1335,7 +1412,9 @@ fn tool_definitions() -> Vec<Value> {
                     "estimate": s("Duration string such as 1h30m"),
                     "flagged": b("Flag state"),
                     "priority": s("low | medium | high, or null to clear"),
-                    "alerts": s("Alerts such as due:-15m, defer; none restores the default"),
+                    "alerts": s("Extra relative alerts such as due:-15m, defer; none clears them"),
+                    "removed_notifications": arr("Default notification types to remove: defer, planned, latest_start, due"),
+                    "custom_notifications": arr("Absolute custom notification dates, or null/[] to clear"),
                     "repeat": s("Repeat rule, or null to clear"),
                     "project": s("Project path, or null to move to the inbox"),
                     "parent": s("Parent task id, or null to clear"),
@@ -1560,6 +1639,9 @@ fn tool_definitions() -> Vec<Value> {
                     "icon": s("project | folder | star | briefcase | home | heart | book | code | rocket | coffee, or one emoji"),
                     "attachments": arr("Replace the project's attachment paths and links"),
                     "clear_attachments": b("Remove every attachment"),
+                    "alerts": s("Extra relative alerts such as due:-15m, defer; none clears them"),
+                    "removed_notifications": arr("Default notification types to remove: defer, planned, latest_start, due"),
+                    "custom_notifications": arr("Absolute custom notification dates, or null/[] to clear"),
                 }),
                 &["id"],
             ),

@@ -3471,3 +3471,97 @@ fn forecast_tag_and_flagged_undated_tasks_join_forecast() {
         .iter()
         .any(|row| row.id == flagged_id));
 }
+
+#[test]
+fn repeating_tasks_keep_removed_defaults_but_drop_absolute_notifications() {
+    use std::collections::BTreeSet;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let mut new_task = NewTask::new("Recurring reminder");
+    new_task.due = Some(Stamp::date_only(local_date(Utc::now())));
+    new_task.repeat = Some(RepeatRule::new(RepeatMode::DueAgain, 1, IntervalUnit::Days));
+    new_task.alerts = vec![flowlist_core::model::TaskAlert::new(
+        flowlist_core::model::AlertEvent::Due,
+        -30,
+    )];
+    let id = store
+        .execute(Command::CreateTask(new_task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let task_id = store.db().resolve_task(&id).unwrap();
+    store
+        .execute(Command::UpdateTask {
+            id: task_id.clone(),
+            patch: flowlist_core::command::TaskPatch {
+                removed_notifications: Some(BTreeSet::from([
+                    flowlist_core::model::DefaultNotification::Planned,
+                ])),
+                custom_notifications: Some(vec![Stamp::date_only(
+                    local_date(Utc::now()) + chrono::Duration::days(2),
+                )]),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![task_id.clone()],
+            completed: true,
+        })
+        .unwrap();
+
+    let next = store
+        .db()
+        .tasks
+        .values()
+        .find(|task| task.id != task_id)
+        .expect("next occurrence exists");
+    assert_eq!(next.alerts.len(), 1);
+    assert!(
+        next.removed_notifications
+            .contains(&flowlist_core::model::DefaultNotification::Planned)
+    );
+    assert!(next.custom_notifications.is_empty());
+}
+
+#[test]
+fn settings_patch_controls_default_notifications() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths.clone()).unwrap();
+
+    assert!(store.db().settings.default_due_notification);
+    assert!(!store.db().settings.default_defer_notification);
+    assert!(!store.db().settings.default_planned_notification);
+    assert!(!store.db().settings.default_latest_start_notification);
+
+    store
+        .execute(Command::UpdateSettings(
+            flowlist_core::command::SettingsPatch {
+                default_defer_notification: Some(true),
+                default_planned_notification: Some(true),
+                default_latest_start_notification: Some(true),
+                default_due_notification: Some(false),
+                default_custom_notification_time: Some(Some(
+                    chrono::NaiveTime::from_hms_opt(8, 15, 0).unwrap(),
+                )),
+                ..Default::default()
+            },
+        ))
+        .unwrap();
+    let settings = &store.db().settings;
+    assert!(settings.default_defer_notification);
+    assert!(settings.default_planned_notification);
+    assert!(settings.default_latest_start_notification);
+    assert!(!settings.default_due_notification);
+    assert_eq!(
+        settings.default_custom_notification_time,
+        chrono::NaiveTime::from_hms_opt(8, 15, 0)
+    );
+
+    let reopened = Store::open(paths).unwrap();
+    assert!(!reopened.db().settings.default_due_notification);
+}

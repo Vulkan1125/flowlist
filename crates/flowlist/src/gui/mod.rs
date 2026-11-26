@@ -11,9 +11,9 @@ mod drag;
 mod emoji;
 mod favicon;
 mod hotkey;
-mod media;
 mod icons;
 mod inspector;
+mod media;
 mod modals;
 mod notifications;
 mod perspective;
@@ -48,8 +48,7 @@ use gpui::{
     Animation, AnimationExt, AnyElement, App, Application, Bounds, ClipboardItem, Context,
     CursorStyle, FocusHandle, Focusable, IntoElement, KeyDownEvent, Keystroke, MouseButton,
     ObjectFit, Render, ScrollHandle, SharedString, Window, WindowBackgroundAppearance,
-    WindowBounds, WindowKind, WindowOptions, div, ease_out_quint, img, point, prelude::*, px,
-    size,
+    WindowBounds, WindowKind, WindowOptions, div, ease_out_quint, img, point, prelude::*, px, size,
 };
 
 use flowlist_core::command::{
@@ -151,6 +150,13 @@ impl EditField {
             EditField::Alerts => EditField::Repeat,
         }
     }
+}
+
+/// The item whose notification schedule is being edited.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum NotificationTarget {
+    Task(TaskId),
+    Project(ProjectId),
 }
 
 /// Fields in the multi-task inspector. They are staged locally and committed
@@ -681,6 +687,8 @@ pub struct FlowlistApp {
     batch_selection: Vec<TaskId>,
     /// Batch inspector controls, measured for GUI probes.
     batch_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Notification inspector controls, measured for GUI probes.
+    notification_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// A click's mouse-up closed the sort or group menu. The chip under the
     /// same click must not immediately reopen it.
     sort_closed_on_up: bool,
@@ -966,7 +974,9 @@ impl FlowlistApp {
             .or_else(|| legacy_wallpaper)
             .filter(|path| path.exists());
         let wallpaper_separate = session.wallpaper_separate.unwrap_or_else(|| {
-            wallpaper_light.is_some() && wallpaper_dark.is_some() && wallpaper_light != wallpaper_dark
+            wallpaper_light.is_some()
+                && wallpaper_dark.is_some()
+                && wallpaper_light != wallpaper_dark
         });
         let use_wallpaper = session.use_wallpaper.unwrap_or(false);
         let wallpaper_opacity = session.wallpaper_opacity.unwrap_or(0.35).clamp(0.05, 0.95);
@@ -1178,6 +1188,7 @@ impl FlowlistApp {
             batch_editing: None,
             batch_selection: Vec::new(),
             batch_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            notification_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             theme_on_open: None,
             plain_accent_light,
             plain_accent_dark,
@@ -1425,7 +1436,10 @@ impl FlowlistApp {
                     .effective_project(&task.id)
                     .map(|project| db.project_path(&project));
                 let time = if stamp.has_time {
-                    due_at.with_timezone(&chrono::Local).format("%H:%M").to_string()
+                    due_at
+                        .with_timezone(&chrono::Local)
+                        .format("%H:%M")
+                        .to_string()
                 } else {
                     "09:00".to_string()
                 };
@@ -1576,11 +1590,7 @@ impl FlowlistApp {
             forecast_calendar_expanded: Some(self.forecast_calendar_expanded),
             forecast_calendar_height: self.forecast_calendar_height,
             focus: None,
-            focus_targets: self
-                .focus_targets
-                .iter()
-                .map(FocusTarget::key)
-                .collect(),
+            focus_targets: self.focus_targets.iter().map(FocusTarget::key).collect(),
             last_focus_targets: self
                 .last_focus_targets
                 .iter()
@@ -1708,13 +1718,8 @@ impl FlowlistApp {
                 group
                     .projects
                     .retain(|project| self.focus_allows_project(project));
-                group
-                    .rows
-                    .retain(|row| self.focus_allows_task(&row.id));
-                if group.rows.is_empty()
-                    && group.projects.is_empty()
-                    && group_project.is_none()
-                {
+                group.rows.retain(|row| self.focus_allows_task(&row.id));
+                if group.rows.is_empty() && group.projects.is_empty() && group_project.is_none() {
                     None
                 } else {
                     Some(group)
@@ -1741,9 +1746,10 @@ impl FlowlistApp {
             for target in &targets {
                 let folder = match target {
                     FocusTarget::Folder(id) => Some(id.clone()),
-                    FocusTarget::Project(id) => {
-                        db.projects.get(id).and_then(|project| project.folder.clone())
-                    }
+                    FocusTarget::Project(id) => db
+                        .projects
+                        .get(id)
+                        .and_then(|project| project.folder.clone()),
                 };
                 let mut current = folder;
                 while let Some(id) = current {
@@ -1819,9 +1825,7 @@ impl FlowlistApp {
     fn show_focus_banner_transient(&mut self, cx: &mut Context<Self>) {
         self.focus_banner_until = Some(Instant::now() + Duration::from_secs(3));
         cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(Duration::from_secs(3))
-                .await;
+            cx.background_executor().timer(Duration::from_secs(3)).await;
             this.update(cx, |this, cx| {
                 if this
                     .focus_banner_until
@@ -2000,9 +2004,7 @@ impl FlowlistApp {
         if !self.focus_targets.is_empty()
             && !matches!(
                 self.view,
-                View::Builtin(
-                    BuiltinPerspective::Inbox | BuiltinPerspective::Trash
-                )
+                View::Builtin(BuiltinPerspective::Inbox | BuiltinPerspective::Trash)
             )
         {
             groups = self.focus_groups(groups);
@@ -2199,9 +2201,7 @@ impl FlowlistApp {
                         label: path.clone(),
                         detail: "Project".to_string(),
                         icon: Icon::Project,
-                        action: QuickOpenAction::Open(sidebar::SidebarTarget::Project(
-                            id.clone(),
-                        )),
+                        action: QuickOpenAction::Open(sidebar::SidebarTarget::Project(id.clone())),
                         rank: 3,
                     });
                     entries.push(QuickOpenEntry {
@@ -2451,9 +2451,7 @@ impl FlowlistApp {
                             this.quick_open = None;
                             this.focus = FocusArea::Content;
                             match action.clone() {
-                                QuickOpenAction::Open(target) => {
-                                    this.sidebar_activate(target, cx)
-                                }
+                                QuickOpenAction::Open(target) => this.sidebar_activate(target, cx),
                                 QuickOpenAction::Focus(target) => this.set_focus(target, cx),
                                 QuickOpenAction::ClearFocus => this.clear_focus(cx),
                             }
@@ -2478,16 +2476,12 @@ impl FlowlistApp {
                 MouseButton::Left,
                 cx.listener(|_, _, _, cx| cx.stop_propagation()),
             )
-            .child(
-                div()
-                    .px_1()
-                    .child(widgets::text_field(
-                        theme,
-                        &query,
-                        "Jump to a perspective, folder, project or tag…",
-                        true,
-                    )),
-            )
+            .child(div().px_1().child(widgets::text_field(
+                theme,
+                &query,
+                "Jump to a perspective, folder, project or tag…",
+                true,
+            )))
             .child(list)
             .child(
                 div()
@@ -2848,11 +2842,7 @@ impl FlowlistApp {
         let children = task
             .child_order
             .iter()
-            .filter(|child| {
-                db.tasks
-                    .get(child)
-                    .is_some_and(|task| !task.is_trashed())
-            })
+            .filter(|child| db.tasks.get(child).is_some_and(|task| !task.is_trashed()))
             .count();
         // Converting to one-off steps is destructive: each child becomes a
         // checklist row with only its title and completion left. Ask first.
@@ -3931,11 +3921,7 @@ impl FlowlistApp {
 
     /// A defer date after its due date would leave the task hidden until it
     /// is already overdue. Refuse the pick and explain beside the field.
-    fn date_order_error(
-        &self,
-        field: DateField,
-        date: chrono::NaiveDate,
-    ) -> Option<&'static str> {
+    fn date_order_error(&self, field: DateField, date: chrono::NaiveDate) -> Option<&'static str> {
         let id = self.selected_one()?;
         let task = self.store.db().tasks.get(&id)?;
         match field {
@@ -4567,11 +4553,8 @@ impl FlowlistApp {
         placement: TaskPlacement,
         cx: &mut Context<Self>,
     ) {
-        let conflicts = flowlist_core::command::date_conflicts_for_move(
-            self.store.db(),
-            &ids,
-            &placement,
-        );
+        let conflicts =
+            flowlist_core::command::date_conflicts_for_move(self.store.db(), &ids, &placement);
         if conflicts.is_empty() {
             self.execute(Command::MoveTasks { ids, placement });
             cx.notify();
@@ -4629,12 +4612,7 @@ impl FlowlistApp {
 
     /// Dropping a task in a gap between root rows moves it out of any parent
     /// and into the project or Inbox at that position.
-    fn drop_on_root(
-        &mut self,
-        before: Option<TaskId>,
-        payload: &DragTask,
-        cx: &mut Context<Self>,
-    ) {
+    fn drop_on_root(&mut self, before: Option<TaskId>, payload: &DragTask, cx: &mut Context<Self>) {
         if payload.tag {
             return;
         }
@@ -4659,9 +4637,7 @@ impl FlowlistApp {
                     project: project.clone(),
                     position: Position::End,
                 },
-                View::Builtin(BuiltinPerspective::Inbox) => {
-                    TaskPlacement::Inbox(Position::End)
-                }
+                View::Builtin(BuiltinPerspective::Inbox) => TaskPlacement::Inbox(Position::End),
                 _ => {
                     self.content_drop_target = None;
                     cx.notify();
@@ -4926,12 +4902,12 @@ impl FlowlistApp {
         self.view_menu = None;
         self.view_menu_cursor = 0;
         self.command_error = None;
-        let result = self.apply_modal(&modal).and_then(|()| {
-            match self.command_error.take() {
+        let result = self
+            .apply_modal(&modal)
+            .and_then(|()| match self.command_error.take() {
                 Some(error) => Err(error),
                 None => Ok(()),
-            }
-        });
+            });
         match result {
             Ok(()) => {
                 self.modal = None;
@@ -5034,7 +5010,10 @@ impl FlowlistApp {
                 };
                 let parse_date = |buffer: &text::TextBuffer,
                                   label: &str|
-                 -> std::result::Result<Option<flowlist_core::time::Stamp>, String> {
+                 -> std::result::Result<
+                    Option<flowlist_core::time::Stamp>,
+                    String,
+                > {
                     let text = buffer.text().trim();
                     if text.is_empty() {
                         Ok(None)
@@ -5120,6 +5099,68 @@ impl FlowlistApp {
                         ..Default::default()
                     },
                 });
+            }
+            modals::Modal::CustomNotification { target, at } => {
+                let text = at.text().trim().to_string();
+                if text.is_empty() {
+                    return Err("Enter a date and time for the notification".to_string());
+                }
+                let mut stamp = parse_stamp(&text, now())
+                    .map_err(|error| format!("Invalid notification time: {error}"))?;
+                if !stamp.has_time {
+                    let time = self
+                        .store
+                        .db()
+                        .settings
+                        .default_custom_notification_time
+                        .unwrap_or_else(|| {
+                            chrono::NaiveTime::from_hms_opt(9, 0, 0)
+                                .unwrap_or(chrono::NaiveTime::MIN)
+                        });
+                    stamp = Stamp::on(stamp.local_date(), time);
+                }
+                match target {
+                    NotificationTarget::Task(id) => {
+                        let mut custom = self
+                            .store
+                            .db()
+                            .tasks
+                            .get(id)
+                            .map(|task| task.custom_notifications.clone())
+                            .unwrap_or_default();
+                        if !custom.iter().any(|existing| existing.at == stamp.at) {
+                            custom.push(stamp);
+                        }
+                        custom.sort_by_key(|stamp| stamp.at);
+                        self.execute(Command::UpdateTask {
+                            id: id.clone(),
+                            patch: TaskPatch {
+                                custom_notifications: Some(custom),
+                                ..Default::default()
+                            },
+                        });
+                    }
+                    NotificationTarget::Project(id) => {
+                        let mut custom = self
+                            .store
+                            .db()
+                            .projects
+                            .get(id)
+                            .map(|project| project.custom_notifications.clone())
+                            .unwrap_or_default();
+                        if !custom.iter().any(|existing| existing.at == stamp.at) {
+                            custom.push(stamp);
+                        }
+                        custom.sort_by_key(|stamp| stamp.at);
+                        self.execute(Command::UpdateProject {
+                            id: id.clone(),
+                            patch: ProjectPatch {
+                                custom_notifications: Some(custom),
+                                ..Default::default()
+                            },
+                        });
+                    }
+                }
             }
             modals::Modal::DeleteProject { id, .. } => {
                 self.execute(Command::DeleteProject { id: id.clone() });
@@ -5238,8 +5279,7 @@ impl FlowlistApp {
                 else {
                     return Err("Links start with http:// or https://".to_string());
                 };
-                let link =
-                    flowlist_core::model::attachment::link_with_name(&link, name.text());
+                let link = flowlist_core::model::attachment::link_with_name(&link, name.text());
                 let apply = |attachments: &mut Vec<String>| -> std::result::Result<(), String> {
                     if let Some(original) = replace {
                         if let Some(index) = attachments.iter().position(|item| item == original) {
@@ -5441,6 +5481,11 @@ impl FlowlistApp {
                 forecast_due_counts,
                 forecast_tag,
                 forecast_flagged,
+                default_defer_notification,
+                default_planned_notification,
+                default_latest_start_notification,
+                default_due_notification,
+                custom_notification_time,
                 focus_banner,
                 toolbar_labels,
                 hide_empty_views,
@@ -5479,6 +5524,15 @@ impl FlowlistApp {
                     .parse::<u32>()
                     .map_err(|_| "Trash retention must be a number".to_string())?;
                 let tag_path = forecast_tag.text().trim().to_string();
+                let custom_time_text = custom_notification_time.text().trim().to_string();
+                let custom_time = if custom_time_text.is_empty() {
+                    None
+                } else {
+                    Some(
+                        chrono::NaiveTime::parse_from_str(&custom_time_text, "%H:%M")
+                            .map_err(|_| "Custom notification time must be HH:MM".to_string())?,
+                    )
+                };
                 let forecast_tag = if tag_path.is_empty() {
                     None
                 } else {
@@ -5498,6 +5552,11 @@ impl FlowlistApp {
                     forecast_due_counts: Some(*forecast_due_counts),
                     forecast_tag: Some(forecast_tag),
                     forecast_flagged: Some(*forecast_flagged),
+                    default_defer_notification: Some(*default_defer_notification),
+                    default_planned_notification: Some(*default_planned_notification),
+                    default_latest_start_notification: Some(*default_latest_start_notification),
+                    default_due_notification: Some(*default_due_notification),
+                    default_custom_notification_time: Some(custom_time),
                     sidebar: Some(sidebar.clone()),
                     ..Default::default()
                 }));
@@ -7460,10 +7519,7 @@ impl FlowlistApp {
             BuiltinPerspective::Tags => {
                 let mut tags = BTreeSet::new();
                 for task in db.tasks.values() {
-                    if task.completed
-                        || task.is_trashed()
-                        || !self.focus_allows_task(&task.id)
-                    {
+                    if task.completed || task.is_trashed() || !self.focus_allows_task(&task.id) {
                         continue;
                     }
                     tags.extend(task.tags.iter().cloned());
@@ -7879,15 +7935,17 @@ impl FlowlistApp {
         state["hide_past_anchor"] = serde_json::json!(anchor(self.hide_past_anchor.get()));
         state["forecast_calendar_open"] = serde_json::json!(self.forecast_calendar_open);
         state["forecast_planned"] = serde_json::json!(self.forecast_planned);
-        state["forecast_count"] = serde_json::json!(
-            self.perspective_count(BuiltinPerspective::Forecast)
-        );
+        state["forecast_count"] =
+            serde_json::json!(self.perspective_count(BuiltinPerspective::Forecast));
         state["forecast_calendar_expanded"] = serde_json::json!(self.forecast_calendar_expanded);
         state["forecast_week"] = serde_json::json!(self.forecast_week.to_string());
         state["forecast_strip"] = serde_json::json!(self.forecast_strip_boxes.borrow().clone());
-        state["forecast_strip_next"] = serde_json::json!(anchor(self.forecast_strip_next_anchor.get()));
-        state["forecast_strip_expand"] = serde_json::json!(anchor(self.forecast_strip_expand_anchor.get()));
-        state["forecast_calendar_collapse"] = serde_json::json!(anchor(self.forecast_calendar_collapse_anchor.get()));
+        state["forecast_strip_next"] =
+            serde_json::json!(anchor(self.forecast_strip_next_anchor.get()));
+        state["forecast_strip_expand"] =
+            serde_json::json!(anchor(self.forecast_strip_expand_anchor.get()));
+        state["forecast_calendar_collapse"] =
+            serde_json::json!(anchor(self.forecast_calendar_collapse_anchor.get()));
         state["forecast_days"] = serde_json::json!(self.forecast_day_boxes.borrow().clone());
         state["forecast_chips"] = serde_json::json!(self.forecast_chip_boxes.borrow().clone());
         state["forecast_day"] = serde_json::json!(self.forecast_date.map(|date| date.to_string()));
@@ -7981,8 +8039,7 @@ impl FlowlistApp {
                 .as_ref()
                 .map(|path| path.display().to_string())
         );
-        state["reminder_wallpaper_separate"] =
-            serde_json::json!(self.reminder_wallpaper_separate);
+        state["reminder_wallpaper_separate"] = serde_json::json!(self.reminder_wallpaper_separate);
         state["modal_reminder_wallpaper"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::Settings {
                 reminder_wallpaper_light,
@@ -8016,8 +8073,7 @@ impl FlowlistApp {
             _ => None,
         });
         state["settings_size"] = serde_json::json!(self.settings_size);
-        state["settings_scroll"] =
-            serde_json::json!(f32::from(-self.modal_scroll.offset().y));
+        state["settings_scroll"] = serde_json::json!(f32::from(-self.modal_scroll.offset().y));
         state["settings_sidebar_group"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::Settings { sidebar_group, .. }) => {
                 (*sidebar_group).map(|group| group.slug())
@@ -8025,8 +8081,7 @@ impl FlowlistApp {
             _ => None,
         });
         state["sidebar_rows"] = serde_json::json!(self.sidebar_row_boxes.borrow().clone());
-        state["sidebar_menu_boxes"] =
-            serde_json::json!(self.sidebar_menu_boxes.borrow().clone());
+        state["sidebar_menu_boxes"] = serde_json::json!(self.sidebar_menu_boxes.borrow().clone());
         state["sidebar_drag_target"] = serde_json::json!(self.sidebar_drag_target);
         state["content_drop_target"] = serde_json::json!(self.content_drop_target);
         state["sidebar_names"] = serde_json::json!(self.sidebar_name_boxes.borrow().clone());
@@ -8043,11 +8098,10 @@ impl FlowlistApp {
                 .collect::<Vec<_>>()
         );
         state["content_groups"] = serde_json::json!(self.content_group_boxes.borrow().clone());
-        state["content_row_boxes"] =
-            serde_json::json!(self.content_row_boxes.borrow().clone());
-        state["content_projects"] =
-            serde_json::json!(self.content_project_boxes.borrow().clone());
+        state["content_row_boxes"] = serde_json::json!(self.content_row_boxes.borrow().clone());
+        state["content_projects"] = serde_json::json!(self.content_project_boxes.borrow().clone());
         state["batch_boxes"] = serde_json::json!(self.batch_boxes.borrow().clone());
+        state["notification_boxes"] = serde_json::json!(self.notification_boxes.borrow().clone());
         state["batch"] = serde_json::json!(if self.selected.len() > 1 {
             Some(serde_json::json!({
                 "count": self.selected.len(),
@@ -8145,24 +8199,26 @@ impl FlowlistApp {
                     this.step_view_history(if forward { 1 } else { -1 }, cx);
                 }
             }))
-            .child(self.with_header_label(
-                div()
-                    .on_children_prepainted(move |bounds, _, _| {
-                        if let Some(bounds) = bounds.first() {
-                            boxes.borrow_mut().insert(
-                                box_key.clone(),
-                                [
-                                    f32::from(bounds.origin.x),
-                                    f32::from(bounds.origin.y),
-                                    f32::from(bounds.size.width),
-                                    f32::from(bounds.size.height),
-                                ],
-                            );
-                        }
-                    })
-                    .child(widgets::icon_button(theme, icon, false)),
-                if forward { "Forward" } else { "Back" },
-            ))
+            .child(
+                self.with_header_label(
+                    div()
+                        .on_children_prepainted(move |bounds, _, _| {
+                            if let Some(bounds) = bounds.first() {
+                                boxes.borrow_mut().insert(
+                                    box_key.clone(),
+                                    [
+                                        f32::from(bounds.origin.x),
+                                        f32::from(bounds.origin.y),
+                                        f32::from(bounds.size.width),
+                                        f32::from(bounds.size.height),
+                                    ],
+                                );
+                            }
+                        })
+                        .child(widgets::icon_button(theme, icon, false)),
+                    if forward { "Forward" } else { "Back" },
+                ),
+            )
     }
 
     /// The eye beside the back/forward arrows. It ends focus, or restores the
@@ -8196,16 +8252,18 @@ impl FlowlistApp {
                     this.toggle_focus_eye(cx);
                 }
             }))
-            .child(self.with_header_label(
-                div()
-                    .on_children_prepainted(move |bounds, _, _| {
-                        if let Some(bounds) = bounds.first() {
-                            anchor.set(Some(*bounds));
-                        }
-                    })
-                    .child(widgets::icon_button(theme, Icon::Eye, active)),
-                if active { "Unfocus" } else { "Focus" },
-            ))
+            .child(
+                self.with_header_label(
+                    div()
+                        .on_children_prepainted(move |bounds, _, _| {
+                            if let Some(bounds) = bounds.first() {
+                                anchor.set(Some(*bounds));
+                            }
+                        })
+                        .child(widgets::icon_button(theme, Icon::Eye, active)),
+                    if active { "Unfocus" } else { "Focus" },
+                ),
+            )
             .into_any_element()
     }
 
@@ -8419,13 +8477,8 @@ impl FlowlistApp {
                                     "Add Task",
                                 )
                             } else {
-                                widgets::button_with_icon(
-                                    theme,
-                                    Icon::Plus,
-                                    "Add task",
-                                    true,
-                                )
-                                .into_any_element()
+                                widgets::button_with_icon(theme, Icon::Plus, "Add task", true)
+                                    .into_any_element()
                             })
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.open_quick_capture(window, cx)
@@ -8837,16 +8890,12 @@ impl Render for FlowlistApp {
             );
         if let Some(path) = self.active_wallpaper() {
             root = root.child(
-                div()
-                    .absolute()
-                    .size_full()
-                    .overflow_hidden()
-                    .child(
-                        img(path)
-                            .object_fit(ObjectFit::Cover)
-                            .size_full()
-                            .opacity(self.wallpaper_opacity),
-                    ),
+                div().absolute().size_full().overflow_hidden().child(
+                    img(path)
+                        .object_fit(ObjectFit::Cover)
+                        .size_full()
+                        .opacity(self.wallpaper_opacity),
+                ),
             );
         }
         root = root.child(self.render_header(window, cx));
@@ -9053,13 +9102,11 @@ fn date_conflict_message(conflict: &DateConflict) -> String {
     let container = conflict
         .container
         .as_ref()
-        .map(|(_, parent)| {
-            if *parent {
-                "parent action"
-            } else {
-                "project"
-            }
-        })
+        .map(
+            |(_, parent)| {
+                if *parent { "parent action" } else { "project" }
+            },
+        )
         .unwrap_or("project or parent");
     let mut parts = Vec::new();
     if let Some((_, to)) = conflict.due {
@@ -9105,49 +9152,49 @@ pub fn run(paths: DataPaths) -> Result<()> {
         }
     });
     app.run(move |cx: &mut App| {
-            cx.bind_keys([gpui::KeyBinding::new("cmd-q", Quit, None)]);
-            cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
-            cx.set_menus(vec![gpui::Menu {
-                name: "Flowlist".into(),
-                items: vec![gpui::MenuItem::action("Quit Flowlist", Quit)],
-            }]);
-            let window = match open_main_window(cx, paths.clone(), requested, test_float) {
-                Ok(window) => window,
-                Err(error) => {
-                    eprintln!("could not open the Flowlist window: {error}");
-                    return;
-                }
-            };
-            // A Carbon hotkey wakes the app even while another app is in
-            // front. The callback only signals this foreground stream, which
-            // opens (or re-focuses) the small floating capture panel.
-            if let Some(mut presses) = hotkey::register() {
-                use futures::StreamExt as _;
-                let paths = paths.clone();
-                cx.spawn(async move |cx| {
-                    while presses.next().await.is_some() {
-                        let opened = cx.update(|cx| {
-                            let theme = window
-                                .read_with(cx, |app, _| app.theme)
-                                .unwrap_or_else(|_| quick_capture::stored_theme(&paths));
-                            quick_capture::toggle(cx, paths.clone(), theme, None)
-                        });
-                        match opened {
-                            Ok(Ok(())) => {}
-                            Ok(Err(error)) => {
-                                eprintln!("flowlist: could not open quick capture: {error}");
-                                let _ = window.update(cx, |app, window, cx| {
-                                    app.focus_capture(window, cx);
-                                });
-                            }
-                            Err(_) => break,
-                        }
-                    }
-                })
-                .detach();
+        cx.bind_keys([gpui::KeyBinding::new("cmd-q", Quit, None)]);
+        cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
+        cx.set_menus(vec![gpui::Menu {
+            name: "Flowlist".into(),
+            items: vec![gpui::MenuItem::action("Quit Flowlist", Quit)],
+        }]);
+        let window = match open_main_window(cx, paths.clone(), requested, test_float) {
+            Ok(window) => window,
+            Err(error) => {
+                eprintln!("could not open the Flowlist window: {error}");
+                return;
             }
-            cx.activate(true);
-        });
+        };
+        // A Carbon hotkey wakes the app even while another app is in
+        // front. The callback only signals this foreground stream, which
+        // opens (or re-focuses) the small floating capture panel.
+        if let Some(mut presses) = hotkey::register() {
+            use futures::StreamExt as _;
+            let paths = paths.clone();
+            cx.spawn(async move |cx| {
+                while presses.next().await.is_some() {
+                    let opened = cx.update(|cx| {
+                        let theme = window
+                            .read_with(cx, |app, _| app.theme)
+                            .unwrap_or_else(|_| quick_capture::stored_theme(&paths));
+                        quick_capture::toggle(cx, paths.clone(), theme, None)
+                    });
+                    match opened {
+                        Ok(Ok(())) => {}
+                        Ok(Err(error)) => {
+                            eprintln!("flowlist: could not open quick capture: {error}");
+                            let _ = window.update(cx, |app, window, cx| {
+                                app.focus_capture(window, cx);
+                            });
+                        }
+                        Err(_) => break,
+                    }
+                }
+            })
+            .detach();
+        }
+        cx.activate(true);
+    });
     Ok(())
 }
 

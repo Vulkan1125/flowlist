@@ -203,13 +203,14 @@ Settings previews each theme family as a miniature window.
 
 ## Notifications
 
-Tasks can carry custom alerts edited from the inspector **Alerts** field:
-`due:-15m, defer, planned:+1h`. Each alert is anchored to Due, Defer/Available
-or Planned and uses signed minutes. Date-only anchors use 9:00 local. Alert
-times follow inherited dates; completed, trashed and closed-project tasks are
-skipped, and the scheduler looks 30 days ahead. Tasks with alerts replace the
-default due reminder; the body includes project and tag context. `none` restores
-the default. Repeating tasks carry their alerts to the next occurrence.
+Notifications have per-type defaults for Defer, Planned, Latest Start and Due,
+plus per-item removal/restoration, relative alerts and absolute custom times.
+The inspector shows the schedule; the **Alerts** field uses syntax such as
+`due:-15m, defer, planned:+1h`. Latest Start is due minus estimate. Date-only
+alerts use 9:00 local; custom date-only notifications use their own default
+time. Relative alerts carry to repeating-task occurrences; absolute custom
+notifications do not. Flowlist currently schedules in the system local time
+zone.
 
 
 ## Batch editing

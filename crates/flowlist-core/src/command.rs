@@ -10,8 +10,9 @@ use crate::db::{ContainerPosition, DateConflict, Db, OrderKey, Position};
 use crate::error::{Error, Result};
 use crate::ids::{ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use crate::model::{
-    ChecklistItem, Folder, Geo, IconSpec, Perspective, Priority, Project, ProjectKind,
-    ProjectStatus, RepeatRule, Tag, TagStatus, Task, TaskAlert, increment_repeat_title,
+    ChecklistItem, DefaultNotification, Folder, Geo, IconSpec, Perspective, Priority, Project,
+    ProjectKind, ProjectStatus, RepeatRule, Tag, TagStatus, Task, TaskAlert,
+    increment_repeat_title,
 };
 use crate::time::{Stamp, local_date, now};
 
@@ -64,6 +65,10 @@ pub struct NewTask {
     pub reminder_match_due: bool,
     #[serde(default)]
     pub alerts: Vec<TaskAlert>,
+    #[serde(default)]
+    pub removed_notifications: BTreeSet<DefaultNotification>,
+    #[serde(default)]
+    pub custom_notifications: Vec<Stamp>,
     pub priority: Option<Priority>,
     pub attachments: Vec<String>,
     pub repeat: Option<RepeatRule>,
@@ -91,6 +96,8 @@ impl NewTask {
             reminder_at: None,
             reminder_match_due: true,
             alerts: Vec::new(),
+            removed_notifications: BTreeSet::new(),
+            custom_notifications: Vec::new(),
             priority: None,
             attachments: Vec::new(),
             repeat: None,
@@ -149,10 +156,13 @@ pub struct TaskPatch {
     pub reminder_match_due: Option<bool>,
     #[serde(deserialize_with = "deserialize_double_option")]
     pub priority: Option<Option<Priority>>,
-    /// Replace the task's custom notification schedule. Empty means fall back
-    /// to the default due reminder.
+    /// Replace the task's extra relative notification schedules.
     #[serde(default)]
     pub alerts: Option<Vec<TaskAlert>>,
+    #[serde(default)]
+    pub removed_notifications: Option<BTreeSet<DefaultNotification>>,
+    #[serde(default)]
+    pub custom_notifications: Option<Vec<Stamp>>,
     pub attachments: Option<Vec<String>>,
     #[serde(deserialize_with = "deserialize_double_option")]
     pub repeat: Option<Option<RepeatRule>>,
@@ -222,6 +232,12 @@ pub struct ProjectPatch {
     pub sequential: Option<bool>,
     pub kind: Option<ProjectKind>,
     pub icon: Option<IconSpec>,
+    #[serde(default)]
+    pub alerts: Option<Vec<TaskAlert>>,
+    #[serde(default)]
+    pub removed_notifications: Option<BTreeSet<DefaultNotification>>,
+    #[serde(default)]
+    pub custom_notifications: Option<Vec<Stamp>>,
     pub attachments: Option<Vec<String>>,
     pub fullscreen_reminder: Option<bool>,
 }
@@ -256,6 +272,12 @@ pub struct SettingsPatch {
     #[serde(deserialize_with = "deserialize_double_option")]
     pub forecast_tag: Option<Option<TagId>>,
     pub forecast_flagged: Option<bool>,
+    pub default_defer_notification: Option<bool>,
+    pub default_planned_notification: Option<bool>,
+    pub default_latest_start_notification: Option<bool>,
+    pub default_due_notification: Option<bool>,
+    #[serde(deserialize_with = "deserialize_double_option")]
+    pub default_custom_notification_time: Option<Option<chrono::NaiveTime>>,
     pub sidebar: Option<crate::model::SidebarOptions>,
 }
 
@@ -624,14 +646,18 @@ impl Command {
                 None => "Delete folder".to_string(),
             },
             Command::SetProjectStatuses { ids, status } => {
-                format!("Set {} to {}", item_count(ids.len(), "project", "projects"), status.label())
+                format!(
+                    "Set {} to {}",
+                    item_count(ids.len(), "project", "projects"),
+                    status.label()
+                )
             }
             Command::DeleteContainers { projects, folders } => {
                 format!(
                     "Delete {}",
                     item_count(projects.len() + folders.len(), "item", "items")
                 )
-            },
+            }
             Command::CreateTag { name, .. } => format!("Add tag “{name}”"),
             Command::UpdateTag { id, .. } => match tag_name(id) {
                 Some(name) => format!("Edit tag “{name}”"),
@@ -713,6 +739,8 @@ impl Command {
                 task.reminder_at = new_task.reminder_at;
                 task.reminder_match_due = new_task.reminder_match_due;
                 task.alerts = new_task.alerts;
+                task.removed_notifications = new_task.removed_notifications;
+                task.custom_notifications = new_task.custom_notifications;
                 task.priority = new_task.priority;
                 task.attachments = new_task.attachments;
                 task.repeat = new_task.repeat;
@@ -840,6 +868,12 @@ impl Command {
                     if let Some(alerts) = patch.alerts {
                         task.alerts = alerts;
                     }
+                    if let Some(removed) = patch.removed_notifications {
+                        task.removed_notifications = removed;
+                    }
+                    if let Some(custom) = patch.custom_notifications {
+                        task.custom_notifications = custom;
+                    }
                     if let Some(attachments) = patch.attachments {
                         task.attachments = attachments
                             .into_iter()
@@ -917,8 +951,7 @@ impl Command {
                         continue;
                     }
                     if completed {
-                        if let Some(blocker) =
-                            crate::query::availability::sequence_blocker(db, &id)
+                        if let Some(blocker) = crate::query::availability::sequence_blocker(db, &id)
                         {
                             let title = db
                                 .tasks
@@ -931,6 +964,7 @@ impl Command {
                         }
                     }
                     let repeat = task.repeat.clone();
+                    let removed_notifications = task.removed_notifications.clone();
                     let due = task.due;
                     let defer = task.defer;
                     let planned = task.planned;
@@ -1001,6 +1035,7 @@ impl Command {
                                 spawned.reminder_at = reminder_at;
                                 spawned.reminder_match_due = reminder_match_due;
                                 spawned.alerts = alerts.clone();
+                                spawned.removed_notifications = removed_notifications.clone();
                                 spawned.priority = series_priority;
                                 spawned.sequential = sequential;
                                 spawned.checklist = db
@@ -1529,6 +1564,15 @@ impl Command {
                     if let Some(attachments) = patch.attachments {
                         project.attachments = clean_attachments(attachments);
                     }
+                    if let Some(alerts) = patch.alerts {
+                        project.alerts = alerts;
+                    }
+                    if let Some(removed) = patch.removed_notifications {
+                        project.removed_notifications = removed;
+                    }
+                    if let Some(custom) = patch.custom_notifications {
+                        project.custom_notifications = custom;
+                    }
                     if let Some(fullscreen) = patch.fullscreen_reminder {
                         project.fullscreen_reminder = fullscreen;
                     }
@@ -1813,8 +1857,12 @@ impl Command {
                     }
                 }
                 db.touch();
-                outcome.affected.extend(project_ids.iter().map(|id| id.to_string()));
-                outcome.affected.extend(selected_folders.iter().map(|id| id.to_string()));
+                outcome
+                    .affected
+                    .extend(project_ids.iter().map(|id| id.to_string()));
+                outcome
+                    .affected
+                    .extend(selected_folders.iter().map(|id| id.to_string()));
                 outcome.message = Some(if trashed == 0 {
                     format!(
                         "{} deleted",
@@ -2074,6 +2122,21 @@ impl Command {
                 if let Some(value) = patch.forecast_flagged {
                     settings.forecast_flagged = value;
                 }
+                if let Some(value) = patch.default_defer_notification {
+                    settings.default_defer_notification = value;
+                }
+                if let Some(value) = patch.default_planned_notification {
+                    settings.default_planned_notification = value;
+                }
+                if let Some(value) = patch.default_latest_start_notification {
+                    settings.default_latest_start_notification = value;
+                }
+                if let Some(value) = patch.default_due_notification {
+                    settings.default_due_notification = value;
+                }
+                if let Some(value) = patch.default_custom_notification_time {
+                    settings.default_custom_notification_time = value;
+                }
                 if let Some(sidebar) = patch.sidebar {
                     settings.sidebar = sidebar;
                 }
@@ -2205,11 +2268,7 @@ fn clean_attachments(paths: Vec<String>) -> Vec<String> {
 }
 
 /// Stored task dates that applying this patch would have to change.
-pub fn date_conflicts_for_task_patch(
-    db: &Db,
-    id: &TaskId,
-    patch: &TaskPatch,
-) -> Vec<DateConflict> {
+pub fn date_conflicts_for_task_patch(db: &Db, id: &TaskId, patch: &TaskPatch) -> Vec<DateConflict> {
     let Some(task) = db.tasks.get(id) else {
         return Vec::new();
     };
@@ -2694,11 +2753,7 @@ fn merge_db(db: &mut Db, imported: Db) -> MergeStats {
 /// Replace a task's child tasks with one-off checklist steps. Returns the
 /// number of steps created. Nested children are flattened, so task-only
 /// details such as notes, dates, tags and priority are dropped.
-fn convert_subtasks_to_one_off(
-    db: &mut Db,
-    id: &TaskId,
-    at: DateTime<Utc>,
-) -> Result<usize> {
+fn convert_subtasks_to_one_off(db: &mut Db, id: &TaskId, at: DateTime<Utc>) -> Result<usize> {
     db.task(id)?;
     let descendants = db.task_subtree(id);
     let items: Vec<(String, bool)> = descendants
@@ -2731,11 +2786,7 @@ fn convert_subtasks_to_one_off(
 
 /// Turn a task's one-off checklist steps back into child tasks. Returns the
 /// ids of the created subtasks.
-fn convert_one_off_to_subtasks(
-    db: &mut Db,
-    id: &TaskId,
-    at: DateTime<Utc>,
-) -> Result<Vec<TaskId>> {
+fn convert_one_off_to_subtasks(db: &mut Db, id: &TaskId, at: DateTime<Utc>) -> Result<Vec<TaskId>> {
     let parent = db.task(id)?.clone();
     let mut created = Vec::new();
     for item in parent.checklist.clone() {

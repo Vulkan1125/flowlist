@@ -233,7 +233,47 @@ launch
 wait_value traffic_lights "hidden"
 echo "  hidden buttons survive a relaunch"
 
-echo "8. Settings can be resized and grows a scrollbar when squeezed"
+echo "8. Default notifications and the custom notification time save"
+open_settings
+"$helpers/flowctl" key 21 cmd
+wait_value settings_section "reminders"
+wait_map theme_boxes "default-defer-notification"
+click_map theme_boxes "default-defer-notification"
+for _ in $(seq 1 60); do
+  if python3 - "$state" <<'PY'
+import json, sys
+field = json.load(open(sys.argv[1])).get("modal_field")
+sys.exit(0 if field else 1)
+PY
+  then
+    break
+  fi
+  sleep 0.1
+done
+python3 - "$state" > "$tmp/pt" <<'PY'
+import json, sys
+field = json.load(open(sys.argv[1])).get("modal_field")
+assert field, "custom notification time field has no bounds"
+print(int(field[0] + field[2] / 2), int(field[1] + field[3] / 2))
+PY
+read -r field_x field_y < "$tmp/pt"
+"$helpers/flowctl" mouse $((WX + field_x)) $((WY + field_y))
+sleep 0.4
+"$helpers/flowctl" key 0 cmd
+printf '07:45' | pbcopy
+"$helpers/flowctl" key 9 cmd
+sleep 0.3
+"$helpers/flowctl" key 36
+sleep 0.6
+python3 - "$lib/data.json" <<'PY'
+import json, sys
+settings = json.load(open(sys.argv[1]))["db"]["settings"]
+assert settings["default_defer_notification"] is True, settings
+assert settings["default_custom_notification_time"].startswith("07:45"), settings
+print("  defaults and 07:45 saved")
+PY
+
+echo "9. Settings can be resized and grows a scrollbar when squeezed"
 open_settings
 wait_map settings_toggle_rows "settings-resize"
 python3 - "$state" > "$tmp/pt" <<'PY'
@@ -269,7 +309,7 @@ PY
 wait_map settings_toggle_rows "settings-scrollbar"
 echo "  resized to $size and the scrollbar appeared"
 
-echo "9. The scrollbar thumb drags the body"
+echo "10. The scrollbar thumb drags the body"
 python3 - "$state" > "$tmp/pt" <<'PY'
 import json, sys
 b = json.load(open(sys.argv[1]))["settings_toggle_rows"]["settings-scrollbar"]
