@@ -94,7 +94,7 @@ echo "1. The add-subtask field takes a click and selects a word"
 for _ in $(seq 1 80); do
   if python3 - "$state" <<'PY'
 import json, sys
-sys.exit(0 if "task:subtasks" in json.load(open(sys.argv[1])).get("inspector_section_boxes", {}) else 1)
+sys.exit(0 if "inspector-tab:subtasks" in json.load(open(sys.argv[1])).get("theme_boxes", {}) else 1)
 PY
   then break; fi
   "$helpers/flowctl" move $((WX + 600)) $((WY + 300))
@@ -102,7 +102,7 @@ PY
 done
 python3 - "$state" > "$tmp/section-point" <<'PY'
 import json, sys
-b = json.load(open(sys.argv[1]))["inspector_section_boxes"]["task:subtasks"]
+b = json.load(open(sys.argv[1]))["theme_boxes"]["inspector-tab:subtasks"]
 print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
 PY
 set -- $(cat "$tmp/section-point")
@@ -138,6 +138,24 @@ print(f"  selected word {word!r} in the add field")
 PY
 "$helpers/flowctl" key 53
 sleep 0.3
+# The title lives on the Properties tab, so return there before editing it.
+for _ in $(seq 1 80); do
+  if python3 - "$state" <<'PY'
+import json, sys
+sys.exit(0 if "inspector-tab:properties" in json.load(open(sys.argv[1])).get("theme_boxes", {}) else 1)
+PY
+  then break; fi
+  "$helpers/flowctl" move $((WX + 600)) $((WY + 300))
+  sleep 0.1
+done
+python3 - "$state" > "$tmp/properties-point" <<'PY'
+import json, sys
+b = json.load(open(sys.argv[1]))["theme_boxes"]["inspector-tab:properties"]
+print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
+PY
+set -- $(cat "$tmp/properties-point")
+"$helpers/flowctl" mouse $((WX + $1)) $((WY + $2))
+sleep 0.6
 
 echo "2. A click places the caret inside the edited title"
 "$helpers/flowctl" key 14

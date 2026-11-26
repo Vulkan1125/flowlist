@@ -145,7 +145,12 @@ done
 click_box theme_boxes repeat-weekday:1
 click_box theme_boxes repeat-weekday:3
 wait_json task repeat_weekdays '"Monday and Wednesday" in d["repeat"]'
-echo "   week strip picks Monday and Wednesday"
+for _ in $(seq 1 80); do
+  if [ -n "$(box_now theme_boxes repeat-custom)" ]; then break; fi
+  "$helpers/flowctl" move $((wx + 600)) $((wy + 300))
+  sleep 0.1
+done
+echo "   week strip picks Monday and Wednesday; interval shows custom"
 click_box theme_boxes repeat-schedule:completion
 wait_json task repeat_schedule '"after completion" in d["repeat"]'
 click_box theme_boxes repeat-mode:defer
@@ -154,6 +159,26 @@ echo "   weekdays, after completion, defer until"
 
 echo "3. Tags use the OmniFocus chip box"
 click_box inspector_section_boxes task:tags
+for _ in $(seq 1 80); do
+  if python3 - "$state" <<'PY'
+import json, sys
+boxes = json.load(open(sys.argv[1])).get("theme_boxes", {})
+sys.exit(0 if "tag-box" in boxes and "tag-add" in boxes else 1)
+PY
+  then break; fi
+  "$helpers/flowctl" move $((wx + 600)) $((wy + 300))
+  sleep 0.1
+done
+python3 - "$state" <<'PY'
+import json, sys
+boxes = json.load(open(sys.argv[1]))["theme_boxes"]
+box = boxes["tag-box"]
+add = boxes["tag-add"]
+box_x = box[0] + box[2] / 2
+add_x = add[0] + add[2] / 2
+assert abs(box_x - add_x) < 5, (box, add)
+print("   plus is centred in the empty tag box")
+PY
 click_box theme_boxes tag-add
 printf 'errand' | pbcopy
 "$helpers/flowctl" key 9 cmd

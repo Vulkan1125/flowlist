@@ -96,10 +96,10 @@ leaving the list.
   clear it. Changing the priority of a repeating task opens a small sheet:
   apply it to **This occurrence** or the **Whole series**. Future occurrences
   inherit the series priority.
-- **Subtasks** are an inline list: tick a child, click its title to open it,
-  drag the grip to reorder, or type in the field at the bottom to add one. The
-  step-type chips, the subtask rows and the add field have clear space between
-  them.
+- The **Subtasks** tab is an inline list: tick a child, click its title to open
+  it, drag the grip to reorder, or type in the field at the bottom to add one.
+  The step-type chips, the subtask rows and the add field have clear space
+  between them.
   **Separate** moves a child to the end of the project (or the Inbox). You can
   also press `Tab` to indent the selected task under the one above, or drag a
   task onto another task.
@@ -122,7 +122,10 @@ leaving the list.
   preview an image or PDF in the app; PDFs step with `←` / `→`. `open` hands the
   file to its default app. Removing an attachment asks first and leaves the
   file on disk; Undo restores the row.
-- Every inspector section has a disclosure triangle. Collapsing a section
+- A selected task has two inspector tabs: **Properties** and **Subtasks**.
+  Properties holds the fields below; Subtasks holds the subtask list and its
+  Parallel / Sequential / One-off choice.
+- Every Properties section has a disclosure triangle. Collapsing a section
   shortens the sheet without hiding the others, and the choice is remembered
   per device.
 - **Tags**, **Project**, **Defer**, **Planned**, **Due**, **Estimate**,
@@ -135,16 +138,18 @@ leaving the list.
   choices for **Due Date** or **Defer Until Date** and for **Completion** or
   **Assigned Dates**. When the unit is **Days**, a single Sunday-to-Saturday
   row appears. Leave it clear to repeat every day; select S/M/T/W/T/F/S to
-  repeat only those weekdays. The line beneath says the result in plain words,
-  such as “Every Monday and Wednesday, from the assigned dates, scheduling the
-  next due date.”
-- **Tags** is its own section with a bordered chip box and a `+` control.
-  Clicking the box or `+` opens the add field; Enter adds the tag.
+  repeat only those weekdays. When weekdays are selected the interval bar shows
+  a greyed-out “custom”. The line beneath says the result in plain words, such
+  as “Every Monday and Wednesday, from the assigned dates, scheduling the next
+  due date.”
+- **Tags** is its own section above Notifications, with a bordered chip box and
+  a `+` control. Clicking the box or `+` opens the add field; Enter adds the
+  tag. **Notes & Attachments** sits in the old Tags position, before Dates.
 - **Notifications** is the only place for alerts now. Add a default back, a
   relative alert or an absolute custom time from **Add Notification**; no
   separate Alerts field is needed. Every task notification has a checkbox on
-  its right; the section says “Check the boxes to turn them into full screen
-  reminders.” Only one can be checked at a time.
+  its right; the section says “Check a notification to show it full screen
+  instead of as a banner”. Only one can be checked at a time.
 - **Empty sections start folded.** For example, a task with no notes does not
   spend space on Notes & Attachments, and a task with no notifications folds
   that section until one is added.

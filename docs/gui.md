@@ -207,9 +207,9 @@ Notifications have per-type defaults for Defer, Planned, Latest Start and Due,
 plus per-item removal, relative alerts and absolute custom times. The inspector
 shows a chronological list and an **Add Notification** menu; removed defaults,
 **Before Due…** and **Custom Notification…** all live there. Each task
-notification has a checkbox on its right; the section says “Check the boxes to
-turn them into full screen reminders.” One notification at a time can drive
-the reminder.
+notification has a checkbox on its right; the section says “Check a
+notification to show it full screen instead of as a banner”. One notification
+at a time can drive the reminder.
 Latest Start is due minus estimate. Date-only alerts use 9:00 local; custom
 date-only notifications use their own default time. Relative alerts carry to
 repeating-task occurrences; absolute custom notifications do not. Flowlist

@@ -24,7 +24,7 @@ use super::icons::Icon;
 use super::widgets::TipExt;
 use super::{
     BatchDraft, BatchField, ClockUnit, DateField, DatePickerStep, EditField, FlowlistApp,
-    NotificationTarget, View, icons, widgets,
+    InspectorTab, NotificationTarget, View, icons, widgets,
 };
 
 /// A two-or-more choice row that keeps the OmniFocus segmented look without
@@ -542,6 +542,10 @@ impl FlowlistApp {
                 ),
         );
 
+        if self.selected.len() == 1 && self.selected_one().is_some() {
+            panel = panel.child(self.inspector_tab_bar(cx));
+        }
+
         panel = panel.on_drag_move::<DragInspectorScroll>(cx.listener(
             |this, event: &gpui::DragMoveEvent<DragInspectorScroll>, _, cx| {
                 let Some(drag_offset) = this.inspector_scroll_drag_grab.get() else {
@@ -568,8 +572,12 @@ impl FlowlistApp {
         let content = if self.selected.len() > 1 {
             self.render_batch_inspector(cx).into_any_element()
         } else if let Some(id) = self.selected_one() {
-            self.render_task_inspector(&id, window, cx)
-                .into_any_element()
+            match self.inspector_tab {
+                InspectorTab::Properties => self
+                    .render_task_properties(&id, window, cx)
+                    .into_any_element(),
+                InspectorTab::Subtasks => self.render_task_subtasks(&id, cx),
+            }
         } else if let View::Project(id) = self.view.clone() {
             self.render_project_inspector(&id, window, cx)
                 .into_any_element()
@@ -1555,7 +1563,9 @@ impl FlowlistApp {
                     .text_xs()
                     .whitespace_normal()
                     .text_color(theme.text_faint)
-                    .child("Check the boxes to turn them into full screen reminders."),
+                    .child(
+                        "Check a notification to show it full screen instead of as a banner",
+                    ),
             );
         }
         let add_target = target.clone();
@@ -1771,7 +1781,66 @@ impl FlowlistApp {
         cx.notify();
     }
 
-    fn render_task_inspector(
+    fn inspector_tab_bar(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let active = self.inspector_tab;
+        let mut row = div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .px_3()
+            .py_1()
+            .border_b_1()
+            .border_color(theme.border);
+        for (tab, label) in [
+            (InspectorTab::Properties, "Properties"),
+            (InspectorTab::Subtasks, "Subtasks"),
+        ] {
+            row = row.child(
+                div()
+                    .on_children_prepainted(
+                        self.theme_probe(format!("inspector-tab:{}", tab.slug())),
+                    )
+                    .id(super::sid(format!("inspector-tab:{}", tab.slug())))
+                    .flex_1()
+                    .cursor_pointer()
+                    .child(widgets::toggle_chip(theme, label, active == tab))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.inspector_tab = tab;
+                        this.inspector_scroll
+                            .set_offset(gpui::point(px(0.), px(0.)));
+                        cx.notify();
+                    })),
+            );
+        }
+        row.into_any_element()
+    }
+
+    fn render_task_subtasks(&self, id: &TaskId, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let db = self.store.db();
+        let Some(task) = db.tasks.get(id) else {
+            return self.render_empty_inspector().into_any_element();
+        };
+        let title = task.title.clone();
+        let sequential = task.sequential;
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .p_3()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .whitespace_normal()
+                    .child(title),
+            )
+            .child(self.inspector_task_type(id, sequential, cx))
+            .into_any_element()
+    }
+
+    fn render_task_properties(
         &self,
         id: &TaskId,
         window: &mut Window,
@@ -1833,10 +1902,6 @@ impl FlowlistApp {
         let has_action = priority.is_some() || project_id.is_some();
         let has_dates = defer.is_some() || planned.is_some() || due.is_some() || estimate.is_some();
         let has_notes = !notes.is_empty() || !attachments.is_empty();
-        let has_subtasks = db
-            .tasks
-            .get(&id)
-            .is_some_and(|task| !task.child_order.is_empty());
         let notifications_target = NotificationTarget::Task(id.clone());
         let has_notifications = self.notifications_have_data(&notifications_target);
 
@@ -1900,10 +1965,6 @@ impl FlowlistApp {
                 cx,
             ))
             .into_any_element();
-        let subtasks_content = self
-            .inspector_task_type(&id, sequential, cx)
-            .into_any_element();
-
         let mut body = div()
             .flex()
             .flex_col()
@@ -1970,10 +2031,10 @@ impl FlowlistApp {
                 cx,
             ))
             .child(self.inspector_section(
-                "task:tags",
-                "Tags",
-                !tags.is_empty(),
-                tags_content,
+                "task:notes",
+                "Notes & Attachments",
+                has_notes,
+                notes_content,
                 cx,
             ))
             .child(self.inspector_section(
@@ -1991,24 +2052,17 @@ impl FlowlistApp {
                 cx,
             ))
             .child(self.inspector_section(
+                "task:tags",
+                "Tags",
+                !tags.is_empty(),
+                tags_content,
+                cx,
+            ))
+            .child(self.inspector_section(
                 "task:notifications",
                 "Notifications",
                 has_notifications,
                 notifications_content,
-                cx,
-            ))
-            .child(self.inspector_section(
-                "task:notes",
-                "Notes & Attachments",
-                has_notes,
-                notes_content,
-                cx,
-            ))
-            .child(self.inspector_section(
-                "task:subtasks",
-                "Subtasks",
-                has_subtasks,
-                subtasks_content,
                 cx,
             ))
             .when(!draft, |this| {
@@ -2166,6 +2220,9 @@ impl FlowlistApp {
             .as_ref()
             .map(|rule| rule.schedule)
             .unwrap_or_default();
+        let weekdays_selected = rule
+            .as_ref()
+            .is_some_and(|rule| !rule.selected_weekdays().is_empty());
         let toggle_id = id.clone();
         let mut body = div()
             .flex()
@@ -2227,6 +2284,7 @@ impl FlowlistApp {
                                 &id,
                                 every,
                                 unit,
+                                weekdays_selected,
                                 cx,
                             )),
                         )
@@ -2338,12 +2396,23 @@ impl FlowlistApp {
         id: &TaskId,
         every: u32,
         unit: IntervalUnit,
+        weekdays_selected: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
-        let editing =
-            self.editing == Some(EditField::Repeat) && self.focus == super::FocusArea::Field;
-        let number = if editing {
+        let editing = !weekdays_selected
+            && self.editing == Some(EditField::Repeat)
+            && self.focus == super::FocusArea::Field;
+        let number = if weekdays_selected {
+            div()
+                .on_children_prepainted(self.theme_probe("repeat-custom".to_string()))
+                .flex_1()
+                .px_2()
+                .text_sm()
+                .text_color(theme.text_faint)
+                .child("custom")
+                .into_any_element()
+        } else if editing {
             div()
                 .on_children_prepainted(self.field_editor_probe())
                 .id("repeat-interval-editor")
@@ -3644,7 +3713,7 @@ impl FlowlistApp {
                 .text_color(theme.text_faint)
                 .cursor_pointer()
                 .hover(|style| style.bg(theme.hover))
-                .child("+")
+                .child(icons::icon(Icon::Plus, 12.0, theme.text_faint))
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.focus = super::FocusArea::TagInput;
                     this.suggestion_index = 0;
@@ -3672,6 +3741,7 @@ impl FlowlistApp {
                     })
                     .bg(theme.field)
                     .cursor_pointer()
+                    .when(tags.is_empty() && !active, |this| this.justify_center())
                     .on_children_prepainted(self.theme_probe("tag-box".to_string()))
                     .id("tag-box")
                     .child(row)

@@ -149,6 +149,22 @@ impl EditField {
     }
 }
 
+/// The two pages of the single-task inspector.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum InspectorTab {
+    Properties,
+    Subtasks,
+}
+
+impl InspectorTab {
+    fn slug(self) -> &'static str {
+        match self {
+            InspectorTab::Properties => "properties",
+            InspectorTab::Subtasks => "subtasks",
+        }
+    }
+}
+
 /// The item whose notification schedule is being edited.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum NotificationTarget {
@@ -691,6 +707,8 @@ pub struct FlowlistApp {
     /// Explicit inspector disclosure choices: true means collapsed. Sections
     /// absent from the map use their content-aware default.
     inspector_sections: BTreeMap<String, bool>,
+    /// The active single-task inspector tab.
+    inspector_tab: InspectorTab,
     /// The open "Add Notification" menu and the control it points at.
     notification_menu: Option<NotificationTarget>,
     notification_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
@@ -1199,6 +1217,7 @@ impl FlowlistApp {
             notification_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             inspector_section_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             inspector_sections: session.inspector_sections.clone(),
+            inspector_tab: InspectorTab::Properties,
             notification_menu: None,
             notification_anchor: Rc::new(Cell::new(None)),
             repeat_unit_menu: None,
@@ -8202,6 +8221,7 @@ impl FlowlistApp {
         state["inspector_section_boxes"] =
             serde_json::json!(self.inspector_section_boxes.borrow().clone());
         state["inspector_sections"] = serde_json::json!(self.inspector_sections);
+        state["inspector_tab"] = serde_json::json!(self.inspector_tab.slug());
         state["notification_menu"] =
             serde_json::json!(self.notification_menu.as_ref().map(|target| match target {
                 NotificationTarget::Task(id) => format!("task:{id}"),

@@ -2,30 +2,34 @@
 
 ## Unreleased
 
-- **Collapsible inspector sections.** Title, Action, Dates, Repeat,
-  Notifications, Notes & Attachments and Subtasks each fold from their header;
-  the choice is remembered per device. Project sections cover Project, Dates,
-  Review, Notifications, Tags and Attachments.
+- **Collapsible inspector sections.** Title, Action, Notes & Attachments, Dates,
+  Repeat, Tags and Notifications each fold from their header; the choice is
+  remembered per device. Project sections cover Project, Dates, Review,
+  Notifications, Tags and Attachments.
 - **OmniFocus-style Repeat and Review.** Repeat has a single editable interval
   box with a day/week/month/year dropdown, a Sunday-to-Saturday strip when the
   unit is Days, segmented choices for Due Date / Defer Until Date and
-  Completion / Assigned Dates, and a plain-language summary beneath them.
-  Review shows Next Review, an inline cadence stepper and Last Reviewed, with a
-  sheet for the exact date and interval.
+  Completion / Assigned Dates, and a plain-language summary beneath them. With
+  weekdays selected, the interval box shows a greyed-out “custom”. Review shows
+  Next Review, an inline cadence stepper and Last Reviewed, with a sheet for the
+  exact date and interval.
 - **Sheets keep one action.** The footer hint and Cancel button are gone; Save
   is the only footer button, and Escape still closes the sheet.
+- **Properties and Subtasks tabs.** A single task has two inspector tabs. The
+  first is **Properties**; Subtasks has its own page so the property sheet stays
+  short.
 - **One Notifications section.** The separate top Alerts field is gone.
   Notifications are a chronological list; Add Notification restores a removed
   default or adds a relative or custom alert. Every task notification has a
   checkbox on its right that opens a full-screen reminder at that time (one at
-  a time); the section says “Check the boxes to turn them into full screen
-  reminders.”
+  a time); the section says “Check a notification to show it full screen
+  instead of as a banner”.
 - **OmniFocus-style Tags.** Tags are a separate section with a bordered chip
   box, a `+` control and an inline add field. Project tags use the same chip
   box without the input.
-- **Empty sections start folded.** Action, Dates, Tags, Repeat, Notifications,
-  Notes & Attachments and Subtasks open by default only when they have data.
-  Populated sections stay open.
+- **Empty sections start folded.** Action, Notes & Attachments, Dates, Repeat,
+  Tags and Notifications open by default only when they have data. Populated
+  sections stay open.
 - **Notification parity, except date time zones.** Default notifications can be
   enabled separately for Defer, Planned, Latest Start and Due. Each task or
   project can remove or restore any default, add relative alerts or absolute

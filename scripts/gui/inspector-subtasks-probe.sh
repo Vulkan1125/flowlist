@@ -47,6 +47,35 @@ for _ in $(seq 1 30); do
 done
 echo "window=$window"
 
+# Subtasks live on their own inspector tab now.
+for _ in $(seq 1 80); do
+  if python3 - "$state" <<'PY'
+import json, sys
+sys.exit(0 if "inspector-tab:subtasks" in json.load(open(sys.argv[1])).get("theme_boxes", {}) else 1)
+PY
+  then break; fi
+  "$helpers/flowctl" move $((WX + 600)) $((WY + 300))
+  sleep 0.1
+done
+python3 - "$state" > "$tmp/tab-point" <<'PY'
+import json, sys
+b = json.load(open(sys.argv[1]))["theme_boxes"]["inspector-tab:subtasks"]
+print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
+PY
+set -- $(cat "$tmp/tab-point")
+"$helpers/flowctl" mouse $((WX + $1)) $((WY + $2))
+sleep 0.6
+for _ in $(seq 1 80); do
+  if python3 - "$state" <<'PY'
+import json, sys
+state = json.load(open(sys.argv[1]))
+sys.exit(0 if state.get("inspector_subtasks") else 1)
+PY
+  then break; fi
+  "$helpers/flowctl" move $((WX + 600)) $((WY + 300))
+  sleep 0.1
+done
+
 click_box() {
   python3 - "$state" "$1" "$WX" "$WY" <<'PY' >"$tmp/click.sh"
 import json, sys

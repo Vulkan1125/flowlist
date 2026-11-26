@@ -230,12 +230,13 @@ working domain and GUI. This page tracks what is implemented and verified.
       Start and Due; per-item remove/restore; relative alerts; absolute custom
       notifications; project and action-group schedules; CLI/MCP access.
       Per-date floating/fixed time zones are still a date-model gap.
-- [x] Collapsible inspector sections for Title, Action, Dates, Repeat,
-      Notifications, Notes & Attachments, Subtasks and the project sections.
+- [x] Collapsible Properties sections: Title, Action, Notes & Attachments,
+      Dates, Repeat, Tags and Notifications, plus the project sections.
 - [x] OmniFocus-style Repeat controls with one editable interval box, a
       day/week/month/year dropdown, a Sunday-to-Saturday weekday strip and a
       plain-language summary, plus a Review section with Next Review, cadence
       and Last Reviewed.
+- [x] Single-task inspector tabs: **Properties** and **Subtasks**.
 - [x] Sheets show Save only; Escape still cancels.
 - [x] One Notifications section with an Add Notification menu and a per-row
       full-screen reminder checkbox; the separate Alerts text field is retired.
