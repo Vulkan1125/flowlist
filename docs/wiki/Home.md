@@ -12,7 +12,7 @@ network. There is no account, no sync service and no telemetry.
 > Report corrections on the
 > [issue tracker](https://github.com/Vulkan1125/flowlist/issues).
 
-![The Flowlist window showing the Inbox](images/gui-inbox.png)
+![The Flowlist window showing the Inbox](images/gui-inbox-v2.png)
 
 *The Inbox in the Catppuccin theme. Plain is the default; all eleven families
 are in Settings → Appearance.*
@@ -66,56 +66,56 @@ change.
 
 The Inbox is for capture, not for storage. Process it until it is empty.
 
-![The Inbox](images/gui-inbox.png)
+![The Inbox](images/gui-inbox-v2.png)
 
 ### Today
 
 Today gathers overdue work, work due today, work deferred to today and planned
 today.
 
-![Today](images/gui-today.png)
+![Today](images/gui-today-v2.png)
 
 ### Projects
 
 Projects hold an outline of tasks. They can be parallel, sequential or a
 single-actions list, and they can live in nested folders.
 
-![A project and its outline](images/gui-project.png)
+![A project and its outline](images/gui-project-v2.png)
 
 ### Inspector
 
 The inspector is the full record: notes, tags, dates, repeat, priority,
 checklist, subtasks, attachments and notifications.
 
-![The task inspector](images/gui-inspector.png)
+![The task inspector](images/gui-inspector-v2.png)
 
 ### Capture
 
 Press `⌃⌥Space` anywhere. One line can carry a tag, a project, dates, an
 estimate, a repeat rule, a flag and a note.
 
-![Quick capture](images/gui-capture.png)
+![Quick capture](images/gui-capture-v2.png)
 
 ### Settings
 
 Settings covers appearance, the sidebar, workflow, reminders, Calendar,
 Nearby, Trash, Mobile and About.
 
-![Settings](images/gui-settings.png)
+![Settings](images/gui-settings-v2.png)
 
 ### Forecast
 
 Forecast combines the month grid, the day list and Calendar events, with
 separate dates for defer, planned and due.
 
-![Forecast](images/gui-forecast.png)
+![Forecast](images/gui-forecast-v2.png)
 
 ### View editor
 
 Saved views have a Simple tab for common filters and a Comprehensive tab for
 the full rule tree, project rules, date ranges and comments.
 
-![The view editor](images/gui-perspective-editor.png)
+![The view editor](images/gui-perspective-editor-v2.png)
 
 ## Feature map
 

@@ -6,7 +6,7 @@ theme and size you left it with.
 *The screenshots here use the Catppuccin theme; the Settings shot shows Plain's
 accent picker. Every family is one click away in Settings → Appearance.*
 
-![The Inbox with a working set of tasks](images/gui-inbox.png)
+![The Inbox with a working set of tasks](images/gui-inbox-v2.png)
 
 ## Capture
 
@@ -22,7 +22,7 @@ There are three ways to add a task:
 - **`n`** puts the caret in the capture bar at the top of the list, when the
   view has one.
 
-![The floating capture panel with a parsed task](images/gui-capture.png)
+![The floating capture panel with a parsed task](images/gui-capture-v2.png)
 
 The line is parsed as you type, and the chips under it show where the task will
 land. A plain thought goes to the Inbox; `::Project` files it into a project;
@@ -88,9 +88,9 @@ a turning arrow for Defer; hovering names the field.
 Toggle the inspector with `i` or `⌘I`. It edits the selected task without
 leaving the list.
 
-![The task inspector](images/gui-inspector.png)
+![The task inspector](images/gui-inspector-v2.png)
 
-![A project task selected with the inspector open](images/gui-inspector.png)
+![A project task selected with the inspector open](images/gui-inspector-v2.png)
 
 - **Title, notes, estimate, repeat** are editable fields. `Tab` / `Enter`
   saves the field and moves to the next one; `Esc` cancels the field.
@@ -214,13 +214,13 @@ remains a separate upgrade rather than a notification-only change.
 
 Create a project with `⇧⌘N` (or **＋ Project** at the bottom of the rail).
 
-![A project outline](images/gui-project.png)
+![A project outline](images/gui-project-v2.png)
 
 A project can be **Parallel** (all tasks available), **Sequential** (one at a
 time) or single-action, and Active, On hold, Done or Dropped. Projects live in
 folders and can carry their own tags, dates, attachments and icon.
 
-![A project outline with its progress and review banner](images/gui-project.png)
+![A project outline with its progress and review banner](images/gui-project-v2.png)
 
 - The banner shows progress, the next review date, the status and the project
   type.
@@ -249,11 +249,11 @@ leaves focus.
 
 ## Views
 
-![Today](images/gui-today.png)
+![Today](images/gui-today-v2.png)
 
 Forecast combines a month grid, a day list and Calendar events:
 
-![Forecast](images/gui-forecast.png)
+![Forecast](images/gui-forecast-v2.png)
 
 Button titles under the header icons can be turned off in **Settings →
 Workflow → Show button titles**. Search has no title.
@@ -276,7 +276,7 @@ The rail is the map of the library:
 | **Attachments** | open tasks with files or links |
 | **Nearby** | tags with a location, ranked by distance |
 
-![Today, grouped into Overdue and Today](images/gui-today.png)
+![Today, grouped into Overdue and Today](images/gui-today-v2.png)
 
 `⌘1`…`⌘8` jump between the built-in views. The back and forward arrows (`⌘[` /
 `⌘]`) walk the views you visited.
@@ -317,7 +317,7 @@ titles itself **Search** and ranks the closest matches first.
   project” (or “with parent”) instead of implying the task owns it.
 - **Right-click a folder** for Open, Rename, **Edit folder…**, New project here,
   New subfolder and Delete.
-![The saved-view editor](images/gui-perspective-editor.png)
+![The saved-view editor](images/gui-perspective-editor-v2.png)
 
 - **Saved perspectives have two tabs.** **Simple** is the original editor:
   the common checkboxes and pop-up filters for Inbox, Flagged, Status,
@@ -419,7 +419,7 @@ The status bar names the last action and its Undo until the next one.
 
 ## Settings
 
-![Settings](images/gui-settings.png)
+![Settings](images/gui-settings-v2.png)
 
 Press `⌘,`. The sheet opens at a fixed size and can be resized from the grip in
 its bottom-right corner. When the content no longer fits, a thin Zed-style
@@ -442,7 +442,7 @@ eight sections on the left (`⌘1`…`⌘8` jump between them):
 - **About** — version, library folder, GitHub and wiki links, and the update
   check.
 
-![Settings on the Appearance section](images/gui-settings.png)
+![Settings on the Appearance section](images/gui-settings-v2.png)
 
 ### Reminders
 
