@@ -1946,8 +1946,9 @@ impl FlowlistApp {
             .child(div().size(px(6.)).rounded_full().bg(color))
             .child(
                 div()
-                    .w(px(74.))
+                    .w(px(96.))
                     .flex_shrink_0()
+                    .whitespace_nowrap()
                     .text_xs()
                     .text_color(theme.text_faint)
                     .child(event.time_label()),

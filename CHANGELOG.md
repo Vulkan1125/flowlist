@@ -11,6 +11,8 @@
   near horizon is **Later this month** and the far folded horizon is **Later**.
 - **Settings remembers its size.** The Settings sheet reopens at the size it was
   last dragged to.
+- **Calendar event times stay on one line.** Forecast shows the full
+  `start – end` range on one row instead of wrapping the end time below it.
 - **Collapsible inspector sections.** Title, Action, Notes & Attachments, Dates,
   Repeat, Tags and Notifications each fold from their header; the choice is
   remembered per device. Project sections cover Project, Dates, Review,

@@ -64,6 +64,7 @@ assert state.get("calendar_permission") == "Allowed", state.get("calendar_permis
 agenda = state.get("calendar_event_boxes", {})
 for key in ("test-standup", "test-holiday", "test-birthday", "test-review"):
     assert key in agenda, (key, agenda)
+    assert agenda[key][3] <= 30, (key, agenda[key])
 chips = state.get("calendar_chip_boxes", {})
 # Today has three events but the month cell shows only two chips; the agenda
 # still lists all of them.
