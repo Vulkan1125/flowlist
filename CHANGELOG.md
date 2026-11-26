@@ -20,7 +20,7 @@
   its familiar checkbox and pop-up filters. **Comprehensive** is a single
   quiet OmniFocus 4-style contents list: indented rule text with code-editor
   guide lines, a right-side `⋯` menu, a hover plus, a faint Add a new rule,
-  and a shared Presentation section. The icon background is a squircle.
+  and a shared Presentation section. The icon background is square.
 - **More duration and view options.** Estimated-duration rules now include
   **greater than** and **between**, with a custom-minutes field for less/greater.
   Date-range rules have a calendar picker beside On/Between date fields.
@@ -37,6 +37,12 @@
   task actually has a notification; an empty list just says “No notifications”.
 - **Perspective menus own their scrolling.** Scrolling the rule catalogue or a
   layout menu no longer moves the whole sheet behind it.
+- **View audit fixes.** Tag grouping and sorting now see inherited parent and
+  project tags. Action groups still count as groups after their children are
+  completed. Remaining and Due Soon no longer include tasks in completed or
+  dropped projects. Tasks in dropped projects inherit the project's dropped
+  date. Hour-based date ranges compare timestamps instead of whole days, and
+  clearing a Between endpoint makes it genuinely open-ended.
 - **Calendar events in Forecast.** Calendar now has its own Settings section.
   Turn on Forecast events, grant read-only access, and switch individual
   calendars (holidays, birthdays and the rest) on or off. Events sit above each

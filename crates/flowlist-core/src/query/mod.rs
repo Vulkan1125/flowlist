@@ -1098,12 +1098,8 @@ impl<'a> GroupContext<'a> {
                 }
             }
             GroupBy::Tag => {
-                let mut candidates: Vec<TagId> = task.tags.iter().cloned().collect();
-                if let Some(project_id) = &task.project {
-                    if let Some(project) = db.projects.get(project_id) {
-                        candidates.extend(project.tags.iter().cloned());
-                    }
-                }
+                let candidates: Vec<TagId> =
+                    perspective::effective_tags(db, task).into_iter().collect();
                 let best = candidates
                     .into_iter()
                     .filter_map(|id| {
@@ -1162,13 +1158,13 @@ impl<'a> GroupContext<'a> {
                 ),
             },
             GroupBy::CompletedDate => {
-                match task.completed_at {
+                match task.completed_at.or_else(|| task.completed.then_some(task.modified_at)) {
                     Some(at) => {
                         let date = crate::time::local_date(at);
                         (
                             format!("completed:{}", date.format("%Y-%m-%d")),
                             human_date(&Stamp::date_only(date), self.at),
-                            (date - crate::time::local_date(self.at)).num_days(),
+                            (crate::time::local_date(self.at) - date).num_days(),
                         )
                     }
                     None => (
@@ -1179,13 +1175,20 @@ impl<'a> GroupContext<'a> {
                 }
             }
             GroupBy::DroppedDate => {
-                match task.trashed_at {
+                let dropped = task.trashed_at.or_else(|| {
+                    row.project
+                        .as_ref()
+                        .and_then(|id| db.projects.get(id))
+                        .filter(|project| project.status == crate::model::ProjectStatus::Dropped)
+                        .and_then(|project| project.dropped_at)
+                });
+                match dropped {
                     Some(at) => {
                         let date = crate::time::local_date(at);
                         (
                             format!("dropped:{}", date.format("%Y-%m-%d")),
                             human_date(&Stamp::date_only(date), self.at),
-                            (date - crate::time::local_date(self.at)).num_days(),
+                            (crate::time::local_date(self.at) - date).num_days(),
                         )
                     }
                     None => (
@@ -1200,7 +1203,7 @@ impl<'a> GroupContext<'a> {
                 (
                     format!("added:{}", date.format("%Y-%m-%d")),
                     human_date(&Stamp::date_only(date), self.at),
-                    (date - crate::time::local_date(self.at)).num_days(),
+                    (crate::time::local_date(self.at) - date).num_days(),
                 )
             }
             GroupBy::ChangedDate => {
@@ -1208,7 +1211,7 @@ impl<'a> GroupContext<'a> {
                 (
                     format!("changed:{}", date.format("%Y-%m-%d")),
                     human_date(&Stamp::date_only(date), self.at),
-                    (date - crate::time::local_date(self.at)).num_days(),
+                    (crate::time::local_date(self.at) - date).num_days(),
                 )
             }
             GroupBy::NextReview => {
@@ -1230,12 +1233,8 @@ impl<'a> GroupContext<'a> {
                 }
             }
             GroupBy::TagsCombined => {
-                let mut candidates: Vec<TagId> = task.tags.iter().cloned().collect();
-                if let Some(project_id) = &task.project {
-                    if let Some(project) = db.projects.get(project_id) {
-                        candidates.extend(project.tags.iter().cloned());
-                    }
-                }
+                let candidates: Vec<TagId> =
+                    perspective::effective_tags(db, task).into_iter().collect();
                 let mut paths: Vec<(i64, String)> = candidates
                     .into_iter()
                     .filter_map(|id| self.tags.get(&id).cloned())

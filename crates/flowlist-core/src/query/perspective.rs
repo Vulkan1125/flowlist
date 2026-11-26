@@ -334,7 +334,7 @@ pub fn condition_matches(db: &Db, task: &Task, condition: &Condition, at: DateTi
         Condition::StatusKind { value } => match value {
             FilterStatus::Flagged => task.flagged,
             FilterStatus::DueSoon => {
-                if task.completed || project_dropped(db, task) {
+                if task.completed || project_closed(db, task) {
                     return false;
                 }
                 let days = db.settings.due_soon_days.max(0) as i64;
@@ -416,7 +416,7 @@ fn tag_set(db: &Db, ids: &[TagId], include_children: bool) -> BTreeSet<TagId> {
 
 /// Every tag that applies to an action: its own tags, tags on parent actions,
 /// and tags on the project.
-fn effective_tags(db: &Db, task: &Task) -> BTreeSet<TagId> {
+pub(crate) fn effective_tags(db: &Db, task: &Task) -> BTreeSet<TagId> {
     let mut tags = task.tags.clone();
     let mut current = task.parent.clone();
     let mut guard = 0;
@@ -445,6 +445,12 @@ fn project_dropped(db: &Db, task: &Task) -> bool {
         .is_some_and(|project| project.status == ProjectStatus::Dropped)
 }
 
+fn project_closed(db: &Db, task: &Task) -> bool {
+    db.effective_project(&task.id)
+        .and_then(|id| db.projects.get(&id))
+        .is_some_and(|project| project.status.is_closed())
+}
+
 fn availability_matches(
     db: &Db,
     task: &Task,
@@ -455,8 +461,14 @@ fn availability_matches(
     match value {
         AvailabilityFilter::FirstAvailable => task_is_first_available(db, task, at),
         AvailabilityFilter::Available => availability.is_available(),
-        AvailabilityFilter::Remaining => !task.completed && !project_dropped(db, task),
-        AvailabilityFilter::Completed => task.completed,
+        AvailabilityFilter::Remaining => !task.completed && !project_closed(db, task),
+        AvailabilityFilter::Completed => {
+            task.completed
+                || db
+                    .effective_project(&task.id)
+                    .and_then(|id| db.projects.get(&id))
+                    .is_some_and(|project| project.status == ProjectStatus::Done)
+        }
         AvailabilityFilter::Dropped => project_dropped(db, task),
     }
 }
@@ -490,14 +502,11 @@ fn task_is_first_available(db: &Db, task: &Task, at: DateTime<Utc>) -> bool {
 }
 
 fn item_kind_matches(db: &Db, task: &Task, value: ItemKindFilter) -> bool {
-    let task_has_children = task
-        .child_order
-        .iter()
-        .any(|id| db.tasks.get(id).is_some_and(|child| !child.completed))
+    let task_has_children = !task.child_order.is_empty()
         || db
             .tasks
             .values()
-            .any(|other| other.parent.as_ref() == Some(&task.id) && !other.completed);
+            .any(|other| other.parent.as_ref() == Some(&task.id));
     match value {
         // Custom perspectives list actions, not project rows. A project row is
         // never emitted, so this rule only matches once project-level
@@ -594,7 +603,12 @@ fn date_for(
         DateField::Planned => db.effective_planned(&task.id).map(|stamp| stamp.at),
         DateField::Defer => db.effective_defer(&task.id).map(|stamp| stamp.at),
         DateField::Completed => task.completed_at,
-        DateField::Dropped => task.trashed_at,
+        DateField::Dropped => task.trashed_at.or_else(|| {
+            db.effective_project(&task.id)
+                .and_then(|id| db.projects.get(&id))
+                .filter(|project| project.status == ProjectStatus::Dropped)
+                .and_then(|project| project.dropped_at)
+        }),
         DateField::Added => Some(task.created_at),
         DateField::Changed => Some(task.modified_at),
     }
@@ -609,12 +623,22 @@ fn range_matches(date: DateTime<Utc>, range: &DateRangeFilter, at: DateTime<Utc>
         DateRangeFilter::Today => date_only == today,
         DateRangeFilter::Tomorrow => date_only == today + Duration::days(1),
         DateRangeFilter::InPast { amount, unit } => {
-            let edge = local_date(shift(at, *unit, -(*amount as i64)));
-            date_only <= today && date_only >= edge
+            if *unit == DateUnit::Hours {
+                let edge = at - Duration::hours(*amount as i64);
+                date <= at && date >= edge
+            } else {
+                let edge = local_date(shift(at, *unit, -(*amount as i64)));
+                date_only <= today && date_only >= edge
+            }
         }
         DateRangeFilter::InNext { amount, unit } => {
-            let edge = local_date(shift(at, *unit, *amount as i64));
-            date_only >= today && date_only <= edge
+            if *unit == DateUnit::Hours {
+                let edge = at + Duration::hours(*amount as i64);
+                date >= at && date <= edge
+            } else {
+                let edge = local_date(shift(at, *unit, *amount as i64));
+                date_only >= today && date_only <= edge
+            }
         }
         DateRangeFilter::Between { from, to } => {
             from.is_none_or(|from| date_only >= from) && to.is_none_or(|to| date_only <= to)
@@ -1019,6 +1043,170 @@ mod tests {
         let (db, undated) = db_with_task(Task::new("undated"));
         assert!(!matches(&db, &undated, &future, Utc::now()));
         assert!(!matches(&db, &undated, &past, Utc::now()));
+    }
+
+    #[test]
+    fn remaining_and_due_soon_exclude_closed_projects() {
+        let mut db = Db::new();
+        let mut project = Project::new("Done project");
+        project.status = ProjectStatus::Done;
+        let project_id = db.add_project(project);
+        let mut task = Task::new("left behind");
+        task.project = Some(project_id.clone());
+        let task_id = db.add_task_to_inbox(task);
+        db.tasks.get_mut(&task_id).unwrap().project = Some(project_id);
+        let task = db.tasks[&task_id].clone();
+        let remaining = FilterNode::condition(Condition::Availability {
+            value: AvailabilityFilter::Remaining,
+        });
+        assert!(!matches(&db, &task, &remaining, Utc::now()));
+        let soon = FilterNode::condition(Condition::StatusKind {
+            value: FilterStatus::DueSoon,
+        });
+        db.tasks.get_mut(&task_id).unwrap().due =
+            Some(Stamp::date_only(local_date(Utc::now())));
+        let task = db.tasks[&task_id].clone();
+        assert!(!matches(&db, &task, &soon, Utc::now()));
+    }
+
+    #[test]
+    fn due_soon_window_edges_are_calendar_days() {
+        let today = local_date(Utc::now());
+        let rule = FilterNode::condition(Condition::StatusKind {
+            value: FilterStatus::DueSoon,
+        });
+        for (offset, expected) in [(-3, true), (0, true), (2, true), (3, false)] {
+            let mut task = Task::new("edge");
+            task.due = Some(Stamp::date_only(today + Duration::days(offset)));
+            let (db, task) = db_with_task(task);
+            assert_eq!(matches(&db, &task, &rule, Utc::now()), expected, "offset {offset}");
+        }
+    }
+
+    #[test]
+    fn tag_grouping_uses_parent_and_project_tags() {
+        let mut db = Db::new();
+        let mut work = Tag::new("Work");
+        work.id = crate::ids::TagId::new();
+        let work_id = work.id.clone();
+        db.tags.insert(work_id.clone(), work);
+        db.tag_roots.push(work_id.clone());
+        let project_id = db.add_project(Project::new("Project"));
+        db.projects.get_mut(&project_id).unwrap().tags.insert(work_id.clone());
+        let mut parent = Task::new("Parent");
+        parent.tags.insert(work_id.clone());
+        parent.project = Some(project_id.clone());
+        let parent_id = db.add_task_to_inbox(parent);
+        db.tasks.get_mut(&parent_id).unwrap().project = Some(project_id.clone());
+        db.projects
+            .get_mut(&project_id)
+            .unwrap()
+            .task_order
+            .push(parent_id.clone());
+        let mut child = Task::new("Child");
+        child.parent = Some(parent_id.clone());
+        let child_id = db.add_task_to_inbox(child);
+        db.tasks.get_mut(&child_id).unwrap().parent = Some(parent_id.clone());
+        db.tasks
+            .get_mut(&parent_id)
+            .unwrap()
+            .child_order
+            .push(child_id.clone());
+        let filter = FilterNode::condition(Condition::ItemKind {
+            value: ItemKindFilter::NotProjectOrGroup,
+        });
+        let groups = crate::query::run(
+            &db,
+            &filter,
+            crate::model::SortBy::Manual,
+            crate::model::GroupBy::Tag,
+            false,
+            Utc::now(),
+        );
+        let titles: Vec<&str> = groups.iter().map(|group| group.title.as_str()).collect();
+        assert!(titles.contains(&"Work"), "{titles:?}");
+    }
+
+    #[test]
+    fn action_groups_remain_groups_after_children_complete() {
+        let mut db = Db::new();
+        let mut parent = Task::new("Group");
+        parent.sequential = true;
+        let parent_id = db.add_task_to_inbox(parent);
+        let mut child = Task::new("Done child");
+        child.parent = Some(parent_id.clone());
+        child.completed = true;
+        let child_id = db.add_task_to_inbox(child);
+        db.tasks.get_mut(&child_id).unwrap().parent = Some(parent_id.clone());
+        db.tasks.get_mut(&child_id).unwrap().completed = true;
+        let parent = db.tasks[&parent_id].clone();
+        let rule = FilterNode::condition(Condition::ItemKind {
+            value: ItemKindFilter::Group,
+        });
+        assert!(matches(&db, &parent, &rule, Utc::now()));
+    }
+
+    #[test]
+    fn hour_ranges_use_timestamps_not_calendar_days() {
+        let at = Utc::now();
+        let mut task = Task::new("two hours ago");
+        task.due = Some(Stamp {
+            at: at - Duration::hours(2),
+            has_time: true,
+        });
+        let mut db = Db::new();
+        let id = db.add_task_to_inbox(task);
+        let task = db.tasks[&id].clone();
+        let one_hour = FilterNode::condition(Condition::DateRange {
+            field: DateField::Due,
+            range: DateRangeFilter::InPast {
+                amount: 1,
+                unit: DateUnit::Hours,
+            },
+        });
+        let three_hours = FilterNode::condition(Condition::DateRange {
+            field: DateField::Due,
+            range: DateRangeFilter::InPast {
+                amount: 3,
+                unit: DateUnit::Hours,
+            },
+        });
+        assert!(!matches(&db, &task, &one_hour, at));
+        assert!(matches(&db, &task, &three_hours, at));
+    }
+
+    #[test]
+    fn tasks_in_dropped_projects_inherit_the_dropped_date() {
+        let mut db = Db::new();
+        let mut project = Project::new("Dropped");
+        project.status = ProjectStatus::Dropped;
+        project.dropped_at = Some(Utc::now());
+        let project_id = db.add_project(project);
+        let mut task = Task::new("inside");
+        task.project = Some(project_id.clone());
+        let task_id = db.add_task_to_inbox(task);
+        db.tasks.get_mut(&task_id).unwrap().project = Some(project_id);
+        let task = db.tasks[&task_id].clone();
+        let rule = FilterNode::condition(Condition::DateRange {
+            field: DateField::Dropped,
+            range: DateRangeFilter::Today,
+        });
+        assert!(matches(&db, &task, &rule, Utc::now()));
+        let groups = crate::query::run(
+            &db,
+            &FilterNode::condition(Condition::ItemKind {
+                value: ItemKindFilter::NotProjectOrGroup,
+            }),
+            crate::model::SortBy::Manual,
+            crate::model::GroupBy::DroppedDate,
+            true,
+            Utc::now(),
+        );
+        assert!(
+            groups.iter().any(|group| group.title != "Not Dropped"),
+            "{:?}",
+            groups.iter().map(|group| group.title.clone()).collect::<Vec<_>>()
+        );
     }
 
     #[test]

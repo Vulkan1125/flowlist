@@ -95,17 +95,11 @@ pub fn sort_rows(db: &Db, rows: &mut [TaskRow], sort: SortBy) {
                 })
         }),
         SortBy::Tag => rows.sort_by_cached_key(|row| {
-            let mut names = db
+            let mut names: Vec<String> = db
                 .tasks
                 .get(&row.id)
-                .map(|task| task.tags.clone())
-                .unwrap_or_default();
-            if let Some(project_id) = &row.project {
-                if let Some(project) = db.projects.get(project_id) {
-                    names.extend(project.tags.iter().cloned());
-                }
-            }
-            let mut names: Vec<String> = names
+                .map(|task| crate::query::perspective::effective_tags(db, task))
+                .unwrap_or_default()
                 .into_iter()
                 .filter_map(|id| db.tags.get(&id).map(|tag| tag.name.to_lowercase()))
                 .collect();
@@ -123,9 +117,16 @@ pub fn sort_rows(db: &Db, rows: &mut [TaskRow], sort: SortBy) {
             option_cmp(right, left)
         }),
         SortBy::DroppedDate => rows.sort_by(|a, b| {
-            let left = db.tasks.get(&a.id).and_then(|task| task.trashed_at);
-            let right = db.tasks.get(&b.id).and_then(|task| task.trashed_at);
-            option_cmp(right, left)
+            let dropped = |row: &TaskRow| {
+                db.tasks.get(&row.id).and_then(|task| task.trashed_at).or_else(|| {
+                    row.project
+                        .as_ref()
+                        .and_then(|id| db.projects.get(id))
+                        .filter(|project| project.status == crate::model::ProjectStatus::Dropped)
+                        .and_then(|project| project.dropped_at)
+                })
+            };
+            option_cmp(dropped(b), dropped(a))
         }),
         SortBy::NextReview => rows.sort_by(|a, b| {
             let left = db

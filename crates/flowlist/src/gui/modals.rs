@@ -3322,7 +3322,7 @@ impl FlowlistApp {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(px(10.))
+                    .rounded(px(2.))
                     .border_1()
                     .border_color(if icon_open {
                         theme.accent

@@ -4204,10 +4204,29 @@ impl FlowlistApp {
             if let Some(modal) = self.modal.as_mut() {
                 if let modals::Modal::Perspective { form } = modal {
                     if let Some(node) = form.rule_mut(rule) {
-                        if second {
-                            node.text2.clear();
-                        } else {
-                            node.text.clear();
+                        let today = local_date(now()).format("%Y-%m-%d").to_string();
+                        match node.condition_ref() {
+                            Some(flowlist_core::model::Condition::DateRange {
+                                range: flowlist_core::model::DateRangeFilter::Between { .. },
+                                ..
+                            }) => {
+                                if second {
+                                    node.text2.clear();
+                                } else {
+                                    node.text.clear();
+                                }
+                            }
+                            Some(flowlist_core::model::Condition::DateRange {
+                                range: flowlist_core::model::DateRangeFilter::On { .. },
+                                ..
+                            }) => node.text.set(today),
+                            _ => {
+                                if second {
+                                    node.text2.clear();
+                                } else {
+                                    node.text.clear();
+                                }
+                            }
                         }
                     }
                 }

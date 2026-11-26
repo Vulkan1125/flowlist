@@ -804,9 +804,9 @@ fn edited_range(range: &DateRangeFilter, text: &str, text2: &str) -> DateRangeFi
         DateRangeFilter::On { date } => DateRangeFilter::On {
             date: parse_date_input(text).unwrap_or(*date),
         },
-        DateRangeFilter::Between { from, to } => DateRangeFilter::Between {
-            from: parse_date_input(text).or(*from),
-            to: parse_date_input(text2).or(*to),
+        DateRangeFilter::Between { .. } => DateRangeFilter::Between {
+            from: parse_date_input(text),
+            to: parse_date_input(text2),
         },
         DateRangeFilter::InPast { amount, unit } => DateRangeFilter::InPast {
             amount: parse_u32(text).unwrap_or(*amount),
@@ -2059,6 +2059,33 @@ mod tests {
             &form.filter(),
             at
         ));
+    }
+
+    #[test]
+    fn clearing_a_between_endpoint_makes_it_open_ended() {
+        let date = flowlist_core::time::local_date(flowlist_core::time::now());
+        let mut id = 1;
+        let mut node = RuleNode::from_filter(
+            &FilterNode::condition(Condition::DateRange {
+                field: DateField::Due,
+                range: DateRangeFilter::Between {
+                    from: Some(date),
+                    to: Some(date),
+                },
+            }),
+            &mut id,
+        );
+        node.text2.set(String::new());
+        assert_eq!(
+            node.condition(),
+            Condition::DateRange {
+                field: DateField::Due,
+                range: DateRangeFilter::Between {
+                    from: Some(date),
+                    to: None,
+                },
+            }
+        );
     }
 
     #[test]
