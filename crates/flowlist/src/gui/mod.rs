@@ -665,6 +665,11 @@ pub struct FlowlistApp {
     /// Theme swatches and appearance chips in Settings, so a probe can click
     /// a family or light/dark without guessing at the grid.
     theme_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// The perspective editor's open select, the row the arrow keys point at,
+    /// and where each select painted so its menu can be a root overlay.
+    view_menu: Option<perspective::ViewField>,
+    view_menu_cursor: usize,
+    view_menu_scroll: ScrollHandle,
     /// Where editor controls painted, so a GUI probe can click them without
     /// guessing at pixels.
     view_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
@@ -835,6 +840,7 @@ pub struct FlowlistApp {
     /// Last size chosen by dragging the Settings sheet's corner. `None` uses
     /// the width and height that fit the current window.
     settings_size: Option<(f32, f32)>,
+    perspective_size: Option<(f32, f32)>,
     /// Where the pointer grabbed the Settings scrollbar thumb, in points.
     scroll_drag_grab: Rc<Cell<Option<f32>>>,
     /// Where the pointer grabbed the inspector scrollbar thumb, in points.
@@ -1159,6 +1165,9 @@ impl FlowlistApp {
             date_picker_unit: ClockUnit::Hour,
             date_picker_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             theme_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            view_menu: None,
+            view_menu_cursor: 0,
+            view_menu_scroll: ScrollHandle::new(),
             view_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             archive_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             title_space: Rc::new(Cell::new(None)),
@@ -1255,6 +1264,7 @@ impl FlowlistApp {
             modal_focus: 0,
             modal_scroll: ScrollHandle::new(),
             settings_size: session.settings_size,
+            perspective_size: session.perspective_size,
             scroll_drag_grab: Rc::new(Cell::new(None)),
             inspector_scroll_drag_grab: Rc::new(Cell::new(None)),
             toast,
@@ -1669,6 +1679,7 @@ impl FlowlistApp {
             calendar_hidden: self.calendar_hidden.clone(),
             forecast_due_only: Some(self.forecast_due_only),
             settings_size: self.settings_size,
+            perspective_size: self.perspective_size,
             fullscreen_reminders: Some(self.fullscreen_reminders),
             pause_media_on_reminder: Some(self.pause_media_on_reminder),
             reminder_background: Some(self.reminder_background.slug().to_string()),
@@ -5033,6 +5044,8 @@ impl FlowlistApp {
         }
         self.modal = Some(modal);
         self.modal_focus = 0;
+        self.view_menu = None;
+        self.view_menu_cursor = 0;
         self.view_boxes.borrow_mut().clear();
         self.settings_toggle_boxes.borrow_mut().clear();
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
@@ -5074,6 +5087,8 @@ impl FlowlistApp {
         self.modal_focus = 0;
         self.pending_modal = None;
         self.modal_error = None;
+        self.view_menu = None;
+        self.view_menu_cursor = 0;
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
         self.focus = FocusArea::Content;
         self.save_session();
@@ -5085,6 +5100,8 @@ impl FlowlistApp {
             return;
         };
         let uninstall = matches!(modal, modals::Modal::Uninstall { .. });
+        self.view_menu = None;
+        self.view_menu_cursor = 0;
         self.command_error = None;
         let result = self
             .apply_modal(&modal)
@@ -6089,6 +6106,43 @@ impl FlowlistApp {
                     self.traffic_lights_visible = *traffic_lights;
                 }
                 cx.notify();
+                return;
+            }
+            if let Some(field) = self.view_menu {
+                let choices = self.view_choices(field);
+                let count = choices.len();
+                match stroke.key.as_str() {
+                    "escape" => {
+                        self.view_menu = None;
+                        cx.notify();
+                    }
+                    "down" | "j" => {
+                        if count > 0 {
+                            self.view_menu_cursor = (self.view_menu_cursor + 1) % count;
+                        }
+                        cx.notify();
+                    }
+                    "up" | "k" => {
+                        if count > 0 {
+                            self.view_menu_cursor = (self.view_menu_cursor + count - 1) % count;
+                        }
+                        cx.notify();
+                    }
+                    "home" => {
+                        self.view_menu_cursor = 0;
+                        cx.notify();
+                    }
+                    "end" => {
+                        self.view_menu_cursor = count.saturating_sub(1);
+                        cx.notify();
+                    }
+                    "enter" | "return" => {
+                        if let Some(choice) = choices.get(self.view_menu_cursor).cloned() {
+                            self.choose_view_choice(choice, cx);
+                        }
+                    }
+                    _ => {}
+                }
                 return;
             }
             let paste = if mods.platform && stroke.key == "v" {
@@ -8104,11 +8158,16 @@ impl FlowlistApp {
                 .and_then(|(_, index)| self.first_icon_match(index))
                 .map(|spec| spec.stored()),
         });
+        state["view_menu"] = serde_json::json!(self.view_menu.map(|field| field.key()));
         state["view_boxes"] = serde_json::json!(self.view_boxes.borrow().clone());
         state["view_form"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::Perspective { form }) => Some(serde_json::json!({
                 "name": form.name.text(),
                 "description": form.description.text(),
+                "tab": match form.tab {
+                    perspective::PerspectiveTab::Simple => "simple",
+                    perspective::PerspectiveTab::Comprehensive => "comprehensive",
+                },
                 "icon": form.icon.as_ref().map(|icon| icon.stored()),
                 "icon_open": form.icon_open,
                 "pinned": form.pinned,
@@ -8328,6 +8387,7 @@ impl FlowlistApp {
             _ => None,
         });
         state["settings_size"] = serde_json::json!(self.settings_size);
+        state["perspective_size"] = serde_json::json!(self.perspective_size);
         state["settings_scroll"] = serde_json::json!(f32::from(-self.modal_scroll.offset().y));
         state["settings_sidebar_group"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::Settings { sidebar_group, .. }) => {
@@ -9347,6 +9407,9 @@ impl Render for FlowlistApp {
         }
         if self.quick_open.is_some() {
             root = root.child(self.render_quick_open(window, cx));
+        }
+        if let Some(layer) = self.render_view_menu_layer(cx) {
+            root = root.child(layer);
         }
         // Written after the body renders, so measurements taken during this
         // frame (such as the title slot width) are current in the file.

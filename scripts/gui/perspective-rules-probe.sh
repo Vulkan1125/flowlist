@@ -112,6 +112,26 @@ found = any(sys.argv[2] in (row.get("label") or "") for row in rows)
 sys.exit(0 if found else 1)
 PY
 }
+count_rows() {
+  python3 - "$state" "$1" <<'PY'
+import json, sys
+rows = (json.load(open(sys.argv[1])).get("view_form") or {}).get("rows") or []
+print(sum(1 for row in rows if sys.argv[2] in (row.get("label") or "")))
+PY
+}
+wait_tab() {
+  for _ in $(seq 1 80); do
+    if python3 - "$state" "$1" <<'PY'
+import json, sys
+form = json.load(open(sys.argv[1])).get("view_form") or {}
+sys.exit(0 if form.get("tab") == sys.argv[2] else 1)
+PY
+    then return 0; fi
+    sleep 0.1
+  done
+  echo "FAIL: tab is not '$1'" >&2
+  exit 1
+}
 wait_row() {
   for _ in $(seq 1 80); do
     if row_has "$1"; then return 0; fi
@@ -144,10 +164,33 @@ launch
 wait_value modal "Perspective"
 click_map view_boxes "modal-field:0"
 "$helpers/flowctl" text "a"
+wait_tab simple
+wait_map view_boxes "perspective-resize"
+point=$(python3 - "$state" <<'PY'
+import json, sys
+b = json.load(open(sys.argv[1]))["view_boxes"]["perspective-resize"]
+print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
+PY
+)
+"$helpers/flowctl" drag $((WX + ${point% *})) $((WY + ${point#* })) $((WX + ${point% *} + 120)) $((WY + ${point#* } + 80))
+sleep 0.5
+python3 - "$state" <<'PY'
+import json, sys
+size = json.load(open(sys.argv[1])).get("perspective_size")
+assert size is not None and size[0] > 760 and size[1] > 640, size
+PY
+click_map view_boxes "status"
+wait_value view_menu "status"
+click_map view_boxes "option:status:available"
+wait_value view_menu ""
+click_map view_boxes "modal-flagged"
+click_map view_boxes "perspective-tab:comprehensive"
+wait_tab comprehensive
+wait_row "Is flagged"
 wait_row "Availability is Remaining"
 
 echo "2. The catalogue adds a rule beneath the top-level All"
-click_map view_boxes "rule-add:1"
+click_map view_boxes "rule-plus:1"
 python3 - "$state" <<'PY'
 import json, sys
 form = json.load(open(sys.argv[1])).get("view_form") or {}
@@ -172,6 +215,18 @@ fi
 sleep 0.3
 click_map view_boxes "rule-option:1:Status--Due-Soon"
 wait_row "Status is Due Soon"
+status_id=$(python3 - "$state" <<'PY'
+import json, sys
+rows = (json.load(open(sys.argv[1])).get("view_form") or {}).get("rows") or []
+print(next(row["id"] for row in rows if "Due Soon" in (row.get("label") or "")))
+PY
+)
+click_map view_boxes "rule-plus:$status_id"
+click_map view_boxes "rule-option:1:Availability"
+if [ "$(count_rows 'Availability is Remaining')" != "2" ]; then
+  echo "FAIL: expected two Availability cards" >&2
+  exit 1
+fi
 
 echo "3. A rule can be turned off and back on"
 row_id=$(python3 - "$state" <<'PY'
@@ -180,20 +235,17 @@ rows = (json.load(open(sys.argv[1])).get("view_form") or {}).get("rows") or []
 print(next(row["id"] for row in rows if "Due Soon" in (row.get("label") or "")))
 PY
 )
-click_map view_boxes "rule-menu:$row_id"
-click_map view_boxes "rule-menu-item:$row_id:turn-off"
+click_map view_boxes "rule-check:$row_id"
 python3 - "$state" "$row_id" <<'PY'
 import json, sys
 rows = (json.load(open(sys.argv[1])).get("view_form") or {}).get("rows") or []
 row = next(row for row in rows if str(row["id"]) == sys.argv[2])
 assert row["enabled"] is False, row
 PY
-click_map view_boxes "rule-menu:$row_id"
-click_map view_boxes "rule-menu-item:$row_id:turn-on"
+click_map view_boxes "rule-check:$row_id"
 
 echo "4. Editing a rule changes its value"
-click_map view_boxes "rule-menu:$row_id"
-click_map view_boxes "rule-menu-item:$row_id:edit"
+click_map view_boxes "rule-select:$row_id"
 wait_editing "$row_id"
 click_map view_boxes "rule-state:$row_id:Flagged"
 wait_row "Status is Flagged"

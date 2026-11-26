@@ -6,12 +6,14 @@
 //! that shape. The saved form is still the shared recursive `FilterNode`, so
 //! CLI- and MCP-authored perspectives round-trip without loss.
 
+use std::collections::BTreeSet;
+
 use flowlist_core::db::Db;
-use flowlist_core::ids::{PerspectiveId, TagId};
+use flowlist_core::ids::{PerspectiveId, ProjectId, TagId};
 use flowlist_core::model::{
     AvailabilityFilter, Condition, DateField, DateRangeFilter, DueWindow, FilterNode, FilterStatus,
-    GroupBy, IconSpec, ItemKindFilter, Perspective, ProjectStatusFilter, SortBy, TagStatusFilter,
-    TaskStatus,
+    GroupBy, IconSpec, ItemKindFilter, Perspective, Priority, ProjectStatusFilter, SortBy,
+    TagStatusFilter, TaskStatus,
 };
 
 use super::text::TextBuffer;
@@ -22,6 +24,265 @@ pub enum IconTab {
     #[default]
     Icons,
     Emoji,
+}
+
+/// Due windows offered by the editor. The CLI and MCP server can still write
+/// the date-based variants; they survive editing untouched.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DueChoice {
+    Any,
+    Overdue,
+    Today,
+    Tomorrow,
+    Next7Days,
+    Next30Days,
+    Later,
+    NoDate,
+}
+
+impl DueChoice {
+    pub fn label(self) -> &'static str {
+        match self {
+            DueChoice::Any => "Any",
+            DueChoice::Overdue => "Overdue",
+            DueChoice::Today => "Today",
+            DueChoice::Tomorrow => "Tomorrow",
+            DueChoice::Next7Days => "Next 7 days",
+            DueChoice::Next30Days => "Next 30 days",
+            DueChoice::Later => "Later / none",
+            DueChoice::NoDate => "No date",
+        }
+    }
+
+    pub fn window(self) -> Option<DueWindow> {
+        match self {
+            DueChoice::Any => None,
+            DueChoice::Overdue => Some(DueWindow::Overdue),
+            DueChoice::Today => Some(DueWindow::Today),
+            DueChoice::Tomorrow => Some(DueWindow::Tomorrow),
+            DueChoice::Next7Days => Some(DueWindow::Next7Days),
+            DueChoice::Next30Days => Some(DueWindow::Next30Days),
+            DueChoice::Later => Some(DueWindow::Later),
+            DueChoice::NoDate => Some(DueWindow::NoDate),
+        }
+    }
+
+    fn from_window(window: DueWindow) -> Option<Self> {
+        match window {
+            DueWindow::Overdue => Some(DueChoice::Overdue),
+            DueWindow::Today => Some(DueChoice::Today),
+            DueWindow::Tomorrow => Some(DueChoice::Tomorrow),
+            DueWindow::Next7Days => Some(DueChoice::Next7Days),
+            DueWindow::Next30Days => Some(DueChoice::Next30Days),
+            DueWindow::Later => Some(DueChoice::Later),
+            DueWindow::NoDate => Some(DueChoice::NoDate),
+            _ => None,
+        }
+    }
+}
+
+/// Deferred tasks are never overdue, so the editor leaves that window out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DeferChoice {
+    Any,
+    Today,
+    Tomorrow,
+    Next7Days,
+    Next30Days,
+    NoDate,
+}
+
+impl DeferChoice {
+    pub fn label(self) -> &'static str {
+        match self {
+            DeferChoice::Any => "Any",
+            DeferChoice::Today => "Today",
+            DeferChoice::Tomorrow => "Tomorrow",
+            DeferChoice::Next7Days => "Next 7 days",
+            DeferChoice::Next30Days => "Next 30 days",
+            DeferChoice::NoDate => "No date",
+        }
+    }
+
+    pub fn window(self) -> Option<DueWindow> {
+        match self {
+            DeferChoice::Any => None,
+            DeferChoice::Today => Some(DueWindow::Today),
+            DeferChoice::Tomorrow => Some(DueWindow::Tomorrow),
+            DeferChoice::Next7Days => Some(DueWindow::Next7Days),
+            DeferChoice::Next30Days => Some(DueWindow::Next30Days),
+            DeferChoice::NoDate => Some(DueWindow::NoDate),
+        }
+    }
+
+    fn from_window(window: DueWindow) -> Option<Self> {
+        match window {
+            DueWindow::Today => Some(DeferChoice::Today),
+            DueWindow::Tomorrow => Some(DeferChoice::Tomorrow),
+            DueWindow::Next7Days => Some(DeferChoice::Next7Days),
+            DueWindow::Next30Days => Some(DeferChoice::Next30Days),
+            DueWindow::NoDate => Some(DeferChoice::NoDate),
+            _ => None,
+        }
+    }
+}
+
+/// A control in the perspective editor. Each one owns a menu of every value,
+/// so choosing a project or a status is a jump rather than a cycle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ViewField {
+    Project,
+    Tag,
+    Status,
+    Due,
+    Planned,
+    Defer,
+    Fullscreen,
+    Group,
+    Sort,
+}
+
+impl ViewField {
+    pub fn key(self) -> &'static str {
+        match self {
+            ViewField::Project => "project",
+            ViewField::Tag => "tag",
+            ViewField::Status => "status",
+            ViewField::Due => "due",
+            ViewField::Planned => "planned",
+            ViewField::Defer => "defer",
+            ViewField::Fullscreen => "fullscreen",
+            ViewField::Group => "group",
+            ViewField::Sort => "sort",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ViewField::Project => "Projects",
+            ViewField::Tag => "Tags",
+            ViewField::Status => "Status",
+            ViewField::Due => "Due dates",
+            ViewField::Planned => "Planned dates",
+            ViewField::Defer => "Defer dates",
+            ViewField::Fullscreen => "Full-screen reminders",
+            ViewField::Group => "Group by",
+            ViewField::Sort => "Sort by",
+        }
+    }
+
+    /// Fields whose menu stays open while several values are toggled.
+    pub fn is_multi(self) -> bool {
+        matches!(
+            self,
+            ViewField::Project
+                | ViewField::Tag
+                | ViewField::Due
+                | ViewField::Planned
+                | ViewField::Defer
+        )
+    }
+}
+
+/// One menu value offered by a [`ViewField`]. Project and tag choices carry
+/// the library id so the editor can label them with the current name.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ViewChoice {
+    Project(Option<ProjectId>),
+    Tag(Option<TagId>),
+    Status(TaskStatus),
+    Due(DueChoice),
+    Planned(DueChoice),
+    Defer(DeferChoice),
+    Fullscreen(Option<bool>),
+    Group(GroupBy),
+    Sort(SortBy),
+}
+
+impl ViewChoice {
+    /// A stable id fragment for probes and element ids.
+    pub fn slug(&self) -> String {
+        match self {
+            ViewChoice::Project(Some(id)) => id.to_string(),
+            ViewChoice::Tag(Some(id)) => id.to_string(),
+            ViewChoice::Project(None) | ViewChoice::Tag(None) => "any".to_string(),
+            ViewChoice::Status(status) => status_slug(*status).to_string(),
+            ViewChoice::Due(choice) => match choice {
+                DueChoice::Any => "any",
+                DueChoice::Overdue => "overdue",
+                DueChoice::Today => "today",
+                DueChoice::Tomorrow => "tomorrow",
+                DueChoice::Next7Days => "next7",
+                DueChoice::Next30Days => "next30",
+                DueChoice::Later => "later",
+                DueChoice::NoDate => "none",
+            }
+            .to_string(),
+            ViewChoice::Fullscreen(Some(true)) => "has".to_string(),
+            ViewChoice::Fullscreen(Some(false)) => "none".to_string(),
+            ViewChoice::Fullscreen(None) => "any".to_string(),
+            ViewChoice::Planned(choice) => match choice {
+                DueChoice::Any => "any",
+                DueChoice::Overdue => "overdue",
+                DueChoice::Today => "today",
+                DueChoice::Tomorrow => "tomorrow",
+                DueChoice::Next7Days => "next7",
+                DueChoice::Next30Days => "next30",
+                DueChoice::Later => "later",
+                DueChoice::NoDate => "none",
+            }
+            .to_string(),
+            ViewChoice::Defer(choice) => match choice {
+                DeferChoice::Any => "any",
+                DeferChoice::Today => "today",
+                DeferChoice::Tomorrow => "tomorrow",
+                DeferChoice::Next7Days => "next7",
+                DeferChoice::Next30Days => "next30",
+                DeferChoice::NoDate => "none",
+            }
+            .to_string(),
+            ViewChoice::Group(group) => match group {
+                GroupBy::None => "none",
+                GroupBy::Project => "project",
+                GroupBy::Folder => "folder",
+                GroupBy::Tag => "tag",
+                GroupBy::DueDate => "due",
+                GroupBy::DeferDate => "defer",
+                GroupBy::PlannedDate => "planned",
+                GroupBy::Flagged => "flagged",
+                GroupBy::Estimate => "estimate",
+            }
+            .to_string(),
+            ViewChoice::Sort(sort) => match sort {
+                SortBy::Manual => "manual",
+                SortBy::Due => "due",
+                SortBy::Defer => "defer",
+                SortBy::Planned => "planned",
+                SortBy::Name => "name",
+                SortBy::Priority => "priority",
+                SortBy::Flagged => "flagged",
+                SortBy::Estimate => "estimate",
+                SortBy::Created => "created",
+                SortBy::CompletedAt => "completed",
+            }
+            .to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PerspectiveTab {
+    Simple,
+    Comprehensive,
+}
+
+impl PerspectiveTab {
+    pub fn label(self) -> &'static str {
+        match self {
+            PerspectiveTab::Simple => "Simple",
+            PerspectiveTab::Comprehensive => "Comprehensive",
+        }
+    }
 }
 
 /// A rule in the editor tree. `id` survives rebuilds of the visible rows, so
@@ -427,6 +688,29 @@ impl RuleNode {
         }
     }
 
+    pub fn deep_clone(&self, next_id: &mut u64) -> Self {
+        let kind = match &self.kind {
+            RuleKind::All(nodes) => RuleKind::All(
+                nodes.iter().map(|node| node.deep_clone(next_id)).collect(),
+            ),
+            RuleKind::Any(nodes) => RuleKind::Any(
+                nodes.iter().map(|node| node.deep_clone(next_id)).collect(),
+            ),
+            RuleKind::None(nodes) => RuleKind::None(
+                nodes.iter().map(|node| node.deep_clone(next_id)).collect(),
+            ),
+            RuleKind::Comment => RuleKind::Comment,
+            RuleKind::Condition(condition) => RuleKind::Condition(condition.clone()),
+        };
+        Self {
+            id: fresh_id(next_id),
+            enabled: self.enabled,
+            kind,
+            text: TextBuffer::new(self.text.text().to_string()),
+            text2: TextBuffer::new(self.text2.text().to_string()),
+        }
+    }
+
     pub fn has_conditions(&self) -> bool {
         match &self.kind {
             RuleKind::All(nodes) | RuleKind::Any(nodes) | RuleKind::None(nodes) => {
@@ -515,11 +799,35 @@ pub struct PerspectiveForm {
     pub group: GroupBy,
     pub sort: SortBy,
     pub show_completed: bool,
+    pub tab: PerspectiveTab,
+    // ---------------------------------------------------------- simple tab
+    pub text: TextBuffer,
+    pub flagged_only: bool,
+    pub inbox_only: bool,
+    pub status: TaskStatus,
+    pub dues: BTreeSet<DueChoice>,
+    pub planned: BTreeSet<DueChoice>,
+    pub defers: BTreeSet<DeferChoice>,
+    pub fullscreen: Option<bool>,
+    pub projects: BTreeSet<ProjectId>,
+    pub tags: BTreeSet<TagId>,
+    pub priorities: BTreeSet<Priority>,
+    pub tag_children: bool,
+    pub estimate_min: TextBuffer,
+    pub estimate_max: TextBuffer,
+    /// Conditions the simple tab has no widget for.
+    pub extra: Vec<Condition>,
+    /// Non-condition roots kept intact while the simple tab is used.
+    pub extra_roots: Vec<FilterNode>,
+    // --------------------------------------------------- comprehensive tab
     pub root: RuleNode,
     /// The rule whose configuration card is open.
     pub editing: Option<u64>,
     /// The group whose Add a new rule menu is open.
     pub add_menu: Option<u64>,
+    /// When set, a chosen rule is inserted after this row instead of at the
+    /// end of the group.
+    pub add_after: Option<u64>,
     /// The rule whose three-dot menu is open.
     pub row_menu: Option<u64>,
     /// Which layout pop-up is open, if any.
@@ -549,9 +857,27 @@ impl Default for PerspectiveForm {
             group: GroupBy::Project,
             sort: SortBy::Due,
             show_completed: false,
+            tab: PerspectiveTab::Simple,
+            text: TextBuffer::empty(),
+            flagged_only: false,
+            inbox_only: false,
+            status: TaskStatus::Any,
+            dues: BTreeSet::new(),
+            planned: BTreeSet::new(),
+            defers: BTreeSet::new(),
+            fullscreen: None,
+            projects: BTreeSet::new(),
+            tags: BTreeSet::new(),
+            priorities: BTreeSet::new(),
+            tag_children: true,
+            estimate_min: TextBuffer::empty(),
+            estimate_max: TextBuffer::empty(),
+            extra: Vec::new(),
+            extra_roots: Vec::new(),
             root: RuleNode::default_root(&mut next_id),
             editing: None,
             add_menu: None,
+            add_after: None,
             row_menu: None,
             layout_menu: None,
             next_id,
@@ -581,7 +907,7 @@ impl PerspectiveForm {
                 group
             }
         };
-        Self {
+        let mut form = Self {
             id: Some(perspective.id.clone()),
             name: TextBuffer::new(perspective.name.clone()),
             description: TextBuffer::new(perspective.description.clone()),
@@ -600,7 +926,65 @@ impl PerspectiveForm {
             row_menu: None,
             layout_menu: None,
             next_id,
+            ..Self::default()
+        };
+        form.read_simple_filter(&perspective.filter);
+        // Simple is the first tab for views it can represent exactly. A view
+        // with nested groups or advanced rules opens where it can be edited
+        // without silently flattening it.
+        form.tab = if form.extra_condition_count() == 0 {
+            PerspectiveTab::Simple
+        } else {
+            PerspectiveTab::Comprehensive
+        };
+        form
+    }
+
+    pub fn set_tab(&mut self, tab: PerspectiveTab) {
+        if tab == self.tab {
+            return;
         }
+        match tab {
+            PerspectiveTab::Comprehensive => {
+                let filter = self.simple_filter();
+                // A brand-new comprehensive tab starts with Availability:
+                // Remaining. Keep that starter card when adding the simple
+                // tab's filters, so moving between tabs never silently drops
+                // the example rule.
+                if !filter.is_empty() {
+                    if root_is_starter(&self.root) {
+                        let mut merged = self.root.clone();
+                        let mut added = Vec::new();
+                        match &filter {
+                            FilterNode::All(nodes) => {
+                                for node in nodes {
+                                    added.push(RuleNode::from_filter(node, &mut self.next_id));
+                                }
+                            }
+                            other => {
+                                added.push(RuleNode::from_filter(other, &mut self.next_id));
+                            }
+                        }
+                        if let Some(children) = merged.children_mut() {
+                            children.extend(added);
+                        }
+                        self.root = merged;
+                    } else {
+                        self.root = RuleNode::from_filter(&filter, &mut self.next_id);
+                    }
+                }
+                self.editing = None;
+                self.add_menu = None;
+                self.add_after = None;
+                self.row_menu = None;
+                self.layout_menu = None;
+            }
+            PerspectiveTab::Simple => {
+                let filter = self.root.to_filter();
+                self.read_simple_filter(&filter);
+            }
+        }
+        self.tab = tab;
     }
 
     pub fn to_perspective(&self) -> Perspective {
@@ -621,7 +1005,10 @@ impl PerspectiveForm {
     }
 
     pub fn filter(&self) -> FilterNode {
-        self.root.to_filter()
+        match self.tab {
+            PerspectiveTab::Simple => self.simple_filter(),
+            PerspectiveTab::Comprehensive => self.root.to_filter(),
+        }
     }
 
     pub fn group_label(&self) -> &'static str {
@@ -632,21 +1019,343 @@ impl PerspectiveForm {
         sort_label(self.sort)
     }
 
-    /// True when the tree contains a rule that can narrow the library.
-    pub fn has_filters(&self) -> bool {
-        self.root.has_conditions()
+    pub fn status_label(&self) -> &'static str {
+        status_label(self.status)
     }
 
-    /// Drop every rule except the top-level group, which OmniFocus never
-    /// deletes. Layout choices are not filters, so they stay.
+    /// True when the active tab contains a rule that can narrow the library.
+    pub fn has_filters(&self) -> bool {
+        match self.tab {
+            PerspectiveTab::Simple => self.simple_has_filters(),
+            PerspectiveTab::Comprehensive => self.root.has_conditions(),
+        }
+    }
+
+    /// Drop every rule from both tabs. Layout choices are not filters, so they
+    /// stay.
     pub fn clear_filters(&mut self) {
-        self.root = RuleNode::group(
-            RuleKind::All(Vec::new()),
-            &mut self.next_id,
-        );
+        self.root = RuleNode::group(RuleKind::All(Vec::new()), &mut self.next_id);
+        self.clear_simple_filters();
         self.editing = None;
         self.add_menu = None;
         self.row_menu = None;
+    }
+
+    // ------------------------------------------------------------ simple tab
+
+    fn read_simple_filter(&mut self, filter: &FilterNode) {
+        self.clear_simple_filters();
+        let FilterNode::All(nodes) = filter else {
+            if !filter.is_empty() {
+                self.extra_roots.push(filter.clone());
+            }
+            return;
+        };
+        for node in nodes {
+            match node {
+                FilterNode::Condition(condition) => {
+                    if !self.absorb(condition) {
+                        self.extra.push(condition.clone());
+                    }
+                }
+                FilterNode::Any(nodes) if self.absorb_multi(nodes) => {}
+                _ => self.extra_roots.push(node.clone()),
+            }
+        }
+    }
+
+    fn absorb(&mut self, condition: &Condition) -> bool {
+        match condition {
+            Condition::Flagged { value: true } => self.flagged_only = true,
+            Condition::InInbox => self.inbox_only = true,
+            Condition::Status { value } => self.status = *value,
+            Condition::Due { window } => match DueChoice::from_window(*window) {
+                Some(choice) => {
+                    self.dues.insert(choice);
+                }
+                None => return false,
+            },
+            Condition::Planned { window } => match DueChoice::from_window(*window) {
+                Some(choice) => {
+                    self.planned.insert(choice);
+                }
+                None => return false,
+            },
+            Condition::Deferred { window } => match DeferChoice::from_window(*window) {
+                Some(choice) => {
+                    self.defers.insert(choice);
+                }
+                None => return false,
+            },
+            Condition::Project { id } => {
+                self.projects.insert(id.clone());
+            }
+            Condition::Priority { value } => {
+                self.priorities.insert(*value);
+            }
+            Condition::FullscreenReminder { value } => self.fullscreen = Some(*value),
+            Condition::Text { value } => {
+                self.text.set(value.clone());
+            }
+            Condition::Tag {
+                id,
+                include_children,
+            } => {
+                self.tags.insert(id.clone());
+                self.tag_children = *include_children;
+            }
+            Condition::Estimate {
+                min_minutes,
+                max_minutes,
+            } => {
+                self.estimate_min.set(
+                    min_minutes
+                        .map(|minutes| minutes.to_string())
+                        .unwrap_or_default(),
+                );
+                self.estimate_max.set(
+                    max_minutes
+                        .map(|minutes| minutes.to_string())
+                        .unwrap_or_default(),
+                );
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    fn absorb_multi(&mut self, nodes: &[FilterNode]) -> bool {
+        fn kind(condition: &Condition) -> Option<u8> {
+            match condition {
+                Condition::Project { .. } => Some(0),
+                Condition::Tag { .. } => Some(1),
+                Condition::Due { .. } => Some(2),
+                Condition::Deferred { .. } => Some(3),
+                Condition::Planned { .. } => Some(5),
+                Condition::Priority { .. } => Some(4),
+                _ => None,
+            }
+        }
+        let conditions: Vec<&Condition> = nodes
+            .iter()
+            .filter_map(|node| match node {
+                FilterNode::Condition(condition) => Some(condition),
+                _ => None,
+            })
+            .collect();
+        if conditions.len() != nodes.len() || conditions.len() < 2 {
+            return false;
+        }
+        let Some(first) = kind(conditions[0]) else {
+            return false;
+        };
+        if !conditions.iter().all(|condition| kind(condition) == Some(first)) {
+            return false;
+        }
+        for condition in conditions {
+            let _ = self.absorb(condition);
+        }
+        true
+    }
+
+    pub fn simple_filter(&self) -> FilterNode {
+        let mut nodes = self.extra_roots.clone();
+        let mut conditions = self.extra.clone();
+        if self.flagged_only {
+            conditions.push(Condition::Flagged { value: true });
+        }
+        if self.inbox_only {
+            conditions.push(Condition::InInbox);
+        }
+        if self.status != TaskStatus::Any {
+            conditions.push(Condition::Status { value: self.status });
+        }
+        if let Some(value) = self.fullscreen {
+            conditions.push(Condition::FullscreenReminder { value });
+        }
+        let mut grouped: Vec<FilterNode> = Vec::new();
+        let mut group = |conditions: Vec<Condition>| {
+            let mut nodes: Vec<FilterNode> = conditions
+                .into_iter()
+                .map(FilterNode::Condition)
+                .collect();
+            match nodes.len() {
+                0 => {}
+                1 => grouped.push(nodes.remove(0)),
+                _ => grouped.push(FilterNode::Any(nodes)),
+            }
+        };
+        group(
+            self.dues
+                .iter()
+                .map(|choice| Condition::Due {
+                    window: choice.window().expect("stored choices always have a window"),
+                })
+                .collect(),
+        );
+        group(
+            self.planned
+                .iter()
+                .map(|choice| Condition::Planned {
+                    window: choice
+                        .window()
+                        .expect("stored choices always have a window"),
+                })
+                .collect(),
+        );
+        group(
+            self.defers
+                .iter()
+                .map(|choice| Condition::Deferred {
+                    window: choice.window().expect("stored choices always have a window"),
+                })
+                .collect(),
+        );
+        group(
+            self.projects
+                .iter()
+                .map(|id| Condition::Project { id: id.clone() })
+                .collect(),
+        );
+        group(
+            self.tags
+                .iter()
+                .map(|id| Condition::Tag {
+                    id: id.clone(),
+                    include_children: self.tag_children,
+                })
+                .collect(),
+        );
+        group(
+            self.priorities
+                .iter()
+                .map(|priority| Condition::Priority { value: *priority })
+                .collect(),
+        );
+        let text = self.text.text().trim().to_string();
+        if !text.is_empty() {
+            conditions.push(Condition::Text { value: text });
+        }
+        let estimate_min = self.estimate_min.text().trim().parse::<u32>().ok();
+        let estimate_max = self.estimate_max.text().trim().parse::<u32>().ok();
+        if estimate_min.is_some() || estimate_max.is_some() {
+            conditions.push(Condition::Estimate {
+                min_minutes: estimate_min,
+                max_minutes: estimate_max,
+            });
+        }
+        nodes.extend(conditions.into_iter().map(FilterNode::Condition));
+        nodes.extend(grouped);
+        FilterNode::all(nodes)
+    }
+
+    pub fn toggle_project(&mut self, id: Option<ProjectId>) {
+        match id {
+            None => self.projects.clear(),
+            Some(id) => {
+                if !self.projects.remove(&id) {
+                    self.projects.insert(id);
+                }
+            }
+        }
+        if !self.projects.is_empty() {
+            self.inbox_only = false;
+        }
+    }
+
+    pub fn toggle_tag(&mut self, id: Option<TagId>) {
+        match id {
+            None => self.tags.clear(),
+            Some(id) => {
+                if !self.tags.remove(&id) {
+                    self.tags.insert(id);
+                }
+            }
+        }
+        if !self.tags.is_empty() {
+            self.inbox_only = false;
+        }
+    }
+
+    pub fn toggle_due(&mut self, choice: DueChoice) {
+        if choice == DueChoice::Any {
+            self.dues.clear();
+        } else if !self.dues.remove(&choice) {
+            self.dues.insert(choice);
+        }
+    }
+
+    pub fn toggle_planned(&mut self, choice: DueChoice) {
+        if choice == DueChoice::Any {
+            self.planned.clear();
+        } else if !self.planned.remove(&choice) {
+            self.planned.insert(choice);
+        }
+    }
+
+    pub fn toggle_defer(&mut self, choice: DeferChoice) {
+        if choice == DeferChoice::Any {
+            self.defers.clear();
+        } else if !self.defers.remove(&choice) {
+            self.defers.insert(choice);
+        }
+    }
+
+    pub fn toggle_inbox(&mut self) {
+        self.inbox_only = !self.inbox_only;
+        if self.inbox_only {
+            self.projects.clear();
+            self.tags.clear();
+        }
+    }
+
+    pub fn toggle_priority(&mut self, priority: Priority) {
+        if !self.priorities.remove(&priority) {
+            self.priorities.insert(priority);
+        }
+    }
+
+    pub fn simple_has_filters(&self) -> bool {
+        self.inbox_only
+            || self.flagged_only
+            || self.show_completed
+            || self.status != TaskStatus::Any
+            || self.fullscreen.is_some()
+            || !self.dues.is_empty()
+            || !self.planned.is_empty()
+            || !self.defers.is_empty()
+            || !self.projects.is_empty()
+            || !self.tags.is_empty()
+            || !self.priorities.is_empty()
+            || !self.text.text().trim().is_empty()
+            || !self.estimate_min.text().trim().is_empty()
+            || !self.estimate_max.text().trim().is_empty()
+            || !self.extra.is_empty()
+            || !self.extra_roots.is_empty()
+    }
+
+    pub fn extra_condition_count(&self) -> usize {
+        self.extra.len() + self.extra_roots.len()
+    }
+
+    fn clear_simple_filters(&mut self) {
+        self.inbox_only = false;
+        self.flagged_only = false;
+        self.show_completed = false;
+        self.status = TaskStatus::Any;
+        self.fullscreen = None;
+        self.dues.clear();
+        self.planned.clear();
+        self.defers.clear();
+        self.projects.clear();
+        self.tags.clear();
+        self.priorities.clear();
+        self.tag_children = true;
+        self.text.clear();
+        self.estimate_min.clear();
+        self.estimate_max.clear();
+        self.extra.clear();
+        self.extra_roots.clear();
     }
 
     pub fn is_rule_enabled(&self, id: u64) -> bool {
@@ -692,6 +1401,20 @@ impl PerspectiveForm {
         {
             children.push(rule);
             self.add_menu = None;
+            self.add_after = None;
+            self.editing = None;
+        }
+    }
+
+    pub fn add_rule_after(&mut self, after: u64, template: RuleTemplate) {
+        let rule = template.build(&mut self.next_id);
+        let Some(children) = sibling_list_mut(&mut self.root, after) else {
+            return;
+        };
+        if let Some(index) = children.iter().position(|child| child.id == after) {
+            children.insert(index + 1, rule);
+            self.add_menu = None;
+            self.add_after = None;
             self.editing = None;
         }
     }
@@ -709,6 +1432,19 @@ impl PerspectiveForm {
         }
         if self.row_menu == Some(id) {
             self.row_menu = None;
+        }
+    }
+
+    pub fn duplicate_rule(&mut self, id: u64) {
+        let Some(original) = find_rule(&self.root, id).cloned() else {
+            return;
+        };
+        let copy = original.deep_clone(&mut self.next_id);
+        let Some(children) = sibling_list_mut(&mut self.root, id) else {
+            return;
+        };
+        if let Some(index) = children.iter().position(|child| child.id == id) {
+            children.insert(index + 1, copy);
         }
     }
 
@@ -821,6 +1557,20 @@ impl GroupOperator {
             GroupOperator::None => "None",
         }
     }
+}
+
+fn root_is_starter(node: &RuleNode) -> bool {
+    matches!(
+        &node.kind,
+        RuleKind::All(children)
+            if children.len() == 1
+                && matches!(
+                    &children[0].kind,
+                    RuleKind::Condition(Condition::Availability {
+                        value: AvailabilityFilter::Remaining
+                    })
+                )
+    )
 }
 
 fn find_rule(node: &RuleNode, id: u64) -> Option<&RuleNode> {
@@ -1085,6 +1835,26 @@ fn window_label(window: DueWindow) -> String {
     }
 }
 
+fn status_slug(status: TaskStatus) -> &'static str {
+    match status {
+        TaskStatus::Any => "any",
+        TaskStatus::Available => "available",
+        TaskStatus::Blocked => "blocked",
+        TaskStatus::Deferred => "deferred",
+        TaskStatus::Completed => "completed",
+    }
+}
+
+fn status_label(status: TaskStatus) -> &'static str {
+    match status {
+        TaskStatus::Any => "Any",
+        TaskStatus::Available => "Available",
+        TaskStatus::Blocked => "Blocked",
+        TaskStatus::Deferred => "Deferred",
+        TaskStatus::Completed => "Completed",
+    }
+}
+
 fn group_label(group: GroupBy) -> &'static str {
     match group {
         GroupBy::None => "None",
@@ -1138,7 +1908,7 @@ mod tests {
     fn a_new_form_starts_with_the_example_rule() {
         let form = PerspectiveForm::new();
         assert_eq!(
-            conditions(&form.filter()),
+            conditions(&RuleNode::default_root(&mut 1).to_filter()),
             vec![Condition::Availability {
                 value: AvailabilityFilter::Remaining
             }]
@@ -1148,6 +1918,7 @@ mod tests {
     #[test]
     fn the_tree_round_trips_nested_groups_and_disabled_rules() {
         let mut form = PerspectiveForm::new();
+        form.tab = PerspectiveTab::Comprehensive;
         form.clear_filters();
         let all = form.root.id;
         form.add_rule(all, RuleTemplate::GroupAny);
@@ -1178,6 +1949,7 @@ mod tests {
     #[test]
     fn none_groups_exclude_matching_items() {
         let mut form = PerspectiveForm::new();
+        form.tab = PerspectiveTab::Comprehensive;
         form.clear_filters();
         let root = form.root.id;
         form.add_rule(root, RuleTemplate::GroupNone);
@@ -1201,6 +1973,7 @@ mod tests {
     #[test]
     fn comments_never_match_against_an_any_group() {
         let mut form = PerspectiveForm::new();
+        form.tab = PerspectiveTab::Comprehensive;
         form.clear_filters();
         let root = form.root.id;
         form.add_rule(root, RuleTemplate::GroupAny);
@@ -1222,6 +1995,7 @@ mod tests {
     #[test]
     fn text_and_estimate_editors_apply_their_buffers() {
         let mut form = PerspectiveForm::new();
+        form.tab = PerspectiveTab::Comprehensive;
         form.clear_filters();
         let root = form.root.id;
         form.add_rule(root, RuleTemplate::Search);

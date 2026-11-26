@@ -16,6 +16,12 @@
   (all of them in a single-actions list), and projects carry completed and
   dropped timestamps for date-range rules. Dragging a rule onto a group nests
   it, and date fields accept the same natural phrases as the rest of Flowlist.
+- **Two-tab view editor.** The previous simple editor is the first tab, with
+  its familiar checkbox and pop-up filters. **Comprehensive** is a single
+  OmniFocus-style rule table: enable checkbox, rule pop-up, minus/plus on every
+  row, indented groups and a shared Presentation section. The catalogue itself
+  is indented, another Availability card is one plus-click away, and the sheet
+  is resizable with a remembered size.
 - **Icons-only header by default.** A fresh session shows the toolbar icons
   without the small titles. The titles are still available in Settings.
 - **Quieter empty notifications.** The full-screen hint appears only when a

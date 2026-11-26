@@ -291,6 +291,8 @@ pub struct Session {
     /// Last size of the Settings sheet.
     #[serde(default)]
     pub settings_size: Option<(f32, f32)>,
+    /// Last size of the perspective editor sheet.
+    pub perspective_size: Option<(f32, f32)>,
     /// Take over the screen with a due reminder while Flowlist is running.
     #[serde(default)]
     pub fullscreen_reminders: Option<bool>,

@@ -308,13 +308,22 @@ titles itself **Search** and ranks the closest matches first.
   project” (or “with parent”) instead of implying the task owns it.
 - **Right-click a folder** for Open, Rename, **Edit folder…**, New project here,
   New subfolder and Delete.
-- **Saved perspectives** use the OmniFocus contents tree. **Contents** starts
-  with one **All of the following** group. Change its operator to **Any** or
-  **None**, add rules from the catalogue, and nest **All / Any / None** groups
-  as deeply as needed. Every row has a three-dot menu for **Edit**,
-  **Turn Off**, **Move Up**, **Move Down** and **Delete**; drag the grip to
-  reorder. A new view begins with **Availability: Remaining**, exactly like
-  OmniFocus. **Comment** rows annotate the tree without filtering it.
+- **Saved perspectives have two tabs.** **Simple** is the original editor:
+  the common checkboxes and pop-up filters for Inbox, Flagged, Status,
+  Projects, Tags, Priorities, dates, full-screen reminders, estimate and text.
+  **Comprehensive** is the OmniFocus-style rule table. A new view starts on
+  Simple; a view with nested or advanced rules opens on Comprehensive so
+  nothing is flattened silently. Both tabs share the icon, Group actions by
+  and Sort actions by controls.
+- **Comprehensive rules** use a single bordered table. Every row has an
+  enable checkbox, a rule pop-up, and minus/plus buttons. **All / Any / None**
+  rows say “of the following are true” and indent their children. Click the
+  rule pop-up to edit its options, click the operator to cycle All / Any /
+  None, and use plus on a row to add another card right below it (choose
+  **Availability** again to create a second Availability card). Drag a row onto
+  a group to nest it. **Comment** rows annotate the tree without filtering.
+  The rule catalogue and its headings are indented, and the whole sheet can be
+  resized from its bottom-right grip; the size is remembered.
   The catalogue covers **Status: Due Soon / Flagged**, all five
   **Availability** choices, **Has an estimated duration**, **less than**
   5/15/30/60 minutes, **Has a due / planned / defer date**, **Has date in

@@ -146,6 +146,10 @@ impl Render for DragGhost {
 #[derive(Clone, Copy, Debug)]
 pub struct DragSettingsResize;
 
+/// Dragging the perspective editor's bottom-right corner.
+#[derive(Clone, Copy, Debug)]
+pub struct DragPerspectiveResize;
+
 /// Dragging the Settings sheet's custom scrollbar thumb.
 #[derive(Clone, Copy, Debug)]
 pub struct DragSettingsScroll;

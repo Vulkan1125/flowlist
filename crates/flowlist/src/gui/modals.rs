@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use gpui::{
     Animation, AnimationExt, AnyElement, Bounds, Context, CursorStyle, IntoElement, ObjectFit,
-    Window, div, img, point, prelude::*, px, rgb, rgba,
+    Window, div, img, point, prelude::*, px, rgb, rgba, size,
 };
 
 use flowlist_core::command::Command;
@@ -23,13 +23,13 @@ use flowlist_core::query;
 use flowlist_core::time::now;
 
 use super::drag::{
-    DragRule, DragSettingsResize, DragSettingsScroll, rule_ghost, settings_resize_ghost,
-    settings_scroll_ghost,
+    DragPerspectiveResize, DragRule, DragSettingsResize, DragSettingsScroll, rule_ghost,
+    settings_resize_ghost, settings_scroll_ghost,
 };
 use super::icons::Icon;
 use super::perspective::{
-    GroupOperator, IconTab, LayoutField, PerspectiveForm, RuleKind, RuleNode, RuleTemplate,
-    rule_summary,
+    DeferChoice, DueChoice, GroupOperator, IconTab, LayoutField, PerspectiveForm, PerspectiveTab,
+    RuleKind, RuleNode, RuleTemplate, ViewChoice, ViewField, rule_summary,
 };
 use super::screen_picker;
 use super::text::TextBuffer;
@@ -1007,13 +1007,7 @@ impl Modal {
             Modal::Uninstall { .. } => 0,
             Modal::AttachLink { .. } => 2,
             Modal::NewFolder { .. } | Modal::NewTag { .. } => 1,
-            Modal::Perspective { form } => {
-                if form.icon_open {
-                    6
-                } else {
-                    5
-                }
-            }
+            Modal::Perspective { .. } => 10,
             Modal::Import { .. } => 1,
             Modal::Settings { .. } => 8,
             Modal::Location { .. } | Modal::TagLocation { .. } => 2,
@@ -1070,9 +1064,12 @@ impl Modal {
             Modal::Perspective { form } => match index {
                 0 => Some(&form.name),
                 1 => Some(&form.description),
-                2 => form.editing_buffer(0),
-                3 => form.editing_buffer(1),
+                2 if form.tab == PerspectiveTab::Simple => Some(&form.text),
+                3 if form.tab == PerspectiveTab::Simple => Some(&form.estimate_min),
+                4 if form.tab == PerspectiveTab::Simple => Some(&form.estimate_max),
                 5 => Some(&form.icon_query),
+                8 if form.tab == PerspectiveTab::Comprehensive => form.editing_buffer(0),
+                9 if form.tab == PerspectiveTab::Comprehensive => form.editing_buffer(1),
                 _ => None,
             },
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -1156,9 +1153,12 @@ impl Modal {
             Modal::Perspective { form } => match index {
                 0 => Some(&mut form.name),
                 1 => Some(&mut form.description),
-                2 => form.editing_buffer_mut(0),
-                3 => form.editing_buffer_mut(1),
+                2 if form.tab == PerspectiveTab::Simple => Some(&mut form.text),
+                3 if form.tab == PerspectiveTab::Simple => Some(&mut form.estimate_min),
+                4 if form.tab == PerspectiveTab::Simple => Some(&mut form.estimate_max),
                 5 => Some(&mut form.icon_query),
+                8 if form.tab == PerspectiveTab::Comprehensive => form.editing_buffer_mut(0),
+                9 if form.tab == PerspectiveTab::Comprehensive => form.editing_buffer_mut(1),
                 _ => None,
             },
             Modal::Import { text, .. } => (index == 0).then_some(text),
@@ -1233,9 +1233,12 @@ impl Modal {
             Modal::Perspective { .. } => match index {
                 0 => "Name",
                 1 => "Description",
-                2 => "Rule value",
-                3 => "Rule second value",
+                2 => "Contains text",
+                3 => "Minimum estimate (minutes)",
+                4 => "Maximum estimate (minutes)",
                 5 => "Search icons",
+                8 => "Rule value",
+                9 => "Rule second value",
                 _ => "",
             },
             Modal::Import { .. } => "Library text",
@@ -1794,6 +1797,30 @@ impl FlowlistApp {
                 if is_perspective {
                     body = body.child(self.render_modal_field(0, cx));
                     body = body.child(self.render_modal_field(1, cx));
+                    if matches!(
+                        &self.modal,
+                        Some(Modal::Perspective { form }) if form.tab == PerspectiveTab::Simple
+                    ) {
+                        body = body.child(self.render_modal_field(2, cx));
+                        body = body.child(
+                            div()
+                                .flex()
+                                .items_start()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .child(self.render_modal_field(3, cx)),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .child(self.render_modal_field(4, cx)),
+                                ),
+                        );
+                    }
                 } else if is_new_project {
                     for index in 0..6 {
                         body = body.child(self.render_modal_field(index, cx));
@@ -1908,6 +1935,8 @@ impl FlowlistApp {
         let viewport_height = f32::from(viewport.height);
         let card_max_height = if is_settings {
             (viewport_height - 120.0).clamp(480.0, 1040.0)
+        } else if is_perspective {
+            780.0
         } else {
             640.0
         };
@@ -1922,7 +1951,24 @@ impl FlowlistApp {
                 )
             })
             .unwrap_or((width, card_max_height.min(settings_max_height)));
-        let card_width = if is_settings { settings_width } else { width };
+        let perspective_max_width = (viewport_width - 40.0).max(640.0);
+        let perspective_max_height = (viewport_height - 80.0).max(420.0);
+        let (perspective_width, perspective_height) = self
+            .perspective_size
+            .map(|(width, height)| {
+                (
+                    width.clamp(640.0, perspective_max_width),
+                    height.clamp(420.0, perspective_max_height),
+                )
+            })
+            .unwrap_or((760.0_f32.max(width), card_max_height.min(perspective_max_height)));
+        let card_width = if is_settings {
+            settings_width
+        } else if is_perspective {
+            perspective_width
+        } else {
+            width
+        };
         let mut card = div()
             .flex()
             .flex_col()
@@ -1980,6 +2026,25 @@ impl FlowlistApp {
                         cx.notify();
                     },
                 ))
+        } else if is_perspective {
+            card.relative()
+                .h(px(perspective_height))
+                .on_drag_move::<DragPerspectiveResize>(cx.listener(
+                    |this, event: &gpui::DragMoveEvent<DragPerspectiveResize>, window, cx| {
+                        let viewport = window.viewport_size();
+                        let center_x = f32::from(viewport.width) / 2.0;
+                        let center_y = f32::from(viewport.height) / 2.0;
+                        let max_width = (f32::from(viewport.width) - 40.0).max(640.0);
+                        let max_height = (f32::from(viewport.height) - 80.0).max(420.0);
+                        let width = 2.0 * (f32::from(event.event.position.x) - center_x);
+                        let height = 2.0 * (f32::from(event.event.position.y) - center_y);
+                        this.perspective_size = Some((
+                            width.clamp(640.0, max_width),
+                            height.clamp(420.0, max_height),
+                        ));
+                        cx.notify();
+                    },
+                ))
         } else {
             card.max_h(px(card_max_height))
         };
@@ -2005,6 +2070,8 @@ impl FlowlistApp {
 
         if is_settings {
             card = card.child(self.settings_resize_grip(theme, cx));
+        } else if is_perspective {
+            card = card.child(self.perspective_resize_grip(theme, cx));
         }
 
         div()
@@ -2083,6 +2150,41 @@ impl FlowlistApp {
     /// A Zed-style thin scrollbar: a six-point rounded thumb with four points
     /// of padding, a quiet track that only tints on hover, and exact tracking
     /// while dragging. It appears only when the body overflows.
+    fn perspective_resize_grip(&self, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+        let dot = |bottom: f32, right: f32| {
+            div()
+                .absolute()
+                .bottom(px(bottom))
+                .right(px(right))
+                .size(px(2.5))
+                .rounded_full()
+                .bg(theme.text_faint)
+        };
+        div()
+            .on_children_prepainted(self.view_probe("perspective-resize".to_string()))
+            .child(
+                div()
+                    .relative()
+                    .size(px(10.))
+                    .child(dot(0., 0.))
+                    .child(dot(0., 5.))
+                    .child(dot(5., 0.)),
+            )
+            .id("perspective-resize")
+            .absolute()
+            .bottom(px(2.))
+            .right(px(2.))
+            .size(px(16.))
+            .rounded_sm()
+            .cursor(CursorStyle::ResizeUpLeftDownRight)
+            .hover(|style| style.bg(theme.hover))
+            .flow_tip(self, cx, theme, "Drag to resize the view editor")
+            .on_drag(DragPerspectiveResize, |_, position, window, cx| {
+                settings_resize_ghost(&DragSettingsResize, position, window, cx)
+            })
+            .into_any_element()
+    }
+
     fn modal_scrollbar(&self, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
         const THUMB_WIDTH: f32 = 6.0;
         const PADDING: f32 = 4.0;
@@ -2698,7 +2800,1131 @@ impl FlowlistApp {
         }
     }
 
+    /// One labelled menu button in the perspective editor. The value reads like
+    /// a field and the chevron says it opens a list rather than cycling.
+    fn perspective_select(
+        &self,
+        field: ViewField,
+        value: String,
+        active: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let key = field.key().to_string();
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .min_w_0()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(field.label()),
+            )
+            .child(
+                div().on_children_prepainted(self.view_probe(key)).child(
+                    div()
+                        .id(super::sid(format!("modal-{}", field.key())))
+                        .h(px(28.))
+                        .px_2()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(if active { theme.accent } else { theme.border })
+                        .bg(if active { theme.selection } else { theme.field })
+                        .text_sm()
+                        .text_color(if active { theme.accent } else { theme.text })
+                        .cursor_pointer()
+                        .hover(|style| style.bg(theme.hover))
+                        .child(
+                            div()
+                                .min_w_0()
+                                .overflow_hidden()
+                                .whitespace_nowrap()
+                                .child(value),
+                        )
+                        .child(icons::icon(
+                            Icon::ChevronDown,
+                            11.0,
+                            if active {
+                                theme.accent
+                            } else {
+                                theme.text_faint
+                            },
+                        ))
+                        .on_click(
+                            cx.listener(move |this, _, _, cx| this.toggle_view_menu(field, cx)),
+                        ),
+                ),
+            )
+    }
+
+    fn presentation_select(
+        &self,
+        field: ViewField,
+        label: &'static str,
+        value: String,
+        active: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let key = field.key().to_string();
+        div()
+            .flex()
+            .items_center()
+            .gap_3()
+            .min_w_0()
+            .child(
+                div()
+                    .w(px(150.))
+                    .text_sm()
+                    .text_color(theme.text)
+                    .child(label),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .on_children_prepainted(self.view_probe(key))
+                    .child(
+                        div()
+                            .id(super::sid(format!("modal-{}", field.key())))
+                            .h(px(28.))
+                            .px_2()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(if active { theme.accent } else { theme.border })
+                            .bg(if active { theme.selection } else { theme.field })
+                            .text_sm()
+                            .text_color(if active { theme.accent } else { theme.text })
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover))
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
+                                    .child(value),
+                            )
+                            .child(icons::icon(
+                                Icon::ChevronDown,
+                                11.0,
+                                if active { theme.accent } else { theme.text_faint },
+                            ))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.toggle_view_menu(field, cx)
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    pub(super) fn view_choices(&self, field: ViewField) -> Vec<ViewChoice> {
+        let db = self.store.db();
+        match field {
+            ViewField::Project => {
+                let mut projects: Vec<_> = db.projects.values().collect();
+                projects.sort_by_cached_key(|project| project.name.to_lowercase());
+                let mut choices = vec![ViewChoice::Project(None)];
+                choices.extend(
+                    projects
+                        .into_iter()
+                        .map(|project| ViewChoice::Project(Some(project.id.clone()))),
+                );
+                choices
+            }
+            ViewField::Tag => {
+                let mut tags: Vec<_> = db.tags.values().collect();
+                tags.sort_by_cached_key(|tag| tag.name.to_lowercase());
+                let mut choices = vec![ViewChoice::Tag(None)];
+                choices.extend(
+                    tags.into_iter()
+                        .map(|tag| ViewChoice::Tag(Some(tag.id.clone()))),
+                );
+                choices
+            }
+            ViewField::Status => [
+                TaskStatus::Any,
+                TaskStatus::Available,
+                TaskStatus::Blocked,
+                TaskStatus::Deferred,
+                TaskStatus::Completed,
+            ]
+            .into_iter()
+            .map(ViewChoice::Status)
+            .collect(),
+            ViewField::Due => [
+                super::perspective::DueChoice::Any,
+                super::perspective::DueChoice::Overdue,
+                super::perspective::DueChoice::Today,
+                super::perspective::DueChoice::Tomorrow,
+                super::perspective::DueChoice::Next7Days,
+                super::perspective::DueChoice::Next30Days,
+                super::perspective::DueChoice::Later,
+                super::perspective::DueChoice::NoDate,
+            ]
+            .into_iter()
+            .map(ViewChoice::Due)
+            .collect(),
+            ViewField::Planned => [
+                super::perspective::DueChoice::Any,
+                super::perspective::DueChoice::Overdue,
+                super::perspective::DueChoice::Today,
+                super::perspective::DueChoice::Tomorrow,
+                super::perspective::DueChoice::Next7Days,
+                super::perspective::DueChoice::Next30Days,
+                super::perspective::DueChoice::Later,
+                super::perspective::DueChoice::NoDate,
+            ]
+            .into_iter()
+            .map(ViewChoice::Planned)
+            .collect(),
+            ViewField::Fullscreen => [None, Some(true), Some(false)]
+                .into_iter()
+                .map(ViewChoice::Fullscreen)
+                .collect(),
+            ViewField::Defer => [
+                super::perspective::DeferChoice::Any,
+                super::perspective::DeferChoice::Today,
+                super::perspective::DeferChoice::Tomorrow,
+                super::perspective::DeferChoice::Next7Days,
+                super::perspective::DeferChoice::Next30Days,
+                super::perspective::DeferChoice::NoDate,
+            ]
+            .into_iter()
+            .map(ViewChoice::Defer)
+            .collect(),
+            ViewField::Group => [
+                GroupBy::None,
+                GroupBy::Project,
+                GroupBy::Folder,
+                GroupBy::Tag,
+                GroupBy::DueDate,
+                GroupBy::DeferDate,
+                GroupBy::PlannedDate,
+                GroupBy::Flagged,
+                GroupBy::Estimate,
+            ]
+            .into_iter()
+            .map(ViewChoice::Group)
+            .collect(),
+            ViewField::Sort => [
+                SortBy::Manual,
+                SortBy::Due,
+                SortBy::Defer,
+                SortBy::Planned,
+                SortBy::Name,
+                SortBy::Priority,
+                SortBy::Flagged,
+                SortBy::Estimate,
+                SortBy::Created,
+                SortBy::CompletedAt,
+            ]
+            .into_iter()
+            .map(ViewChoice::Sort)
+            .collect(),
+        }
+    }
+
+    fn view_choice_label(&self, choice: &ViewChoice) -> String {
+        match choice {
+            ViewChoice::Project(None) => "Any".to_string(),
+            ViewChoice::Project(Some(id)) => self.store.db().project_path(id),
+            ViewChoice::Tag(None) => "Any".to_string(),
+            ViewChoice::Tag(Some(id)) => self
+                .store
+                .db()
+                .tags
+                .get(id)
+                .map(|tag| tag.name.clone())
+                .unwrap_or_else(|| "Unknown tag".to_string()),
+            ViewChoice::Status(status) => match status {
+                TaskStatus::Any => "Any",
+                TaskStatus::Available => "Available",
+                TaskStatus::Blocked => "Blocked",
+                TaskStatus::Deferred => "Deferred",
+                TaskStatus::Completed => "Completed",
+            }
+            .to_string(),
+            ViewChoice::Due(choice) => choice.label().to_string(),
+            ViewChoice::Planned(choice) => choice.label().to_string(),
+            ViewChoice::Defer(choice) => choice.label().to_string(),
+            ViewChoice::Fullscreen(None) => "Any".to_string(),
+            ViewChoice::Fullscreen(Some(true)) => "Has full-screen reminder".to_string(),
+            ViewChoice::Fullscreen(Some(false)) => "No full-screen reminder".to_string(),
+            ViewChoice::Group(group) => super::group_label(Some(*group)).to_string(),
+            ViewChoice::Sort(sort) => super::sort_label(Some(*sort)).to_string(),
+        }
+    }
+
+    fn view_choice_selected(&self, form: &PerspectiveForm, choice: &ViewChoice) -> bool {
+        match choice {
+            ViewChoice::Project(None) => form.projects.is_empty(),
+            ViewChoice::Project(Some(id)) => form.projects.contains(id),
+            ViewChoice::Tag(None) => form.tags.is_empty(),
+            ViewChoice::Tag(Some(id)) => form.tags.contains(id),
+            ViewChoice::Status(status) => form.status == *status,
+            ViewChoice::Due(choice) => {
+                (*choice == DueChoice::Any && form.dues.is_empty()) || form.dues.contains(choice)
+            }
+            ViewChoice::Planned(choice) => {
+                (*choice == DueChoice::Any && form.planned.is_empty())
+                    || form.planned.contains(choice)
+            }
+            ViewChoice::Defer(choice) => {
+                (*choice == DeferChoice::Any && form.defers.is_empty())
+                    || form.defers.contains(choice)
+            }
+            ViewChoice::Fullscreen(value) => form.fullscreen == *value,
+            ViewChoice::Group(group) => form.group == *group,
+            ViewChoice::Sort(sort) => form.sort == *sort,
+        }
+    }
+
+    fn toggle_view_menu(&mut self, field: ViewField, cx: &mut Context<Self>) {
+        if self.view_menu == Some(field) {
+            self.view_menu = None;
+        } else {
+            let cursor = {
+                let Some(Modal::Perspective { form }) = &self.modal else {
+                    return;
+                };
+                self.view_choices(field)
+                    .iter()
+                    .position(|choice| self.view_choice_selected(form, choice))
+                    .unwrap_or(0)
+            };
+            self.view_menu = Some(field);
+            self.view_menu_cursor = cursor;
+            self.view_menu_scroll.set_offset(point(px(0.), px(0.)));
+        }
+        cx.notify();
+    }
+
+    pub(super) fn choose_view_choice(&mut self, choice: ViewChoice, cx: &mut Context<Self>) {
+        let multi = matches!(
+            choice,
+            ViewChoice::Project(_)
+                | ViewChoice::Tag(_)
+                | ViewChoice::Due(_)
+                | ViewChoice::Planned(_)
+                | ViewChoice::Defer(_)
+        );
+        if let Some(Modal::Perspective { form }) = &mut self.modal {
+            match choice {
+                ViewChoice::Project(id) => form.toggle_project(id),
+                ViewChoice::Tag(id) => form.toggle_tag(id),
+                ViewChoice::Status(status) => form.status = status,
+                ViewChoice::Due(choice) => form.toggle_due(choice),
+                ViewChoice::Planned(choice) => form.toggle_planned(choice),
+                ViewChoice::Defer(choice) => form.toggle_defer(choice),
+                ViewChoice::Fullscreen(value) => form.fullscreen = value,
+                ViewChoice::Group(group) => form.group = group,
+                ViewChoice::Sort(sort) => form.sort = sort,
+            }
+        }
+        if !multi {
+            self.view_menu = None;
+        }
+        cx.notify();
+    }
+
+    fn render_view_menu(&self, field: ViewField, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let Some(Modal::Perspective { form }) = &self.modal else {
+            return div().into_any_element();
+        };
+        let choices = self.view_choices(field);
+        let mut menu = div()
+            .id("view-menu")
+            .min_w(px(220.))
+            .max_w(px(320.))
+            .max_h(px(300.))
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg()
+            .overflow_y_scroll()
+            .track_scroll(&self.view_menu_scroll);
+        for (index, choice) in choices.iter().enumerate() {
+            let selected = self.view_choice_selected(form, choice);
+            let cursor = self.view_menu_cursor == index;
+            let label = self.view_choice_label(choice);
+            let slug = choice.slug();
+            let option_key = format!("option:{}:{slug}", field.key());
+            let captured = choice.clone();
+            menu = menu.child(
+                div()
+                    .on_children_prepainted(self.view_probe(option_key))
+                    .child(
+                        div()
+                            .id(super::sid(format!("view-option:{}:{slug}", field.key())))
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .px_2()
+                            .py_1()
+                            .rounded_sm()
+                            .text_xs()
+                            .text_color(if selected {
+                                theme.accent
+                            } else {
+                                theme.text_dim
+                            })
+                            .bg(if selected {
+                                theme.selection
+                            } else if cursor {
+                                theme.hover
+                            } else {
+                                theme.clear
+                            })
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover))
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
+                                    .child(label),
+                            )
+                            .child(if field.is_multi() {
+                                view_checkbox(theme, selected).into_any_element()
+                            } else if selected {
+                                icons::icon(Icon::Check, 11.0, theme.accent).into_any_element()
+                            } else {
+                                div().w(px(11.)).into_any_element()
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.choose_view_choice(captured.clone(), cx);
+                            })),
+                    ),
+            );
+        }
+        menu.into_any_element()
+    }
+
+    /// The root-layer menu for the open perspective select. It paints after the
+    /// sheet so a project or tag list can extend past the card without being
+    /// clipped by the scrolling body.
+    pub(super) fn render_view_menu_layer(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let field = self.view_menu?;
+        let (x, y) = {
+            let boxes = self.view_boxes.borrow();
+            let [x, y, width, height] = *boxes.get(field.key())?;
+            let anchor = Bounds {
+                origin: point(px(x), px(y)),
+                size: size(px(width), px(height)),
+            };
+            let count = self.view_choices(field).len() as f32;
+            let menu_height = (count * 25.0 + 10.0).min(300.0);
+            super::menu_position(
+                anchor,
+                self.window_size.unwrap_or((1254.0, 1404.0)),
+                240.0,
+                menu_height,
+            )
+        };
+        Some(
+            div()
+                .id("view-menu-layer")
+                .absolute()
+                .occlude()
+                .left(px(x))
+                .top(px(y))
+                .child(self.render_view_menu(field, cx))
+                .into_any_element(),
+        )
+    }
+
     fn render_perspective_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let Some(Modal::Perspective { form }) = &self.modal else {
+            return div();
+        };
+        let form = form.clone();
+        let db = self.store.db();
+        let icon = form.icon.clone();
+        let icon_open = form.icon_open;
+        let display_icon = icon.clone().unwrap_or_else(|| {
+            IconSpec::builtin(if form.pinned {
+                ProjectIcon::Pin
+            } else {
+                ProjectIcon::Project
+            })
+        });
+        let icon_label = match &icon {
+            Some(spec @ IconSpec::Builtin(_)) => spec.label(),
+            Some(IconSpec::Emoji(_)) => String::new(),
+            None => if form.pinned { "Pin" } else { "Default" }.to_string(),
+        };
+        let has_icon_label = !icon_label.is_empty();
+        let heading = |text: &'static str| {
+            div()
+                .text_xs()
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(theme.text_faint)
+                .child(text)
+        };
+
+        let icon_row = div()
+            .flex()
+            .items_center()
+            .gap_3()
+            .child(
+                div()
+                    .on_children_prepainted(self.theme_probe("perspective-icon-row".to_string()))
+                    .id("modal-perspective-icon")
+                    .relative()
+                    .w(px(56.))
+                    .h(px(56.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(if icon_open {
+                        theme.accent
+                    } else {
+                        theme.border
+                    })
+                    .bg(if icon_open {
+                        theme.selection
+                    } else {
+                        theme.field
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(widgets::icon_spec(&display_icon, 24.0, theme.text_dim))
+                    .child(
+                        div()
+                            .absolute()
+                            .bottom(px(4.))
+                            .right(px(4.))
+                            .child(icons::icon(Icon::ChevronDown, 9.0, theme.text_faint)),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.icon_open = !form.icon_open;
+                            if form.icon_open {
+                                this.modal_focus = 5;
+                            }
+                        }
+                        cx.notify();
+                    })),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child("Icon"),
+                    )
+                    .when(has_icon_label, |this| {
+                        this.child(div().text_sm().text_color(theme.text_dim).child(icon_label))
+                    }),
+            );
+
+        let mut tabs = div()
+            .id("modal-perspective-tabs")
+            .flex()
+            .items_center()
+            .gap_1()
+            .p_1()
+            .rounded_md()
+            .bg(theme.field)
+            .border_1()
+            .border_color(theme.border_soft);
+        for tab in [PerspectiveTab::Simple, PerspectiveTab::Comprehensive] {
+            let active = form.tab == tab;
+            let slug = match tab {
+                PerspectiveTab::Simple => "simple",
+                PerspectiveTab::Comprehensive => "comprehensive",
+            };
+            tabs = tabs.child(
+                div()
+                    .on_children_prepainted(
+                        self.view_probe(format!("perspective-tab:{slug}")),
+                    )
+                    .id(super::sid(format!("perspective-tab:{slug}")))
+                    .px_3()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if active { theme.accent } else { theme.text_dim })
+                    .bg(if active { theme.raised } else { theme.clear })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(tab.label())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.set_tab(tab);
+                            this.view_menu = None;
+                            this.modal_focus = 0;
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+
+        let content = match form.tab {
+            PerspectiveTab::Simple => self
+                .render_simple_perspective_controls(cx)
+                .into_any_element(),
+            PerspectiveTab::Comprehensive => self
+                .render_comprehensive_perspective_controls(cx)
+                .into_any_element(),
+        };
+
+        let layout_row = div()
+            .flex()
+            .items_start()
+            .gap_2()
+            .child(div().flex_1().min_w_0().child(self.perspective_select(
+                ViewField::Group,
+                form.group_label().to_string(),
+                form.group != GroupBy::None,
+                cx,
+            )))
+            .child(div().flex_1().min_w_0().child(self.perspective_select(
+                ViewField::Sort,
+                form.sort_label().to_string(),
+                false,
+                cx,
+            )));
+
+        let preview = query::run(
+            db,
+            &form.filter(),
+            form.sort,
+            form.group,
+            form.show_completed,
+            now(),
+        );
+        let matches = preview
+            .iter()
+            .map(|group| group.rows.len() + group.projects.len())
+            .sum::<usize>();
+        let extra = form.extra_condition_count();
+        let summary = div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .px_2()
+            .py_2()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border_soft)
+            .bg(theme.field)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .min_w_0()
+                    .child(icons::icon(Icon::Perspective, 13.0, theme.text_faint))
+                    .child(div().text_sm().text_color(theme.text).child(format!(
+                        "{matches} {} match",
+                        if matches == 1 { "item" } else { "items" }
+                    )))
+                    .when(extra > 0, |this| {
+                        this.child(div().text_xs().text_color(theme.text_faint).child(format!(
+                            "· {extra} advanced condition{} kept",
+                            if extra == 1 { "" } else { "s" }
+                        )))
+                    }),
+            )
+            .when(form.has_filters(), |this| {
+                this.child(
+                    div()
+                        .on_children_prepainted(self.view_probe("clear".to_string()))
+                        .child(
+                            div()
+                                .id("modal-clear-filters")
+                                .flex_shrink_0()
+                                .text_xs()
+                                .text_color(theme.accent)
+                                .cursor_pointer()
+                                .hover(|style| style.text_color(theme.text))
+                                .child("Clear filters")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                                        form.clear_filters();
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                )
+            });
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(icon_row)
+            .when(icon_open, |this| {
+                this.child(self.render_icon_picker_card(
+                    IconTarget::Perspective,
+                    5,
+                    form.icon.as_ref(),
+                    form.icon_tab,
+                    cx,
+                ))
+            })
+            .child(tabs)
+            .child(widgets::divider(theme))
+            .child(content)
+            .child(widgets::divider(theme))
+            .child(heading("PRESENTATION"))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .child(
+                        div()
+                            .w(px(150.))
+                            .text_sm()
+                            .text_color(theme.text)
+                            .child("Group and sort:"),
+                    )
+                    .child(
+                        div()
+                            .h(px(28.))
+                            .px_2()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(theme.border)
+                            .bg(theme.field)
+                            .text_sm()
+                            .text_color(theme.text)
+                            .child("Individual Actions"),
+                    ),
+            )
+            .child(self.presentation_select(
+                ViewField::Group,
+                "Group actions by:",
+                form.group_label().to_string(),
+                form.group != GroupBy::None,
+                cx,
+            ))
+            .child(self.presentation_select(
+                ViewField::Sort,
+                "Sort actions by:",
+                form.sort_label().to_string(),
+                false,
+                cx,
+            ))
+            .child(widgets::divider(theme))
+            .child(summary)
+    }
+
+    fn render_simple_perspective_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let Some(Modal::Perspective { form }) = &self.modal else {
+            return div();
+        };
+        let form = form.clone();
+        let db = self.store.db();
+        let icon = form.icon.clone();
+        let icon_open = form.icon_open;
+        let display_icon = icon.clone().unwrap_or_else(|| {
+            IconSpec::builtin(if form.pinned {
+                ProjectIcon::Pin
+            } else {
+                ProjectIcon::Project
+            })
+        });
+        let icon_label = match &icon {
+            Some(spec @ IconSpec::Builtin(_)) => spec.label(),
+            Some(IconSpec::Emoji(_)) => String::new(),
+            None => if form.pinned { "Pin" } else { "Default" }.to_string(),
+        };
+        let has_icon_label = !icon_label.is_empty();
+        let project_label = match form.projects.len() {
+            0 => "Any".to_string(),
+            1 => db.project_path(form.projects.first().expect("length checked")),
+            count => format!("{count} projects"),
+        };
+        let tag_label = match form.tags.len() {
+            0 => "Any".to_string(),
+            1 => form
+                .tags
+                .first()
+                .and_then(|id| db.tags.get(id))
+                .map(|tag| format!("#{}", tag.name))
+                .unwrap_or_else(|| "Any".to_string()),
+            count => format!("{count} tags"),
+        };
+        let due_label = match form.dues.len() {
+            0 => "Any".to_string(),
+            1 => form
+                .dues
+                .first()
+                .expect("length checked")
+                .label()
+                .to_string(),
+            count => format!("{count} date filters"),
+        };
+        let planned_label = match form.planned.len() {
+            0 => "Any".to_string(),
+            1 => form
+                .planned
+                .first()
+                .expect("length checked")
+                .label()
+                .to_string(),
+            count => format!("{count} planned filters"),
+        };
+        let defer_label = match form.defers.len() {
+            0 => "Any".to_string(),
+            1 => form
+                .defers
+                .first()
+                .expect("length checked")
+                .label()
+                .to_string(),
+            count => format!("{count} defer filters"),
+        };
+        let fullscreen_label = match form.fullscreen {
+            None => "Any".to_string(),
+            Some(true) => "Has full-screen reminder".to_string(),
+            Some(false) => "No full-screen reminder".to_string(),
+        };
+        let extra = form.extra_condition_count();
+        // A live count turns the sheet into a preview: every change shows how
+        // many tasks the saved view would list.
+        let preview = query::run(
+            db,
+            &form.filter(),
+            form.sort,
+            form.group,
+            form.show_completed,
+            now(),
+        );
+        let matches = preview.iter().map(|group| group.rows.len()).sum::<usize>();
+
+        let toggle = |label: &'static str, active: bool, id: &'static str| {
+            div()
+                .on_children_prepainted(self.view_probe(id.to_string()))
+                .id(id)
+                .child(widgets::toggle_chip(theme, label, active))
+        };
+        let toggles = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_1()
+            .child(
+                div()
+                    .on_children_prepainted(self.theme_probe("modal-inbox".to_string()))
+                    .id("modal-inbox-wrap")
+                    .child(toggle("Inbox only", form.inbox_only, "modal-inbox"))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.toggle_inbox();
+                        }
+                        cx.notify();
+                    })),
+            )
+            .child(
+                toggle("Flagged only", form.flagged_only, "modal-flagged").on_click(cx.listener(
+                    |this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.flagged_only = !form.flagged_only;
+                        }
+                        cx.notify();
+                    },
+                )),
+            )
+            .child(
+                toggle("Completed", form.show_completed, "modal-completed")
+                    .flow_tip(self, cx, theme, "Include completed tasks")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.show_completed = !form.show_completed;
+                        }
+                        cx.notify();
+                    })),
+            );
+
+        let priority_toggles = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_1()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("Priority"),
+            )
+            .children(Priority::ALL.iter().map(|priority| {
+                let active = form.priorities.contains(priority);
+                div()
+                    .id(gpui::ElementId::Name(
+                        format!("modal-priority-{}", priority.slug()).into(),
+                    ))
+                    .child(widgets::toggle_chip(theme, priority.label(), active))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.toggle_priority(*priority);
+                        }
+                        cx.notify();
+                    }))
+            }));
+
+        let icon_row = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .child(div().text_xs().text_color(theme.text_faint).child("Icon"))
+            .child(
+                div()
+                    .on_children_prepainted(self.theme_probe("perspective-icon-row".to_string()))
+                    .id("modal-perspective-icon")
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .px_2()
+                    .py_1()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(if icon_open {
+                        theme.accent
+                    } else {
+                        theme.border_soft
+                    })
+                    .bg(if icon_open {
+                        theme.selection
+                    } else {
+                        theme.clear
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(widgets::icon_spec(&display_icon, 14.0, theme.text_dim))
+                    .when(has_icon_label, |this| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child(icon_label),
+                        )
+                    })
+                    .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.icon_open = !form.icon_open;
+                            if form.icon_open {
+                                this.modal_focus = 5;
+                            }
+                        }
+                        cx.notify();
+                    })),
+            );
+        let project_tag_row = div()
+            .flex()
+            .items_start()
+            .gap_2()
+            .child(div().flex_1().min_w_0().child(self.perspective_select(
+                ViewField::Project,
+                project_label,
+                !form.projects.is_empty(),
+                cx,
+            )))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(self.perspective_select(
+                        ViewField::Tag,
+                        tag_label,
+                        !form.tags.is_empty(),
+                        cx,
+                    ))
+                    .when(!form.tags.is_empty(), |this| {
+                        this.child(
+                            div()
+                                .id("modal-tag-children")
+                                .flex()
+                                .flow_tip(self, cx, theme, "Match tasks tagged with a child tag")
+                                .child(widgets::toggle_chip(theme, "Child tags", form.tag_children))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                                        form.tag_children = !form.tag_children;
+                                    }
+                                    cx.notify();
+                                })),
+                        )
+                    }),
+            );
+
+        let windows_row = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap_2()
+                    .child(div().flex_1().min_w_0().child(self.perspective_select(
+                        ViewField::Status,
+                        form.status_label().to_string(),
+                        form.status != TaskStatus::Any,
+                        cx,
+                    )))
+                    .child(div().flex_1().min_w_0().child(self.perspective_select(
+                        ViewField::Due,
+                        due_label,
+                        !form.dues.is_empty(),
+                        cx,
+                    ))),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap_2()
+                    .child(div().flex_1().min_w_0().child(self.perspective_select(
+                        ViewField::Planned,
+                        planned_label,
+                        !form.planned.is_empty(),
+                        cx,
+                    )))
+                    .child(div().flex_1().min_w_0().child(self.perspective_select(
+                        ViewField::Defer,
+                        defer_label,
+                        !form.defers.is_empty(),
+                        cx,
+                    ))),
+            );
+
+        let fullscreen_row =
+            div()
+                .flex()
+                .items_start()
+                .gap_2()
+                .child(div().flex_1().min_w_0().child(self.perspective_select(
+                    ViewField::Fullscreen,
+                    fullscreen_label,
+                    form.fullscreen.is_some(),
+                    cx,
+                )));
+
+        let layout_row = div()
+            .flex()
+            .items_start()
+            .gap_2()
+            .child(div().flex_1().min_w_0().child(self.perspective_select(
+                ViewField::Group,
+                form.group_label().to_string(),
+                form.group != GroupBy::None,
+                cx,
+            )))
+            .child(div().flex_1().min_w_0().child(self.perspective_select(
+                ViewField::Sort,
+                form.sort_label().to_string(),
+                false,
+                cx,
+            )));
+
+        let heading = |text: &'static str| {
+            div()
+                .text_xs()
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(theme.text_faint)
+                .child(text)
+        };
+        let summary = div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .px_2()
+            .py_2()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border_soft)
+            .bg(theme.field)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .min_w_0()
+                    .child(icons::icon(Icon::Perspective, 13.0, theme.text_faint))
+                    .child(div().text_sm().text_color(theme.text).child(format!(
+                        "{matches} {} match",
+                        if matches == 1 { "task" } else { "tasks" }
+                    )))
+                    .when(extra > 0, |this| {
+                        this.child(div().text_xs().text_color(theme.text_faint).child(format!(
+                            "· {extra} CLI condition{} kept",
+                            if extra == 1 { "" } else { "s" }
+                        )))
+                    }),
+            )
+            .when(form.has_filters(), |this| {
+                this.child(
+                    div()
+                        .on_children_prepainted(self.view_probe("clear".to_string()))
+                        .child(
+                            div()
+                                .id("modal-clear-filters")
+                                .flex_shrink_0()
+                                .text_xs()
+                                .text_color(theme.accent)
+                                .cursor_pointer()
+                                .hover(|style| style.text_color(theme.text))
+                                .child("Clear filters")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                                        form.clear_filters();
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                )
+            });
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(heading("FILTERS"))
+            .child(toggles)
+            .child(priority_toggles)
+            .child(project_tag_row)
+            .child(windows_row)
+            .child(fullscreen_row)
+    }
+
+    fn render_comprehensive_perspective_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let Some(Modal::Perspective { form }) = &self.modal else {
             return div();
@@ -2843,41 +4069,37 @@ impl FlowlistApp {
             .flex()
             .flex_col()
             .gap_2()
-            .child(icon_row)
-            .when(icon_open, |this| {
-                this.child(self.render_icon_picker_card(
-                    IconTarget::Perspective,
-                    5,
-                    form.icon.as_ref(),
-                    form.icon_tab,
-                    cx,
-                ))
-            })
-            .child(widgets::divider(theme))
-            .child(heading("CONTENTS"))
             .child(
                 div()
                     .flex()
-                    .flex_col()
-                    .gap_1()
-                    .children(self.render_rule_nodes(&form.root, 0, true, cx)),
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(heading("FILTER RULES"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child("Use + on a row to add another rule"),
+                    ),
             )
-            .child(widgets::divider(theme))
-            .child(heading("LAYOUT"))
-            .child(self.render_layout_select(
-                LayoutField::Group,
-                form.group_label().to_string(),
-                form.group != GroupBy::None,
-                cx,
-            ))
-            .child(self.render_layout_select(
-                LayoutField::Sort,
-                form.sort_label().to_string(),
-                false,
-                cx,
-            ))
-            .child(widgets::divider(theme))
-            .child(summary)
+            .child(
+                div()
+                    .text_xs()
+                    .whitespace_normal()
+                    .text_color(theme.text_faint)
+                    .child(
+                        "All means every card must match; Any means one is enough; None excludes matches. The checkbox turns a rule off without deleting it.",
+                    ),
+            )
+            .child(
+                div()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(theme.border)
+                    .overflow_hidden()
+                    .children(self.render_rule_rows(&form.root, 0, None, true, cx)),
+            )
     }
 
     fn render_layout_select(
@@ -3034,232 +4256,263 @@ impl FlowlistApp {
         card.into_any_element()
     }
 
-    fn render_rule_nodes(
+    fn render_rule_rows(
         &self,
         node: &RuleNode,
         depth: usize,
+        parent: Option<u64>,
         is_root: bool,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
-        let mut out = vec![self.render_rule_row(node, depth, is_root, cx)];
-        if node.kind.is_group() {
-            for child in node.children() {
-                out.extend(self.render_rule_nodes(child, depth + 1, false, cx));
-            }
-            out.push(self.render_add_rule_row(node.id, depth + 1, cx));
-        }
-        if matches!(&self.modal, Some(Modal::Perspective { form }) if form.editing == Some(node.id))
-        {
-            out.push(self.render_rule_editor(node, depth + 1, cx));
-        }
-        if matches!(&self.modal, Some(Modal::Perspective { form }) if form.row_menu == Some(node.id))
-        {
-            out.push(self.render_rule_menu(node, depth + 1, cx));
-        }
-        if matches!(&self.modal, Some(Modal::Perspective { form }) if form.add_menu == Some(node.id))
-        {
-            out.push(self.render_add_rule_menu(node.id, depth + 1, cx));
-        }
-        out
-    }
-
-    fn render_rule_row(
-        &self,
-        node: &RuleNode,
-        depth: usize,
-        is_root: bool,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
         let theme = self.theme;
         let db = self.store.db();
         let id = node.id;
-        let label = rule_summary(db, node);
+        let is_group = node.kind.is_group();
         let editing = matches!(&self.modal, Some(Modal::Perspective { form }) if form.editing == Some(id));
         let disabled = !node.enabled;
-        let is_group = node.kind.is_group();
-        let indent = (depth as f32) * 14.0;
+        let summary = rule_summary(db, node);
+        let indent = (depth as f32) * 24.0;
+
+        let checkbox = div()
+            .on_children_prepainted(self.view_probe(format!("rule-check:{id}")))
+            .id(super::sid(format!("rule-check:{id}")))
+            .w(px(26.))
+            .h(px(26.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer()
+            .child(view_checkbox(theme, node.enabled))
+            .flow_tip(self, cx, theme, "Turn this rule on or off")
+            .on_click(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                if let Some(Modal::Perspective { form }) = &mut this.modal {
+                    let enabled = form.is_rule_enabled(id);
+                    form.set_rule_enabled(id, !enabled);
+                }
+                cx.notify();
+            }));
+
+        let selector = if is_group {
+            let operator = match node.kind {
+                RuleKind::All(_) => GroupOperator::All,
+                RuleKind::Any(_) => GroupOperator::Any,
+                RuleKind::None(_) => GroupOperator::None,
+                _ => GroupOperator::All,
+            };
+            let next = match operator {
+                GroupOperator::All => GroupOperator::Any,
+                GroupOperator::Any => GroupOperator::None,
+                GroupOperator::None => GroupOperator::All,
+            };
+            div()
+                .id(super::sid(format!("rule-op:{id}")))
+                .h(px(26.))
+                .px_2()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .rounded_sm()
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.raised)
+                .text_sm()
+                .text_color(theme.text)
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover))
+                .child(operator.label())
+                .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
+                .flow_tip(self, cx, theme, "Click to switch All / Any / None")
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        form.set_group_operator(id, next);
+                    }
+                    cx.notify();
+                }))
+                .into_any_element()
+        } else {
+            let label = if disabled {
+                format!("{summary}  (off)")
+            } else {
+                summary.clone()
+            };
+            div()
+                .on_children_prepainted(self.view_probe(format!("rule-select:{id}")))
+                .id(super::sid(format!("rule-select:{id}")))
+                .min_w_0()
+                .max_w(px(520.))
+                .h(px(26.))
+                .px_2()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .rounded_sm()
+                .border_1()
+                .border_color(if editing { theme.accent } else { theme.border })
+                .bg(theme.raised)
+                .text_sm()
+                .text_color(if disabled {
+                    theme.text_faint
+                } else if editing {
+                    theme.accent
+                } else {
+                    theme.text
+                })
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover))
+                .child(
+                    div()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .child(label),
+                )
+                .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
+                .flow_tip(self, cx, theme, "Click to edit this rule")
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        form.editing = if form.editing == Some(id) {
+                            None
+                        } else {
+                            Some(id)
+                        };
+                        form.add_menu = None;
+                        form.add_after = None;
+                    }
+                    cx.notify();
+                }))
+                .into_any_element()
+        };
+
         let mut row = div()
             .on_children_prepainted(self.view_probe(format!("rule:{id}")))
             .id(super::sid(format!("rule:{id}")))
             .flex()
             .items_center()
-            .gap_1()
-            .min_h(px(28.))
-            .pl(px(indent + 4.0))
-            .pr_1()
-            .rounded_md()
-            .text_sm()
-            .text_color(if disabled {
-                theme.text_faint
-            } else if is_group {
-                theme.text
-            } else {
-                theme.text_dim
-            })
-            .bg(if editing { theme.selection } else { theme.clear })
-            .hover(|style| style.bg(theme.hover));
-        if !is_root {
-            let payload = DragRule::rule(id, label.clone());
+            .gap_2()
+            .h(px(38.))
+            .pl(px(indent + 8.0))
+            .pr_2()
+            .border_b_1()
+            .border_color(theme.border_soft)
+            .bg(if editing { theme.selection } else { theme.raised })
+            .hover(|style| style.bg(theme.hover))
+            .child(checkbox)
+            .child(selector);
+        if is_group {
             row = row.child(
                 div()
-                    .id(super::sid(format!("rule-drag:{id}")))
-                    .w(px(12.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_color(theme.text_faint)
-                    .cursor_pointer()
-                    .child("⠿")
-                    .on_drag(payload, move |payload, position, window, cx| {
-                        rule_ghost(payload, position, window, cx, theme)
-                    }),
-            );
-        } else {
-            row = row.child(div().w(px(12.)));
-        }
-        if let Some(group_label) = node.kind.group_label() {
-            row = row.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .min_w_0()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .child(group_label),
-                    )
-                    .child(self.group_operator_chips(node.id, node, cx)),
-            );
-        } else {
-            row = row.child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .child(if disabled {
-                        format!("{label}  (off)")
-                    } else {
-                        label.clone()
-                    }),
+                    .text_sm()
+                    .text_color(theme.text_dim)
+                    .child("of the following are true"),
             );
         }
+        row = row.child(div().flex_grow());
         if !is_root {
             row = row.child(
                 div()
-                    .on_children_prepainted(self.view_probe(format!("rule-menu:{id}")))
-                    .id(super::sid(format!("rule-menu:{id}")))
+                    .on_children_prepainted(self.view_probe(format!("rule-minus:{id}")))
+                    .id(super::sid(format!("rule-minus:{id}")))
                     .w(px(22.))
                     .h(px(22.))
                     .flex()
                     .items_center()
                     .justify_center()
                     .rounded_sm()
-                    .text_color(theme.text_faint)
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.raised)
+                    .text_sm()
+                    .text_color(theme.text_dim)
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover).text_color(theme.text))
-                    .child("⋯")
+                    .child("−")
+                    .flow_tip(self, cx, theme, "Delete this rule")
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         if let Some(Modal::Perspective { form }) = &mut this.modal {
-                            form.row_menu = if form.row_menu == Some(id) {
-                                None
-                            } else {
-                                Some(id)
-                            };
-                            form.editing = None;
+                            form.delete_rule(id);
                         }
                         cx.notify();
                     })),
             );
         }
-        row = row.on_click(cx.listener(move |this, _, _, cx| {
-            if let Some(Modal::Perspective { form }) = &mut this.modal {
-                if is_group {
-                    form.add_menu = if form.add_menu == Some(id) {
-                        None
-                    } else {
-                        Some(id)
-                    };
-                    form.row_menu = None;
-                } else {
-                    form.editing = if form.editing == Some(id) {
-                        None
-                    } else {
-                        Some(id)
-                    };
-                    form.row_menu = None;
-                }
-            }
-            cx.notify();
-        }));
-        if !is_root {
-            row = row.on_drop::<DragRule>(cx.listener(move |this, payload: &DragRule, _, cx| {
-                if let Some(Modal::Perspective { form }) = &mut this.modal {
-                    let moved = if is_group {
-                        form.move_into(payload.id, id)
-                    } else {
-                        form.move_before(payload.id, id)
-                    };
-                    if moved {
-                        form.row_menu = None;
+        row = row.child(
+            div()
+                .on_children_prepainted(self.view_probe(format!("rule-plus:{id}")))
+                .id(super::sid(format!("rule-plus:{id}")))
+                .w(px(22.))
+                .h(px(22.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_sm()
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.raised)
+                .text_color(theme.text_dim)
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover).text_color(theme.text))
+                .child(icons::icon(Icon::Plus, 11.0, theme.text_dim))
+                .flow_tip(self, cx, theme, "Add a rule here")
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        if is_group {
+                            form.add_menu = Some(id);
+                            form.add_after = None;
+                        } else {
+                            form.add_menu = parent;
+                            form.add_after = Some(id);
+                        }
                         form.editing = None;
                     }
-                }
-                cx.notify();
-            }));
-        }
-        row.into_any_element()
-    }
-
-    fn group_operator_chips(
-        &self,
-        id: u64,
-        node: &RuleNode,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let theme = self.theme;
-        let current = match node.kind {
-            RuleKind::All(_) => GroupOperator::All,
-            RuleKind::Any(_) => GroupOperator::Any,
-            RuleKind::None(_) => GroupOperator::None,
-            _ => GroupOperator::All,
-        };
-        let mut row = div().flex().items_center().gap(px(2.));
-        for operator in [
-            GroupOperator::All,
-            GroupOperator::Any,
-            GroupOperator::None,
-        ] {
-            let active = operator == current;
-            row = row.child(
-                div()
-                    .id(super::sid(format!("rule-op:{id}:{}", operator.label())))
-                    .h(px(18.))
-                    .px_1()
-                    .flex()
-                    .items_center()
-                    .rounded_sm()
-                    .text_size(px(10.))
-                    .text_color(if active { theme.accent } else { theme.text_faint })
-                    .bg(if active { theme.selection } else { theme.clear })
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .child(operator.label())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        if let Some(Modal::Perspective { form }) = &mut this.modal {
-                            form.set_group_operator(id, operator);
+                    cx.notify();
+                })),
+        );
+        if !is_root {
+            let payload = DragRule::rule(id, summary.clone());
+            row = row
+                .on_drag(payload, move |payload, position, window, cx| {
+                    rule_ghost(payload, position, window, cx, theme)
+                })
+                .on_drop::<DragRule>(cx.listener(move |this, payload: &DragRule, _, cx| {
+                    if let Some(Modal::Perspective { form }) = &mut this.modal {
+                        let moved = if is_group {
+                            form.move_into(payload.id, id)
+                        } else {
+                            form.move_before(payload.id, id)
+                        };
+                        if moved {
+                            form.editing = None;
                         }
-                        cx.notify();
-                    })),
-            );
+                    }
+                    cx.notify();
+                }));
         }
-        row.into_any_element()
+
+        let mut out = vec![row.into_any_element()];
+        if editing {
+            out.push(self.render_rule_editor(node, depth + 1, cx));
+        }
+        if is_group {
+            for child in node.children() {
+                out.extend(self.render_rule_rows(child, depth + 1, Some(id), false, cx));
+            }
+            if matches!(&self.modal, Some(Modal::Perspective { form }) if form.add_menu == Some(id) && form.add_after.is_none())
+            {
+                out.push(self.render_add_rule_menu(id, depth + 1, cx));
+            }
+        }
+        if matches!(&self.modal, Some(Modal::Perspective { form }) if form.add_menu == parent && form.add_after == Some(id))
+        {
+            out.push(self.render_add_rule_menu(parent.unwrap_or(id), depth, cx));
+        }
+        out
     }
 
     fn render_add_rule_row(
@@ -3310,7 +4563,7 @@ impl FlowlistApp {
         let mut menu = div()
             .on_children_prepainted(self.view_probe("rule-add-menu".to_string()))
             .id("rule-add-menu")
-            .ml(px((depth as f32) * 14.0 + 20.0))
+            .ml(px((depth as f32) * 24.0 + 40.0))
             .flex()
             .flex_col()
             .gap(px(1.))
@@ -3321,13 +4574,23 @@ impl FlowlistApp {
             .bg(theme.raised)
             .max_h(px(320.))
             .overflow_y_scroll();
+        menu = menu.child(
+            div()
+                .px_2()
+                .pt_1()
+                .pb_1()
+                .text_size(px(10.))
+                .text_color(theme.text_faint)
+                .child("Choosing a rule adds a new card under this group"),
+        );
         let mut category = "";
         for template in RuleTemplate::ALL {
             if template.category() != category {
                 category = template.category();
                 menu = menu.child(
                     div()
-                        .px_2()
+                        .pl_2()
+                        .pr_2()
                         .pt_2()
                         .pb_1()
                         .text_size(px(10.))
@@ -3347,7 +4610,8 @@ impl FlowlistApp {
                         self.view_probe(format!("rule-option:{parent}:{slug}")),
                     )
                     .id(super::sid(format!("rule-option:{parent}:{slug}")))
-                    .px_2()
+                    .pl_7()
+                    .pr_2()
                     .py_1()
                     .rounded_sm()
                     .text_xs()
@@ -3357,7 +4621,11 @@ impl FlowlistApp {
                     .child(label)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(Modal::Perspective { form }) = &mut this.modal {
-                            form.add_rule(parent, template);
+                            if let Some(after) = form.add_after {
+                                form.add_rule_after(after, template);
+                            } else {
+                                form.add_rule(parent, template);
+                            }
                         }
                         cx.notify();
                     })),
@@ -3396,6 +4664,7 @@ impl FlowlistApp {
                     if enabled { "Turn Off" } else { "Turn On" }.to_string(),
                     Some("toggle"),
                 ),
+                ("Duplicate".to_string(), Some("duplicate")),
                 ("Move Up".to_string(), Some("up")),
                 ("Move Down".to_string(), Some("down")),
                 ("Delete".to_string(), Some("delete")),
@@ -3407,6 +4676,7 @@ impl FlowlistApp {
                     if enabled { "Turn Off" } else { "Turn On" }.to_string(),
                     Some("toggle"),
                 ),
+                ("Duplicate".to_string(), Some("duplicate")),
                 ("Move Up".to_string(), Some("up")),
                 ("Move Down".to_string(), Some("down")),
                 ("Delete".to_string(), Some("delete")),
@@ -3445,6 +4715,9 @@ impl FlowlistApp {
                                 Some("toggle") => {
                                     let now = form.is_rule_enabled(id);
                                     form.set_rule_enabled(id, !now);
+                                }
+                                Some("duplicate") => {
+                                    form.duplicate_rule(id);
                                 }
                                 Some("up") => {
                                     form.move_rule(id, true);
@@ -3543,14 +4816,15 @@ impl FlowlistApp {
         let Some(buffer) = form.editing_buffer(index) else {
             return div().into_any_element();
         };
-        let focused = self.modal_focus == index;
+        let focus_index = 8 + index;
+        let focused = self.modal_focus == focus_index;
         let field = widgets::text_field_with_cursor(
             theme,
             buffer,
             placeholder,
             focused,
             cx.listener(move |this, hit: &widgets::TextHit, _, cx| {
-                this.set_modal_cursor(index, hit.index, hit.extend, hit.click_count, cx);
+                this.set_modal_cursor(focus_index, hit.index, hit.extend, hit.click_count, cx);
             }),
         );
         div()
@@ -3559,7 +4833,7 @@ impl FlowlistApp {
             .min_w_0()
             .child(field)
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.modal_focus = index;
+                this.modal_focus = focus_index;
                 this.focus = super::FocusArea::Modal;
                 cx.notify();
             }))
