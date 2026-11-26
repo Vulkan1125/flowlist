@@ -23,8 +23,8 @@ use super::drag::{DragForecastResize, DragTask, ghost, resize_ghost};
 use super::icons::{self, Icon};
 use super::widgets::TipExt;
 use super::{
-    EditField, FlowlistApp, FocusArea, View, group_label, group_slug, sort_label, sort_slug,
-    widgets,
+    EditField, FlowlistApp, FocusArea, View, calendar, group_label, group_slug, sort_label,
+    sort_slug, widgets,
 };
 
 impl FlowlistApp {
@@ -726,7 +726,12 @@ impl FlowlistApp {
         for (index, label) in labels.iter().enumerate() {
             let date = week + Duration::days(index as i64);
             let count = days.get(&date).map_or(0, Vec::len)
-                + project_days.get(&date).map_or(0, Vec::len);
+                + project_days.get(&date).map_or(0, Vec::len)
+                + if self.calendar_events_enabled {
+                    self.calendar_events_on(date).len()
+                } else {
+                    0
+                };
             let selected = !self.forecast_past
                 && !self.forecast_future
                 && self.forecast_date == Some(date);
@@ -938,7 +943,12 @@ impl FlowlistApp {
                 let is_selected = self.forecast_date == Some(date);
                 let ids = days.get(&date).cloned().unwrap_or_default();
                 let project_ids = project_days.get(&date).cloned().unwrap_or_default();
-                let count = ids.len() + project_ids.len();
+                let events = if self.calendar_events_enabled {
+                    self.calendar_events_on(date)
+                } else {
+                    Vec::new()
+                };
+                let count = ids.len() + project_ids.len() + events.len();
                 let cell_key = date.to_string();
                 let box_sink = day_boxes.clone();
                 let drop_date = date;
@@ -1021,7 +1031,75 @@ impl FlowlistApp {
                 );
 
                 let mut shown = 0;
-                for project_id in project_ids.iter().take(2) {
+                for event in events.iter().take(2) {
+                    let event_id = event.id.clone();
+                    let title = event.chip_label();
+                    let color: gpui::Hsla = event
+                        .color
+                        .map(|color| gpui::rgb(color).into())
+                        .unwrap_or(theme.accent);
+                    let chip_key = event.id.clone();
+                    let chip_sink = self.calendar_chip_boxes.clone();
+                    let select_date = date;
+                    let select_month =
+                        NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date);
+                    cell = cell.child(
+                        div()
+                            .on_children_prepainted(move |bounds, _, _| {
+                                if let Some(bounds) = bounds.first() {
+                                    chip_sink.borrow_mut().insert(
+                                        chip_key.clone(),
+                                        [
+                                            f32::from(bounds.origin.x),
+                                            f32::from(bounds.origin.y),
+                                            f32::from(bounds.size.width),
+                                            f32::from(bounds.size.height),
+                                        ],
+                                    );
+                                }
+                            })
+                            .child(
+                                div()
+                                    .id(super::sid(format!("calendar-chip:{event_id}")))
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .h(px(15.))
+                                    .w_full()
+                                    .min_w_0()
+                                    .px_1()
+                                    .rounded_sm()
+                                    .bg(theme.field)
+                                    .text_xs()
+                                    .text_color(theme.text_dim)
+                                    .truncate()
+                                    .text_ellipsis()
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        this.forecast_past = false;
+                                        this.forecast_future = false;
+                                        this.forecast_date = Some(select_date);
+                                        this.forecast_month = select_month;
+                                        this.forecast_week = week_start(select_date);
+                                        this.selected.clear();
+                                        this.anchor = None;
+                                        this.save_session();
+                                        cx.notify();
+                                    }))
+                                    .child(div().size(px(5.)).rounded_full().bg(color))
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .truncate()
+                                            .text_ellipsis()
+                                            .child(title.clone()),
+                                    ),
+                            ),
+                    );
+                    shown += 1;
+                }
+                for project_id in project_ids.iter().take(2 - shown) {
                     let Some(project) = db.projects.get(project_id) else {
                         continue;
                     };
@@ -1806,10 +1884,105 @@ impl FlowlistApp {
         )
     }
 
+    /// Events shown under a Forecast group. Only real day groups get events;
+    /// Past, Future, Flagged and tag buckets do not duplicate them.
+    fn forecast_events_for_group(&self, key: &str) -> Vec<&calendar::Event> {
+        if !self.calendar_events_enabled {
+            return Vec::new();
+        }
+        let today = local_date(now());
+        let date = if key == "forecast:today" {
+            Some(today)
+        } else if key == "forecast:tomorrow" {
+            Some(today + Duration::days(1))
+        } else if let Some(value) = key.strip_prefix("forecast-day:") {
+            chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").ok()
+        } else if let Some(value) = key.strip_prefix("forecast:") {
+            chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").ok()
+        } else {
+            None
+        };
+        date.map(|date| self.calendar_events_on(date))
+            .unwrap_or_default()
+    }
+
+    fn render_calendar_event_row(&self, event: &calendar::Event) -> AnyElement {
+        let theme = self.theme;
+        let color: gpui::Hsla = event
+            .color
+            .map(|color| gpui::rgb(color).into())
+            .unwrap_or(theme.accent);
+        let boxes = self.calendar_event_boxes.clone();
+        let key = event.id.clone();
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    boxes.borrow_mut().insert(
+                        key.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .id(super::sid(format!("calendar-event:{}", event.id)))
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_4()
+            .py_1()
+            .text_sm()
+            .child(div().size(px(6.)).rounded_full().bg(color))
+            .child(
+                div()
+                    .w(px(74.))
+                    .flex_shrink_0()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(event.time_label()),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_ellipsis()
+                    .child(event.title.clone()),
+            )
+            .when_some(event.location.clone(), |this, location| {
+                this.child(
+                    div()
+                        .max_w(px(110.))
+                        .truncate()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .child(location),
+                )
+            })
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(event.calendar.clone()),
+            )
+            .into_any_element()
+    }
+
     fn render_groups(&self, groups: &[Group], cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
         let mut list = div().flex().flex_col().w_full().py_1();
+        let show_calendar = matches!(self.view, View::Builtin(BuiltinPerspective::Forecast))
+            && self.calendar_events_enabled;
+        let has_group_events = show_calendar
+            && groups
+                .iter()
+                .any(|group| !self.forecast_events_for_group(&group.key).is_empty());
         let show_headers = groups.len() > 1
+            || has_group_events
             || matches!(
                 self.view,
                 View::Builtin(BuiltinPerspective::Projects) | View::Folder(_) | View::Custom(_)
@@ -1827,6 +2000,7 @@ impl FlowlistApp {
         let entirely_empty = groups.len() == 1
             && groups[0].rows.is_empty()
             && groups[0].projects.is_empty()
+            && !has_group_events
             && !show_headers;
         if groups.is_empty() || entirely_empty {
             if !self.search.is_empty() {
@@ -1901,6 +2075,31 @@ impl FlowlistApp {
                 list = list.child(self.render_group_header(group, open, cx));
             }
             if open {
+                let events = self.forecast_events_for_group(&group.key);
+                if !events.is_empty() {
+                    list = list.child(
+                        div()
+                            .px_4()
+                            .pt_2()
+                            .pb_1()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(theme.text_faint)
+                            .child("Calendar"),
+                    );
+                    for event in &events {
+                        list = list.child(self.render_calendar_event_row(event));
+                    }
+                    if !group.projects.is_empty() || !group.rows.is_empty() {
+                        list = list.child(
+                            div()
+                                .mx_4()
+                                .mt_1()
+                                .h(px(1.))
+                                .bg(theme.border_soft),
+                        );
+                    }
+                }
                 // Forecast puts a project's own deadline above the day's
                 // actions. Every other view has an empty list here.
                 if !group.projects.is_empty() {
@@ -1949,7 +2148,7 @@ impl FlowlistApp {
                     }
                     list = list.child(self.render_task_row(&row, cx));
                 }
-                if group.rows.is_empty() && group.projects.is_empty() {
+                if group.rows.is_empty() && group.projects.is_empty() && events.is_empty() {
                     list = list.child(
                         div()
                             .px_4()
@@ -2412,6 +2611,11 @@ impl FlowlistApp {
         let key = group.key.clone();
         let open_key = key.clone();
         let project = project_id_from_key(&key);
+        let event_count = if matches!(self.view, View::Builtin(BuiltinPerspective::Forecast)) {
+            self.forecast_events_for_group(&key).len()
+        } else {
+            0
+        };
         let group_boxes = self.content_group_boxes.clone();
         let group_key = group.key.clone();
         let mut row =
@@ -2464,7 +2668,7 @@ impl FlowlistApp {
                 )
                 .child(widgets::count(
                     theme,
-                    group.rows.len() + group.projects.len(),
+                    group.rows.len() + group.projects.len() + event_count,
                 ))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.toggle_group_collapsed(open_key.clone(), cx)

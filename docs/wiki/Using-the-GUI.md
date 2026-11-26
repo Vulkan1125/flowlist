@@ -340,6 +340,12 @@ titles itself **Search** and ranks the closest matches first.
   appear in Forecast without needing a date. **Show flagged undated tasks** does
   the same for flagged actions. A task that already has a due, defer or planned
   date stays in its date section instead of duplicating.
+- **Settings → Workflow → Calendar** enables read-only macOS Calendar events.
+  They sit above each day's tasks under a **Calendar** heading, and the month
+  grid shows event chips with the calendar's colour. The week strip counts
+  events with the day's tasks. The first enable asks for Calendar access; if it
+  is denied, the same card opens System Settings. Events are never added to the
+  library.
 - Projects appear in Forecast on their own due, defer and planned dates. A
   project row shows its icon, name, status, dates and progress; clicking opens
   the project. The day’s **Tasks** section follows, with tasks from those

@@ -56,7 +56,7 @@ The sidebar's fixed perspectives are the backbone:
 | Inbox | tasks with no project and no due/defer date |
 | Today | due today, deferred to today, and overdue; overdue can be hidden |
 | Projects | open projects and their tasks |
-| Forecast | overdue / today / tomorrow / later, with a collapsible, resizable month calendar; an optional Forecast tag and flagged-undated section sit above Past |
+| Forecast | overdue / today / tomorrow / later, with a collapsible, resizable month calendar; read-only Calendar events can join each day, and an optional Forecast tag and flagged-undated section sit above Past |
 | Flagged | flagged tasks |
 | Review | projects due for review |
 | Tags | tasks grouped by tag |

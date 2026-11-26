@@ -279,6 +279,9 @@ pub struct Session {
     /// Due-date reminders on this Mac. Per device, not per library.
     #[serde(default)]
     pub notifications: Option<bool>,
+    /// Show read-only macOS Calendar events in Forecast. Per device.
+    #[serde(default)]
+    pub calendar_events: Option<bool>,
     /// Take over the screen with a due reminder while Flowlist is running.
     #[serde(default)]
     pub fullscreen_reminders: Option<bool>,

@@ -293,6 +293,9 @@ library:
   headings, tag ordering by usage, the live-project folder badge, title-bar
   history, Settings visibility and count choices, and that those choices
   survive a relaunch.
+- `scripts/gui/calendar-events-probe.sh` runs Forecast with the
+  `FLOWLIST_TEST_CALENDAR` fixture and checks agenda event rows, month-grid
+  chips and event-only Today/Tomorrow groups.
 - `scripts/gui/settings-probe.sh` checks the sectioned sheet, the `⌘1`–`⌘7`
   section shortcuts, Plain's keyboard accent presets, Escape's undo pair, the
   saved accent pair, relaunch persistence and Reset to ink.

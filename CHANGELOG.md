@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Calendar events in Forecast.** With Settings → Workflow → Calendar enabled,
+  Flowlist reads macOS Calendar events and shows them above each day's tasks in
+  Forecast. The month grid shows event chips and the week strip counts them;
+  events are read-only, never stored in the library, and do not affect task
+  counts outside Forecast.
 - **Collapsible inspector sections.** Title, Action, Notes & Attachments, Dates,
   Repeat, Tags and Notifications each fold from their header; the choice is
   remembered per device. Project sections cover Project, Dates, Review,

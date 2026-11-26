@@ -146,8 +146,10 @@ integrations are tracked separately and are not part of this phase.
       actions into Forecast, flagged undated actions can be shown, and on-hold
       project deadlines already appear. Absolute custom notifications remain
       part of the alert editor rather than Forecast dates.
-- [ ] **Calendar events in Forecast** — read upcoming events from macOS
+- [x] **Calendar events in Forecast** — read upcoming events from macOS
       Calendar and interleave them with due, planned and deferred tasks.
+      Settings → Workflow → Calendar enables it; access is read-only and
+      per-device.
 - [ ] **Nested perspective rules** — an All / Any / None rule builder with
       nesting, date-range rules, tag/project-status rules, and comments.
 - [ ] **Project-level custom perspectives** — an “Entire Projects” structure

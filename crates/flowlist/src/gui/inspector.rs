@@ -1885,7 +1885,6 @@ impl FlowlistApp {
         let estimate = task.estimate_min.map(format_duration);
         let repeat_rule = task.repeat.clone();
         let attachments = task.attachments.clone();
-        let sequential = task.sequential;
         let availability = flowlist_core::query::availability::availability(db, &id, now());
         let created = task
             .created_at

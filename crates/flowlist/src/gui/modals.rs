@@ -228,6 +228,8 @@ pub enum Modal {
         vim_mode: bool,
         /// Due-date reminders, per device.
         notifications: bool,
+        /// Show macOS Calendar events in Forecast, per device.
+        calendar_events: bool,
         /// Take over the screen when a task comes due, per device.
         fullscreen_reminders: bool,
         /// Pause system media while a full-screen reminder is on screen.
@@ -683,6 +685,7 @@ impl Modal {
             trash_days: TextBuffer::new(settings.trash_retention_days.to_string()),
             vim_mode: app.vim_mode,
             notifications: app.due_notifications,
+            calendar_events: app.calendar_events_enabled,
             fullscreen_reminders: app.fullscreen_reminders,
             pause_media_on_reminder: app.pause_media_on_reminder,
             reminder_background: app.reminder_background,
@@ -6230,6 +6233,95 @@ impl FlowlistApp {
                         ),
                 ),
         );
+        let calendar_events = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                calendar_events: true,
+                ..
+            })
+        );
+        let calendar_permission = super::calendar::permission();
+        let mut calendar_body = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(div().flex_1().text_sm().child("Show Calendar events in Forecast"))
+                    .child(
+                        div()
+                            .on_children_prepainted(
+                                self.theme_probe("settings-calendar-events".to_string()),
+                            )
+                            .id("settings-calendar-events")
+                            .child(widgets::switch(theme, calendar_events))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(Modal::Settings { calendar_events, .. }) = &mut this.modal
+                                {
+                                    *calendar_events = !*calendar_events;
+                                }
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .whitespace_normal()
+                    .text_color(if calendar_permission.allowed() {
+                        theme.success
+                    } else {
+                        theme.text_faint
+                    })
+                    .child(format!("Calendar access: {}", calendar_permission.label())),
+            );
+        if !calendar_permission.allowed() {
+            let can_ask = matches!(
+                calendar_permission,
+                super::calendar::Permission::Unknown
+                    | super::calendar::Permission::NotDetermined
+            );
+            let label = if can_ask {
+                "Allow Calendar access"
+            } else {
+                "Open Calendar privacy settings"
+            };
+            calendar_body = calendar_body.child(
+                div()
+                    .id("calendar-permission-button")
+                    .w(px(220.))
+                    .px_2()
+                    .py_1()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.field)
+                    .text_xs()
+                    .text_color(theme.accent)
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(label)
+                    .on_click(cx.listener(move |_this, _, _, cx| {
+                        if can_ask {
+                            super::calendar::request_permission();
+                        } else {
+                            super::calendar::open_settings();
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        let calendar_card = self.settings_card(
+            "Calendar",
+            Some(
+                "Read-only macOS Calendar events appear beside tasks in Forecast. Access is per device and Flowlist never changes your calendars.",
+            ),
+            calendar_body,
+        );
         let focus_banner = matches!(
             &self.modal,
             Some(Modal::Settings {
@@ -6272,6 +6364,7 @@ impl FlowlistApp {
             .child(toolbar_card)
             .child(subtasks_card)
             .child(forecast_card)
+            .child(calendar_card)
             .child(focus_card)
             .child(
                 self.settings_card(

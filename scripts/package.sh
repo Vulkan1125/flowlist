@@ -56,6 +56,10 @@ cat >"$app/Contents/Info.plist" <<PLIST
 	<string>13.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Flowlist reads your Calendar events to show them in Forecast.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Flowlist reads your Calendar events to show them in Forecast.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT licensed</string>
 </dict>
