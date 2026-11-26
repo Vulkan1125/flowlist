@@ -212,7 +212,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Quick Open (`⌘O`): one navigation palette for perspectives, folders,
       projects, tags and priorities, with live filtering, keyboard selection
       and a scrolling result list that stays inside the panel
-- [x] OmniFocus-style header titles under the icon buttons, with a Workflow
+- [x] Header titles under the icon buttons, with a Workflow
       setting to hide them. Search keeps only its placeholder.
 - [x] Focus-aware sidebar counts for task perspectives and project dashboards;
       Inbox stays global
@@ -232,7 +232,7 @@ working domain and GUI. This page tracks what is implemented and verified.
       Per-date floating/fixed time zones are still a date-model gap.
 - [x] Collapsible Properties sections: Title, Action, Notes & Attachments,
       Dates, Repeat, Tags and Notifications, plus the project sections.
-- [x] OmniFocus-style Repeat controls with one editable interval box, a
+- [x] Repeat controls with one editable interval box, a
       day/week/month/year dropdown, a Sunday-to-Saturday weekday strip and a
       plain-language summary, plus a Review section with Next Review, cadence
       and Last Reviewed.
@@ -245,7 +245,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Settings reopens at the size it was last dragged to.
 - [x] One Notifications section with an Add Notification menu and a per-row
       full-screen reminder checkbox; the separate Alerts text field is retired.
-- [x] OmniFocus-style tag chips in their own section, with a `+` add control.
+- [x] Tag chips in their own section, with a `+` add control.
 - [x] Empty inspector sections start folded and populated ones start open.
 - [x] Forecast tag and flagged undated actions: a designated tag and an
       optional Flagged section above the usual Forecast buckets
@@ -268,7 +268,7 @@ working domain and GUI. This page tracks what is implemented and verified.
       saved views can filter by Planned window, and sorting, grouping, CLI and
       MCP understand it. Projects carry a planned date and actions inherit it
       through parent actions; a task or parent action overrides it.
-- [x] Date marks: Defer, Planned and Due carry distinct OmniFocus-style
+- [x] Date marks: Defer, Planned and Due carry distinct
       icons (turning arrow, signpost, clock-on-calendar) on task rows and
       inspector labels, with hover tooltips.
 - [x] Calendar icons on the inspector's Defer, Planned and Due fields open a two-step

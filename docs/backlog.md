@@ -82,9 +82,9 @@ intentionally outside Phase 5.
       one illustrated empty state, prose counts, 120 ms overlay fades,
       miniature-window theme swatches and a quieter status bar.
 
-### Phase 5 — OmniFocus parity (non-platform)
+### Phase 5 — Advanced view parity (non-platform)
 
-Gap audit against OmniFocus 4.10.1 (November 2026). Platform/ecosystem
+Gap audit against the reference task manager (November 2026). Platform/ecosystem
 integrations are tracked separately and are not part of this phase.
 
 - [x] **Quick Open** — `⌘O` opens one navigation palette for perspectives,
@@ -95,7 +95,7 @@ integrations are tracked separately and are not part of this phase.
       quick capture, Forecast Planned Today and planned calendar days, Today
       including planned-today tasks, a Planned dates filter in the saved-view
       editor, Planned sorting and grouping, CLI `--planned`, MCP
-      `planned` / `planned_at`, Android display, and distinct OmniFocus-style
+      `planned` / `planned_at`, Android display, and distinct
       marks for Defer, Planned and Due.
 - [x] **Past plans and Running** — a planned date that slips stays in
       Forecast's Past section and in Today's Past plans group; one Hide past
@@ -150,7 +150,7 @@ integrations are tracked separately and are not part of this phase.
       Calendar and interleave them with due, planned and deferred tasks.
       Settings → Calendar enables it, lists every calendar with a show/hide
       switch, and keeps access read-only and per-device.
-- [x] **Nested perspective rules** — the OmniFocus contents tree: nested
+- [x] **Nested perspective rules** — the shared contents tree: nested
       All / Any / None groups, the full rule catalogue, date ranges, tag and
       project status, comments, turning rules off, drag reordering, and the
       same evaluator on the Mac and the phone.
@@ -642,7 +642,7 @@ product comparison, not a claim of feature parity.
 - **System capture surfaces** — Quick Entry, Mail Drop, clippings and
   share-sheet capture. Background capture is already in the backlog; treat
   Mail Drop as a separate import path.
-- **Per-date time zones** — OmniFocus dates can float with the wall clock or be
+- **Per-date time zones** — dates can float with the wall clock or be
   fixed to a time zone. Flowlist stores one instant and schedules in the system
   time zone. This needs a date-model and sync change across macOS and Android,
   not only a notification change.

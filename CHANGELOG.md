@@ -4,8 +4,8 @@
 
 ### Perspective rules
 
-- **OmniFocus rule tree.** Saved views now use one hierarchical contents tree:
-  nested **All / Any / None** groups, every OmniFocus 4 rule from **Status:
+- **Rule tree.** Saved views now use one hierarchical contents tree:
+  nested **All / Any / None** groups, every supported rule from **Status:
   Due Soon** through **Matches search terms**, comments, disabled rules, drag
   reordering and a top-level operator. New views start with **Availability:
   Remaining**. Date ranges cover due, planned, defer, completed, dropped, added
@@ -31,10 +31,10 @@
 ### View editor
 
 - **Simple and Comprehensive tabs.** Simple restores the previous checkbox and
-  pop-up editor. Comprehensive is the OmniFocus-style rule tree. A new view
+  pop-up editor. Comprehensive is the full rule tree. A new view
   starts on Simple; advanced views open on Comprehensive so nothing is silently
   flattened.
-- **Quiet OmniFocus 4 contents list.** Indented rule text with code-editor
+- **Quiet contents list.** Indented rule text with code-editor
   guide lines, a right-side `⋯` menu, a hover plus, a faint **Add a new rule**,
   and a shared Presentation section. The icon background is square.
 - **Resizable, scrollable sheet.** The editor resizes in both directions and
@@ -73,7 +73,7 @@
 - **Collapsible inspector sections.** Title, Action, Notes & Attachments, Dates,
   Repeat, Tags and Notifications fold from their headers; the choice is
   remembered per device.
-- **OmniFocus-style Repeat and Review.** Repeat has an editable interval, unit
+- **Repeat and Review.** Repeat has an editable interval, unit
   menu, weekday strip, anchored choices and a plain-language summary. Review
   shows Next Review, an inline cadence stepper and Last Reviewed.
 - **Properties and Subtasks tabs.** A single task has separate Properties and
@@ -85,7 +85,7 @@
   and Due defaults can be enabled separately. Each task or project can remove
   or restore defaults and add relative or absolute notifications. Flowlist
   still schedules in the system time zone.
-- **OmniFocus-style Tags.** Tags use a bordered chip box, a `+` control and an
+- **Tags.** Tags use a bordered chip box, a `+` control and an
   inline add field. Project tags use the same box without the input.
 - **Empty sections start folded.** Sections open by default only when they have
   data.
@@ -118,13 +118,13 @@
   several. Right-click a selected row to focus the selection, mark the selected
   projects Active/On Hold/Done/Dropped, or delete the selection in one undoable
   step.
-- **Toolbar titles.** Header icon buttons can show small titles underneath,
-  OmniFocus-style. Search keeps only its placeholder. Turn the titles off in
+- **Toolbar titles.** Header icon buttons can show small titles underneath.
+  Search keeps only its placeholder. Turn the titles off in
   Settings → Workflow → Show button titles.
 
 ### Changes
 
-- **Focus banner and controls.** The banner uses an opaque OmniFocus-style
+- **Focus banner and controls.** The banner uses an opaque high-contrast
   palette. Workflow can hide it; the eye remains available, and a restored focus
   briefly shows the banner before it dismisses itself. Toolbar labels get a
   taller title bar, larger type and roomier spacing without changing the
@@ -199,8 +199,8 @@
   now treats Due, Defer and Planned as independent dates, so a task planned
   today and due next week appears in both places, and clicking a planned day
   lists it.
-- **Three dates at a glance.** Rows and inspector labels now carry OmniFocus-
-  style marks — a turning arrow for Defer, a signpost for Planned and a clock
+- **Three dates at a glance.** Rows and inspector labels carry distinct marks
+  — a turning arrow for Defer, a signpost for Planned and a clock
   on a calendar for Due — so the dates never read as the same thing. Today now
   includes tasks planned for today and its subtitle says so. Saved views gain
   a Planned dates filter (Any, Overdue, Today, Tomorrow, Next 7/30 days, No
