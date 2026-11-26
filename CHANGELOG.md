@@ -1,30 +1,46 @@
 # Changelog
 
-## Unreleased
+## 0.9.51 — 2026-11-26
 
-- **Toolbar titles.** Header icon buttons can carry small titles underneath,
-  OmniFocus-style. Settings → Workflow has **Show button titles**; search keeps
-  its placeholder and never gets a title. Button titles are on by default.
-- **Focus counts.** Sidebar counts for Today, Forecast, Flagged, Review, Tags,
-  Completed, Archive, Nearby, Changed, Attachments and Fullscreen now follow the
-  focused projects and folders. Inbox stays global.
+### What's new
+
+- **Focus mode.** Scope every perspective, search, Forecast calendar and
+  Review/Archive/Nearby list to one or more projects or folders. The sidebar
+  dims outside the focused branches, and a full-width banner below the title bar
+  names them. The eye beside the history arrows ends focus and restores the
+  previous focus. Inbox and Trash stay global.
+- **Multi-selection in the sidebar.** Cmd-click projects and folders to select
+  several. Right-click a selected row to focus the selection, mark the selected
+  projects Active/On Hold/Done/Dropped, or delete the selection in one undoable
+  step.
+- **Toolbar titles.** Header icon buttons can show small titles underneath,
+  OmniFocus-style. Search keeps only its placeholder. Turn the titles off in
+  Settings → Workflow → Show button titles.
+
+### Changes
+
+- **Focus banner and controls.** The banner uses an opaque OmniFocus-style
+  palette. Workflow can hide it; the eye remains available, and a restored focus
+  briefly shows the banner before it dismisses itself. Toolbar labels get a
+  taller title bar, larger type and roomier spacing without changing the
+  unlabeled layout.
+- **Focus-aware counts.** Sidebar counts for task perspectives and project
+  dashboards follow the focused branches; Inbox stays global.
+- **Settings and inspector polish.** Workflow toggles are right-aligned, the
+  Window controls status sits beside its main label, and the inspector no longer
+  has a separate close ✕.
+
+### Bug fixes
+
 - **Reminder media.** Pause media now only stops playback when a full-screen
-  reminder opens; it no longer starts previously paused media when the reminder
+  reminder opens. It no longer starts previously paused media when the reminder
   closes.
-- **Inspector trim.** Removed the close ✕ from the inspector header. The `i`
-  shortcut and the header Inspect button still toggle it.
-- **Focus mode.** Focus on a project, a folder, or several of either. Cmd-click
-  selects rows in the sidebar; right-click a selected row for **Focus on N
-  selected**, project status changes across the selected projects, or batch
-  delete. A single row can still be focused from its context menu or with Quick
-  Open. Every perspective, search, Forecast calendar and Review/Archive/Nearby
-  list is scoped to the selected branches, and the sidebar dims everything
-  outside them. A full-width, opaque OmniFocus-style banner below the title bar
-  names the focus and clears it with its ✕. The eye beside the history arrows
-  glows while focused, ends focus, and restores the previous focus. Settings can
-  hide the banner; the eye stays and a restored focus briefly announces itself
-  before the banner self-dismisses. Opening a project or folder outside every
-  focused branch leaves focus. Inbox and Trash stay global.
+- **Focus counts.** Badges update immediately with the active focus and no longer
+  leave stale values such as an attachments count with no matching rows.
+- **Focus eye.** The eye no longer shifts when its title changes between Focus
+  and Unfocus.
+- **Window controls switch.** The switch stays fixed when the shown/hidden text
+  changes.
 
 ## 0.9.50 — 2026-11-25
 
