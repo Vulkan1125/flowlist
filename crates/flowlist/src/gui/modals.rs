@@ -2627,7 +2627,7 @@ impl FlowlistApp {
             .flex()
             .items_center()
             .justify_center()
-            .rounded_md()
+            .rounded(px(9.))
             .border_1()
             .border_color(if active {
                 theme.accent
@@ -3301,7 +3301,7 @@ impl FlowlistApp {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded_full()
+                    .rounded(px(10.))
                     .border_1()
                     .border_color(if icon_open {
                         theme.accent
@@ -4339,42 +4339,11 @@ impl FlowlistApp {
                     .top_0()
                     .bottom_0()
                     .w(px(1.))
-                    .bg(theme.border_soft),
+                    .bg(theme.text_faint)
+                    .opacity(0.45),
             );
         }
         row = row
-            .child(
-                div()
-                    .on_children_prepainted(self.view_probe(format!("rule-menu:{id}")))
-                    .id(super::sid(format!("rule-menu:{id}")))
-                    .w(px(20.))
-                    .h(px(20.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_sm()
-                    .text_color(if menu_open { theme.text } else { theme.text_faint })
-                    .opacity(0.35)
-                    .group_hover(group.clone(), |style| style.opacity(1.0))
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover).text_color(theme.text))
-                    .child("⋯")
-                    .flow_tip(self, cx, theme, "Rule actions")
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        if let Some(Modal::Perspective { form }) = &mut this.modal {
-                            form.row_menu = if form.row_menu == Some(id) {
-                                None
-                            } else {
-                                Some(id)
-                            };
-                            form.editing = None;
-                            form.add_menu = None;
-                            form.add_after = None;
-                        }
-                        cx.notify();
-                    })),
-            )
             .child(
                 div()
                     .min_w_0()
@@ -4386,8 +4355,11 @@ impl FlowlistApp {
             .child(div().flex_grow())
             .child(
                 div()
-                    .opacity(0.0)
+                    .opacity(0.32)
                     .group_hover(group.clone(), |style| style.opacity(1.0))
+                    .flex()
+                    .items_center()
+                    .gap_1()
                     .child(
                         div()
                             .on_children_prepainted(self.view_probe(format!("rule-plus:{id}")))
@@ -4416,6 +4388,36 @@ impl FlowlistApp {
                                     form.editing = None;
                                     this.rule_menu_scroll
                                         .set_offset(point(px(0.), px(0.)));
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .on_children_prepainted(self.view_probe(format!("rule-menu:{id}")))
+                            .id(super::sid(format!("rule-menu:{id}")))
+                            .w(px(20.))
+                            .h(px(20.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded_sm()
+                            .text_color(if menu_open { theme.text } else { theme.text_faint })
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover).text_color(theme.text))
+                            .child("⋯")
+                            .flow_tip(self, cx, theme, "Rule actions")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                if let Some(Modal::Perspective { form }) = &mut this.modal {
+                                    form.row_menu = if form.row_menu == Some(id) {
+                                        None
+                                    } else {
+                                        Some(id)
+                                    };
+                                    form.editing = None;
+                                    form.add_menu = None;
+                                    form.add_after = None;
                                 }
                                 cx.notify();
                             })),
