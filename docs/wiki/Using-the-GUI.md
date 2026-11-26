@@ -251,6 +251,10 @@ leaves focus.
 
 ![Today](images/gui-today.png)
 
+Forecast combines a month grid, a day list and Calendar events:
+
+![Forecast](images/gui-forecast.png)
+
 Button titles under the header icons can be turned off in **Settings →
 Workflow → Show button titles**. Search has no title.
 
@@ -313,6 +317,8 @@ titles itself **Search** and ranks the closest matches first.
   project” (or “with parent”) instead of implying the task owns it.
 - **Right-click a folder** for Open, Rename, **Edit folder…**, New project here,
   New subfolder and Delete.
+![The saved-view editor](images/gui-perspective-editor.png)
+
 - **Saved perspectives have two tabs.** **Simple** is the original editor:
   the common checkboxes and pop-up filters for Inbox, Flagged, Status,
   Projects, Tags, Priorities, dates, full-screen reminders, estimate and text.

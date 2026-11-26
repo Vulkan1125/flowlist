@@ -103,6 +103,20 @@ Nearby, Trash, Mobile and About.
 
 ![Settings](images/gui-settings.png)
 
+### Forecast
+
+Forecast combines the month grid, the day list and Calendar events, with
+separate dates for defer, planned and due.
+
+![Forecast](images/gui-forecast.png)
+
+### View editor
+
+Saved views have a Simple tab for common filters and a Comprehensive tab for
+the full rule tree, project rules, date ranges and comments.
+
+![The view editor](images/gui-perspective-editor.png)
+
 ## Feature map
 
 ### Capture and the Inbox
