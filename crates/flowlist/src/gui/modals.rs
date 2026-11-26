@@ -9220,8 +9220,7 @@ impl FlowlistApp {
                     if installed {
                         match crate::serve::agent::remove() {
                             Ok(_) => {
-                                this.toast =
-                                    Some("Mobile access is off; the login item was removed".into())
+                                this.toast = Some("Mobile access off".into())
                             }
                             Err(error) => this.toast = Some(error.to_string()),
                         }
@@ -9229,8 +9228,7 @@ impl FlowlistApp {
                         let mobile = crate::serve::load_mobile(&paths.root);
                         match crate::serve::agent::install(&paths, mobile.port) {
                             Ok(_) => {
-                                this.toast =
-                                    Some("Mobile access is on; the server starts at login".into())
+                                this.toast = Some("Mobile access on".into())
                             }
                             Err(error) => this.toast = Some(error.to_string()),
                         }
@@ -9246,13 +9244,13 @@ impl FlowlistApp {
                             div()
                                 .text_sm()
                                 .text_color(theme.text)
-                                .child("Serve to my phone"),
+                                .child("Mobile server"),
                         )
                         .child(
                             div()
                                 .text_xs()
                                 .text_color(theme.text_faint)
-                                .child(format!("{status} · port {port} · starts when you log in")),
+                                .child(format!("{status} · port {port}")),
                         ),
                 )
                 .child(
@@ -9267,7 +9265,7 @@ impl FlowlistApp {
 
         let server = self.settings_card(
             "Mobile access",
-            Some("Direct to this Mac. No account, cloud or telemetry."),
+            Some("Direct to this Mac."),
             div().flex().flex_col().gap_3().child(toggle),
         );
 
@@ -9279,7 +9277,7 @@ impl FlowlistApp {
                     div()
                         .text_xs()
                         .text_color(theme.text_faint)
-                        .child("No address found. Check Wi-Fi or Tailscale."),
+                        .child("No address found."),
                 );
             }
             for address in &addresses {
@@ -9340,13 +9338,13 @@ impl FlowlistApp {
             }
             self.settings_card(
                 "Pair a phone",
-                Some("Scan on Android, or enter an address and the code."),
+                Some("Scan on Android, or enter the code."),
                 body,
             )
         } else {
             self.settings_card(
                 "Pair a phone",
-                Some("Turn on Mobile access to see the code and addresses."),
+                Some("Turn on Mobile access."),
                 div().into_any_element(),
             )
         };
@@ -9408,7 +9406,7 @@ impl FlowlistApp {
             );
         }
         let devices =
-            self.settings_card("Paired phones", Some("The phone must pair again."), devices);
+            self.settings_card("Paired phones", Some("Revoking requires a new pairing."), devices);
 
         div()
             .flex()
