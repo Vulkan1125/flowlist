@@ -106,7 +106,7 @@ pub fn text_field_with_trailer(
     focused: bool,
     trailer: f32,
 ) -> impl IntoElement {
-    text_field_inner(theme, buffer, placeholder, focused, trailer, None)
+    text_field_inner(theme, buffer, placeholder, focused, trailer, None, true)
 }
 
 /// A character offset from a click or drag inside a text field.
@@ -137,6 +137,27 @@ pub fn text_field_with_cursor(
         focused,
         0.0,
         Some(Rc::new(on_cursor)),
+        true,
+    )
+}
+
+/// A cursor-aware field with no border or background, for embedding inside a
+/// larger control such as the repeat interval box.
+pub fn inline_text_field_with_cursor(
+    theme: Theme,
+    buffer: &TextBuffer,
+    placeholder: &str,
+    focused: bool,
+    on_cursor: impl Fn(&TextHit, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    text_field_inner(
+        theme,
+        buffer,
+        placeholder,
+        focused,
+        0.0,
+        Some(Rc::new(on_cursor)),
+        false,
     )
 }
 
@@ -147,6 +168,7 @@ fn text_field_inner(
     focused: bool,
     trailer: f32,
     on_cursor: Option<CursorHandler>,
+    chrome: bool,
 ) -> impl IntoElement {
     let chars: Vec<char> = buffer.text().chars().collect();
     let (start, end) = buffer.selection();
@@ -198,10 +220,12 @@ fn text_field_inner(
         .h(px(28.))
         .pl_2()
         .pr(px(8.0 + trailer))
-        .rounded_md()
-        .border_1()
-        .border_color(if focused { theme.accent } else { theme.border })
-        .bg(if focused { theme.raised } else { theme.field })
+        .when(chrome, |this| {
+            this.rounded_md()
+                .border_1()
+                .border_color(if focused { theme.accent } else { theme.border })
+                .bg(if focused { theme.raised } else { theme.field })
+        })
         .text_sm()
         .cursor(CursorStyle::IBeam)
         .overflow_hidden()

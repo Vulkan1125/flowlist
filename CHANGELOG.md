@@ -6,15 +6,20 @@
   Notifications, Notes & Attachments and Subtasks each fold from their header;
   the choice is remembered per device. Project sections cover Project, Dates,
   Review, Notifications, Tags and Attachments.
-- **OmniFocus-style Repeat and Review.** Repeat has an editable every-number
-  field, unit chips, segmented choices for Due Date / Defer Until Date and
+- **OmniFocus-style Repeat and Review.** Repeat has a single editable interval
+  box with a day/week/month/year dropdown, a Sunday-to-Saturday strip when the
+  unit is Days, segmented choices for Due Date / Defer Until Date and
   Completion / Assigned Dates, and a plain-language summary beneath them.
   Review shows Next Review, an inline cadence stepper and Last Reviewed, with a
   sheet for the exact date and interval.
+- **Sheets keep one action.** The footer hint and Cancel button are gone; Save
+  is the only footer button, and Escape still closes the sheet.
 - **One Notifications section.** The separate top Alerts field is gone.
   Notifications are a chronological list; Add Notification restores a removed
   default or adds a relative or custom alert. Every task notification has a
-  checkbox that opens a full-screen reminder at that time (one at a time).
+  checkbox on its right that opens a full-screen reminder at that time (one at
+  a time); the section says “Check the boxes to turn them into full screen
+  reminders.”
 - **OmniFocus-style Tags.** Tags are a separate section with a bordered chip
   box, a `+` control and an inline add field. Project tags use the same chip
   box without the input.

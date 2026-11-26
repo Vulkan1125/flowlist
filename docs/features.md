@@ -232,9 +232,11 @@ working domain and GUI. This page tracks what is implemented and verified.
       Per-date floating/fixed time zones are still a date-model gap.
 - [x] Collapsible inspector sections for Title, Action, Dates, Repeat,
       Notifications, Notes & Attachments, Subtasks and the project sections.
-- [x] OmniFocus-style Repeat controls with an editable interval field and a
+- [x] OmniFocus-style Repeat controls with one editable interval box, a
+      day/week/month/year dropdown, a Sunday-to-Saturday weekday strip and a
       plain-language summary, plus a Review section with Next Review, cadence
       and Last Reviewed.
+- [x] Sheets show Save only; Escape still cancels.
 - [x] One Notifications section with an Add Notification menu and a per-row
       full-screen reminder checkbox; the separate Alerts text field is retired.
 - [x] OmniFocus-style tag chips in their own section, with a `+` add control.
@@ -399,7 +401,7 @@ working domain and GUI. This page tracks what is implemented and verified.
       appearance on screen separately, keys `1`–`9` pick a preset, and a
       system eyedropper samples any pixel on screen (the background included).
       Every custom tone is luminance-clamped to preserve the 4.5:1 contract
-      for accent text and primary-button labels. Cancel restores the accent
+      for accent text and primary-button labels. Escape restores the accent
       pair the sheet opened with; Save persists both tones in the library
       session.
 - [x] Session persistence: view, selection, inspector, sort, grouping,
@@ -411,7 +413,7 @@ working domain and GUI. This page tracks what is implemented and verified.
       button, `⌘T` / `⇧⌘T` / `⌥⌘T` (`⇧T` in vim mode). Plain opens on a pure
       white reading surface in light mode and a near-black one in dark mode,
       and is the first-run default. Clicking a swatch or appearance chip
-      previews it on the live window; Cancel or Esc puts back the theme the
+      previews it on the live window; Esc puts back the theme the
       sheet opened with, and Save keeps the new one. Plain also carries the
       accent presets, custom picker and eyedropper; the other families keep
       their own accent as part of their identity.

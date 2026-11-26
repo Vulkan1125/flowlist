@@ -207,8 +207,9 @@ Notifications have per-type defaults for Defer, Planned, Latest Start and Due,
 plus per-item removal, relative alerts and absolute custom times. The inspector
 shows a chronological list and an **Add Notification** menu; removed defaults,
 **Before Due…** and **Custom Notification…** all live there. Each task
-notification has a checkbox that opens a full-screen reminder at that time (one
-at a time).
+notification has a checkbox on its right; the section says “Check the boxes to
+turn them into full screen reminders.” One notification at a time can drive
+the reminder.
 Latest Start is due minus estimate. Date-only alerts use 9:00 local; custom
 date-only notifications use their own default time. Relative alerts carry to
 repeating-task occurrences; absolute custom notifications do not. Flowlist
@@ -247,7 +248,7 @@ group.
 
 The New Project, New Folder, New Tag, New Perspective, Rename, Delete, Import,
 Settings, View and Tag Location sheets share one visual language: a title,
-subtitle, fields, and Cancel / confirm in the footer. Fields accept a click for
+subtitle, fields, and Save in the footer. Escape cancels. Fields accept a click for
 the caret and a drag for selection. Rename sheets select the whole name on open
 so typing replaces it. The New Project sheet adds Notes and a Review every
 (days) field, so each project can have its own cadence.
@@ -284,7 +285,7 @@ the section on screen.
 - **Trash** — how long deleted tasks stay restorable (`0` keeps them forever).
 
 Theme, accent and window-button choices preview live on the whole window.
-Cancel or Esc restores the theme, appearance, accent pair and window buttons
+Esc restores the theme, appearance, accent pair and window buttons
 the sheet opened with; Save keeps them. The sidebar choice is saved with the library, so the CLI and MCP
 see the same settings document.
 

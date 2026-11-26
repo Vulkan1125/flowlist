@@ -94,6 +94,24 @@ fn segmented_row(
     row.into_any_element()
 }
 
+fn interval_unit_label(unit: IntervalUnit) -> &'static str {
+    match unit {
+        IntervalUnit::Days => "Days",
+        IntervalUnit::Weeks => "Weeks",
+        IntervalUnit::Months => "Months",
+        IntervalUnit::Years => "Years",
+    }
+}
+
+fn interval_unit_slug(unit: IntervalUnit) -> &'static str {
+    match unit {
+        IntervalUnit::Days => "days",
+        IntervalUnit::Weeks => "weeks",
+        IntervalUnit::Months => "months",
+        IntervalUnit::Years => "years",
+    }
+}
+
 fn review_step_days(days: u32) -> u32 {
     if days >= 7 && days % 7 == 0 {
         7
@@ -223,12 +241,12 @@ fn notification_row(
     remove: Option<AnyElement>,
     probe: impl Fn(Vec<gpui::Bounds<gpui::Pixels>>, &mut Window, &mut gpui::App) + 'static,
 ) -> AnyElement {
-    let mut row = div()
-        .on_children_prepainted(probe)
+    let mut inner = div()
         .flex()
         .items_center()
         .gap_2()
-        .when_some(check, |this, check| this.child(check))
+        .flex_1()
+        .min_w_0()
         .min_h(px(28.))
         .px_2()
         .py_1()
@@ -254,7 +272,16 @@ fn notification_row(
                 .child(date.to_string()),
         );
     if let Some(remove) = remove {
-        row = row.child(remove);
+        inner = inner.child(remove);
+    }
+    let mut row = div()
+        .on_children_prepainted(probe)
+        .flex()
+        .items_center()
+        .gap_2()
+        .child(inner);
+    if let Some(check) = check {
+        row = row.child(check);
     }
     row.into_any_element()
 }
@@ -1523,14 +1550,12 @@ impl FlowlistApp {
 
         let mut body = div().flex().flex_col().gap_2().child(list);
         if is_task {
-            body = body.child(widgets::divider(theme)).child(
+            body = body.child(
                 div()
                     .text_xs()
                     .whitespace_normal()
                     .text_color(theme.text_faint)
-                    .child(
-                        "Check a notification to open a full-screen reminder at that time. One at a time.",
-                    ),
+                    .child("Check the boxes to turn them into full screen reminders."),
             );
         }
         let add_target = target.clone();
@@ -1986,7 +2011,6 @@ impl FlowlistApp {
                 subtasks_content,
                 cx,
             ))
-            .child(widgets::divider(theme))
             .when(!draft, |this| {
                 this.child(
                     div()
@@ -2197,64 +2221,22 @@ impl FlowlistApp {
                             })),
                     )
                     .child(div().text_sm().child("Repeat Every"))
-                    .child(div().flex_1())
                     .when(enabled, |this| {
                         this.child(
-                            div()
-                                .w(px(64.))
-                                .child(self.inspector_text_field(
-                                    "Repeat every",
-                                    EditField::Repeat,
-                                    &every.to_string(),
-                                    false,
-                                    cx,
-                                )),
+                            div().flex_1().child(self.inspector_repeat_interval(
+                                &id,
+                                every,
+                                unit,
+                                cx,
+                            )),
                         )
                     }),
             );
         if enabled {
-            let mut units = div().flex().flex_wrap().items_center().gap_1();
-            for candidate in [
-                IntervalUnit::Days,
-                IntervalUnit::Weeks,
-                IntervalUnit::Months,
-                IntervalUnit::Years,
-            ] {
-                let slug = match candidate {
-                    IntervalUnit::Days => "days",
-                    IntervalUnit::Weeks => "weeks",
-                    IntervalUnit::Months => "months",
-                    IntervalUnit::Years => "years",
-                };
-                let label = match candidate {
-                    IntervalUnit::Days => "Days",
-                    IntervalUnit::Weeks => "Weeks",
-                    IntervalUnit::Months => "Months",
-                    IntervalUnit::Years => "Years",
-                };
-                let current_rule = rule.clone();
-                let unit_id = id.clone();
-                units = units.child(
-                    div()
-                        .on_children_prepainted(
-                            self.theme_probe(format!("repeat-unit:{slug}")),
-                        )
-                        .id(super::sid(format!("repeat-unit:{slug}")))
-                        .cursor_pointer()
-                        .child(widgets::toggle_chip(theme, label, unit == candidate))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(current) = &current_rule {
-                                this.update_task_repeat(
-                                    &unit_id,
-                                    current,
-                                    |rule| rule.unit = candidate,
-                                    cx,
-                                );
-                            }
-                        })),
-                );
+            if unit == IntervalUnit::Days {
+                body = body.child(self.inspector_week_strip(&id, &rule, cx));
             }
-            body = body.child(units).child(
+            body = body.child(
                 div()
                     .flex()
                     .flex_col()
@@ -2349,6 +2331,256 @@ impl FlowlistApp {
             }
         }
         body
+    }
+
+    fn inspector_repeat_interval(
+        &self,
+        id: &TaskId,
+        every: u32,
+        unit: IntervalUnit,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let editing =
+            self.editing == Some(EditField::Repeat) && self.focus == super::FocusArea::Field;
+        let number = if editing {
+            div()
+                .on_children_prepainted(self.field_editor_probe())
+                .id("repeat-interval-editor")
+                .flex_1()
+                .px_2()
+                .child(widgets::inline_text_field_with_cursor(
+                    theme,
+                    &self.field,
+                    "1",
+                    true,
+                    cx.listener(|this, hit: &widgets::TextHit, _, cx| this.field_text_hit(hit, cx)),
+                ))
+                .into_any_element()
+        } else {
+            div()
+                .on_children_prepainted(self.theme_probe("field-box:repeat-every".to_string()))
+                .id("field:repeat-every")
+                .flex_1()
+                .px_2()
+                .text_sm()
+                .cursor_pointer()
+                .child(every.to_string())
+                .on_click(cx.listener(|this, _, _, cx| this.begin_edit(EditField::Repeat, cx)))
+                .into_any_element()
+        };
+        let anchor = self.repeat_unit_anchor.clone();
+        let probe_boxes = self.notification_boxes.clone();
+        let unit_id = id.clone();
+        let unit_label = interval_unit_label(unit);
+        div()
+            .flex()
+            .items_center()
+            .h(px(28.))
+            .rounded_md()
+            .border_1()
+            .border_color(if editing { theme.accent } else { theme.border })
+            .bg(theme.field)
+            .overflow_hidden()
+            .child(number)
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            anchor.set(Some(*bounds));
+                            probe_boxes.borrow_mut().insert(
+                                "repeat-unit-toggle".to_string(),
+                                [
+                                    f32::from(bounds.origin.x),
+                                    f32::from(bounds.origin.y),
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
+                                ],
+                            );
+                        }
+                    })
+                    .id("repeat-unit-toggle")
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .h_full()
+                    .px_2()
+                    .border_l_1()
+                    .border_color(theme.border)
+                    .text_sm()
+                    .text_color(theme.text_dim)
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(unit_label)
+                    .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.repeat_unit_menu = Some(unit_id.clone());
+                        cx.notify();
+                    })),
+            )
+    }
+
+    fn inspector_week_strip(
+        &self,
+        id: &TaskId,
+        rule: &Option<RepeatRule>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let selected = rule
+            .as_ref()
+            .map(|rule| rule.selected_weekdays())
+            .unwrap_or_default();
+        let letters = ["S", "M", "T", "W", "T", "F", "S"];
+        let mut strip = div()
+            .flex()
+            .items_center()
+            .h(px(30.))
+            .w_full()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border)
+            .overflow_hidden();
+        for (day, letter) in letters.iter().enumerate() {
+            let day = day as u8;
+            let current_rule = rule.clone();
+            let strip_id = id.clone();
+            let active = selected.contains(&day);
+            strip = strip.child(
+                div()
+                    .on_children_prepainted(self.theme_probe(format!("repeat-weekday:{day}")))
+                    .id(super::sid(format!("repeat-weekday:{day}")))
+                    .flex_1()
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .when(day > 0, |this| this.border_l_1().border_color(theme.border))
+                    .bg(if active {
+                        theme.selection
+                    } else {
+                        theme.field
+                    })
+                    .text_xs()
+                    .text_color(if active { theme.accent } else { theme.text_dim })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(*letter)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(current) = &current_rule {
+                            let mut days = current.selected_weekdays();
+                            if days.contains(&day) {
+                                days.remove(&day);
+                            } else {
+                                days.insert(day);
+                            }
+                            this.update_task_repeat(
+                                &strip_id,
+                                current,
+                                |rule| {
+                                    rule.set_selected_weekdays(days);
+                                    if !rule.selected_weekdays().is_empty() {
+                                        rule.every = 1;
+                                        rule.unit = IntervalUnit::Days;
+                                    }
+                                },
+                                cx,
+                            );
+                        }
+                    })),
+            );
+        }
+        strip
+    }
+
+    pub(super) fn render_repeat_unit_menu(
+        &self,
+        id: &TaskId,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let theme = self.theme;
+        let current = self
+            .store
+            .db()
+            .tasks
+            .get(id)
+            .and_then(|task| task.repeat.clone())
+            .map(|rule| rule.unit)
+            .unwrap_or(IntervalUnit::Weeks);
+        let mut menu = div()
+            .min_w(px(120.))
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg();
+        for candidate in [
+            IntervalUnit::Days,
+            IntervalUnit::Weeks,
+            IntervalUnit::Months,
+            IntervalUnit::Years,
+        ] {
+            let slug = interval_unit_slug(candidate);
+            let label = interval_unit_label(candidate);
+            let active = current == candidate;
+            let menu_id = id.clone();
+            menu = menu.child(
+                div()
+                    .on_children_prepainted(
+                        self.notification_probe(format!("repeat-unit-option:{slug}")),
+                    )
+                    .id(super::sid(format!("repeat-unit-option:{slug}")))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if active {
+                        theme.accent
+                    } else {
+                        theme.text_dim
+                    })
+                    .bg(if active { theme.selection } else { theme.clear })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(label.to_string())
+                    .when(active, |this| {
+                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(current) = this
+                            .store
+                            .db()
+                            .tasks
+                            .get(&menu_id)
+                            .and_then(|task| task.repeat.clone())
+                        {
+                            this.update_task_repeat(
+                                &menu_id,
+                                &current,
+                                |rule| {
+                                    rule.unit = candidate;
+                                    if candidate != IntervalUnit::Days {
+                                        rule.weekdays = None;
+                                    }
+                                },
+                                cx,
+                            );
+                        }
+                        this.repeat_unit_menu = None;
+                        this.save_session();
+                        cx.notify();
+                    })),
+            );
+        }
+        menu
     }
 
     fn inspector_priority(
@@ -3390,7 +3622,7 @@ impl FlowlistApp {
                 .flex_1()
                 .min_w(px(140.))
                 .id("tag-input")
-                .child(widgets::text_field_with_cursor(
+                .child(widgets::inline_text_field_with_cursor(
                     theme,
                     &self.tag_buffer,
                     "Add tag…",

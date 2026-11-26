@@ -130,18 +130,21 @@ leaving the list.
   and a clock-face time picker. A defer date after the due date is refused with
   a toast, so the picker stays open for another choice. Planned never changes
   availability.
-- **Repeat** uses OmniFocus-style controls: a repeat checkbox, an editable
-  every-number field, day/week/month/year chips, and segmented choices for
-  **Due Date** or **Defer Until Date** and for **Completion** or **Assigned
-  Dates**. The line beneath them says in plain words what the choices mean,
-  such as “Every 2 weeks, from completion, scheduling the next due date.”
+- **Repeat** uses OmniFocus-style controls: a repeat checkbox, one interval box
+  with an editable number and a day/week/month/year dropdown, and segmented
+  choices for **Due Date** or **Defer Until Date** and for **Completion** or
+  **Assigned Dates**. When the unit is **Days**, a single Sunday-to-Saturday
+  row appears. Leave it clear to repeat every day; select S/M/T/W/T/F/S to
+  repeat only those weekdays. The line beneath says the result in plain words,
+  such as “Every Monday and Wednesday, from the assigned dates, scheduling the
+  next due date.”
 - **Tags** is its own section with a bordered chip box and a `+` control.
   Clicking the box or `+` opens the add field; Enter adds the tag.
 - **Notifications** is the only place for alerts now. Add a default back, a
   relative alert or an absolute custom time from **Add Notification**; no
-  separate Alerts field is needed. Every task notification row has a checkbox
-  that opens a full-screen reminder at that notification’s time. Only one can
-  be checked at a time.
+  separate Alerts field is needed. Every task notification has a checkbox on
+  its right; the section says “Check the boxes to turn them into full screen
+  reminders.” Only one can be checked at a time.
 - **Empty sections start folded.** For example, a task with no notes does not
   spend space on Notes & Attachments, and a task with no notifications folds
   that section until one is added.
@@ -290,7 +293,7 @@ titles itself **Search** and ranks the closest matches first.
   constraint-free default. A task or parent task can defer later or fall due
   earlier than the project, never the other way around. Dropping a task whose
   dates break the rule opens an **Adjust dates?** sheet; confirming changes the
-  dates and completes the move together. Cancel leaves everything untouched.
+  dates and completes the move together. Escape leaves everything untouched.
   The same sheet appears when typing a project into the task inspector or when
   a project date change would clamp existing tasks. Editing a task date that
   violates its container keeps the field open with a direct message such as
@@ -428,7 +431,7 @@ build is ad-hoc signed, so this sheet shows **Blocked for this ad-hoc build**.
 Use an Apple Development or Developer ID certificate when packaging (`set
 FLOWLIST_SIGN_IDENTITY=…` before `scripts/package.sh`) to enable reminders.
 
-Changes preview live. **Cancel** puts back the theme, accent and window
+Changes preview live. **Escape** puts back the theme, accent and window
 controls the sheet opened with; **Save** keeps them.
 
 ## Keyboard

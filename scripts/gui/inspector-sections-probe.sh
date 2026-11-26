@@ -132,13 +132,25 @@ sleep 0.3
 "$helpers/flowctl" key 36
 sleep 0.5
 wait_json task repeat_every 'd["repeat"].startswith("every 2 weeks")'
-click_box theme_boxes repeat-unit:months
+click_box notification_boxes repeat-unit-toggle
+click_box notification_boxes repeat-unit-option:months
 wait_json task repeat_unit 'd["repeat"].startswith("every 2 months")'
+click_box notification_boxes repeat-unit-toggle
+click_box notification_boxes repeat-unit-option:days
+for _ in $(seq 1 80); do
+  if [ -n "$(box_now theme_boxes repeat-weekday:1)" ]; then break; fi
+  "$helpers/flowctl" move $((wx + 600)) $((wy + 300))
+  sleep 0.1
+done
+click_box theme_boxes repeat-weekday:1
+click_box theme_boxes repeat-weekday:3
+wait_json task repeat_weekdays '"Monday and Wednesday" in d["repeat"]'
+echo "   week strip picks Monday and Wednesday"
 click_box theme_boxes repeat-schedule:completion
 wait_json task repeat_schedule '"after completion" in d["repeat"]'
 click_box theme_boxes repeat-mode:defer
 wait_json task repeat_mode '"defer another" in d["repeat"]'
-echo "   every 2 months, after completion, defer until"
+echo "   weekdays, after completion, defer until"
 
 echo "3. Tags use the OmniFocus chip box"
 click_box inspector_section_boxes task:tags

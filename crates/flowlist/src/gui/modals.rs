@@ -1973,42 +1973,16 @@ impl FlowlistApp {
                 div()
                     .flex()
                     .items_center()
-                    .justify_between()
+                    .justify_end()
                     .pt_1()
-                    .child(div().text_xs().text_color(theme.text_faint).child(
-                        if matches!(
-                            modal,
-                            Modal::DeleteTask { .. } | Modal::PriorityScope { .. }
-                        ) {
-                            "Esc close · ⇥ switch choice"
-                        } else if is_settings {
-                            "Esc close · ⌘1–8 sections · ⇥ field"
-                        } else if field_count > 0 {
-                            "Esc close · ⇥ next field"
-                        } else {
-                            "Esc close"
-                        },
-                    ))
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .id("modal-cancel")
-                                    .child(widgets::button(theme, "Cancel", false))
-                                    .on_click(cx.listener(|this, _, _, cx| this.close_modal(cx))),
+                            .on_children_prepainted(
+                                self.theme_probe("modal-save".to_string()),
                             )
-                            .child(
-                                div()
-                                    .on_children_prepainted(
-                                        self.theme_probe("modal-save".to_string()),
-                                    )
-                                    .id("modal-save")
-                                    .child(widgets::button(theme, confirm_label, true))
-                                    .on_click(cx.listener(|this, _, _, cx| this.commit_modal(cx))),
-                            ),
+                            .id("modal-save")
+                            .child(widgets::button(theme, confirm_label, true))
+                            .on_click(cx.listener(|this, _, _, cx| this.commit_modal(cx))),
                     ),
             );
         }

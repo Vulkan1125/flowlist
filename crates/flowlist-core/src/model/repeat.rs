@@ -1,6 +1,8 @@
 //! Repeat rules and calendar-aware next-occurrence calculation.
 
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use std::collections::BTreeSet;
+
+use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::time::{IntervalUnit, Stamp, add_interval_to_stamp, local_date};
@@ -50,6 +52,10 @@ pub struct RepeatRule {
     pub end: RepeatEnd,
     #[serde(default)]
     pub completed_count: u32,
+    /// Optional weekday filter, with 0 = Sunday through 6 = Saturday. When set,
+    /// the rule repeats on those weekdays instead of every N days.
+    #[serde(default)]
+    pub weekdays: Option<Vec<u8>>,
 }
 
 fn one() -> u32 {
@@ -72,15 +78,63 @@ impl RepeatRule {
             unit,
             end: RepeatEnd::Never,
             completed_count: 0,
+            weekdays: None,
         }
+    }
+
+    pub fn selected_weekdays(&self) -> BTreeSet<u8> {
+        self.weekdays
+            .as_ref()
+            .map(|days| days.iter().copied().filter(|day| *day < 7).collect())
+            .unwrap_or_default()
+    }
+
+    pub fn set_selected_weekdays(&mut self, days: BTreeSet<u8>) {
+        if days.is_empty() || days.len() >= 7 {
+            self.weekdays = None;
+        } else {
+            self.weekdays = Some(days.into_iter().collect());
+        }
+    }
+
+    pub fn weekday_summary(&self) -> Option<String> {
+        let days = self.selected_weekdays();
+        if days.is_empty() {
+            return None;
+        }
+        let names: Vec<&str> = days
+            .iter()
+            .map(|day| match day {
+                0 => "Sunday",
+                1 => "Monday",
+                2 => "Tuesday",
+                3 => "Wednesday",
+                4 => "Thursday",
+                5 => "Friday",
+                _ => "Saturday",
+            })
+            .collect();
+        let joined = match names.as_slice() {
+            [] => String::new(),
+            [one] => one.to_string(),
+            [first, second] => format!("{first} and {second}"),
+            _ => format!(
+                "{}, and {}",
+                names[..names.len() - 1].join(", "),
+                names[names.len() - 1]
+            ),
+        };
+        Some(format!("every {joined}"))
     }
 
     /// A plain-language sentence for the inspector. It is derived only from
     /// the controls above it, so the UI never has to ask the user to read the
     /// compact rule syntax.
     pub fn summary(&self) -> String {
-        let every = self.unit.label(self.every.max(1));
-        let every = format!("{}{}", every[..1].to_uppercase(), &every[1..]);
+        let cadence = self
+            .weekday_summary()
+            .unwrap_or_else(|| self.unit.label(self.every.max(1)));
+        let every = format!("{}{}", cadence[..1].to_uppercase(), &cadence[1..]);
         let origin = match self.schedule {
             RepeatSchedule::Fixed => "from the assigned dates",
             RepeatSchedule::AfterCompletion => "from completion",
@@ -113,10 +167,10 @@ impl RepeatRule {
             RepeatEnd::OnDate(date) => format!(" until {}", date.format("%Y-%m-%d")),
             RepeatEnd::AfterCount(count) => format!(" for {count} times"),
         };
-        format!(
-            "{}{schedule}{mode}{end}",
-            self.unit.label(self.every.max(1))
-        )
+        let cadence = self
+            .weekday_summary()
+            .unwrap_or_else(|| self.unit.label(self.every.max(1)));
+        format!("{cadence}{schedule}{mode}{end}")
     }
 
     /// The next occurrence after completing the task. `None` means the rule
@@ -143,7 +197,52 @@ impl RepeatRule {
         let completed_local = local_date(completed_at);
         let every = self.every.max(1);
 
-        let (new_due, new_defer) = match (self.schedule, self.mode) {
+        let selected_weekdays = self.selected_weekdays();
+        let weekday_dates = if selected_weekdays.is_empty() {
+            None
+        } else if due.is_none() && defer.is_none() {
+            None
+        } else {
+            let anchor = match self.schedule {
+                RepeatSchedule::AfterCompletion => Some(completed_local),
+                RepeatSchedule::Fixed => match self.mode {
+                    RepeatMode::DueAgain => due.or(defer).map(|d| d.local_date()),
+                    RepeatMode::DeferAnother => defer.or(due).map(|d| d.local_date()),
+                },
+            };
+            anchor.map(|anchor| (next_weekday_after(anchor, &selected_weekdays), anchor))
+        };
+        let (new_due, new_defer) = if let Some((next_date, _anchor_date)) = weekday_dates {
+            match self.mode {
+                RepeatMode::DueAgain => {
+                    let new_due = due.map(|value| stamp_on(value, next_date));
+                    let new_defer = match (due, defer) {
+                        (Some(old_due), Some(defer)) => {
+                            let shift = (next_date - old_due.local_date()).num_days();
+                            Some(with_time_from(shift_by_days(defer, shift), defer))
+                        }
+                        (None, Some(defer)) => Some(with_time_from(
+                            Stamp::date_only(next_date),
+                            defer,
+                        )),
+                        _ => None,
+                    };
+                    (new_due, new_defer)
+                }
+                RepeatMode::DeferAnother => {
+                    let base = defer.or(due);
+                    let new_defer = base.map(|value| stamp_on(value, next_date));
+                    let new_due = match (new_defer, due) {
+                        (Some(nd), Some(od)) => {
+                            Some(with_time_from(shift_by_days(nd, lead_days), od))
+                        }
+                        _ => None,
+                    };
+                    (new_due, new_defer)
+                }
+            }
+        } else {
+            match (self.schedule, self.mode) {
             (RepeatSchedule::Fixed, RepeatMode::DueAgain) => {
                 let new_due = due.map(|value| add_interval_to_stamp(value, every, self.unit));
                 let new_defer = defer.map(|value| add_interval_to_stamp(value, every, self.unit));
@@ -179,6 +278,7 @@ impl RepeatRule {
                 };
                 (new_due, new_defer)
             }
+            }
         };
 
         // A repeating task without any dates still recurs: completing it simply
@@ -204,6 +304,17 @@ impl RepeatRule {
             completed_count: self.completed_count.saturating_add(1),
         })
     }
+}
+
+fn next_weekday_after(anchor: NaiveDate, selected: &BTreeSet<u8>) -> NaiveDate {
+    let mut candidate = anchor + Duration::days(1);
+    for _ in 0..14 {
+        if selected.contains(&(candidate.weekday().num_days_from_sunday() as u8)) {
+            return candidate;
+        }
+        candidate += Duration::days(1);
+    }
+    candidate
 }
 
 fn add_interval(date: NaiveDate, every: u32, unit: IntervalUnit) -> NaiveDate {
@@ -291,6 +402,7 @@ mod tests {
             unit: IntervalUnit::Weeks,
             end: RepeatEnd::Never,
             completed_count: 0,
+            weekdays: None,
         };
         let next = rule.next_occurrence(Some(due), None, Utc::now()).unwrap();
         assert_eq!(next.due.unwrap().local_date(), date(2026, 11, 19));
@@ -311,6 +423,7 @@ mod tests {
             unit: IntervalUnit::Weeks,
             end: RepeatEnd::Never,
             completed_count: 0,
+            weekdays: None,
         };
         let next = rule
             .next_occurrence(Some(due), Some(defer), Utc::now())
@@ -338,6 +451,19 @@ mod tests {
 
     #[test]
     #[test]
+    #[test]
+    fn weekday_filters_advance_to_the_next_selected_day() {
+        let due = Stamp::date_only(date(2026, 11, 23)); // Monday
+        let mut rule = RepeatRule::new(RepeatMode::DueAgain, 1, IntervalUnit::Days);
+        rule.set_selected_weekdays(BTreeSet::from([1, 3])); // Monday, Wednesday
+        let next = rule.next_occurrence(Some(due), None, Utc::now()).unwrap();
+        assert_eq!(next.due.unwrap().local_date(), date(2026, 11, 25));
+        assert_eq!(
+            rule.summary(),
+            "Every Monday and Wednesday, from the assigned dates, scheduling the next due date."
+        );
+    }
+
     fn summary_reads_like_the_inspector_copy() {
         let mut rule = RepeatRule::new(RepeatMode::DeferAnother, 2, IntervalUnit::Weeks);
         rule.schedule = RepeatSchedule::AfterCompletion;
