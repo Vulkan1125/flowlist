@@ -278,6 +278,13 @@ impl QuickCapture {
         let stroke = &event.keystroke;
         let mods = stroke.modifiers;
 
+        if stroke.key == "f12"
+            && let Some(path) = super::test_shot_path()
+        {
+            super::capture_window_png(window, &path);
+            return;
+        }
+
         if mods.control && mods.alt && stroke.key == "space" {
             mark_toggle();
             self.dismiss(window, cx, true);

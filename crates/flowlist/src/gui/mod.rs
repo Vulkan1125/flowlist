@@ -6055,6 +6055,14 @@ impl FlowlistApp {
     // --------------------------------------------------------------- keys
 
     fn on_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let keystroke = event.keystroke.clone();
+        if keystroke.key == "f12"
+            && let Some(path) = test_shot_path()
+        {
+            capture_window_png(window, &path);
+            return;
+        }
+
         let stroke = &event.keystroke;
         let mods = stroke.modifiers;
 
@@ -9574,7 +9582,116 @@ impl Render for FlowlistApp {
     }
 }
 
-/// Raise a window above the window manager for screenshot probes. Normal
+static TEST_SHOT_COUNTER: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+pub(crate) fn test_shot_path() -> Option<std::path::PathBuf> {
+    let dir = std::env::var_os("FLOWLIST_TEST_SHOT_DIR")?;
+    let index = TEST_SHOT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    Some(std::path::PathBuf::from(dir).join(format!("shot-{index:02}.png")))
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CgPoint {
+    x: f64,
+    y: f64,
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CgSize {
+    width: f64,
+    height: f64,
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CgRect {
+    origin: CgPoint,
+    size: CgSize,
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn capture_window_png(window: &Window, path: &std::path::Path) {
+    use objc::runtime::Object;
+    use objc::{class, msg_send, sel, sel_impl};
+    use raw_window_handle::RawWindowHandle;
+    use std::ffi::CString;
+    use std::os::raw::{c_char, c_void};
+
+    type CreateImage = unsafe extern "C" fn(CgRect, u32, u32, u32) -> *mut Object;
+
+    unsafe extern "C" {
+        fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
+    }
+
+    let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(window) else {
+        return;
+    };
+    let RawWindowHandle::AppKit(appkit) = handle.as_raw() else {
+        return;
+    };
+    let view = appkit.ns_view.as_ptr().cast::<Object>();
+    unsafe {
+        let native: *mut Object = msg_send![view, window];
+        if native.is_null() {
+            return;
+        }
+        // The app can capture its own window without the Screen Recording
+        // permission. `CGWindowListCreateImage` is deprecated at compile time
+        // but still present at runtime, so resolve it dynamically.
+        let window_number: isize = msg_send![native, windowNumber];
+        let frame = CgRect {
+            origin: CgPoint {
+                x: f64::INFINITY,
+                y: f64::INFINITY,
+            },
+            size: CgSize {
+                width: 0.0,
+                height: 0.0,
+            },
+        };
+        let name = CString::new("CGWindowListCreateImage").unwrap();
+        let symbol = dlsym(-2isize as *mut c_void, name.as_ptr() as *const c_char);
+        if symbol.is_null() {
+            return;
+        }
+        let create_image: CreateImage = std::mem::transmute(symbol);
+        let image = create_image(frame, 8, window_number as u32, 1);
+        if image.is_null() {
+            return;
+        }
+        let rep: *mut Object = msg_send![class!(NSBitmapImageRep), alloc];
+        let rep: *mut Object = msg_send![rep, initWithCGImage: image];
+        if rep.is_null() {
+            return;
+        }
+        let data: *mut Object = msg_send![
+            rep,
+            representationUsingType: 4usize
+            properties: std::ptr::null::<Object>()
+        ];
+        if data.is_null() {
+            return;
+        }
+        let bytes: *const u8 = msg_send![data, bytes];
+        let length: usize = msg_send![data, length];
+        if bytes.is_null() || length == 0 {
+            return;
+        }
+        let slice = std::slice::from_raw_parts(bytes, length);
+        let _ = std::fs::write(path, slice);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn capture_window_png(_window: &Window, _path: &std::path::Path) {}
+
+/// Raise a window above the window manager for screenshot probes./// Raise a window above the window manager for screenshot probes. Normal
 /// launches never call this; the main window keeps its native level and
 /// corners. The quick capture panel has its own version of this.
 #[cfg(target_os = "macos")]
