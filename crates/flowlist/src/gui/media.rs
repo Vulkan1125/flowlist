@@ -7,7 +7,7 @@
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use std::ffi::{CStr, CString, c_char, c_void};
+    use std::ffi::{CString, c_char, c_void};
     use std::ptr;
     use std::sync::OnceLock;
 
@@ -16,27 +16,8 @@ mod platform {
 
     type SendCommand = unsafe extern "C" fn(u32, *mut c_void) -> u8;
 
-    const MR_COMMAND_PLAY: u32 = 0;
     const MR_COMMAND_PAUSE: u32 = 1;
     const RTLD_LAZY: i32 = 1;
-    const MEDIA_BUNDLES: &[&str] = &[
-        "com.apple.Music",
-        "com.apple.iTunes",
-        "com.spotify.client",
-        "com.apple.QuickTimePlayerX",
-        "com.apple.TV",
-        "org.videolan.vlc",
-        "com.colliderli.iina",
-        "com.google.Chrome",
-        "com.apple.Safari",
-        "org.mozilla.firefox",
-        "company.thebrowser.Browser",
-        "com.microsoft.edgemac",
-        "com.brave.Browser",
-        "com.operasoftware.Opera",
-        "com.plexapp.plex",
-    ];
-
     unsafe extern "C" {
         fn dlopen(filename: *const c_char, flags: i32) -> *mut c_void;
         fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
@@ -77,10 +58,6 @@ mod platform {
 
     pub(super) fn pause() -> bool {
         send_command(MR_COMMAND_PAUSE)
-    }
-
-    pub(super) fn resume() -> bool {
-        send_command(MR_COMMAND_PLAY)
     }
 
     #[repr(C)]
@@ -159,44 +136,6 @@ mod platform {
         false
     }
 
-    /// Whether a media-capable app is still running. Used only before resuming,
-    /// so quitting the player while the reminder is open cannot launch Music.
-    pub(super) fn is_media_app_running() -> bool {
-        // SAFETY: NSWorkspace and every returned object are autoreleased AppKit
-        // values. The UTF8String bytes stay valid while the bundle object is
-        // alive, which is the duration of this call.
-        unsafe {
-            let workspace: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
-            if workspace.is_null() {
-                return false;
-            }
-            let apps: *mut Object = msg_send![workspace, runningApplications];
-            if apps.is_null() {
-                return false;
-            }
-            let count: usize = msg_send![apps, count];
-            for index in 0..count {
-                let app: *mut Object = msg_send![apps, objectAtIndex: index];
-                if app.is_null() {
-                    continue;
-                }
-                let bundle: *mut Object = msg_send![app, bundleIdentifier];
-                if bundle.is_null() {
-                    continue;
-                }
-                let utf8: *const c_char = msg_send![bundle, UTF8String];
-                if utf8.is_null() {
-                    continue;
-                }
-                if let Ok(identifier) = CStr::from_ptr(utf8).to_str()
-                    && MEDIA_BUNDLES.contains(&identifier)
-                {
-                    return true;
-                }
-            }
-        }
-        false
-    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -205,33 +144,18 @@ mod platform {
         false
     }
 
-    pub(super) fn resume() -> bool {
-        false
-    }
-
     pub(super) fn is_audio_playing() -> bool {
         false
     }
 
-    pub(super) fn is_media_app_running() -> bool {
-        false
-    }
 }
 
 pub(super) fn pause() -> bool {
     platform::pause()
 }
 
-pub(super) fn resume() -> bool {
-    platform::resume()
-}
-
 pub(super) fn is_audio_playing() -> bool {
     platform::is_audio_playing()
-}
-
-pub(super) fn is_media_app_running() -> bool {
-    platform::is_media_app_running()
 }
 
 #[cfg(test)]
@@ -239,6 +163,5 @@ mod tests {
     #[test]
     fn audio_and_player_queries_are_safe() {
         let _ = super::is_audio_playing();
-        let _ = super::is_media_app_running();
     }
 }

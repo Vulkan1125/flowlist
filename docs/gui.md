@@ -46,6 +46,9 @@ the sidebar is the visual anchor.
 
 ## Views
 
+Header icon buttons can show small titles underneath; **Settings → Workflow →
+Show button titles** turns them off. Search never takes a title.
+
 The sidebar's fixed perspectives are the backbone:
 
 | View | Contents |

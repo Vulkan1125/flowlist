@@ -1131,6 +1131,10 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
+        // Rebuilt every frame so a badge that disappears cannot leave a stale
+        // value behind for the next view or focus scope. Boxes stay measured
+        // across frames; they are hit targets, not values.
+        self.sidebar_count_values.borrow_mut().clear();
         let options = self.store.db().settings.sidebar.clone();
         // A project drag owns the sidebar highlight only while it is live.
         if !cx.has_active_drag() {

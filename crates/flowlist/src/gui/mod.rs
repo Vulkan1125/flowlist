@@ -407,6 +407,8 @@ pub struct FlowlistApp {
     last_focus_targets: Vec<FocusTarget>,
     /// Keep the focus banner visible while focused.
     show_focus_banner: bool,
+    /// Show button titles under the header's icon controls.
+    show_toolbar_labels: bool,
     /// When the banner is disabled, a freshly enabled focus shows it briefly.
     focus_banner_until: Option<Instant>,
     /// Projects and folders Cmd-clicked in the sidebar, waiting for a command.
@@ -778,6 +780,7 @@ impl FlowlistApp {
             .filter_map(|key| FocusTarget::from_key(store.db(), key))
             .collect();
         let show_focus_banner = session.focus_banner.unwrap_or(true);
+        let show_toolbar_labels = session.toolbar_labels.unwrap_or(true);
         if let Some(target) = focus_targets.first()
             && matches!(view, View::Project(_) | View::Folder(_))
             && !focus_targets
@@ -935,6 +938,7 @@ impl FlowlistApp {
             focus_targets,
             last_focus_targets,
             show_focus_banner,
+            show_toolbar_labels,
             focus_banner_until: None,
             sidebar_selection: Vec::new(),
             forecast_month,
@@ -1490,6 +1494,7 @@ impl FlowlistApp {
                 .map(FocusTarget::key)
                 .collect(),
             focus_banner: Some(self.show_focus_banner),
+            toolbar_labels: Some(self.show_toolbar_labels),
             view_options: {
                 let mut map = self.view_options.clone();
                 map.insert(self.view.key(), self.current_view_options());
@@ -5330,6 +5335,7 @@ impl FlowlistApp {
                 keep_completed_subtasks,
                 forecast_due_counts,
                 focus_banner,
+                toolbar_labels,
                 hide_empty_views,
                 follow_system,
                 theme,
@@ -5400,6 +5406,7 @@ impl FlowlistApp {
                 if self.show_focus_banner {
                     self.focus_banner_until = None;
                 }
+                self.show_toolbar_labels = *toolbar_labels;
                 self.hide_empty_views = *hide_empty_views;
                 self.notification_requested = false;
                 if self.due_notifications && !notifications::permission().allowed() {
@@ -7267,12 +7274,15 @@ impl FlowlistApp {
             BuiltinPerspective::Inbox => db.inbox_unscheduled_outline(false).len(),
             BuiltinPerspective::Today => query::today(db, true, at)
                 .into_iter()
-                .map(|group| group.rows.len())
-                .sum(),
+                .flat_map(|group| group.rows)
+                .filter(|row| self.focus_allows_task(&row.id))
+                .count(),
             BuiltinPerspective::Projects => db
                 .projects
                 .values()
-                .filter(|project| project.status.is_open())
+                .filter(|project| {
+                    project.status.is_open() && self.focus_allows_project(&project.id)
+                })
                 .count(),
             BuiltinPerspective::Forecast => {
                 let today = local_date(at);
@@ -7280,7 +7290,10 @@ impl FlowlistApp {
                 db.tasks
                     .values()
                     .filter(|task| {
-                        if task.completed || task.is_trashed() {
+                        if task.completed
+                            || task.is_trashed()
+                            || !self.focus_allows_task(&task.id)
+                        {
                             return false;
                         }
                         let due = task.due.is_some_and(|stamp| stamp.local_date() <= today);
@@ -7298,14 +7311,30 @@ impl FlowlistApp {
             BuiltinPerspective::Flagged => db
                 .tasks
                 .values()
-                .filter(|task| !task.completed && !task.is_trashed() && task.flagged)
+                .filter(|task| {
+                    !task.completed
+                        && !task.is_trashed()
+                        && task.flagged
+                        && self.focus_allows_task(&task.id)
+                })
                 .count(),
-            BuiltinPerspective::Review => query::review_projects(db, at).len(),
-            BuiltinPerspective::Tags => db
-                .flatten_tags()
+            BuiltinPerspective::Review => query::review_projects(db, at)
                 .into_iter()
-                .filter(|row| db.tag_usage_count(&row.tag, true) > 0)
+                .filter(|project| self.focus_allows_project(project))
                 .count(),
+            BuiltinPerspective::Tags => {
+                let mut tags = BTreeSet::new();
+                for task in db.tasks.values() {
+                    if task.completed
+                        || task.is_trashed()
+                        || !self.focus_allows_task(&task.id)
+                    {
+                        continue;
+                    }
+                    tags.extend(task.tags.iter().cloned());
+                }
+                tags.len()
+            }
             BuiltinPerspective::Completed => {
                 let days = db.settings.show_completed_days.max(1) as i64;
                 let cutoff = at - chrono::Duration::days(days);
@@ -7317,18 +7346,28 @@ impl FlowlistApp {
                             && task
                                 .completed_at
                                 .is_some_and(|completed| completed >= cutoff)
+                            && self.focus_allows_task(&task.id)
                     })
                     .count()
             }
-            BuiltinPerspective::Archive => query::archived_projects(db).len(),
-            BuiltinPerspective::Nearby => query::nearby(db, at).len(),
+            BuiltinPerspective::Archive => query::archived_projects(db)
+                .into_iter()
+                .filter(|project| self.focus_allows_project(project))
+                .count(),
+            BuiltinPerspective::Nearby => query::nearby(db, at)
+                .into_iter()
+                .filter(|hit| self.focus_allows_task(&hit.task))
+                .count(),
             BuiltinPerspective::Changed => {
                 let days = db.settings.changed_days.max(1) as i64;
                 let cutoff = at - chrono::Duration::days(days);
                 db.tasks
                     .values()
                     .filter(|task| {
-                        !task.completed && !task.is_trashed() && task.modified_at >= cutoff
+                        !task.completed
+                            && !task.is_trashed()
+                            && task.modified_at >= cutoff
+                            && self.focus_allows_task(&task.id)
                     })
                     .count()
             }
@@ -7336,7 +7375,10 @@ impl FlowlistApp {
                 .tasks
                 .values()
                 .filter(|task| {
-                    !task.completed && !task.is_trashed() && !task.attachments.is_empty()
+                    !task.completed
+                        && !task.is_trashed()
+                        && !task.attachments.is_empty()
+                        && self.focus_allows_task(&task.id)
                 })
                 .count(),
             BuiltinPerspective::Fullscreen => db
@@ -7347,6 +7389,7 @@ impl FlowlistApp {
                         && !task.is_trashed()
                         && db.wants_fullscreen_reminder(&task.id)
                         && db.reminder_stamp(&task.id).is_some()
+                        && self.focus_allows_task(&task.id)
                 })
                 .count(),
             BuiltinPerspective::Trash => db.trash_count(),
@@ -7413,6 +7456,7 @@ impl FlowlistApp {
                 .collect::<Vec<_>>(),
             "focus_banner_enabled": self.show_focus_banner,
             "focus_banner_transient": self.focus_banner_until.is_some(),
+            "toolbar_labels": self.show_toolbar_labels,
             "modal": self.modal.as_ref().map(|modal| modal.title()),
             "modal_message": self.modal_error.clone(),
             "date_error": self.date_error.as_ref().map(|(_, field, message)| {
@@ -7906,6 +7950,27 @@ impl FlowlistApp {
         }
     }
 
+    /// Put a small title under a header icon when the toolbar-label setting is
+    /// on. Search deliberately never goes through this.
+    fn with_header_label(&self, content: impl IntoElement, label: &'static str) -> AnyElement {
+        if !self.show_toolbar_labels {
+            return content.into_any_element();
+        }
+        div()
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap_0p5()
+            .child(content)
+            .child(
+                div()
+                    .text_size(px(9.5))
+                    .text_color(self.theme.text_faint)
+                    .child(label),
+            )
+            .into_any_element()
+    }
+
     /// A title-bar arrow that steps through the views the window visited.
     /// It stops the header's window-drag handler so a click never starts a
     /// window move, and it measures itself for the GUI probe.
@@ -7931,7 +7996,7 @@ impl FlowlistApp {
                     this.step_view_history(if forward { 1 } else { -1 }, cx);
                 }
             }))
-            .child(
+            .child(self.with_header_label(
                 div()
                     .on_children_prepainted(move |bounds, _, _| {
                         if let Some(bounds) = bounds.first() {
@@ -7947,7 +8012,8 @@ impl FlowlistApp {
                         }
                     })
                     .child(widgets::icon_button(theme, icon, false)),
-            )
+                if forward { "Forward" } else { "Back" },
+            ))
     }
 
     /// The eye beside the back/forward arrows. It ends focus, or restores the
@@ -7975,7 +8041,7 @@ impl FlowlistApp {
                     this.toggle_focus_eye(cx);
                 }
             }))
-            .child(
+            .child(self.with_header_label(
                 div()
                     .on_children_prepainted(move |bounds, _, _| {
                         if let Some(bounds) = bounds.first() {
@@ -7983,7 +8049,8 @@ impl FlowlistApp {
                         }
                     })
                     .child(widgets::icon_button(theme, Icon::Eye, active)),
-            )
+                if active { "Unfocus" } else { "Focus" },
+            ))
             .into_any_element()
     }
 
@@ -8189,12 +8256,20 @@ impl FlowlistApp {
                             .id("add-task")
                             .mr_1()
                             .flow_tip(self, cx, theme, "Add a task (⌃⌥Space)")
-                            .child(widgets::button_with_icon(
-                                theme,
-                                Icon::Plus,
-                                "Add task",
-                                true,
-                            ))
+                            .child(if self.show_toolbar_labels {
+                                self.with_header_label(
+                                    widgets::icon_button(theme, Icon::Plus, false),
+                                    "Add Task",
+                                )
+                            } else {
+                                widgets::button_with_icon(
+                                    theme,
+                                    Icon::Plus,
+                                    "Add task",
+                                    true,
+                                )
+                                .into_any_element()
+                            })
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.open_quick_capture(window, cx)
                             })),
@@ -8204,7 +8279,10 @@ impl FlowlistApp {
                             .id("undo")
                             .opacity(if self.store.can_undo() { 1.0 } else { 0.4 })
                             .flow_tip(self, cx, theme, "Undo (⌘Z)")
-                            .child(widgets::icon_button(theme, Icon::Undo, false))
+                            .child(self.with_header_label(
+                                widgets::icon_button(theme, Icon::Undo, false),
+                                "Undo",
+                            ))
                             .on_click(cx.listener(|this, _, _, cx| this.undo(cx))),
                     )
                     .child(
@@ -8212,14 +8290,20 @@ impl FlowlistApp {
                             .id("redo")
                             .opacity(if self.store.can_redo() { 1.0 } else { 0.4 })
                             .flow_tip(self, cx, theme, "Redo (⇧⌘Z)")
-                            .child(widgets::icon_button(theme, Icon::Redo, false))
+                            .child(self.with_header_label(
+                                widgets::icon_button(theme, Icon::Redo, false),
+                                "Redo",
+                            ))
                             .on_click(cx.listener(|this, _, _, cx| this.redo(cx))),
                     )
                     .child(
                         div()
                             .id("help")
                             .flow_tip(self, cx, theme, "Keyboard and mouse help (?)")
-                            .child(widgets::icon_button(theme, Icon::Help, false))
+                            .child(self.with_header_label(
+                                widgets::icon_button(theme, Icon::Help, false),
+                                "Help",
+                            ))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.open_modal(modals::Modal::Help, cx)
                             })),
@@ -8228,7 +8312,10 @@ impl FlowlistApp {
                         div()
                             .id("settings")
                             .flow_tip(self, cx, theme, "Settings (⌘,)")
-                            .child(widgets::icon_button(theme, Icon::Settings, false))
+                            .child(self.with_header_label(
+                                widgets::icon_button(theme, Icon::Settings, false),
+                                "Settings",
+                            ))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.open_modal(modals::Modal::settings(this), cx)
                             })),
@@ -8247,10 +8334,13 @@ impl FlowlistApp {
                                     "Switch to dark mode (⌘T)"
                                 },
                             )
-                            .child(widgets::icon_button(
-                                theme,
-                                if dark { Icon::Sun } else { Icon::Moon },
-                                false,
+                            .child(self.with_header_label(
+                                widgets::icon_button(
+                                    theme,
+                                    if dark { Icon::Sun } else { Icon::Moon },
+                                    false,
+                                ),
+                                if dark { "Light" } else { "Dark" },
                             ))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.toggle_appearance();
@@ -8261,7 +8351,10 @@ impl FlowlistApp {
                         div()
                             .id("inspector")
                             .flow_tip(self, cx, theme, "Toggle inspector (i)")
-                            .child(widgets::icon_button(theme, Icon::Info, self.show_inspector))
+                            .child(self.with_header_label(
+                                widgets::icon_button(theme, Icon::Info, self.show_inspector),
+                                "Inspect",
+                            ))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.show_inspector = !this.show_inspector;
                                 this.save_session();

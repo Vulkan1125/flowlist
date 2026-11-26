@@ -47,8 +47,6 @@ pub struct Reminder {
     /// after Complete, Snooze, Dismiss or Esc. Opening the task keeps Flowlist
     /// in front instead.
     previous_app: Option<i32>,
-    /// Whether this reminder actually paused something, so closing resumes it.
-    paused_media: bool,
     focus_handle: FocusHandle,
 }
 
@@ -63,8 +61,9 @@ impl Reminder {
         pause_media: bool,
         cx: &mut Context<Self>,
     ) -> Self {
-        let paused_media =
-            pause_media && super::media::is_audio_playing() && super::media::pause();
+        if pause_media && super::media::is_audio_playing() {
+            let _ = super::media::pause();
+        }
         Self {
             app,
             theme,
@@ -73,7 +72,6 @@ impl Reminder {
             tasks,
             index: 0,
             previous_app,
-            paused_media,
             focus_handle: cx.focus_handle(),
         }
     }
@@ -114,10 +112,6 @@ impl Reminder {
             let _ = app.update(cx, |app, _| app.reminder_closed());
         }
         window.remove_window();
-        if self.paused_media && super::media::is_media_app_running() {
-            let _ = super::media::resume();
-        }
-        self.paused_media = false;
         if restore_previous
             && let Some(pid) = self.previous_app.take()
         {

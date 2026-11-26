@@ -374,6 +374,9 @@ pub struct Session {
     /// Keep the focus banner visible while a focus is active.
     #[serde(default)]
     pub focus_banner: Option<bool>,
+    /// Show the small button titles under the header's icon controls.
+    #[serde(default)]
+    pub toolbar_labels: Option<bool>,
     /// Per-perspective sort, grouping and filters.
     #[serde(default)]
     pub view_options: BTreeMap<String, ViewOptions>,

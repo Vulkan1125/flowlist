@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Toolbar titles.** Header icon buttons can carry small titles underneath,
+  OmniFocus-style. Settings → Workflow has **Show button titles**; search keeps
+  its placeholder and never gets a title. Button titles are on by default.
+- **Focus counts.** Sidebar counts for Today, Forecast, Flagged, Review, Tags,
+  Completed, Archive, Nearby, Changed, Attachments and Fullscreen now follow the
+  focused projects and folders. Inbox stays global.
+- **Reminder media.** Pause media now only stops playback when a full-screen
+  reminder opens; it no longer starts previously paused media when the reminder
+  closes.
+- **Inspector trim.** Removed the close ✕ from the inspector header. The `i`
+  shortcut and the header Inspect button still toggle it.
 - **Focus mode.** Focus on a project, a folder, or several of either. Cmd-click
   selects rows in the sidebar; right-click a selected row for **Focus on N
   selected**, project status changes across the selected projects, or batch

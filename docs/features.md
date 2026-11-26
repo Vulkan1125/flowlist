@@ -212,6 +212,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Quick Open (`⌘O`): one navigation palette for perspectives, folders,
       projects, tags and priorities, with live filtering, keyboard selection
       and a scrolling result list that stays inside the panel
+- [x] OmniFocus-style header titles under the icon buttons, with a Workflow
+      setting to hide them. Search keeps only its placeholder.
+- [x] Focus-aware sidebar counts for task perspectives and project dashboards;
+      Inbox stays global
 - [x] Focus mode: scope every perspective, search, Forecast calendar and
       project dashboard to one or more projects/folders. Cmd-click selects
       sidebar rows; right-click a selected row to focus, change project status

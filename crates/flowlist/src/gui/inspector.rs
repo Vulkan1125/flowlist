@@ -100,20 +100,6 @@ impl FlowlistApp {
                         .text_color(theme.text_faint)
                         .child("INSPECTOR"),
                 )
-                .child(
-                    div()
-                        .id("close-inspector")
-                        .cursor_pointer()
-                        .text_color(theme.text_faint)
-                        .hover(|style| style.text_color(theme.text))
-                        .flow_tip(self, cx, theme, "Close inspector (i)")
-                        .child(icons::icon(Icon::Close, 14.0, theme.text_faint))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.show_inspector = false;
-                            this.save_session();
-                            cx.notify();
-                        })),
-                ),
         );
 
         panel = panel.on_drag_move::<DragInspectorScroll>(

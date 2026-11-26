@@ -245,6 +245,8 @@ pub enum Modal {
         forecast_due_counts: bool,
         /// Keep the Focus banner below the title bar.
         focus_banner: bool,
+        /// Show button titles under the header icons.
+        toolbar_labels: bool,
         /// Drop saved views from the rail while their filter matches nothing.
         hide_empty_views: bool,
         follow_system: bool,
@@ -667,6 +669,7 @@ impl Modal {
             keep_completed_subtasks: app.keep_completed_subtasks,
             forecast_due_counts: app.store.db().settings.forecast_due_counts,
             focus_banner: app.show_focus_banner,
+            toolbar_labels: app.show_toolbar_labels,
             hide_empty_views: app.hide_empty_views,
             follow_system: app.follow_system,
             theme: app.theme.kind(),
@@ -5877,9 +5880,10 @@ impl FlowlistApp {
                     .id("modal-vim-mode")
                     .flex()
                     .items_center()
+                    .justify_between()
                     .gap_2()
                     .cursor_pointer()
-                    .child(div().text_sm().child("Vim mode"))
+                    .child(div().flex_1().text_sm().child("Vim mode"))
                     .child(widgets::switch(theme, vim))
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(Modal::Settings { vim_mode, .. }) = &mut this.modal {
@@ -5912,8 +5916,9 @@ impl FlowlistApp {
             div()
                 .flex()
                 .items_center()
+                .justify_between()
                 .gap_2()
-                .child(div().text_sm().child("Keep completed subtasks"))
+                .child(div().flex_1().text_sm().child("Keep completed subtasks"))
                 .child(
                     div()
                         .on_children_prepainted(self.theme_probe("keep-subtasks-toggle".to_string()))
@@ -5926,6 +5931,40 @@ impl FlowlistApp {
                             }) = &mut this.modal
                             {
                                 *keep_completed_subtasks = !*keep_completed_subtasks;
+                            }
+                            cx.notify();
+                        })),
+                ),
+        );
+        let toolbar_labels = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                toolbar_labels: true,
+                ..
+            })
+        );
+        let toolbar_card = self.settings_card(
+            "Toolbar",
+            Some("Show a small title under the header icons. Search keeps its placeholder and no title."),
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(div().flex_1().text_sm().child("Show button titles"))
+                .child(
+                    div()
+                        .on_children_prepainted(
+                            self.theme_probe("toolbar-labels-toggle".to_string()),
+                        )
+                        .id("toolbar-labels-toggle")
+                        .child(widgets::switch(theme, toolbar_labels))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(Modal::Settings {
+                                toolbar_labels, ..
+                            }) = &mut this.modal
+                            {
+                                *toolbar_labels = !*toolbar_labels;
                             }
                             cx.notify();
                         })),
@@ -5944,8 +5983,9 @@ impl FlowlistApp {
             div()
                 .flex()
                 .items_center()
+                .justify_between()
                 .gap_2()
-                .child(div().text_sm().child("Count only due items"))
+                .child(div().flex_1().text_sm().child("Count only due items"))
                 .child(
                     div()
                         .on_children_prepainted(
@@ -5978,8 +6018,9 @@ impl FlowlistApp {
             div()
                 .flex()
                 .items_center()
+                .justify_between()
                 .gap_2()
-                .child(div().text_sm().child("Keep the Focus banner visible"))
+                .child(div().flex_1().text_sm().child("Keep the Focus banner visible"))
                 .child(
                     div()
                         .on_children_prepainted(
@@ -6003,6 +6044,7 @@ impl FlowlistApp {
             .flex_col()
             .gap_3()
             .child(self.settings_card("Keyboard", None, keyboard))
+            .child(toolbar_card)
             .child(subtasks_card)
             .child(forecast_card)
             .child(focus_card)
