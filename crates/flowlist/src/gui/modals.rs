@@ -4085,7 +4085,6 @@ impl FlowlistApp {
                         div()
                             .flex()
                             .flex_col()
-                            .gap(px(1.))
                             .children(self.render_rule_rows(&form.root, 0, None, true, cx)),
                     )
                     .child(
@@ -4311,11 +4310,12 @@ impl FlowlistApp {
             .on_children_prepainted(self.view_probe(format!("rule-select:{id}")))
             .id(super::sid(format!("rule-select:{id}")))
             .group(group.clone())
+            .relative()
             .flex()
             .items_center()
             .gap_2()
             .h(px(30.))
-            .pl(px(indent + 12.0))
+            .pl(px(indent + 8.0))
             .pr_2()
             .rounded_sm()
             .cursor_pointer()
@@ -4328,7 +4328,53 @@ impl FlowlistApp {
                 theme.text_dim
             })
             .bg(if editing { theme.selection } else { theme.clear })
-            .hover(|style| style.bg(theme.hover))
+            .hover(|style| style.bg(theme.hover));
+        // Code-editor style indent guides. Each ancestor level paints a faint
+        // vertical line through the row, so deep rules read as nested.
+        for level in 0..depth {
+            row = row.child(
+                div()
+                    .absolute()
+                    .left(px(12.0 + level as f32 * 18.0))
+                    .top_0()
+                    .bottom_0()
+                    .w(px(1.))
+                    .bg(theme.border_soft),
+            );
+        }
+        row = row
+            .child(
+                div()
+                    .on_children_prepainted(self.view_probe(format!("rule-menu:{id}")))
+                    .id(super::sid(format!("rule-menu:{id}")))
+                    .w(px(20.))
+                    .h(px(20.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_sm()
+                    .text_color(if menu_open { theme.text } else { theme.text_faint })
+                    .opacity(0.35)
+                    .group_hover(group.clone(), |style| style.opacity(1.0))
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover).text_color(theme.text))
+                    .child("⋯")
+                    .flow_tip(self, cx, theme, "Rule actions")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.row_menu = if form.row_menu == Some(id) {
+                                None
+                            } else {
+                                Some(id)
+                            };
+                            form.editing = None;
+                            form.add_menu = None;
+                            form.add_after = None;
+                        }
+                        cx.notify();
+                    })),
+            )
             .child(
                 div()
                     .min_w_0()
@@ -4338,14 +4384,10 @@ impl FlowlistApp {
                     .child(label),
             )
             .child(div().flex_grow())
-            // Controls stay out of the way until the pointer is on the row.
             .child(
                 div()
                     .opacity(0.0)
                     .group_hover(group.clone(), |style| style.opacity(1.0))
-                    .flex()
-                    .items_center()
-                    .gap_1()
                     .child(
                         div()
                             .on_children_prepainted(self.view_probe(format!("rule-plus:{id}")))
@@ -4374,36 +4416,6 @@ impl FlowlistApp {
                                     form.editing = None;
                                     this.rule_menu_scroll
                                         .set_offset(point(px(0.), px(0.)));
-                                }
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        div()
-                            .on_children_prepainted(self.view_probe(format!("rule-menu:{id}")))
-                            .id(super::sid(format!("rule-menu:{id}")))
-                            .w(px(20.))
-                            .h(px(20.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded_sm()
-                            .text_color(if menu_open { theme.text } else { theme.text_faint })
-                            .cursor_pointer()
-                            .hover(|style| style.bg(theme.hover).text_color(theme.text))
-                            .child("⋯")
-                            .flow_tip(self, cx, theme, "Rule actions")
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                if let Some(Modal::Perspective { form }) = &mut this.modal {
-                                    form.row_menu = if form.row_menu == Some(id) {
-                                        None
-                                    } else {
-                                        Some(id)
-                                    };
-                                    form.editing = None;
-                                    form.add_menu = None;
-                                    form.add_after = None;
                                 }
                                 cx.notify();
                             })),
@@ -4449,7 +4461,14 @@ impl FlowlistApp {
             out.push(self.render_rule_editor(node, depth + 1, cx));
         }
         if menu_open {
-            out.push(self.render_rule_menu(node, parent, depth + 1, cx));
+            out.push(
+                div()
+                    .flex()
+                    .justify_end()
+                    .pr(px(8.))
+                    .child(self.render_rule_menu(node, parent, depth + 1, cx))
+                    .into_any_element(),
+            );
         }
         if is_group {
             if node.children().is_empty() {
@@ -4610,8 +4629,11 @@ impl FlowlistApp {
         let id = node.id;
         let enabled = node.enabled;
         let is_group = node.kind.is_group();
+        let is_root = matches!(
+            &self.modal,
+            Some(Modal::Perspective { form }) if form.root.id == id
+        );
         let mut menu = div()
-            .ml(px((depth as f32) * 18.0 + 12.0))
             .w(px(176.))
             .flex()
             .flex_col()
@@ -4622,7 +4644,16 @@ impl FlowlistApp {
             .border_color(theme.border)
             .bg(theme.raised)
             .shadow_md();
-        let items: Vec<(String, Option<&'static str>)> = if is_group {
+        let items: Vec<(String, Option<&'static str>)> = if is_group && is_root {
+            vec![
+                ("Edit Group".to_string(), Some("edit")),
+                ("Add Rule Inside".to_string(), Some("add-inside")),
+                (
+                    if enabled { "Turn Off" } else { "Turn On" }.to_string(),
+                    Some("toggle"),
+                ),
+            ]
+        } else if is_group {
             vec![
                 ("Edit Group".to_string(), Some("edit")),
                 ("Add Rule Inside".to_string(), Some("add-inside")),
