@@ -1358,6 +1358,24 @@ impl PerspectiveForm {
         self.extra_roots.clear();
     }
 
+    /// True when the open rule editor contains its own scrolling picker.
+    pub fn editor_has_picker(&self) -> bool {
+        self.editing
+            .and_then(|id| self.rule(id))
+            .and_then(RuleNode::condition_ref)
+            .is_some_and(|condition| {
+                matches!(
+                    condition,
+                    Condition::TagsAny { .. }
+                        | Condition::TagsAll { .. }
+                        | Condition::Within { .. }
+                        | Condition::Project { .. }
+                        | Condition::Folder { .. }
+                        | Condition::Tag { .. }
+                )
+            })
+    }
+
     pub fn is_rule_enabled(&self, id: u64) -> bool {
         find_rule(&self.root, id).is_some_and(|node| node.enabled)
     }

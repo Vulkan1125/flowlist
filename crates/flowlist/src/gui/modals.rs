@@ -1380,7 +1380,9 @@ impl FlowlistApp {
         let inner_scroll = matches!(
             &self.modal,
             Some(Modal::Perspective { form })
-                if form.add_menu.is_some() || form.layout_menu.is_some()
+                if form.add_menu.is_some()
+                    || form.layout_menu.is_some()
+                    || form.editor_has_picker()
         );
         let mut body = div()
             .id("modal-body")
@@ -2093,6 +2095,8 @@ impl FlowlistApp {
                     .flex_col()
                     .max_h(px(if is_settings {
                         settings_max_height + 60.0
+                    } else if is_perspective {
+                        perspective_max_height + 60.0
                     } else {
                         720.0
                     }))
@@ -4470,6 +4474,8 @@ impl FlowlistApp {
                             form.add_after = Some(id);
                         }
                         form.editing = None;
+                        this.rule_menu_scroll
+                            .set_offset(point(px(0.), px(0.)));
                     }
                     cx.notify();
                 })),
@@ -4573,7 +4579,8 @@ impl FlowlistApp {
             .border_color(theme.border)
             .bg(theme.raised)
             .max_h(px(320.))
-            .overflow_y_scroll();
+            .overflow_y_scroll()
+            .track_scroll(&self.rule_menu_scroll);
         menu = menu.child(
             div()
                 .px_2()

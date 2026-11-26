@@ -21,7 +21,9 @@
   OmniFocus-style rule table: enable checkbox, rule pop-up, minus/plus on every
   row, indented groups and a shared Presentation section. The catalogue itself
   is indented, another Availability card is one plus-click away, and the sheet
-  is resizable with a remembered size.
+  resizes in both directions with a remembered size. Scrolling a rule menu or
+  an inline tag/project picker stays inside that control instead of moving the
+  sheet.
 - **Icons-only header by default.** A fresh session shows the toolbar icons
   without the small titles. The titles are still available in Settings.
 - **Quieter empty notifications.** The full-screen hint appears only when a

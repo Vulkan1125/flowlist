@@ -172,12 +172,12 @@ b = json.load(open(sys.argv[1]))["view_boxes"]["perspective-resize"]
 print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
 PY
 )
-"$helpers/flowctl" drag $((WX + ${point% *})) $((WY + ${point#* })) $((WX + ${point% *} + 120)) $((WY + ${point#* } + 80))
+"$helpers/flowctl" drag $((WX + ${point% *})) $((WY + ${point#* })) $((WX + ${point% *} + 120)) $((WY + ${point#* } + 200))
 sleep 0.5
 python3 - "$state" <<'PY'
 import json, sys
 size = json.load(open(sys.argv[1])).get("perspective_size")
-assert size is not None and size[0] > 760 and size[1] > 640, size
+assert size is not None and size[0] > 760 and size[1] > 780, size
 PY
 click_map view_boxes "status"
 wait_value view_menu "status"
@@ -196,10 +196,10 @@ import json, sys
 form = json.load(open(sys.argv[1])).get("view_form") or {}
 assert form.get("add_menu") == 1, form.get("add_menu")
 PY
-wait_map view_boxes "rule-add-menu"
+wait_map view_boxes "rule-option:1:Status--Due-Soon"
 point=$(python3 - "$state" <<'PY'
 import json, sys
-b = json.load(open(sys.argv[1]))["view_boxes"]["rule-add-menu"]
+b = json.load(open(sys.argv[1]))["view_boxes"]["rule-option:1:Status--Due-Soon"]
 print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
 PY
 )
@@ -209,6 +209,10 @@ sleep 0.4
 after=$(value settings_scroll)
 if [ "$before" != "$after" ]; then
   echo "FAIL: scrolling the rule menu moved the sheet from $before to $after" >&2
+  exit 1
+fi
+if [ "$(value rule_menu_scroll)" = "0" ]; then
+  echo "FAIL: the rule menu did not scroll" >&2
   exit 1
 fi
 "$helpers/flowctl" scroll $((WX + ${point% *})) $((WY + ${point#* })) -8

@@ -670,6 +670,7 @@ pub struct FlowlistApp {
     view_menu: Option<perspective::ViewField>,
     view_menu_cursor: usize,
     view_menu_scroll: ScrollHandle,
+    rule_menu_scroll: ScrollHandle,
     /// Where editor controls painted, so a GUI probe can click them without
     /// guessing at pixels.
     view_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
@@ -1168,6 +1169,7 @@ impl FlowlistApp {
             view_menu: None,
             view_menu_cursor: 0,
             view_menu_scroll: ScrollHandle::new(),
+            rule_menu_scroll: ScrollHandle::new(),
             view_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             archive_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             title_space: Rc::new(Cell::new(None)),
@@ -8388,6 +8390,7 @@ impl FlowlistApp {
         });
         state["settings_size"] = serde_json::json!(self.settings_size);
         state["perspective_size"] = serde_json::json!(self.perspective_size);
+        state["rule_menu_scroll"] = serde_json::json!(f32::from(-self.rule_menu_scroll.offset().y));
         state["settings_scroll"] = serde_json::json!(f32::from(-self.modal_scroll.offset().y));
         state["settings_sidebar_group"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::Settings { sidebar_group, .. }) => {
