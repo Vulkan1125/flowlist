@@ -1377,13 +1377,6 @@ impl FlowlistApp {
         // sheet owns that scroll region (see render_settings_sheet). While a
         // perspective menu is open, the menu owns scrolling so a wheel over it
         // can never move the sheet behind it.
-        let inner_scroll = matches!(
-            &self.modal,
-            Some(Modal::Perspective { form })
-                if form.add_menu.is_some()
-                    || form.layout_menu.is_some()
-                    || form.editor_has_picker()
-        );
         let mut body = div()
             .id("modal-body")
             .flex()
@@ -1405,7 +1398,7 @@ impl FlowlistApp {
                     .child(error.clone()),
             );
         }
-        if !is_settings && !inner_scroll {
+        if !is_settings {
             body = body
                 .pr(px(14.))
                 .overflow_y_scroll()
@@ -1926,7 +1919,7 @@ impl FlowlistApp {
             .min_h_0()
             .w_full()
             .child(body);
-        if !is_settings && !inner_scroll {
+        if !is_settings {
             body = body.child(self.modal_scrollbar(theme, cx));
         }
         // The settings sheet carries the theme grid, the accent picker and the
@@ -2057,7 +2050,17 @@ impl FlowlistApp {
                     .flex()
                     .items_center()
                     .justify_end()
+                    .gap_2()
                     .pt_1()
+                    .child(
+                        div()
+                            .on_children_prepainted(
+                                self.theme_probe("modal-cancel".to_string()),
+                            )
+                            .id("modal-cancel")
+                            .child(widgets::button(theme, "Cancel", false))
+                            .on_click(cx.listener(|this, _, _, cx| this.close_modal(cx))),
+                    )
                     .child(
                         div()
                             .on_children_prepainted(
@@ -4209,6 +4212,7 @@ impl FlowlistApp {
             };
             let mut menu = div()
                 .id("layout-menu")
+                .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
                 .flex()
                 .flex_col()
                 .gap(px(1.))
@@ -4569,6 +4573,7 @@ impl FlowlistApp {
         let mut menu = div()
             .on_children_prepainted(self.view_probe("rule-add-menu".to_string()))
             .id("rule-add-menu")
+                .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
             .ml(px((depth as f32) * 24.0 + 40.0))
             .flex()
             .flex_col()
@@ -5669,6 +5674,7 @@ impl FlowlistApp {
         tags.sort_by_cached_key(|tag| db.tag_path(&tag.id).to_lowercase());
         let mut card = div()
             .id("rule-tag-picker")
+                .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
             .flex()
             .flex_col()
             .gap_1()
@@ -5787,6 +5793,7 @@ impl FlowlistApp {
         projects.sort_by_cached_key(|project| db.project_path(&project.id).to_lowercase());
         let mut card = div()
             .id("rule-project-picker")
+                .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
             .flex()
             .flex_col()
             .gap_1()
@@ -5867,6 +5874,7 @@ impl FlowlistApp {
         folders.sort_by_cached_key(|folder| db.folder_path(&folder.id).to_lowercase());
         let mut card = div()
             .id("rule-folder-picker")
+                .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
             .flex()
             .flex_col()
             .gap_1()

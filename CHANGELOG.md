@@ -23,7 +23,7 @@
   is indented, another Availability card is one plus-click away, and the sheet
   resizes in both directions with a remembered size. Scrolling a rule menu or
   an inline tag/project picker stays inside that control instead of moving the
-  sheet.
+  sheet. **Cancel** sits left of **Save** in every sheet footer.
 - **Icons-only header by default.** A fresh session shows the toolbar icons
   without the small titles. The titles are still available in Settings.
 - **Quieter empty notifications.** The full-screen hint appears only when a
