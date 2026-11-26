@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Calmer copy
+
+- **Terser interface text.** View subtitles, empty states, settings
+  descriptions, capture placeholders and dialog help are shorter and neutral;
+  built-in views skip the subtitle row instead of restating their purpose.
+
 ## 0.10.0 — 2026-11-26
 
 ### Perspective rules

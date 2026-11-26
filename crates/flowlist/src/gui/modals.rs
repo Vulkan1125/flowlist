@@ -22,6 +22,7 @@ use flowlist_core::model::{
 use flowlist_core::query;
 use flowlist_core::time::now;
 
+use super::DateField as PickerDateField;
 use super::drag::{
     DragPerspectiveResize, DragRule, DragSettingsResize, DragSettingsScroll, rule_ghost,
     settings_resize_ghost, settings_scroll_ghost,
@@ -32,7 +33,6 @@ use super::perspective::{
     RuleKind, RuleNode, RuleTemplate, ViewChoice, ViewField, rule_summary,
 };
 use super::screen_picker;
-use super::DateField as PickerDateField;
 use super::text::TextBuffer;
 use super::theme::{self, Appearance, PLAIN_ACCENTS, Theme, ThemeKind};
 use super::widgets::TipExt;
@@ -366,21 +366,15 @@ impl SettingsSection {
 
     pub fn description(self) -> &'static str {
         match self {
-            SettingsSection::Appearance => {
-                "Theme, accent, window controls and how light and dark are chosen."
-            }
-            SettingsSection::Sidebar => "Which sections, items and counts the rail shows.",
-            SettingsSection::Workflow => "Keyboard, review cadence and history windows.",
-            SettingsSection::Reminders => {
-                "Due notifications and full-screen reminder timing and backdrops."
-            }
-            SettingsSection::Calendar => {
-                "Read-only macOS Calendar events and which calendars Forecast shows."
-            }
-            SettingsSection::Nearby => "How distance ranks tasks with tagged locations.",
-            SettingsSection::Trash => "How long deleted tasks stay restorable.",
-            SettingsSection::Mobile => "Pair your Android phone and keep it in sync with this Mac.",
-            SettingsSection::About => "Version, library location and update checks.",
+            SettingsSection::Appearance => "Theme and accent.",
+            SettingsSection::Sidebar => "Rail sections and counts.",
+            SettingsSection::Workflow => "Keyboard, review and history.",
+            SettingsSection::Reminders => "Notifications and full-screen reminders.",
+            SettingsSection::Calendar => "Forecast Calendar events.",
+            SettingsSection::Nearby => "Distance ranking.",
+            SettingsSection::Trash => "Retention.",
+            SettingsSection::Mobile => "Android pairing.",
+            SettingsSection::About => "Version and library.",
         }
     }
 
@@ -579,10 +573,7 @@ impl Modal {
         }
     }
 
-    pub fn relative_notification(
-        target: super::NotificationTarget,
-        event: AlertEvent,
-    ) -> Self {
+    pub fn relative_notification(target: super::NotificationTarget, event: AlertEvent) -> Self {
         Modal::RelativeNotification {
             target,
             event,
@@ -863,91 +854,61 @@ impl Modal {
 
     pub fn subtitle(&self) -> &'static str {
         match self {
-            Modal::Rename { .. } => "Names are shared by the sidebar, CLI and MCP server.",
-            Modal::ReviewInterval { .. } => {
-                "When the next review is due, and how often it comes back."
-            }
+            Modal::Rename { .. } => "Shared by all surfaces.",
+            Modal::ReviewInterval { .. } => "Next review and cadence.",
             Modal::NewProject { editing, .. } => {
                 if editing.is_some() {
-                    "Change the project's name, notes, review cadence, type or icon."
+                    "Name, notes, dates, review and icon."
                 } else {
-                    "Projects hold an outline of tasks; folders keep projects together."
+                    "Projects hold tasks; folders group projects."
                 }
             }
-            Modal::IconPicker { .. } => "Choose a named icon or an emoji for this project.",
+            Modal::IconPicker { .. } => "Choose an icon or emoji.",
             Modal::AdjustDates { command, .. } => match command {
-                Command::UpdateTaskAdjusted { .. } => {
-                    "If you continue, the task date will be adjusted to fit the project."
-                }
+                Command::UpdateTaskAdjusted { .. } => "Adjust the task date to fit the project?",
                 Command::UpdateProjectAdjusted { .. } => {
-                    "If you continue, these task dates will be adjusted to fit the project’s new dates."
+                    "Adjust these task dates to fit the project?"
                 }
-                _ => {
-                    "If you continue, these task dates will be adjusted to fit the project or parent."
-                }
+                _ => "Adjust these task dates to fit the container?",
             },
-            Modal::CreateProject { .. } => {
-                "This path is not in the library yet. Create it and file the task there?"
-            }
-            Modal::DeleteProject { .. } => {
-                "Its tasks move to Trash. Undo restores the project and its tasks."
-            }
-            Modal::DeleteFolder { .. } => {
-                "Its projects and their tasks move to Trash with it. Undo restores everything."
-            }
-            Modal::CustomNotification { .. } => {
-                "An absolute date and time for this item. It does not follow the item's dates."
-            }
-            Modal::RelativeNotification { .. } => {
-                "An alert that moves with the item's dates. Negative fires before; positive after."
-            }
-            Modal::DeleteContainers { .. } => {
-                "Their tasks move to Trash. Undo restores everything in one step."
-            }
+            Modal::CreateProject { .. } => "Create this project and file the task there?",
+            Modal::DeleteProject { .. } => "Tasks move to Trash. Undo restores them.",
+            Modal::DeleteFolder { .. } => "Projects and tasks move to Trash. Undo restores them.",
+            Modal::CustomNotification { .. } => "Absolute date and time.",
+            Modal::RelativeNotification { .. } => "Relative to the item's dates.",
+            Modal::DeleteContainers { .. } => "Their tasks go to Trash. Undo restores everything.",
             Modal::DeleteTag { .. } => {
                 "Tasks keep their other tags; this tag is removed from them."
             }
             Modal::DeleteTask { .. } => {
-                "This task repeats. Trash this occurrence, or the whole series; Undo restores everything."
+                "Repeating task. Trash one occurrence or the series; Undo restores it."
             }
             Modal::HideSubtasks { .. } => {
-                "Each subtask becomes a checklist step. Task-only details such as notes, dates, tags and priority are removed; the title and completion state are kept."
+                "Subtasks become checklist steps. Notes, dates, tags and priority are dropped."
             }
             Modal::PriorityScope { .. } => {
-                "This task repeats. Apply the new priority to this occurrence, or to every occurrence in the series."
+                "Repeating task. Apply to this occurrence or the whole series."
             }
-            Modal::RemoveAttachment { .. } => {
-                "Only the link on this item goes away; the file stays on disk."
-            }
-            Modal::Uninstall { .. } => {
-                "Remove the app and the flowlist command. Choose whether your library stays."
-            }
+            Modal::RemoveAttachment { .. } => "Removes the link; the file stays on disk.",
+            Modal::Uninstall { .. } => "Removes the app and CLI. Library optional.",
             Modal::AttachLink { replace, .. } if replace.is_some() => {
-                "Give the link a shorter name. Leave the name empty to show the address."
+                "Short name; empty shows the address."
             }
-            Modal::AttachLink { .. } => {
-                "Paste an http(s) address; it opens in your browser. Undo removes it."
-            }
+            Modal::AttachLink { .. } => "http(s) address; opens in your browser.",
             Modal::NewFolder { editing, .. } => {
                 if editing.is_some() {
-                    "Rename the folder. Its projects and nested folders stay put."
+                    "Rename the folder."
                 } else {
-                    "Folders group projects. They can be nested."
+                    "Folder name and parent."
                 }
             }
-            Modal::NewTag { .. } => "Tags are contexts: places, tools or people.",
-            Modal::Perspective { .. } => {
-                "Saved filters with their own conditions, grouping and sort order."
-            }
-            Modal::Import { .. } => {
-                "Paste Flowlist JSON or TaskPaper text. Merge keeps existing items."
-            }
+            Modal::NewTag { .. } => "A place, tool or person.",
+            Modal::Perspective { .. } => "Rules, grouping and sort order.",
+            Modal::Import { .. } => "Flowlist JSON or TaskPaper. Merge keeps existing items.",
             // Settings is a hub of sections; the pane describes itself.
             Modal::Settings { .. } => "",
-            Modal::Location { .. } => {
-                "Nearby uses this point and the radius below to rank tagged tasks."
-            }
-            Modal::TagLocation { .. } => "Give this context a latitude and longitude.",
+            Modal::Location { .. } => "Ranks tagged tasks by distance from here.",
+            Modal::TagLocation { .. } => "Latitude and longitude.",
             Modal::Help => "",
         }
     }
@@ -1019,7 +980,9 @@ impl Modal {
     pub fn field(&self, index: usize) -> Option<&TextBuffer> {
         match self {
             Modal::Rename { name, .. } => (index == 0).then_some(name),
-            Modal::ReviewInterval { days, next_review, .. } => match index {
+            Modal::ReviewInterval {
+                days, next_review, ..
+            } => match index {
                 0 => Some(days),
                 1 => Some(next_review),
                 _ => None,
@@ -1108,7 +1071,9 @@ impl Modal {
     pub fn field_mut(&mut self, index: usize) -> Option<&mut TextBuffer> {
         match self {
             Modal::Rename { name, .. } => (index == 0).then_some(name),
-            Modal::ReviewInterval { days, next_review, .. } => match index {
+            Modal::ReviewInterval {
+                days, next_review, ..
+            } => match index {
                 0 => Some(days),
                 1 => Some(next_review),
                 _ => None,
@@ -1450,9 +1415,12 @@ impl FlowlistApp {
                                 .text_color(theme.text)
                                 .child(name.clone()),
                         )
-                        .child(div().text_xs().text_color(theme.text_faint).child(
-                            "The file or link itself is left alone. Undo puts the attachment back.",
-                        )),
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("The file stays on disk. Undo restores the link."),
+                        ),
                 );
             }
             if let Modal::ReviewInterval { id, name, .. } = modal {
@@ -1594,9 +1562,9 @@ impl FlowlistApp {
                 let projects = self.store.db().project_count(id);
                 let detail = match projects {
                     0 => "It has no projects inside.".to_string(),
-                    1 => "Its 1 project, and every task in it, moves to Trash too.".to_string(),
+                    1 => "Includes 1 project and its tasks.".to_string(),
                     count => {
-                        format!("Its {count} projects, and every task in them, move to Trash too.")
+                        format!("Includes {count} projects and their tasks.")
                     }
                 };
                 body = body.child(
@@ -1843,26 +1811,34 @@ impl FlowlistApp {
                         .items_center()
                         .gap_1()
                         .child(
-                            chip("Deferred", current == AlertEvent::Defer, "relative-event:defer")
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(Modal::RelativeNotification { event, .. }) =
-                                        &mut this.modal
-                                    {
-                                        *event = AlertEvent::Defer;
-                                    }
-                                    cx.notify();
-                                })),
+                            chip(
+                                "Deferred",
+                                current == AlertEvent::Defer,
+                                "relative-event:defer",
+                            )
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(Modal::RelativeNotification { event, .. }) =
+                                    &mut this.modal
+                                {
+                                    *event = AlertEvent::Defer;
+                                }
+                                cx.notify();
+                            })),
                         )
                         .child(
-                            chip("Planned", current == AlertEvent::Planned, "relative-event:planned")
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(Modal::RelativeNotification { event, .. }) =
-                                        &mut this.modal
-                                    {
-                                        *event = AlertEvent::Planned;
-                                    }
-                                    cx.notify();
-                                })),
+                            chip(
+                                "Planned",
+                                current == AlertEvent::Planned,
+                                "relative-event:planned",
+                            )
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(Modal::RelativeNotification { event, .. }) =
+                                    &mut this.modal
+                                {
+                                    *event = AlertEvent::Planned;
+                                }
+                                cx.notify();
+                            })),
                         )
                         .child(
                             chip("Due", current == AlertEvent::Due, "relative-event:due").on_click(
@@ -1957,7 +1933,10 @@ impl FlowlistApp {
                     height.clamp(420.0, perspective_max_height),
                 )
             })
-            .unwrap_or((760.0_f32.max(width), card_max_height.min(perspective_max_height)));
+            .unwrap_or((
+                760.0_f32.max(width),
+                card_max_height.min(perspective_max_height),
+            ));
         let card_width = if is_settings {
             settings_width
         } else if is_perspective {
@@ -2057,26 +2036,26 @@ impl FlowlistApp {
                         div()
                             .on_children_prepainted(self.view_probe("modal-cancel".to_string()))
                             .child(
-                        div()
-                            .on_children_prepainted(
-                                self.theme_probe("modal-cancel".to_string()),
-                            )
-                            .id("modal-cancel")
-                            .child(widgets::button(theme, "Cancel", false))
-                            .on_click(cx.listener(|this, _, _, cx| this.close_modal(cx))),
+                                div()
+                                    .on_children_prepainted(
+                                        self.theme_probe("modal-cancel".to_string()),
+                                    )
+                                    .id("modal-cancel")
+                                    .child(widgets::button(theme, "Cancel", false))
+                                    .on_click(cx.listener(|this, _, _, cx| this.close_modal(cx))),
                             ),
                     )
                     .child(
                         div()
                             .on_children_prepainted(self.view_probe("modal-save".to_string()))
                             .child(
-                        div()
-                            .on_children_prepainted(
-                                self.theme_probe("modal-save".to_string()),
-                            )
-                            .id("modal-save")
-                            .child(widgets::button(theme, confirm_label, true))
-                            .on_click(cx.listener(|this, _, _, cx| this.commit_modal(cx))),
+                                div()
+                                    .on_children_prepainted(
+                                        self.theme_probe("modal-save".to_string()),
+                                    )
+                                    .id("modal-save")
+                                    .child(widgets::button(theme, confirm_label, true))
+                                    .on_click(cx.listener(|this, _, _, cx| this.commit_modal(cx))),
                             ),
                     ),
             );
@@ -2361,7 +2340,7 @@ impl FlowlistApp {
                     .text_xs()
                     .text_color(theme.text_faint)
                     .child(
-                        "Flowlist will quit, remove the app and the flowlist command, then delete the files below. This cannot be undone.",
+                        "Quits Flowlist, removes the app and CLI, and deletes the files below. Cannot be undone.",
                     ),
             )
             .child(choice(
@@ -2933,11 +2912,15 @@ impl FlowlistApp {
                             .child(icons::icon(
                                 Icon::ChevronDown,
                                 11.0,
-                                if active { theme.accent } else { theme.text_faint },
+                                if active {
+                                    theme.accent
+                                } else {
+                                    theme.text_faint
+                                },
                             ))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.toggle_view_menu(field, cx)
-                            })),
+                            .on_click(
+                                cx.listener(move |this, _, _, cx| this.toggle_view_menu(field, cx)),
+                            ),
                     ),
             )
             .into_any_element()
@@ -3355,7 +3338,12 @@ impl FlowlistApp {
                     })),
             )
             .when(has_icon_label, |this| {
-                this.child(div().text_xs().text_color(theme.text_faint).child(icon_label))
+                this.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .child(icon_label),
+                )
             });
 
         let mut tabs = div()
@@ -3376,9 +3364,7 @@ impl FlowlistApp {
             };
             tabs = tabs.child(
                 div()
-                    .on_children_prepainted(
-                        self.view_probe(format!("perspective-tab:{slug}")),
-                    )
+                    .on_children_prepainted(self.view_probe(format!("perspective-tab:{slug}")))
                     .id(super::sid(format!("perspective-tab:{slug}")))
                     .px_3()
                     .py_1()
@@ -3569,9 +3555,7 @@ impl FlowlistApp {
                         .text_xs()
                         .whitespace_normal()
                         .text_color(theme.warning)
-                        .child(
-                            "No items match. A rule and a None group can cancel each other out — for example, Available plus None of Available.",
-                        ),
+                        .child("No matches. Check for a rule and its None counterpart."),
                 )
             })
     }
@@ -3960,7 +3944,10 @@ impl FlowlistApp {
             .child(fullscreen_row)
     }
 
-    fn render_comprehensive_perspective_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_comprehensive_perspective_controls(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let theme = self.theme;
         let Some(Modal::Perspective { form }) = &self.modal else {
             return div();
@@ -4075,7 +4062,12 @@ impl FlowlistApp {
                         if matches == 1 { "task" } else { "tasks" }
                     )))
                     .when(form.editing.is_some(), |this| {
-                        this.child(div().text_xs().text_color(theme.text_faint).child("· editing a rule"))
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("· editing a rule"),
+                        )
                     }),
             )
             .when(form.has_filters(), |this| {
@@ -4135,11 +4127,7 @@ impl FlowlistApp {
                             .text_sm()
                             .text_color(theme.text_faint)
                             .cursor_pointer()
-                            .hover(|style| {
-                                style
-                                    .bg(theme.hover)
-                                    .text_color(theme.text)
-                            })
+                            .hover(|style| style.bg(theme.hover).text_color(theme.text))
                             .child(icons::icon(Icon::Plus, 10.0, theme.text_faint))
                             .child("Add a new rule")
                             .on_click(cx.listener(|this, _, _, cx| {
@@ -4148,8 +4136,7 @@ impl FlowlistApp {
                                     form.add_after = None;
                                     form.editing = None;
                                     form.row_menu = None;
-                                    this.rule_menu_scroll
-                                        .set_offset(point(px(0.), px(0.)));
+                                    this.rule_menu_scroll.set_offset(point(px(0.), px(0.)));
                                 }
                                 cx.notify();
                             })),
@@ -4193,7 +4180,11 @@ impl FlowlistApp {
                     .gap_2()
                     .rounded_md()
                     .border_1()
-                    .border_color(if active || open { theme.accent } else { theme.border })
+                    .border_color(if active || open {
+                        theme.accent
+                    } else {
+                        theme.border
+                    })
                     .bg(if active || open {
                         theme.selection
                     } else {
@@ -4213,7 +4204,11 @@ impl FlowlistApp {
                     .child(icons::icon(
                         Icon::ChevronDown,
                         11.0,
-                        if active { theme.accent } else { theme.text_faint },
+                        if active {
+                            theme.accent
+                        } else {
+                            theme.text_faint
+                        },
                     ))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(Modal::Perspective { form }) = &mut this.modal {
@@ -4336,8 +4331,10 @@ impl FlowlistApp {
         let db = self.store.db();
         let id = node.id;
         let is_group = node.kind.is_group();
-        let editing = matches!(&self.modal, Some(Modal::Perspective { form }) if form.editing == Some(id));
-        let menu_open = matches!(&self.modal, Some(Modal::Perspective { form }) if form.row_menu == Some(id));
+        let editing =
+            matches!(&self.modal, Some(Modal::Perspective { form }) if form.editing == Some(id));
+        let menu_open =
+            matches!(&self.modal, Some(Modal::Perspective { form }) if form.row_menu == Some(id));
         let disabled = !node.enabled;
         let summary = rule_summary(db, node);
         let indent = (depth as f32) * 18.0;
@@ -4374,7 +4371,11 @@ impl FlowlistApp {
             } else {
                 theme.text_dim
             })
-            .bg(if editing { theme.selection } else { theme.clear })
+            .bg(if editing {
+                theme.selection
+            } else {
+                theme.clear
+            })
             .hover(|style| style.bg(theme.hover));
         // Code-editor style indent guides. Each ancestor level paints a faint
         // vertical line through the row, so deep rules read as nested.
@@ -4421,7 +4422,7 @@ impl FlowlistApp {
                             .cursor_pointer()
                             .hover(|style| style.bg(theme.hover).text_color(theme.text))
                             .child(icons::icon(Icon::Plus, 10.0, theme.text_faint))
-                            .flow_tip(self, cx, theme, "Add a rule here")
+                            .flow_tip(self, cx, theme, "Add rule")
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
                                 if let Some(Modal::Perspective { form }) = &mut this.modal {
@@ -4433,8 +4434,7 @@ impl FlowlistApp {
                                         form.add_after = Some(id);
                                     }
                                     form.editing = None;
-                                    this.rule_menu_scroll
-                                        .set_offset(point(px(0.), px(0.)));
+                                    this.rule_menu_scroll.set_offset(point(px(0.), px(0.)));
                                 }
                                 cx.notify();
                             })),
@@ -4449,11 +4449,15 @@ impl FlowlistApp {
                             .items_center()
                             .justify_center()
                             .rounded_sm()
-                            .text_color(if menu_open { theme.text } else { theme.text_faint })
+                            .text_color(if menu_open {
+                                theme.text
+                            } else {
+                                theme.text_faint
+                            })
                             .cursor_pointer()
                             .hover(|style| style.bg(theme.hover).text_color(theme.text))
                             .child("⋯")
-                            .flow_tip(self, cx, theme, "Rule actions")
+                            .flow_tip(self, cx, theme, "Rule menu")
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
                                 if let Some(Modal::Perspective { form }) = &mut this.modal {
@@ -4546,12 +4550,7 @@ impl FlowlistApp {
         out
     }
 
-    fn render_add_rule_row(
-        &self,
-        parent: u64,
-        depth: usize,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn render_add_rule_row(&self, parent: u64, depth: usize, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
         let open = matches!(&self.modal, Some(Modal::Perspective { form }) if form.add_menu == Some(parent));
         div()
@@ -4594,7 +4593,7 @@ impl FlowlistApp {
         let mut menu = div()
             .on_children_prepainted(self.view_probe("rule-add-menu".to_string()))
             .id("rule-add-menu")
-                .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
+            .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
             .ml(px((depth as f32) * 24.0 + 40.0))
             .flex()
             .flex_col()
@@ -4607,15 +4606,6 @@ impl FlowlistApp {
             .max_h(px(320.))
             .overflow_y_scroll()
             .track_scroll(&self.rule_menu_scroll);
-        menu = menu.child(
-            div()
-                .px_2()
-                .pt_1()
-                .pb_1()
-                .text_size(px(10.))
-                .text_color(theme.text_faint)
-                .child("Choosing a rule adds a new card under this group"),
-        );
         let mut category = "";
         for template in RuleTemplate::ALL {
             if template.category() != category {
@@ -4639,9 +4629,7 @@ impl FlowlistApp {
                 .collect::<String>();
             menu = menu.child(
                 div()
-                    .on_children_prepainted(
-                        self.view_probe(format!("rule-option:{parent}:{slug}")),
-                    )
+                    .on_children_prepainted(self.view_probe(format!("rule-option:{parent}:{slug}")))
                     .id(super::sid(format!("rule-option:{parent}:{slug}")))
                     .pl_7()
                     .pr_2()
@@ -4733,9 +4721,7 @@ impl FlowlistApp {
             let slug = label.replace(' ', "-").to_lowercase();
             menu = menu.child(
                 div()
-                    .on_children_prepainted(
-                        self.view_probe(format!("rule-menu-item:{id}:{slug}")),
-                    )
+                    .on_children_prepainted(self.view_probe(format!("rule-menu-item:{id}:{slug}")))
                     .id(super::sid(format!("rule-menu-item:{id}:{slug}")))
                     .px_2()
                     .py_1()
@@ -4847,14 +4833,13 @@ impl FlowlistApp {
                 _ => GroupOperator::All,
             };
             let mut chips = div().flex().items_center().gap_1();
-            for operator in [
-                GroupOperator::All,
-                GroupOperator::Any,
-                GroupOperator::None,
-            ] {
+            for operator in [GroupOperator::All, GroupOperator::Any, GroupOperator::None] {
                 chips = chips.child(
                     div()
-                        .id(super::sid(format!("rule-op-choice:{id}:{}", operator.label())))
+                        .id(super::sid(format!(
+                            "rule-op-choice:{id}:{}",
+                            operator.label()
+                        )))
                         .child(widgets::toggle_chip(
                             theme,
                             operator.label(),
@@ -4873,7 +4858,7 @@ impl FlowlistApp {
                     div()
                         .text_xs()
                         .text_color(theme.text_dim)
-                        .child("Combine the rules below with"),
+                        .child("Combine with"),
                 )
                 .child(chips);
         } else if matches!(node.kind, RuleKind::Comment) {
@@ -4921,12 +4906,7 @@ impl FlowlistApp {
             .into_any_element()
     }
 
-    fn rule_date_button(
-        &self,
-        id: u64,
-        second: bool,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn rule_date_button(&self, id: u64, second: bool, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
         let anchors = self.rule_date_anchors.clone();
         let boxes = self.view_boxes.clone();
@@ -4935,9 +4915,7 @@ impl FlowlistApp {
         div()
             .on_children_prepainted(move |bounds, _, _| {
                 if let Some(bounds) = bounds.first() {
-                    anchors
-                        .borrow_mut()
-                        .insert(anchor_key.clone(), *bounds);
+                    anchors.borrow_mut().insert(anchor_key.clone(), *bounds);
                     boxes.borrow_mut().insert(
                         probe_key.clone(),
                         [
@@ -4963,12 +4941,9 @@ impl FlowlistApp {
             .cursor_pointer()
             .hover(|style| style.bg(theme.hover).text_color(theme.text))
             .child(icons::icon(Icon::Calendar, 12.0, theme.text_faint))
-            .flow_tip(self, cx, theme, "Pick a date")
+            .flow_tip(self, cx, theme, "Pick date")
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.open_date_picker(
-                    PickerDateField::RuleDate { rule: id, second },
-                    cx,
-                )
+                this.open_date_picker(PickerDateField::RuleDate { rule: id, second }, cx)
             }))
             .into_any_element()
     }
@@ -4990,12 +4965,7 @@ impl FlowlistApp {
             .into_any_element()
     }
 
-    fn with_rule(
-        &mut self,
-        id: u64,
-        change: impl FnOnce(&mut RuleNode),
-        cx: &mut Context<Self>,
-    ) {
+    fn with_rule(&mut self, id: u64, change: impl FnOnce(&mut RuleNode), cx: &mut Context<Self>) {
         if let Some(Modal::Perspective { form }) = &mut self.modal
             && let Some(node) = form.rule_mut(id)
         {
@@ -5015,7 +4985,14 @@ impl FlowlistApp {
         let mut body = div().flex().flex_col().gap_2();
 
         let chip_row = |body: gpui::Div, children: Vec<AnyElement>| {
-            body.child(div().flex().flex_wrap().items_center().gap_1().children(children))
+            body.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_1()
+                    .children(children),
+            )
         };
 
         match condition {
@@ -5125,8 +5102,9 @@ impl FlowlistApp {
                             this.with_rule(
                                 id,
                                 |node| {
-                                    if let RuleKind::Condition(Condition::HasDate { field, .. }) =
-                                        &mut node.kind
+                                    if let RuleKind::Condition(Condition::HasDate {
+                                        field, ..
+                                    }) = &mut node.kind
                                     {
                                         *field = choice;
                                     }
@@ -5150,7 +5128,8 @@ impl FlowlistApp {
                                     id,
                                     |node| {
                                         if let RuleKind::Condition(Condition::HasDate {
-                                            value, ..
+                                            value,
+                                            ..
                                         }) = &mut node.kind
                                         {
                                             *value = true;
@@ -5170,7 +5149,8 @@ impl FlowlistApp {
                                     id,
                                     |node| {
                                         if let RuleKind::Condition(Condition::HasDate {
-                                            value, ..
+                                            value,
+                                            ..
                                         }) = &mut node.kind
                                         {
                                             *value = false;
@@ -5211,7 +5191,12 @@ impl FlowlistApp {
                 body = chip_row(body, field_chips);
 
                 let modes: [(&str, DateRangeFilter); 7] = [
-                    ("On", DateRangeFilter::On { date: flowlist_core::time::local_date(now()) }),
+                    (
+                        "On",
+                        DateRangeFilter::On {
+                            date: flowlist_core::time::local_date(now()),
+                        },
+                    ),
                     ("Yesterday", DateRangeFilter::Yesterday),
                     ("Today", DateRangeFilter::Today),
                     ("Tomorrow", DateRangeFilter::Tomorrow),
@@ -5234,8 +5219,7 @@ impl FlowlistApp {
                         DateRangeFilter::Between {
                             from: Some(flowlist_core::time::local_date(now())),
                             to: Some(
-                                flowlist_core::time::local_date(now())
-                                    + chrono::Duration::days(7),
+                                flowlist_core::time::local_date(now()) + chrono::Duration::days(7),
                             ),
                         },
                     ),
@@ -5319,8 +5303,7 @@ impl FlowlistApp {
                                 .child(self.rule_date_button(id, true, cx)),
                         );
                     }
-                    DateRangeFilter::InPast { unit, .. }
-                    | DateRangeFilter::InNext { unit, .. } => {
+                    DateRangeFilter::InPast { unit, .. } | DateRangeFilter::InNext { unit, .. } => {
                         let current = *unit;
                         body = body.child(
                             div()
@@ -5341,7 +5324,8 @@ impl FlowlistApp {
                                         id,
                                         |node| {
                                             if let RuleKind::Condition(Condition::DateRange {
-                                                range, ..
+                                                range,
+                                                ..
                                             }) = &mut node.kind
                                             {
                                                 match range {
@@ -5483,9 +5467,8 @@ impl FlowlistApp {
                             this.with_rule(
                                 id,
                                 |node| {
-                                    if let RuleKind::Condition(Condition::ProjectStatus {
-                                        value,
-                                    }) = &mut node.kind
+                                    if let RuleKind::Condition(Condition::ProjectStatus { value }) =
+                                        &mut node.kind
                                     {
                                         *value = choice;
                                     }
@@ -5521,7 +5504,7 @@ impl FlowlistApp {
                             div()
                                 .text_xs()
                                 .text_color(theme.text_faint)
-                                .child("Terms, separated by commas. Every term must match."),
+                                .child("Comma-separated; all must match."),
                         )
                         .child(self.rule_text_input(0, "deep, work", cx)),
                 );
@@ -5535,9 +5518,19 @@ impl FlowlistApp {
                         .flex()
                         .items_center()
                         .gap_2()
-                        .child(div().text_xs().text_color(theme.text_faint).child("Minimum"))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("Minimum"),
+                        )
                         .child(self.rule_text_input(0, "minutes", cx))
-                        .child(div().text_xs().text_color(theme.text_faint).child("Maximum"))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("Maximum"),
+                        )
                         .child(self.rule_text_input(1, "minutes", cx)),
                 );
             }
@@ -5788,16 +5781,10 @@ impl FlowlistApp {
                 include_children,
             } => {
                 let selected = vec![tag.clone()];
-                body = body.child(self.render_tag_picker(id, &selected, *include_children, false, cx));
+                body =
+                    body.child(self.render_tag_picker(id, &selected, *include_children, false, cx));
             }
-            Condition::InInbox | Condition::InSingleActionsList => {
-                body = body.child(
-                    div()
-                        .text_xs()
-                        .text_color(theme.text_faint)
-                        .child("This rule has no options."),
-                );
-            }
+            Condition::InInbox | Condition::InSingleActionsList => {}
         }
 
         body.into_any_element()
@@ -5817,7 +5804,7 @@ impl FlowlistApp {
         tags.sort_by_cached_key(|tag| db.tag_path(&tag.id).to_lowercase());
         let mut card = div()
             .id("rule-tag-picker")
-                .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
+            .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
             .flex()
             .flex_col()
             .gap_1()
@@ -5889,35 +5876,31 @@ impl FlowlistApp {
                 ("Child tags", "Match a child of a selected tag")
             };
             card = card.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        div()
-                            .id(super::sid(format!("rule-tag-children:{id}")))
-                            .child(widgets::toggle_chip(theme, labels.0, include_children))
-                            .flow_tip(self, cx, theme, labels.1)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.with_rule(
-                                    id,
-                                    |node| {
-                                        if let RuleKind::Condition(condition) = &mut node.kind {
-                                            match condition {
-                                                Condition::TagsAny {
-                                                    include_children, ..
-                                                }
-                                                | Condition::TagsAll {
-                                                    include_children, ..
-                                                } => *include_children = !*include_children,
-                                                _ => {}
+                div().flex().items_center().gap_1().child(
+                    div()
+                        .id(super::sid(format!("rule-tag-children:{id}")))
+                        .child(widgets::toggle_chip(theme, labels.0, include_children))
+                        .flow_tip(self, cx, theme, labels.1)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.with_rule(
+                                id,
+                                |node| {
+                                    if let RuleKind::Condition(condition) = &mut node.kind {
+                                        match condition {
+                                            Condition::TagsAny {
+                                                include_children, ..
                                             }
+                                            | Condition::TagsAll {
+                                                include_children, ..
+                                            } => *include_children = !*include_children,
+                                            _ => {}
                                         }
-                                    },
-                                    cx,
-                                )
-                            })),
-                    ),
+                                    }
+                                },
+                                cx,
+                            )
+                        })),
+                ),
             );
         }
         card.into_any_element()
@@ -5936,7 +5919,7 @@ impl FlowlistApp {
         projects.sort_by_cached_key(|project| db.project_path(&project.id).to_lowercase());
         let mut card = div()
             .id("rule-project-picker")
-                .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
+            .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
             .flex()
             .flex_col()
             .gap_1()
@@ -5983,7 +5966,9 @@ impl FlowlistApp {
                                 if let RuleKind::Condition(condition) = &mut node.kind {
                                     match condition {
                                         Condition::Project { id } => *id = target,
-                                        Condition::Within { project, folder, .. } => {
+                                        Condition::Within {
+                                            project, folder, ..
+                                        } => {
                                             if project.as_ref() == Some(&target) {
                                                 *project = None;
                                             } else {
@@ -6017,7 +6002,7 @@ impl FlowlistApp {
         folders.sort_by_cached_key(|folder| db.folder_path(&folder.id).to_lowercase());
         let mut card = div()
             .id("rule-folder-picker")
-                .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
+            .on_scroll_wheel(cx.listener(|_, _, _, cx| cx.stop_propagation()))
             .flex()
             .flex_col()
             .gap_1()
@@ -6064,7 +6049,9 @@ impl FlowlistApp {
                                 if let RuleKind::Condition(condition) = &mut node.kind {
                                     match condition {
                                         Condition::Folder { id, .. } => *id = target,
-                                        Condition::Within { project, folder, .. } => {
+                                        Condition::Within {
+                                            project, folder, ..
+                                        } => {
                                             if folder.as_ref() == Some(&target) {
                                                 *folder = None;
                                             } else {
@@ -6117,14 +6104,19 @@ impl FlowlistApp {
             .child(
                 div()
                     .id(super::sid(format!("rule-within-children:{id}")))
-                    .child(widgets::toggle_chip(theme, "Child folders", include_children))
+                    .child(widgets::toggle_chip(
+                        theme,
+                        "Child folders",
+                        include_children,
+                    ))
                     .flow_tip(self, cx, theme, "Include projects in nested folders")
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.with_rule(
                             id,
                             |node| {
                                 if let RuleKind::Condition(Condition::Within {
-                                    include_children, ..
+                                    include_children,
+                                    ..
                                 }) = &mut node.kind
                                 {
                                     *include_children = !*include_children;
@@ -6307,7 +6299,7 @@ impl FlowlistApp {
                             div()
                                 .text_xs()
                                 .text_color(theme.text_faint)
-                                .child("Take over the screen when a task in this project is due."),
+                                .child("Full screen when this project is due."),
                         ),
                 )
                 .child(
@@ -6360,7 +6352,7 @@ impl FlowlistApp {
                         div()
                             .text_xs()
                             .text_color(theme.text_faint)
-                            .child("Take over the screen when a task in this folder is due."),
+                            .child("Full screen when this folder is due."),
                     ),
             )
             .child(
@@ -6931,7 +6923,7 @@ impl FlowlistApp {
 
         let theme_card = self.settings_card(
             "Theme",
-            Some("Live preview. Cancel restores the theme and accent the sheet opened with."),
+            Some("Live preview; Cancel restores the previous theme."),
             div()
                 .flex()
                 .flex_col()
@@ -6967,7 +6959,7 @@ impl FlowlistApp {
 
         let icon_card = self.settings_card(
             "Dock icon",
-            Some("Changes the icon in the Dock and app switcher. Finder keeps the bundle artwork."),
+            Some("Dock and app-switcher icon."),
             div()
                 .flex()
                 .items_center()
@@ -7000,55 +6992,56 @@ impl FlowlistApp {
         } else {
             self.settings_card(
                 "Accent",
-                Some("Accent colours are a Plain feature. This family carries its own palette."),
+                Some("Plain only; this family has its own palette."),
                 div(),
             )
         };
 
-        let mut background_body = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_w_0()
-                            .gap_0p5()
-                            .child(div().text_sm().child("Use custom background"))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .whitespace_normal()
-                                    .text_color(theme.text_faint)
-                                    .child("A photo behind the window chrome and list."),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .id("settings-use-wallpaper")
-                            .child(widgets::switch(theme, use_app_wallpaper))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if !has_app_wallpaper {
-                                    this.choose_app_wallpaper(wallpaper_pick_mode, cx);
-                                } else if let Some(Modal::Settings { use_wallpaper, .. }) =
-                                    &mut this.modal
-                                {
-                                    *use_wallpaper = !*use_wallpaper;
-                                    cx.notify();
-                                }
-                            })),
-                    ),
-            )
-            .when(use_app_wallpaper, |this| {
-                this.child(
+        let mut background_body =
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_0p5()
+                                .child(div().text_sm().child("Use custom background"))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .whitespace_normal()
+                                        .text_color(theme.text_faint)
+                                        .child("A photo behind the window chrome and list."),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .id("settings-use-wallpaper")
+                                .child(widgets::switch(theme, use_app_wallpaper))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if !has_app_wallpaper {
+                                        this.choose_app_wallpaper(wallpaper_pick_mode, cx);
+                                    } else if let Some(Modal::Settings { use_wallpaper, .. }) =
+                                        &mut this.modal
+                                    {
+                                        *use_wallpaper = !*use_wallpaper;
+                                        cx.notify();
+                                    }
+                                })),
+                        ),
+                )
+                .when(use_app_wallpaper, |this| {
+                    this.child(
                     div()
                         .flex()
                         .items_center()
@@ -7070,7 +7063,7 @@ impl FlowlistApp {
                                         .whitespace_normal()
                                         .text_color(theme.text_faint)
                                         .child(
-                                            "Off keeps one background for both appearances. On shows a picker for each.",
+                                            "Off: one background. On: light and dark separately.",
                                         ),
                                 ),
                         )
@@ -7101,7 +7094,7 @@ impl FlowlistApp {
                                 })),
                         ),
                 )
-            });
+                });
         let wallpaper_modes: &[Appearance] = if app_wallpaper_separate {
             &[Appearance::Light, Appearance::Dark]
         } else {
@@ -7277,7 +7270,7 @@ impl FlowlistApp {
         }
         let app_background_card = self.settings_card(
             "Background",
-            Some("A custom background behind the main window, with its own opacity."),
+            Some("Custom background behind the main window."),
             background_body,
         );
         let boxes = self.settings_toggle_boxes.clone();
@@ -7316,7 +7309,7 @@ impl FlowlistApp {
                         div()
                             .text_xs()
                             .text_color(theme.text_faint)
-                            .child("Close, minimise and zoom in the header. W toggles them."),
+                            .child("Header window controls; W toggles."),
                     ),
             )
             .child(
@@ -7690,7 +7683,7 @@ impl FlowlistApp {
         self.settings_card(
             "Accent",
             Some(
-                "Presets set light and dark together; keys 1–9 pick one. The picker and eyedropper edit the appearance on screen.",
+                "Presets set both appearances; 1–9 picks one.",
             ),
             div()
                 .flex()
@@ -7715,7 +7708,7 @@ impl FlowlistApp {
                                         .text_xs()
                                         .text_color(theme.text_faint)
                                         .child(
-                                            "Drag the square for saturation and brightness, or the strip for hue. The eyedropper samples anything on screen, background included.",
+                                            "Square: saturation and brightness. Strip: hue. Eyedropper samples the screen.",
                                         ),
                                 )
                                 .child(actions)
@@ -8013,7 +8006,7 @@ impl FlowlistApp {
         let reminders_card = self.settings_card(
             "Reminders",
             Some(
-                "Due dates can send a macOS notification, even when Flowlist is in the background. Full-screen reminders are opt-in per task, project or folder.",
+                "Due-date notifications, plus opt-in full-screen reminders per item.",
             ),
             div()
                 .flex()
@@ -8062,7 +8055,7 @@ impl FlowlistApp {
                         .whitespace_normal()
                         .text_color(theme.text_faint)
                         .child(
-                            "Date-only tasks remind at 09:00; timestamped tasks at their time. The next 30 days are scheduled.",
+                            "Date-only at 09:00; timestamped at their time. Next 30 days.",
                         ),
                 )
                 .child(
@@ -8085,7 +8078,7 @@ impl FlowlistApp {
                                         .whitespace_normal()
                                         .text_color(theme.text_faint)
                                         .child(
-                                            "Only tasks, projects and folders marked for full-screen reminders take over the screen.",
+                                            "Only items marked for full-screen reminders.",
                                         ),
                                 ),
                         )
@@ -8130,7 +8123,7 @@ impl FlowlistApp {
                                         .whitespace_normal()
                                         .text_color(theme.text_faint)
                                         .child(
-                                            "Pauses the current player when the reminder opens and resumes it on close.",
+                                            "Pause the player while the reminder is open.",
                                         ),
                                 ),
                         )
@@ -8244,9 +8237,7 @@ impl FlowlistApp {
                                     .text_xs()
                                     .whitespace_normal()
                                     .text_color(theme.text_faint)
-                                    .child(
-                                        "Use the abstract style that belongs to the current theme.",
-                                    ),
+                                    .child("Use the current theme's abstract style."),
                             ),
                     )
                     .child(
@@ -8343,17 +8334,17 @@ impl FlowlistApp {
                         .flex_1()
                         .min_w_0()
                         .gap_0p5()
-                        .child(div().text_sm().child(
-                            "Use separate reminder backgrounds for light and dark modes",
-                        ))
+                        .child(
+                            div().text_sm().child(
+                                "Use separate reminder backgrounds for light and dark modes",
+                            ),
+                        )
                         .child(
                             div()
                                 .text_xs()
                                 .whitespace_normal()
                                 .text_color(theme.text_faint)
-                                .child(
-                                    "Off keeps one reminder background for both appearances. On shows a picker for each.",
-                                ),
+                                .child("Off: one background. On: light and dark separately."),
                         ),
                 )
                 .child(
@@ -8371,19 +8362,15 @@ impl FlowlistApp {
                                 ..
                             }) = &mut this.modal
                             {
-                                *reminder_wallpaper_separate =
-                                    !*reminder_wallpaper_separate;
-                                if *reminder_wallpaper_separate
-                                    && reminder_wallpaper_dark.is_none()
+                                *reminder_wallpaper_separate = !*reminder_wallpaper_separate;
+                                if *reminder_wallpaper_separate && reminder_wallpaper_dark.is_none()
                                 {
-                                    *reminder_wallpaper_dark =
-                                        reminder_wallpaper_light.clone();
+                                    *reminder_wallpaper_dark = reminder_wallpaper_light.clone();
                                 }
                                 if !*reminder_wallpaper_separate
                                     && reminder_wallpaper_light.is_none()
                                 {
-                                    *reminder_wallpaper_light =
-                                        reminder_wallpaper_dark.clone();
+                                    *reminder_wallpaper_light = reminder_wallpaper_dark.clone();
                                 }
                             }
                             cx.notify();
@@ -8411,7 +8398,7 @@ impl FlowlistApp {
                                         .text_xs()
                                         .whitespace_normal()
                                         .text_color(theme.text_faint)
-                                        .child("Show the reminder background chosen below."),
+                                        .child("Uses the background below."),
                                 ),
                         )
                         .child(
@@ -8705,14 +8692,12 @@ impl FlowlistApp {
         defaults_body = defaults_body.child(self.render_modal_field(6, cx));
         let default_notifications_card = self.settings_card(
             "Default notifications",
-            Some("Automatic alerts for every item, unless removed from that item. Latest start is due minus estimate. The time applies to date-only custom notifications."),
+            Some("Every item by default. Latest start is due minus estimate."),
             defaults_body,
         );
         let reminder_background_card = self.settings_card(
             "Reminder background",
-            Some(
-                "Full-screen reminders can sit on a theme-synced abstract backdrop or your own background. The main window keeps its normal surfaces.",
-            ),
+            Some("Abstract backdrop or your own image. The main window is unaffected."),
             background_body,
         );
         div()
@@ -8751,7 +8736,12 @@ impl FlowlistApp {
                     .items_center()
                     .justify_between()
                     .gap_2()
-                    .child(div().flex_1().text_sm().child("Show Calendar events in Forecast"))
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_sm()
+                            .child("Show Calendar events in Forecast"),
+                    )
                     .child(
                         div()
                             .on_children_prepainted(
@@ -8760,7 +8750,9 @@ impl FlowlistApp {
                             .id("settings-calendar-events")
                             .child(widgets::switch(theme, calendar_events))
                             .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(Modal::Settings { calendar_events, .. }) = &mut this.modal
+                                if let Some(Modal::Settings {
+                                    calendar_events, ..
+                                }) = &mut this.modal
                                 {
                                     *calendar_events = !*calendar_events;
                                 }
@@ -8782,8 +8774,7 @@ impl FlowlistApp {
         if !calendar_permission.allowed() {
             let can_ask = matches!(
                 calendar_permission,
-                super::calendar::Permission::Unknown
-                    | super::calendar::Permission::NotDetermined
+                super::calendar::Permission::Unknown | super::calendar::Permission::NotDetermined
             );
             let label = if can_ask {
                 "Allow Calendar access"
@@ -8817,9 +8808,7 @@ impl FlowlistApp {
         }
         let main_card = self.settings_card(
             "Calendar",
-            Some(
-                "Read-only macOS Calendar events appear beside tasks in Forecast. Access is per device and Flowlist never changes your calendars.",
-            ),
+            Some("Read-only macOS events in Forecast."),
             body,
         );
         let mut calendars = div().flex().flex_col().gap_2();
@@ -8871,8 +8860,9 @@ impl FlowlistApp {
                                 .id(super::sid(format!("calendar-keep:{id}")))
                                 .child(widgets::switch(theme, !hidden))
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    if let Some(Modal::Settings { calendar_hidden, .. }) =
-                                        &mut this.modal
+                                    if let Some(Modal::Settings {
+                                        calendar_hidden, ..
+                                    }) = &mut this.modal
                                     {
                                         if !calendar_hidden.remove(&id) {
                                             calendar_hidden.insert(id.clone());
@@ -8891,11 +8881,8 @@ impl FlowlistApp {
                     .child("No calendars are available."),
             );
         }
-        let calendars_card = self.settings_card(
-            "Calendars",
-            Some("Turn a calendar off to keep its events out of Forecast. New calendars appear on by default."),
-            calendars,
-        );
+        let calendars_card =
+            self.settings_card("Calendars", Some("New calendars start on."), calendars);
         div()
             .flex()
             .flex_col()
@@ -8947,9 +8934,7 @@ impl FlowlistApp {
         );
         let subtasks_card = self.settings_card(
             "Subtasks",
-            Some(
-                "Finished subtasks can stay under their parent instead of disappearing when the list hides completed work.",
-            ),
+            Some("Keep finished subtasks under their parent."),
             div()
                 .flex()
                 .items_center()
@@ -8958,7 +8943,9 @@ impl FlowlistApp {
                 .child(div().flex_1().text_sm().child("Keep completed subtasks"))
                 .child(
                     div()
-                        .on_children_prepainted(self.theme_probe("keep-subtasks-toggle".to_string()))
+                        .on_children_prepainted(
+                            self.theme_probe("keep-subtasks-toggle".to_string()),
+                        )
                         .id("keep-subtasks-toggle")
                         .child(widgets::switch(theme, keep_subtasks))
                         .on_click(cx.listener(|this, _, _, cx| {
@@ -8982,7 +8969,7 @@ impl FlowlistApp {
         );
         let toolbar_card = self.settings_card(
             "Toolbar",
-            Some("Show a small title under the header icons. Search keeps its placeholder and no title."),
+            Some("Small titles under header icons."),
             div()
                 .flex()
                 .items_center()
@@ -8997,10 +8984,7 @@ impl FlowlistApp {
                         .id("toolbar-labels-toggle")
                         .child(widgets::switch(theme, toolbar_labels))
                         .on_click(cx.listener(|this, _, _, cx| {
-                            if let Some(Modal::Settings {
-                                toolbar_labels, ..
-                            }) = &mut this.modal
-                            {
+                            if let Some(Modal::Settings { toolbar_labels, .. }) = &mut this.modal {
                                 *toolbar_labels = !*toolbar_labels;
                             }
                             cx.notify();
@@ -9030,7 +9014,7 @@ impl FlowlistApp {
         );
         let forecast_card = self.settings_card(
             "Forecast",
-            Some("The Forecast tag pulls undated actions into Forecast. Flagged undated actions can join them. Badges can count only due work."),
+            Some("Forecast tag and flagged undated actions; badges can count due work only."),
             div()
                 .flex()
                 .flex_col()
@@ -9053,8 +9037,7 @@ impl FlowlistApp {
                                 .child(widgets::switch(theme, forecast_flagged))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     if let Some(Modal::Settings {
-                                        forecast_flagged,
-                                        ..
+                                        forecast_flagged, ..
                                     }) = &mut this.modal
                                     {
                                         *forecast_flagged = !*forecast_flagged;
@@ -9105,8 +9088,7 @@ impl FlowlistApp {
                                 .child(widgets::switch(theme, forecast_due_only))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     if let Some(Modal::Settings {
-                                        forecast_due_only,
-                                        ..
+                                        forecast_due_only, ..
                                     }) = &mut this.modal
                                     {
                                         *forecast_due_only = !*forecast_due_only;
@@ -9125,25 +9107,25 @@ impl FlowlistApp {
         );
         let focus_card = self.settings_card(
             "Focus",
-            Some("The eye beside the back and forward arrows always stays available. When the banner is off, a newly enabled focus still shows it for a few seconds."),
+            Some("The eye stays available. A new focus shows briefly when the banner is off."),
             div()
                 .flex()
                 .items_center()
                 .justify_between()
                 .gap_2()
-                .child(div().flex_1().text_sm().child("Keep the Focus banner visible"))
                 .child(
                     div()
-                        .on_children_prepainted(
-                            self.theme_probe("focus-banner-toggle".to_string()),
-                        )
+                        .flex_1()
+                        .text_sm()
+                        .child("Keep the Focus banner visible"),
+                )
+                .child(
+                    div()
+                        .on_children_prepainted(self.theme_probe("focus-banner-toggle".to_string()))
                         .id("focus-banner-toggle")
                         .child(widgets::switch(theme, focus_banner))
                         .on_click(cx.listener(|this, _, _, cx| {
-                            if let Some(Modal::Settings {
-                                focus_banner, ..
-                            }) = &mut this.modal
-                            {
+                            if let Some(Modal::Settings { focus_banner, .. }) = &mut this.modal {
                                 *focus_banner = !*focus_banner;
                             }
                             cx.notify();
@@ -9162,9 +9144,7 @@ impl FlowlistApp {
             .child(
                 self.settings_card(
                     "Review and history",
-                    Some(
-                        "Defaults for the library. Projects can override their own review cadence.",
-                    ),
+                    Some("Library defaults; projects can override."),
                     div()
                         .flex()
                         .flex_col()
@@ -9184,9 +9164,7 @@ impl FlowlistApp {
             .gap_3()
             .child(self.settings_card(
                 "Distance",
-                Some(
-                    "The Nearby perspective keeps tags within this radius of the library location.",
-                ),
+                Some("Radius around the library location."),
                 self.render_modal_field(3, cx),
             ))
             .into_any_element()
@@ -9199,7 +9177,7 @@ impl FlowlistApp {
             .gap_3()
             .child(self.settings_card(
                 "Retention",
-                Some("Zero keeps deleted tasks forever. Expired items are swept when Settings is saved."),
+                Some("Zero keeps deleted tasks forever; expired items clear on save."),
                 self.render_modal_field(4, cx),
             ))
             .into_any_element()
@@ -9289,9 +9267,7 @@ impl FlowlistApp {
 
         let server = self.settings_card(
             "Mobile access",
-            Some(
-                "Your phone connects straight to this Mac. No account, no cloud and no telemetry.",
-            ),
+            Some("Direct to this Mac. No account, cloud or telemetry."),
             div().flex().flex_col().gap_3().child(toggle),
         );
 
@@ -9303,7 +9279,7 @@ impl FlowlistApp {
                     div()
                         .text_xs()
                         .text_color(theme.text_faint)
-                        .child("No network address found. Connect to Wi-Fi or Tailscale."),
+                        .child("No address found. Check Wi-Fi or Tailscale."),
                 );
             }
             for address in &addresses {
@@ -9364,17 +9340,13 @@ impl FlowlistApp {
             }
             self.settings_card(
                 "Pair a phone",
-                Some(
-                    "Scan this code with Flowlist on Android, or enter one of these addresses and the code.",
-                ),
+                Some("Scan on Android, or enter an address and the code."),
                 body,
             )
         } else {
             self.settings_card(
                 "Pair a phone",
-                Some(
-                    "Turn on Mobile access above, then the pairing code and this Mac's addresses appear here.",
-                ),
+                Some("Turn on Mobile access to see the code and addresses."),
                 div().into_any_element(),
             )
         };
@@ -9435,11 +9407,8 @@ impl FlowlistApp {
                     ),
             );
         }
-        let devices = self.settings_card(
-            "Paired phones",
-            Some("Revoking a phone makes it pair again. Nothing else changes."),
-            devices,
-        );
+        let devices =
+            self.settings_card("Paired phones", Some("The phone must pair again."), devices);
 
         div()
             .flex()
@@ -9584,16 +9553,12 @@ impl FlowlistApp {
                             .text_xs()
                             .whitespace_normal()
                             .text_color(theme.text_faint)
-                            .child(
-                                "A saved view leaves the rail while its filter matches nothing, and returns with the first matching task.",
-                            ),
+                            .child("Hide saved views while they match nothing."),
                     ),
             )
             .child(
                 div()
-                    .on_children_prepainted(
-                        self.theme_probe("hide-empty-views-toggle".to_string()),
-                    )
+                    .on_children_prepainted(self.theme_probe("hide-empty-views-toggle".to_string()))
                     .id("hide-empty-views-toggle")
                     .child(widgets::switch(theme, hide_empty_views))
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -10116,7 +10081,7 @@ impl FlowlistApp {
                     .child(if merge {
                         "Merge adds new items and keeps existing ids."
                     } else {
-                        "Replace swaps the whole library for the pasted one."
+                        "Replace overwrites the library."
                     }),
             )
     }
@@ -10267,7 +10232,7 @@ fn help_body(theme: super::theme::Theme) -> impl IntoElement {
         div()
             .text_xs()
             .text_color(theme.text_faint)
-            .child("The GUI, CLI and MCP server all write to the same library."),
+            .child("Shared by the GUI, CLI and MCP."),
     )
 }
 

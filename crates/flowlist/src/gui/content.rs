@@ -617,7 +617,17 @@ impl FlowlistApp {
                     })
                     .id("forecast-week-expand")
                     .flow_tip(self, cx, theme, "Show the full month")
-                    .child(div().flex().items_center().justify_center().size(px(20.)).rounded_md().cursor_pointer().hover(|style| style.bg(theme.hover)).child(icons::icon(Icon::ChevronDown, 12.0, theme.text_faint)))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(20.))
+                            .rounded_md()
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover))
+                            .child(icons::icon(Icon::ChevronDown, 12.0, theme.text_faint)),
+                    )
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.set_forecast_calendar_expanded(true);
                         cx.notify();
@@ -660,9 +670,9 @@ impl FlowlistApp {
             self.forecast_planned && !self.forecast_due_only,
             self.forecast_due_only,
         )
-            .into_iter()
-            .filter(|id| self.focus_allows_task(id))
-            .count()
+        .into_iter()
+        .filter(|id| self.focus_allows_task(id))
+        .count()
             + self.forecast_past_project_count(today);
         let future_count = query::forecast_future(
             self.store.db(),
@@ -738,9 +748,8 @@ impl FlowlistApp {
                 } else {
                     0
                 };
-            let selected = !self.forecast_past
-                && !self.forecast_future
-                && self.forecast_date == Some(date);
+            let selected =
+                !self.forecast_past && !self.forecast_future && self.forecast_date == Some(date);
             let is_today = date == today;
             let drop_date = date;
             let box_sink = strip_boxes.clone();
@@ -769,12 +778,7 @@ impl FlowlistApp {
                     })
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child(*label),
-                    )
+                    .child(div().text_xs().text_color(theme.text_faint).child(*label))
                     .child(
                         div()
                             .flex()
@@ -802,8 +806,16 @@ impl FlowlistApp {
                         div()
                             .h(px(12.))
                             .text_xs()
-                            .text_color(if selected { theme.accent } else { theme.text_faint })
-                            .child(if count > 0 { count.to_string() } else { String::new() }),
+                            .text_color(if selected {
+                                theme.accent
+                            } else {
+                                theme.text_faint
+                            })
+                            .child(if count > 0 {
+                                count.to_string()
+                            } else {
+                                String::new()
+                            }),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.forecast_pick_day(drop_date);
@@ -1129,13 +1141,7 @@ impl FlowlistApp {
                             .text_color(theme.text)
                             .cursor_pointer()
                             .child(widgets::icon_spec(&project.icon, 10.0, theme.text_faint))
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_ellipsis()
-                                    .child(name),
-                            )
+                            .child(div().min_w_0().truncate().text_ellipsis().child(name))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
                                 this.forecast_past = false;
@@ -1280,6 +1286,11 @@ impl FlowlistApp {
                     .child(title),
             )
         });
+        let subtitle = if library_search {
+            "Matches from the whole library".to_string()
+        } else {
+            self.view_subtitle()
+        };
         let is_archive = matches!(self.view, View::Builtin(BuiltinPerspective::Archive));
         // A Forecast day filter names the day in the header count, so the
         // header reads "1 task for 23 Nov" while a date is picked.
@@ -1298,7 +1309,10 @@ impl FlowlistApp {
                 .filter(|project| self.focus_allows_project(project))
                 .count()
         } else {
-            groups.iter().map(|group| group.rows.len() + group.projects.len()).sum::<usize>()
+            groups
+                .iter()
+                .map(|group| group.rows.len() + group.projects.len())
+                .sum::<usize>()
         };
         let shows_completed =
             matches!(self.view, View::Project(_) | View::Folder(_) | View::Tag(_));
@@ -1337,7 +1351,7 @@ impl FlowlistApp {
                                                         self,
                                                         cx,
                                                         theme,
-                                                        "Show or hide past plans and overdue tasks in Today",
+                                                        "Show past and overdue",
                                                     )
                                                     .child(widgets::toggle_chip(
                                                         theme,
@@ -1391,8 +1405,10 @@ impl FlowlistApp {
                                                 }
                                             }),
                                     )
-                                    .when(!self.forecast_due_only, |this| {
-                                        this.child(
+                                    .when(
+                                        !self.forecast_due_only,
+                                        |this| {
+                                            this.child(
                                         div()
                                             .flex_shrink_0()
                                             .child(
@@ -1420,7 +1436,8 @@ impl FlowlistApp {
                                                     })),
                                             ),
                                         )
-                                    })
+                                        },
+                                    )
                                 },
                             )
                             .when(!is_trash && !is_archive, |this| {
@@ -1489,12 +1506,7 @@ impl FlowlistApp {
                                     div()
                                         .id("only-available")
                                         .flex_shrink_0()
-                                        .flow_tip(
-                                            self,
-                                            cx,
-                                            theme,
-                                            "Show only the next available task (First Available)",
-                                        )
+                                        .flow_tip(self, cx, theme, "Show next available task")
                                         .child(widgets::toggle_chip(
                                             theme,
                                             "Available",
@@ -1619,19 +1631,17 @@ impl FlowlistApp {
                         }
                     }),
             )
-            .child(
-                div()
-                    .min_w_0()
-                    .text_sm()
-                    .text_color(theme.text_faint)
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .child(if library_search {
-                        "Matches from the whole library".to_string()
-                    } else {
-                        self.view_subtitle()
-                    }),
-            )
+            .when(!subtitle.is_empty(), |this| {
+                this.child(
+                    div()
+                        .min_w_0()
+                        .text_sm()
+                        .text_color(theme.text_faint)
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .child(subtitle),
+                )
+            })
             .child(
                 div()
                     .flex()
@@ -1651,9 +1661,9 @@ impl FlowlistApp {
                                         cx,
                                         theme,
                                         if self.search_library {
-                                            "Searching the whole library; click for this view (⌘⇧F)"
+                                            "Whole library · ⌘⇧F for this view"
                                         } else {
-                                            "Searching this view; click for the whole library (⌘⇧F)"
+                                            "This view · ⌘⇧F for everything"
                                         },
                                     )
                                     .child(widgets::toggle_chip(
@@ -1891,7 +1901,7 @@ impl FlowlistApp {
                         .child(widgets::text_field(
                             theme,
                             &self.capture,
-                            "Add a task…  #tag  ::Project  fsr:1h  due:tomorrow  est:15m",
+                            "Add a task…  #tag  ::Project  due:tomorrow  est:15m",
                             self.focus == super::FocusArea::Capture,
                         ))
                         .on_click(cx.listener(|this, _, _, cx| {
@@ -2028,65 +2038,48 @@ impl FlowlistApp {
                 let (title, detail) = if self.search_library {
                     (
                         "No matches",
-                        "Nothing in the library matches that. ⌘⇧F searches this view instead.",
+                        "No match in the library. ⌘⇧F limits search to this view.",
                     )
                 } else {
                     (
                         "No matches",
-                        "Nothing in this view matches. ⌘⇧F searches the whole library.",
+                        "No match in this view. ⌘⇧F searches everything.",
                     )
                 };
                 return self.render_empty(title, detail).into_any_element();
             }
             let (title, detail) = match &self.view {
-                View::Builtin(BuiltinPerspective::Inbox) => (
-                    "Inbox zero",
-                    "A clean slate. Capture something above and it lands here.",
-                ),
+                View::Builtin(BuiltinPerspective::Inbox) => ("Inbox zero", "Nothing captured."),
                 View::Builtin(BuiltinPerspective::Today) => (
                     "Nothing planned or due today",
                     if self.hide_past {
                         "Past plans and overdue tasks are hidden."
                     } else {
-                        "A clear day. Capture something above when it comes up."
+                        "Nothing scheduled."
                     },
                 ),
-                View::Builtin(BuiltinPerspective::Flagged) => (
-                    "Nothing flagged",
-                    "Flag a task with ! and it will wait here.",
-                ),
-                View::Builtin(BuiltinPerspective::Tags) => (
-                    "No tags yet",
-                    "Add #tag to a task and the tag appears here.",
-                ),
-                View::Builtin(BuiltinPerspective::Nearby) => (
-                    "Nothing nearby",
-                    "Give a tag a location and tasks around it show up here.",
-                ),
+                View::Builtin(BuiltinPerspective::Flagged) => {
+                    ("Nothing flagged", "No flagged tasks.")
+                }
+                View::Builtin(BuiltinPerspective::Tags) => ("No tags yet", "No tags in use."),
+                View::Builtin(BuiltinPerspective::Nearby) => {
+                    ("Nothing nearby", "No located tags within range.")
+                }
                 View::Builtin(BuiltinPerspective::Archive) => (
                     "No archived projects",
-                    "Finished projects can be archived from the project menu.",
+                    "Done and dropped projects appear here.",
                 ),
-                View::Builtin(BuiltinPerspective::Changed) => (
-                    "Nothing changed recently",
-                    "Edits from the last few days collect here.",
-                ),
-                View::Builtin(BuiltinPerspective::Attachments) => (
-                    "No attachments",
-                    "Add a file or link from the inspector and it will appear here.",
-                ),
-                View::Builtin(BuiltinPerspective::Trash) => (
-                    "Trash is empty",
-                    "Deleted tasks wait here until you restore or empty them.",
-                ),
-                View::Builtin(BuiltinPerspective::Completed) => (
-                    "Nothing completed yet",
-                    "Finish a task with x and it will wait here.",
-                ),
-                _ => (
-                    "Nothing here",
-                    "Capture something above, or switch perspective from the sidebar.",
-                ),
+                View::Builtin(BuiltinPerspective::Changed) => {
+                    ("Nothing changed recently", "No edits in the last few days.")
+                }
+                View::Builtin(BuiltinPerspective::Attachments) => {
+                    ("No attachments", "No files or links attached.")
+                }
+                View::Builtin(BuiltinPerspective::Trash) => ("Trash is empty", "Nothing deleted."),
+                View::Builtin(BuiltinPerspective::Completed) => {
+                    ("Nothing completed yet", "No completed tasks.")
+                }
+                _ => ("Nothing here", "Nothing to show."),
             };
             return self.render_empty(title, detail).into_any_element();
         }
@@ -2112,13 +2105,7 @@ impl FlowlistApp {
                         list = list.child(self.render_calendar_event_row(event));
                     }
                     if !group.projects.is_empty() || !group.rows.is_empty() {
-                        list = list.child(
-                            div()
-                                .mx_4()
-                                .mt_1()
-                                .h(px(1.))
-                                .bg(theme.border_soft),
-                        );
+                        list = list.child(div().mx_4().mt_1().h(px(1.)).bg(theme.border_soft));
                     }
                 }
                 // Forecast puts a project's own deadline above the day's
@@ -2164,9 +2151,7 @@ impl FlowlistApp {
                         continue;
                     }
                     if row.depth == 0 && first_root {
-                        list = list.child(
-                            self.render_root_drop_zone(Some(row.id.clone()), cx),
-                        );
+                        list = list.child(self.render_root_drop_zone(Some(row.id.clone()), cx));
                         first_root = false;
                     }
                     list = list.child(self.render_task_row(&row, cx));
@@ -2213,8 +2198,7 @@ impl FlowlistApp {
             // there on purpose. Only children revealed by expanding a branch
             // need the completed-work filter.
             if !seeded {
-                let keep_completed =
-                    app.show_completed || app.keep_completed_subtasks;
+                let keep_completed = app.show_completed || app.keep_completed_subtasks;
                 if task.is_trashed() || (task.completed && !keep_completed) {
                     return;
                 }
@@ -2239,11 +2223,7 @@ impl FlowlistApp {
 
     /// A thin root-level gap that accepts a dragged task. It only shows a
     /// line while the pointer is over it, so it costs almost no space.
-    fn render_root_drop_zone(
-        &self,
-        before: Option<TaskId>,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn render_root_drop_zone(&self, before: Option<TaskId>, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
         let key = match &before {
             Some(id) => format!("root-before:{id}"),
@@ -2310,7 +2290,7 @@ impl FlowlistApp {
             return self
                 .render_empty(
                     "No finished projects",
-                    "Mark a project Done or Dropped and it will wait here.",
+                    "Done and dropped projects appear here.",
                 )
                 .into_any_element();
         }
@@ -2419,11 +2399,7 @@ impl FlowlistApp {
                     .rounded_md()
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover))
-                    .child(widgets::icon_spec(
-                        &project.icon,
-                        15.0,
-                        theme.text_faint,
-                    ))
+                    .child(widgets::icon_spec(&project.icon, 15.0, theme.text_faint))
                     .child(
                         div()
                             .flex_1()
@@ -2589,12 +2565,7 @@ impl FlowlistApp {
                 ))
             })
             .child(div().flex_grow())
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child(meta),
-            )
+            .child(div().text_xs().text_color(theme.text_faint).child(meta))
             .child(
                 div()
                     .w(px(70.))
@@ -2758,11 +2729,7 @@ impl FlowlistApp {
         let subtask_total = task
             .child_order
             .iter()
-            .filter(|child| {
-                db.tasks
-                    .get(*child)
-                    .is_some_and(|task| !task.is_trashed())
-            })
+            .filter(|child| db.tasks.get(*child).is_some_and(|task| !task.is_trashed()))
             .count();
         let subtask_completed = task
             .child_order
@@ -2842,135 +2809,126 @@ impl FlowlistApp {
             .when(completed, |this| this.line_through())
             .child(title);
         let meta_line = div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap_2()
-                    .flex_shrink_0()
-                    // Right-edge metadata reads in a fixed order: what is
-                    // attached, where it lives, what it is tagged, how long it
-                    // takes, when it is due, then the softer signals.
-                    .when(subtask_visible > 0, |this| {
-                        this.child(
-                            div()
-                                .text_xs()
-                                .text_color(theme.text_faint)
-                                .child(format!("[{subtask_done}/{subtask_visible}]")),
-                        )
-                    })
-                    .when(attachment_count > 0, |this| {
-                        this.child(
-                            div()
-                                .id(super::sid(format!("attachments:{}", row.id)))
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .text_xs()
-                                .text_color(theme.text_faint)
-                                .flow_tip(
-                                    self,
-                                    cx,
-                                    theme,
-                                    format!(
-                                        "{attachment_count} {}{}",
-                                        if attachment_links {
-                                            "link"
-                                        } else {
-                                            "attachment"
-                                        },
-                                        if attachment_count == 1 { "" } else { "s" }
-                                    ),
-                                )
-                                .child(icons::icon(
-                                    if attachment_links {
-                                        Icon::Link
-                                    } else {
-                                        Icon::Paperclip
-                                    },
-                                    11.0,
-                                    theme.text_faint,
-                                ))
-                                .child(attachment_count.to_string()),
-                        )
-                    })
-                    .when_some(project, |this, project| {
-                        this.child(div().text_xs().text_color(theme.text_faint).child(project))
-                    })
-                    .children(tags.into_iter().map(|tag| widgets::tag_chip(theme, tag)))
-                    .when_some(estimate, |this, minutes| {
-                        this.child(widgets::chip(
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .flex_shrink_0()
+            // Right-edge metadata reads in a fixed order: what is
+            // attached, where it lives, what it is tagged, how long it
+            // takes, when it is due, then the softer signals.
+            .when(subtask_visible > 0, |this| {
+                this.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .child(format!("[{subtask_done}/{subtask_visible}]")),
+                )
+            })
+            .when(attachment_count > 0, |this| {
+                this.child(
+                    div()
+                        .id(super::sid(format!("attachments:{}", row.id)))
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .flow_tip(
+                            self,
+                            cx,
                             theme,
-                            format_duration(minutes),
+                            format!(
+                                "{attachment_count} {}{}",
+                                if attachment_links {
+                                    "link"
+                                } else {
+                                    "attachment"
+                                },
+                                if attachment_count == 1 { "" } else { "s" }
+                            ),
+                        )
+                        .child(icons::icon(
+                            if attachment_links {
+                                Icon::Link
+                            } else {
+                                Icon::Paperclip
+                            },
+                            11.0,
                             theme.text_faint,
                         ))
-                    })
-                    .when_some(planned, |this, stamp| {
-                        let label = human_date(&stamp, now());
-                        this.child(
-                            div()
-                                .id(super::sid(format!("planned:{}", row.id)))
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .text_xs()
-                                .text_color(theme.text_faint)
-                                .flow_tip(
-                                    self,
-                                    cx,
-                                    theme,
-                                    format!("Planned {label}"),
-                                )
-                                .child(icons::icon(
-                                    Icon::PlannedDate,
-                                    11.0,
-                                    theme.text_faint,
-                                ))
-                                .child(label),
-                        )
-                    })
-                    .when_some(due, |this, stamp| {
-                        let label = human_date(&stamp, now());
-                        this.child(
-                            div()
-                                .id(super::sid(format!("due:{}", row.id)))
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .text_xs()
-                                .text_color(due_color)
-                                .flow_tip(self, cx, theme, format!("Due {label}"))
-                                .child(icons::icon(Icon::DueDate, 11.0, due_color))
-                                .child(label),
-                        )
-                    })
-                    .when_some(defer.filter(|stamp| stamp.at > now()), |this, stamp| {
-                        this.child(widgets::chip_with_icon(
-                            theme,
-                            Icon::DeferDate,
-                            human_date(&stamp, now()),
-                            theme.text_faint,
-                        ))
-                    })
-                    .when_some(repeat_label(db, &id), |this, label| {
-                        this.child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .text_xs()
-                                .text_color(theme.text_faint)
-                                .child(icons::icon(Icon::Repeat, 11.0, theme.text_faint))
-                                .child(label),
-                        )
-                    })
-                    .when(!availability.is_available() && !completed, |this| {
-                        this.child(
-                            div()
-                                .text_xs()
-                                .text_color(theme.warning)
-                                .child(availability.label()),
-                        )
-                    });
+                        .child(attachment_count.to_string()),
+                )
+            })
+            .when_some(project, |this, project| {
+                this.child(div().text_xs().text_color(theme.text_faint).child(project))
+            })
+            .children(tags.into_iter().map(|tag| widgets::tag_chip(theme, tag)))
+            .when_some(estimate, |this, minutes| {
+                this.child(widgets::chip(
+                    theme,
+                    format_duration(minutes),
+                    theme.text_faint,
+                ))
+            })
+            .when_some(planned, |this, stamp| {
+                let label = human_date(&stamp, now());
+                this.child(
+                    div()
+                        .id(super::sid(format!("planned:{}", row.id)))
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .flow_tip(self, cx, theme, format!("Planned {label}"))
+                        .child(icons::icon(Icon::PlannedDate, 11.0, theme.text_faint))
+                        .child(label),
+                )
+            })
+            .when_some(due, |this, stamp| {
+                let label = human_date(&stamp, now());
+                this.child(
+                    div()
+                        .id(super::sid(format!("due:{}", row.id)))
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .text_xs()
+                        .text_color(due_color)
+                        .flow_tip(self, cx, theme, format!("Due {label}"))
+                        .child(icons::icon(Icon::DueDate, 11.0, due_color))
+                        .child(label),
+                )
+            })
+            .when_some(defer.filter(|stamp| stamp.at > now()), |this, stamp| {
+                this.child(widgets::chip_with_icon(
+                    theme,
+                    Icon::DeferDate,
+                    human_date(&stamp, now()),
+                    theme.text_faint,
+                ))
+            })
+            .when_some(repeat_label(db, &id), |this, label| {
+                this.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .child(icons::icon(Icon::Repeat, 11.0, theme.text_faint))
+                        .child(label),
+                )
+            })
+            .when(!availability.is_available() && !completed, |this| {
+                this.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.warning)
+                        .child(availability.label()),
+                )
+            });
         let flag_color = if flagged {
             super::theme::priority_color(theme, Priority::High)
         } else {
@@ -3048,10 +3006,7 @@ impl FlowlistApp {
                         ))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
-                            this.set_branch_open(
-                                format!("task:{}", disclosure_id),
-                                !expanded,
-                            );
+                            this.set_branch_open(format!("task:{}", disclosure_id), !expanded);
                             cx.notify();
                         })),
                 )
@@ -3242,11 +3197,7 @@ impl FlowlistApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(widgets::icon_spec(
-                                &project.icon,
-                                15.0,
-                                theme.text_dim,
-                            ))
+                            .child(widgets::icon_spec(&project.icon, 15.0, theme.text_dim))
                             .child(widgets::progress(theme, done, total))
                             .child(
                                 div()
@@ -3368,7 +3319,7 @@ impl FlowlistApp {
         if projects.is_empty() {
             return list.child(self.render_empty(
                 "No projects to review",
-                "Create a project and it will show up here on its review date.",
+                "Projects appear here on their review date.",
             ));
         }
         for id in projects {
@@ -3485,7 +3436,7 @@ impl FlowlistApp {
                 .p_8()
                 .child(self.render_empty(
                     "Set your location",
-                    "Nearby ranks tagged places by distance. Enter a latitude and longitude and Flowlist will show what is close.",
+                    "Set a latitude and longitude to rank tagged places by distance.",
                 ));
             empty = empty.child(
                 div()
@@ -3524,10 +3475,8 @@ impl FlowlistApp {
                 ),
         );
         if hits.is_empty() {
-            list = list.child(self.render_empty(
-                "Nothing nearby",
-                "Tasks tagged with located contexts inside your radius will appear here.",
-            ));
+            list = list
+                .child(self.render_empty("Nothing nearby", "No located tags within your radius."));
             return list;
         }
         for hit in hits {
@@ -3606,11 +3555,7 @@ fn forecast_pane_width(window_width: f32, show_inspector: bool) -> f32 {
 
 /// The count under a view title. A picked Forecast day names the day, so the
 /// label reads "1 task for 23 Nov"; with no day picked it stays "3 tasks".
-fn view_count_label(
-    is_archive: bool,
-    count: usize,
-    forecast_day: Option<NaiveDate>,
-) -> String {
+fn view_count_label(is_archive: bool, count: usize, forecast_day: Option<NaiveDate>) -> String {
     if is_archive {
         if count == 0 {
             "No projects".to_string()

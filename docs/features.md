@@ -145,7 +145,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       view drops the forward trail, and a vanished project is skipped instead
       of leaving a dead arrow. The arrows dim at the ends of the history.
 - [x] Content header layout: the view title and Sort/Group/Filter chips share
-      one row, while the subtitle sits on its own row. A view name that cannot
+      one row, while a saved view's description sits on its own row; built-in
+      views carry no subtitle and skip the row. A view name that cannot
       fit beside the controls is omitted instead of clipped. Search lives in
       the title bar at every window width, centered on the content pane with
       the inspector's column always reserved (so it stays put when the

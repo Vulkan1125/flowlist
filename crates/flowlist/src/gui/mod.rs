@@ -261,7 +261,10 @@ pub(super) enum DateField {
     Reminder,
     /// A date typed into a perspective rule. `second` selects the end of a
     /// Between range; the rule id keeps the calendar attached to the right row.
-    RuleDate { rule: u64, second: bool },
+    RuleDate {
+        rule: u64,
+        second: bool,
+    },
 }
 
 /// The date popover is a two-step surface: pick a day on the calendar, then
@@ -1366,8 +1369,10 @@ impl FlowlistApp {
         }
         let today = local_date(now());
         self.calendar_calendars = calendar::calendars();
-        self.calendar_events =
-            calendar::events(today - chrono::Duration::days(31), today + chrono::Duration::days(366));
+        self.calendar_events = calendar::events(
+            today - chrono::Duration::days(31),
+            today + chrono::Duration::days(366),
+        );
         self.calendar_events
             .retain(|event| !self.calendar_hidden.contains(&event.calendar_id));
         self.calendar_last_refresh = Some(Instant::now());
@@ -1402,7 +1407,14 @@ impl FlowlistApp {
             .iter()
             .filter(|event| event.local_date() == date)
             .collect();
-        events.sort_by_key(|event| (event.local_date(), !event.all_day, event.start, event.title.to_lowercase()));
+        events.sort_by_key(|event| {
+            (
+                event.local_date(),
+                !event.all_day,
+                event.start,
+                event.title.to_lowercase(),
+            )
+        });
         events
     }
 
@@ -2010,7 +2022,11 @@ impl FlowlistApp {
 
     /// Add event-only Forecast groups for the coming week, so a day with
     /// calendar events still appears even when it has no tasks.
-    fn add_forecast_calendar_groups(&self, groups: &mut Vec<Group>, at: chrono::DateTime<chrono::Utc>) {
+    fn add_forecast_calendar_groups(
+        &self,
+        groups: &mut Vec<Group>,
+        at: chrono::DateTime<chrono::Utc>,
+    ) {
         if !self.calendar_events_enabled {
             return;
         }
@@ -2071,13 +2087,8 @@ impl FlowlistApp {
             {
                 let after = self.forecast_week + chrono::Duration::days(6);
                 let show_planned = self.forecast_planned && !self.forecast_due_only;
-                let ids = query::forecast_future(
-                    db,
-                    at,
-                    after,
-                    show_planned,
-                    self.forecast_due_only,
-                );
+                let ids =
+                    query::forecast_future(db, at, after, show_planned, self.forecast_due_only);
                 let projects = query::forecast_future_projects(
                     db,
                     after,
@@ -2097,13 +2108,7 @@ impl FlowlistApp {
             {
                 let date = self.forecast_date.expect("guard checked");
                 let show_planned = self.forecast_planned && !self.forecast_due_only;
-                let ids = query::tasks_on_date(
-                    db,
-                    date,
-                    at,
-                    show_planned,
-                    self.forecast_due_only,
-                );
+                let ids = query::tasks_on_date(db, date, at, show_planned, self.forecast_due_only);
                 let projects =
                     query::projects_on_date(db, date, show_planned, self.forecast_due_only);
                 let title = query::forecast::day_label(date, local_date(at));
@@ -2683,12 +2688,11 @@ impl FlowlistApp {
                 MouseButton::Left,
                 cx.listener(|_, _, _, cx| cx.stop_propagation()),
             )
-            .child(div().px_1().child(widgets::text_field(
-                theme,
-                &query,
-                "Jump to a perspective, folder, project or tag…",
-                true,
-            )))
+            .child(
+                div()
+                    .px_1()
+                    .child(widgets::text_field(theme, &query, "Jump to…", true)),
+            )
             .child(list)
             .child(
                 div()
@@ -3871,19 +3875,12 @@ impl FlowlistApp {
                     Some(modals::Modal::Perspective { form }) => form,
                     _ => return None,
                 };
-                let buffer = form.rule(rule).map(|node| {
-                    if second {
-                        &node.text2
-                    } else {
-                        &node.text
-                    }
-                })?;
-                flowlist_core::parse::parse_date(
-                    buffer.text().trim(),
-                    now(),
-                )
-                .ok()
-                .map(Stamp::date_only)
+                let buffer =
+                    form.rule(rule)
+                        .map(|node| if second { &node.text2 } else { &node.text })?;
+                flowlist_core::parse::parse_date(buffer.text().trim(), now())
+                    .ok()
+                    .map(Stamp::date_only)
             }
         }
     }
@@ -5786,11 +5783,8 @@ impl FlowlistApp {
                 if !(1..=365).contains(&value) {
                     return Err("Review days must be between 1 and 365".to_string());
                 }
-                let next = flowlist_core::parse::parse_date(
-                    next_review.text().trim(),
-                    now(),
-                )
-                .map_err(|error| format!("Next review: {error}"))?;
+                let next = flowlist_core::parse::parse_date(next_review.text().trim(), now())
+                    .map_err(|error| format!("Next review: {error}"))?;
                 self.execute(Command::UpdateProject {
                     id: id.clone(),
                     patch: ProjectPatch {
@@ -8576,8 +8570,7 @@ impl FlowlistApp {
         state["notification_boxes"] = serde_json::json!(self.notification_boxes.borrow().clone());
         state["calendar_event_boxes"] =
             serde_json::json!(self.calendar_event_boxes.borrow().clone());
-        state["calendar_chip_boxes"] =
-            serde_json::json!(self.calendar_chip_boxes.borrow().clone());
+        state["calendar_chip_boxes"] = serde_json::json!(self.calendar_chip_boxes.borrow().clone());
         state["calendar_events"] = serde_json::json!(self.calendar_events);
         state["calendar_events_enabled"] = serde_json::json!(self.calendar_events_enabled);
         state["calendar_permission"] = serde_json::json!(self.calendar_permission.label());
@@ -8593,7 +8586,8 @@ impl FlowlistApp {
                 NotificationTarget::Task(id) => format!("task:{id}"),
                 NotificationTarget::Project(id) => format!("project:{id}"),
             }));
-        state["repeat_unit_menu"] = serde_json::json!(self.repeat_unit_menu.as_ref().map(|id| id.to_string()));
+        state["repeat_unit_menu"] =
+            serde_json::json!(self.repeat_unit_menu.as_ref().map(|id| id.to_string()));
         state["batch"] = serde_json::json!(if self.selected.len() > 1 {
             Some(serde_json::json!({
                 "count": self.selected.len(),
@@ -9582,8 +9576,7 @@ impl Render for FlowlistApp {
     }
 }
 
-static TEST_SHOT_COUNTER: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
+static TEST_SHOT_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 pub(crate) fn test_shot_path() -> Option<std::path::PathBuf> {
     let dir = std::env::var_os("FLOWLIST_TEST_SHOT_DIR")?;

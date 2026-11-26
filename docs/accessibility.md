@@ -55,8 +55,8 @@ same tooltip and keyboard route.
 
 The title bar holds the search field, centered on the content pane with the
 inspector's column reserved even when it is closed, so the content header keeps
-only the view title and Sort/Group/Filter chips on one row, with the subtitle
-below. While a chip menu or a sheet is open it owns
+only the view title and Sort/Group/Filter chips on one row. A saved view's
+description sits below it; a view without a description skips that row. While a chip menu or a sheet is open it owns
 the pointer: hover and clicks cannot reach the rows behind it. Focusing search
 (`⌘F` or `/`) selects its contents; its × clears the query and keeps the field
 focused. If a view name is

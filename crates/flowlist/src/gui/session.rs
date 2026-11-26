@@ -77,27 +77,25 @@ impl View {
 
     pub fn subtitle(&self) -> &'static str {
         match self {
-            View::Builtin(BuiltinPerspective::Inbox) => "Capture now, organise later",
-            View::Builtin(BuiltinPerspective::Today) => {
-                "Due or planned today, plus what is overdue"
-            }
-            View::Builtin(BuiltinPerspective::Projects) => "Every project at a glance",
-            View::Builtin(BuiltinPerspective::Forecast) => "What is coming up",
-            View::Builtin(BuiltinPerspective::Flagged) => "Your personal priority list",
-            View::Builtin(BuiltinPerspective::Review) => "Keep projects honest",
-            View::Builtin(BuiltinPerspective::Tags) => "Group work by context",
-            View::Builtin(BuiltinPerspective::Completed) => "Recently finished work",
-            View::Builtin(BuiltinPerspective::Archive) => "Finished and dropped projects",
-            View::Builtin(BuiltinPerspective::Changed) => "Recently edited work",
-            View::Builtin(BuiltinPerspective::Attachments) => "Files attached to tasks",
-            View::Builtin(BuiltinPerspective::Fullscreen) => "Reminders that take over the screen",
-            View::Builtin(BuiltinPerspective::Nearby) => "Contexts with a location",
-            View::Builtin(BuiltinPerspective::Trash) => "Deleted tasks, restorable for a while",
-            View::Project(_) => "Project outline",
-            View::Folder(_) => "Projects in this folder",
-            View::Tag(_) => "Everything with this context",
-            View::Custom(_) => "Saved perspective",
-            View::Priority(_) => "Tasks with this priority",
+            View::Builtin(BuiltinPerspective::Inbox) => "",
+            View::Builtin(BuiltinPerspective::Today) => "",
+            View::Builtin(BuiltinPerspective::Projects) => "",
+            View::Builtin(BuiltinPerspective::Forecast) => "",
+            View::Builtin(BuiltinPerspective::Flagged) => "",
+            View::Builtin(BuiltinPerspective::Review) => "",
+            View::Builtin(BuiltinPerspective::Tags) => "",
+            View::Builtin(BuiltinPerspective::Completed) => "",
+            View::Builtin(BuiltinPerspective::Archive) => "",
+            View::Builtin(BuiltinPerspective::Changed) => "",
+            View::Builtin(BuiltinPerspective::Attachments) => "",
+            View::Builtin(BuiltinPerspective::Fullscreen) => "",
+            View::Builtin(BuiltinPerspective::Nearby) => "",
+            View::Builtin(BuiltinPerspective::Trash) => "",
+            View::Project(_) => "",
+            View::Folder(_) => "",
+            View::Tag(_) => "",
+            View::Custom(_) => "",
+            View::Priority(_) => "",
         }
     }
 
@@ -188,8 +186,7 @@ impl FocusTarget {
     pub fn allows_folder(&self, db: &Db, folder: &FolderId) -> bool {
         match self {
             FocusTarget::Folder(id) => {
-                folder_is_ancestor(db, folder, id)
-                    || db.folder_descendants(id).contains(folder)
+                folder_is_ancestor(db, folder, id) || db.folder_descendants(id).contains(folder)
             }
             FocusTarget::Project(id) => db
                 .projects
@@ -577,10 +574,7 @@ mod tests {
         };
         let restored: Session =
             serde_json::from_str(&serde_json::to_string(&session).unwrap()).unwrap();
-        assert_eq!(
-            restored.focus_targets,
-            vec![project.key(), folder.key()]
-        );
+        assert_eq!(restored.focus_targets, vec![project.key(), folder.key()]);
         assert_eq!(restored.last_focus_targets, vec![project.key()]);
         assert_eq!(restored.focus_banner, Some(false));
     }

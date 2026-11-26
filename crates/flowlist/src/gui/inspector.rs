@@ -113,11 +113,7 @@ fn interval_unit_slug(unit: IntervalUnit) -> &'static str {
 }
 
 fn review_step_days(days: u32) -> u32 {
-    if days >= 7 && days % 7 == 0 {
-        7
-    } else {
-        1
-    }
+    if days >= 7 && days % 7 == 0 { 7 } else { 1 }
 }
 
 fn review_interval_label(days: u32) -> String {
@@ -214,11 +210,7 @@ fn notification_checkbox(
         .flex_shrink_0()
         .rounded_sm()
         .border_1()
-        .border_color(if checked {
-            theme.accent
-        } else {
-            theme.border
-        })
+        .border_color(if checked { theme.accent } else { theme.border })
         .bg(if checked { theme.accent } else { theme.field })
         .flex()
         .items_center()
@@ -425,8 +417,7 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) {
         let now_open = self.inspector_section_open(key, default_open);
-        self.inspector_sections
-            .insert(key.to_string(), now_open);
+        self.inspector_sections.insert(key.to_string(), now_open);
         self.save_session();
         cx.notify();
     }
@@ -711,36 +702,38 @@ impl FlowlistApp {
                 div()
                     .text_sm()
                     .text_color(theme.text_faint)
-                    .child("Select a task to see and edit its details."),
+                    .child("Select a task."),
             )
     }
 
     fn render_batch_inspector(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let count = self.selected.len();
-        let mut body =
-            div()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .p_3()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .child(format!("{count} tasks selected")),
-                )
-                .child(div().text_xs().text_color(theme.text_faint).child(
-                    "Set a field to change every selected task. Empty fields stay unchanged.",
-                ))
-                .child(self.batch_text_field(BatchField::Project, &self.batch_draft.project, cx))
-                .child(self.batch_text_field(BatchField::Tags, &self.batch_draft.tags, cx))
-                .child(self.batch_priority(cx))
-                .child(self.batch_text_field(BatchField::Defer, &self.batch_draft.defer, cx))
-                .child(self.batch_text_field(BatchField::Planned, &self.batch_draft.planned, cx))
-                .child(self.batch_text_field(BatchField::Due, &self.batch_draft.due, cx))
-                .child(self.batch_flag(cx))
-                .child(self.batch_text_field(BatchField::Estimate, &self.batch_draft.estimate, cx));
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .p_3()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child(format!("{count} tasks selected")),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("Only filled fields are applied."),
+            )
+            .child(self.batch_text_field(BatchField::Project, &self.batch_draft.project, cx))
+            .child(self.batch_text_field(BatchField::Tags, &self.batch_draft.tags, cx))
+            .child(self.batch_priority(cx))
+            .child(self.batch_text_field(BatchField::Defer, &self.batch_draft.defer, cx))
+            .child(self.batch_text_field(BatchField::Planned, &self.batch_draft.planned, cx))
+            .child(self.batch_text_field(BatchField::Due, &self.batch_draft.due, cx))
+            .child(self.batch_flag(cx))
+            .child(self.batch_text_field(BatchField::Estimate, &self.batch_draft.estimate, cx));
         if let Some(error) = &self.batch_draft.error {
             body = body.child(
                 div()
@@ -1199,10 +1192,7 @@ impl FlowlistApp {
             patch.reminder_at = if match_due {
                 Some(None)
             } else {
-                Some(Some(Stamp {
-                    at,
-                    has_time: true,
-                }))
+                Some(Some(Stamp { at, has_time: true }))
             };
         }
         self.execute(Command::UpdateTask {
@@ -1243,7 +1233,9 @@ impl FlowlistApp {
                     project
                         .map(|project| project.custom_notifications.clone())
                         .unwrap_or_default(),
-                    project.map(|project| project.alerts.clone()).unwrap_or_default(),
+                    project
+                        .map(|project| project.alerts.clone())
+                        .unwrap_or_default(),
                 )
             }
         };
@@ -1319,7 +1311,9 @@ impl FlowlistApp {
                     project
                         .map(|project| project.custom_notifications.clone())
                         .unwrap_or_default(),
-                    project.map(|project| project.alerts.clone()).unwrap_or_default(),
+                    project
+                        .map(|project| project.alerts.clone())
+                        .unwrap_or_default(),
                 )
             }
         };
@@ -1464,13 +1458,7 @@ impl FlowlistApp {
                     key.clone(),
                     self.notification_probe(key),
                     cx.listener(move |this, _, _, cx| {
-                        this.set_fullscreen_notification(
-                            &fsr_target,
-                            !checked,
-                            at,
-                            false,
-                            cx,
-                        );
+                        this.set_fullscreen_notification(&fsr_target, !checked, at, false, cx);
                     }),
                 )
             });
@@ -1520,13 +1508,7 @@ impl FlowlistApp {
                     key.clone(),
                     self.notification_probe(key),
                     cx.listener(move |this, _, _, cx| {
-                        this.set_fullscreen_notification(
-                            &fsr_target,
-                            !checked,
-                            at,
-                            false,
-                            cx,
-                        );
+                        this.set_fullscreen_notification(&fsr_target, !checked, at, false, cx);
                     }),
                 )
             });
@@ -1564,9 +1546,7 @@ impl FlowlistApp {
                     .text_xs()
                     .whitespace_normal()
                     .text_color(theme.text_faint)
-                    .child(
-                        "Check a notification to show it full screen instead of as a banner",
-                    ),
+                    .child("Check to show full screen."),
             );
         }
         let add_target = target.clone();
@@ -2023,13 +2003,7 @@ impl FlowlistApp {
                     ),
             )
             .child(self.inspector_section("task:title", "Title", true, title_content, cx))
-            .child(self.inspector_section(
-                "task:action",
-                "Action",
-                has_action,
-                action_content,
-                cx,
-            ))
+            .child(self.inspector_section("task:action", "Action", has_action, action_content, cx))
             .child(self.inspector_section(
                 "task:notes",
                 "Notes & Attachments",
@@ -2037,13 +2011,7 @@ impl FlowlistApp {
                 notes_content,
                 cx,
             ))
-            .child(self.inspector_section(
-                "task:dates",
-                "Dates",
-                has_dates,
-                dates_content,
-                cx,
-            ))
+            .child(self.inspector_section("task:dates", "Dates", has_dates, dates_content, cx))
             .child(self.inspector_section(
                 "task:repeat",
                 "Repeat",
@@ -2051,13 +2019,7 @@ impl FlowlistApp {
                 repeat_content,
                 cx,
             ))
-            .child(self.inspector_section(
-                "task:tags",
-                "Tags",
-                !tags.is_empty(),
-                tags_content,
-                cx,
-            ))
+            .child(self.inspector_section("task:tags", "Tags", !tags.is_empty(), tags_content, cx))
             .child(self.inspector_section(
                 "task:notifications",
                 "Notifications",
@@ -2170,12 +2132,7 @@ impl FlowlistApp {
         body.into_any_element()
     }
 
-    fn set_task_repeat(
-        &mut self,
-        id: &TaskId,
-        rule: Option<RepeatRule>,
-        cx: &mut Context<Self>,
-    ) {
+    fn set_task_repeat(&mut self, id: &TaskId, rule: Option<RepeatRule>, cx: &mut Context<Self>) {
         self.execute(Command::UpdateTask {
             id: id.clone(),
             patch: TaskPatch {
@@ -2216,80 +2173,61 @@ impl FlowlistApp {
             .map(|rule| rule.unit)
             .unwrap_or(IntervalUnit::Weeks);
         let mode = rule.as_ref().map(|rule| rule.mode).unwrap_or_default();
-        let schedule = rule
-            .as_ref()
-            .map(|rule| rule.schedule)
-            .unwrap_or_default();
+        let schedule = rule.as_ref().map(|rule| rule.schedule).unwrap_or_default();
         let weekdays_selected = rule
             .as_ref()
             .is_some_and(|rule| !rule.selected_weekdays().is_empty());
         let toggle_id = id.clone();
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .on_children_prepainted(
-                                self.theme_probe("repeat-toggle".to_string()),
-                            )
-                            .id("inspector-repeat-toggle")
-                            .size(px(15.))
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(if enabled {
-                                theme.accent
+        let mut body = div().flex().flex_col().gap_2().child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .on_children_prepainted(self.theme_probe("repeat-toggle".to_string()))
+                        .id("inspector-repeat-toggle")
+                        .size(px(15.))
+                        .rounded_sm()
+                        .border_1()
+                        .border_color(if enabled { theme.accent } else { theme.border })
+                        .bg(if enabled { theme.accent } else { theme.field })
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .when(enabled, |this| {
+                            this.child(icons::icon(Icon::Check, 10.0, theme.bg))
+                        })
+                        .when(!enabled, |this| {
+                            // Keep one child so the probe bounds still paint
+                            // for an unchecked repeat box.
+                            this.child(div().size(px(1.)))
+                        })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            let next = if enabled {
+                                None
                             } else {
-                                theme.border
-                            })
-                            .bg(if enabled {
-                                theme.accent
-                            } else {
-                                theme.field
-                            })
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .when(enabled, |this| {
-                                this.child(icons::icon(Icon::Check, 10.0, theme.bg))
-                            })
-                            .when(!enabled, |this| {
-                                // Keep one child so the probe bounds still paint
-                                // for an unchecked repeat box.
-                                this.child(div().size(px(1.)))
-                            })
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                let next = if enabled {
-                                    None
-                                } else {
-                                    Some(RepeatRule::new(
-                                        RepeatMode::DueAgain,
-                                        1,
-                                        IntervalUnit::Weeks,
-                                    ))
-                                };
-                                this.set_task_repeat(&toggle_id, next, cx);
-                            })),
-                    )
-                    .child(div().text_sm().child("Repeat Every"))
-                    .when(enabled, |this| {
-                        this.child(
-                            div().flex_1().child(self.inspector_repeat_interval(
-                                &id,
-                                every,
-                                unit,
-                                weekdays_selected,
-                                cx,
-                            )),
-                        )
-                    }),
-            );
+                                Some(RepeatRule::new(
+                                    RepeatMode::DueAgain,
+                                    1,
+                                    IntervalUnit::Weeks,
+                                ))
+                            };
+                            this.set_task_repeat(&toggle_id, next, cx);
+                        })),
+                )
+                .child(div().text_sm().child("Repeat Every"))
+                .when(enabled, |this| {
+                    this.child(div().flex_1().child(self.inspector_repeat_interval(
+                        &id,
+                        every,
+                        unit,
+                        weekdays_selected,
+                        cx,
+                    )))
+                }),
+        );
         if enabled {
             if unit == IntervalUnit::Days {
                 body = body.child(self.inspector_week_strip(&id, &rule, cx));
@@ -2525,11 +2463,7 @@ impl FlowlistApp {
                     .items_center()
                     .justify_center()
                     .when(day > 0, |this| this.border_l_1().border_color(theme.border))
-                    .bg(if active {
-                        theme.selection
-                    } else {
-                        theme.field
-                    })
+                    .bg(if active { theme.selection } else { theme.field })
                     .text_xs()
                     .text_color(if active { theme.accent } else { theme.text_dim })
                     .cursor_pointer()
@@ -2562,11 +2496,7 @@ impl FlowlistApp {
         strip
     }
 
-    pub(super) fn render_repeat_unit_menu(
-        &self,
-        id: &TaskId,
-        cx: &mut Context<Self>,
-    ) -> gpui::Div {
+    pub(super) fn render_repeat_unit_menu(&self, id: &TaskId, cx: &mut Context<Self>) -> gpui::Div {
         let theme = self.theme;
         let current = self
             .store
@@ -2611,11 +2541,7 @@ impl FlowlistApp {
                     .py_1()
                     .rounded_sm()
                     .text_xs()
-                    .text_color(if active {
-                        theme.accent
-                    } else {
-                        theme.text_dim
-                    })
+                    .text_color(if active { theme.accent } else { theme.text_dim })
                     .bg(if active { theme.selection } else { theme.clear })
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover))
@@ -3724,36 +3650,28 @@ impl FlowlistApp {
                 }))
                 .into_any_element()
         });
-        let mut section = div()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap_1()
-                    .p_2()
-                    .rounded_lg()
-                    .border_1()
-                    .border_color(if active {
-                        theme.accent
-                    } else {
-                        theme.border
-                    })
-                    .bg(theme.field)
-                    .cursor_pointer()
-                    .when(tags.is_empty() && !active, |this| this.justify_center())
-                    .on_children_prepainted(self.theme_probe("tag-box".to_string()))
-                    .id("tag-box")
-                    .child(row)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.focus = super::FocusArea::TagInput;
-                        this.suggestion_index = 0;
-                        cx.notify();
-                    })),
-            );
+        let mut section = div().flex().flex_col().gap_1().child(
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_1()
+                .p_2()
+                .rounded_lg()
+                .border_1()
+                .border_color(if active { theme.accent } else { theme.border })
+                .bg(theme.field)
+                .cursor_pointer()
+                .when(tags.is_empty() && !active, |this| this.justify_center())
+                .on_children_prepainted(self.theme_probe("tag-box".to_string()))
+                .id("tag-box")
+                .child(row)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.focus = super::FocusArea::TagInput;
+                    this.suggestion_index = 0;
+                    cx.notify();
+                })),
+        );
         let suggestions = self.tag_suggestions();
         if !suggestions.is_empty() {
             section = section.child(self.inspector_suggestions(suggestions, true, cx));
@@ -4057,13 +3975,7 @@ impl FlowlistApp {
             .gap_3()
             .p_3()
             .child(self.inspector_section("project:overview", "Project", true, meta_content, cx))
-            .child(self.inspector_section(
-                "project:dates",
-                "Dates",
-                has_dates,
-                dates_content,
-                cx,
-            ))
+            .child(self.inspector_section("project:dates", "Dates", has_dates, dates_content, cx))
             .child(self.inspector_section("project:review", "Review", true, review_content, cx))
             .child(self.inspector_section(
                 "project:notifications",
@@ -4227,7 +4139,12 @@ impl FlowlistApp {
                             .text_color(theme.text_faint)
                             .child("Last Reviewed"),
                     )
-                    .child(div().text_sm().text_color(theme.text_dim).child(last_reviewed.to_string())),
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(theme.text_dim)
+                            .child(last_reviewed.to_string()),
+                    ),
             )
     }
 

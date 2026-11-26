@@ -143,7 +143,7 @@ impl FlowlistApp {
         }
         let updates = self.settings_card(
             "Updates",
-            Some("The check reads the latest published GitHub release; nothing is sent back."),
+            Some("Reads the latest GitHub release; nothing is sent."),
             div()
                 .flex()
                 .flex_col()
@@ -237,9 +237,7 @@ impl FlowlistApp {
         }
         let command_line = self.settings_card(
             "Command line",
-            Some(
-                "Run flowlist from any Terminal window. The command lives inside the app bundle; this puts a link on your PATH.",
-            ),
+            Some("Link the bundled command into your PATH."),
             div()
                 .flex()
                 .flex_col()
@@ -258,15 +256,18 @@ impl FlowlistApp {
                         ))
                         .when(cli_path.is_some(), |this| {
                             this.child(
-                                div().text_xs().text_color(if cli_on_path {
-                                    theme.success
-                                } else {
-                                    theme.warning
-                                }).child(if cli_on_path {
-                                    "On your PATH"
-                                } else {
-                                    "Installed, but its folder is not on PATH"
-                                }),
+                                div()
+                                    .text_xs()
+                                    .text_color(if cli_on_path {
+                                        theme.success
+                                    } else {
+                                        theme.warning
+                                    })
+                                    .child(if cli_on_path {
+                                        "On your PATH"
+                                    } else {
+                                        "Installed, but its folder is not on PATH"
+                                    }),
                             )
                         }),
                 )
@@ -274,12 +275,16 @@ impl FlowlistApp {
         );
         let uninstall = self.danger_card(
             "Danger zone",
-            Some("Removing Flowlist also removes the flowlist command. You choose whether the library stays."),
+            Some("Removes the app and CLI; the library is optional."),
             div().flex().child(
                 div()
                     .on_children_prepainted(self.theme_probe("uninstall-open".to_string()))
                     .id("uninstall-open")
-                    .child(widgets::danger_button(theme, Icon::Skull, "Uninstall Flowlist…"))
+                    .child(widgets::danger_button(
+                        theme,
+                        Icon::Skull,
+                        "Uninstall Flowlist…",
+                    ))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.open_modal(super::modals::Modal::uninstall(), cx)
                     })),
@@ -395,8 +400,7 @@ impl FlowlistApp {
         }
         let Some(bundle) = current_bundle() else {
             self.update = UpdateState::Failed(
-                "This build is not inside Flowlist.app; download the release and replace it by hand."
-                    .to_string(),
+                "Not inside Flowlist.app; download and replace manually.".to_string(),
             );
             cx.notify();
             return;

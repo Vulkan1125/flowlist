@@ -370,13 +370,7 @@ impl QuickCapture {
                 div()
                     .flex_1()
                     .min_w_0()
-                    .child(field_text(
-                        theme,
-                        &self.buffer,
-                        "What's on your mind?",
-                        focused,
-                        window,
-                    ))
+                    .child(field_text(theme, &self.buffer, "New task", focused, window))
                     .cursor(CursorStyle::IBeam),
             )
             .child(key_hint(theme, "esc"))
@@ -955,10 +949,7 @@ fn panel_bounds(cx: &App, anchor: Option<Bounds<gpui::Pixels>>) -> Bounds<gpui::
                 .primary_display()
                 .or_else(|| cx.displays().into_iter().next());
             let bounds = display.map(|display| display.bounds()).unwrap_or_else(|| {
-                Bounds::new(
-                    gpui::point(px(0.), px(0.)),
-                    size(px(1280.), px(800.)),
-                )
+                Bounds::new(gpui::point(px(0.), px(0.)), size(px(1280.), px(800.)))
             });
             (
                 bounds.origin.x + (bounds.size.width - panel.width) / 2.0,
