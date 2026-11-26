@@ -986,6 +986,42 @@ mod tests {
     }
 
     #[test]
+    fn open_ended_between_ranges_handle_future_and_past_cutoffs() {
+        use chrono::NaiveDate;
+        let cutoff = NaiveDate::from_ymd_opt(2026, 12, 30).unwrap();
+        let future = FilterNode::condition(Condition::DateRange {
+            field: DateField::Due,
+            range: DateRangeFilter::Between {
+                from: Some(cutoff + Duration::days(1)),
+                to: None,
+            },
+        });
+        let past = FilterNode::condition(Condition::DateRange {
+            field: DateField::Due,
+            range: DateRangeFilter::Between {
+                from: None,
+                to: Some(cutoff),
+            },
+        });
+
+        let mut after = Task::new("after");
+        after.due = Some(Stamp::date_only(cutoff + Duration::days(1)));
+        let (db, after) = db_with_task(after);
+        assert!(matches(&db, &after, &future, Utc::now()));
+        assert!(!matches(&db, &after, &past, Utc::now()));
+
+        let mut on_cutoff = Task::new("cutoff");
+        on_cutoff.due = Some(Stamp::date_only(cutoff));
+        let (db, on_cutoff) = db_with_task(on_cutoff);
+        assert!(!matches(&db, &on_cutoff, &future, Utc::now()));
+        assert!(matches(&db, &on_cutoff, &past, Utc::now()));
+
+        let (db, undated) = db_with_task(Task::new("undated"));
+        assert!(!matches(&db, &undated, &future, Utc::now()));
+        assert!(!matches(&db, &undated, &past, Utc::now()));
+    }
+
+    #[test]
     fn due_soon_uses_the_library_horizon() {
         let today = local_date(Utc::now());
         let mut task = Task::new("soon");

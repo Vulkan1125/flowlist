@@ -132,6 +132,14 @@ PY
   echo "FAIL: tab is not '$1'" >&2
   exit 1
 }
+wait_date_picker() {
+  for _ in $(seq 1 80); do
+    if [ "$(value date_picker_open)" = "$1" ]; then return 0; fi
+    sleep 0.1
+  done
+  echo "FAIL: date picker is '$(value date_picker_open)'" >&2
+  exit 1
+}
 wait_row() {
   for _ in $(seq 1 80); do
     if row_has "$1"; then return 0; fi
@@ -257,8 +265,42 @@ click_map view_boxes "rule-state:$row_id:Flagged"
 wait_row "Status is Flagged"
 click_map view_boxes "rule-close:$row_id"
 
+echo "4b. The calendar picker writes a rule date"
+click_map view_boxes "rule-plus:1"
+wait_map view_boxes "rule-option:1:Status--Due-Soon"
+point=$(python3 - "$state" <<'PY'
+import json, sys
+b = json.load(open(sys.argv[1]))["view_boxes"]["rule-option:1:Status--Due-Soon"]
+print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
+PY
+)
+"$helpers/flowctl" scroll $((WX + ${point% *})) $((WY + ${point#* })) 2
+sleep 0.3
+click_map view_boxes "rule-option:1:Has-date-in-range"
+date_id=$(python3 - "$state" <<'PY'
+import json, sys
+rows = (json.load(open(sys.argv[1])).get("view_form") or {}).get("rows") or []
+print(next(row["id"] for row in rows if "Due Date is" in (row.get("label") or "")))
+PY
+)
+click_map view_boxes "rule-select:$date_id"
+click_map view_boxes "rule-range-mode:$date_id:On"
+point=$(python3 - "$state" "$date_id" <<'PY'
+import json, sys
+b = json.load(open(sys.argv[1]))["view_boxes"][f"rule-range-mode:{sys.argv[2]}:On"]
+print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
+PY
+)
+"$helpers/flowctl" scroll $((WX + ${point% *})) $((WY + ${point#* })) 2
+sleep 0.3
+click_map view_boxes "rule-date:$date_id:false"
+wait_date_picker "rule-date"
+today=$(date +%Y-%m-%d)
+click_map date_picker_boxes "day:$today"
+wait_row "Due Date is On $today"
+
 echo "5. Save writes the tree"
-"$helpers/flowctl" key 36
+click_map view_boxes "modal-save"
 sleep 1
 python3 - "$lib" <<'PY'
 import json, pathlib, sys

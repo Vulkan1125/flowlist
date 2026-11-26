@@ -32,6 +32,7 @@ use super::perspective::{
     RuleKind, RuleNode, RuleTemplate, ViewChoice, ViewField, rule_summary,
 };
 use super::screen_picker;
+use super::DateField as PickerDateField;
 use super::text::TextBuffer;
 use super::theme::{self, Appearance, PLAIN_ACCENTS, Theme, ThemeKind};
 use super::widgets::TipExt;
@@ -2054,14 +2055,21 @@ impl FlowlistApp {
                     .pt_1()
                     .child(
                         div()
+                            .on_children_prepainted(self.view_probe("modal-cancel".to_string()))
+                            .child(
+                        div()
                             .on_children_prepainted(
                                 self.theme_probe("modal-cancel".to_string()),
                             )
                             .id("modal-cancel")
                             .child(widgets::button(theme, "Cancel", false))
                             .on_click(cx.listener(|this, _, _, cx| this.close_modal(cx))),
+                            ),
                     )
                     .child(
+                        div()
+                            .on_children_prepainted(self.view_probe("modal-save".to_string()))
+                            .child(
                         div()
                             .on_children_prepainted(
                                 self.theme_probe("modal-save".to_string()),
@@ -2069,6 +2077,7 @@ impl FlowlistApp {
                             .id("modal-save")
                             .child(widgets::button(theme, confirm_label, true))
                             .on_click(cx.listener(|this, _, _, cx| this.commit_modal(cx))),
+                            ),
                     ),
             );
         }
@@ -3384,6 +3393,9 @@ impl FlowlistApp {
                         if let Some(Modal::Perspective { form }) = &mut this.modal {
                             form.set_tab(tab);
                             this.view_menu = None;
+                            this.date_picker = None;
+                            this.date_picker_time = None;
+                            this.date_picker_step = super::DatePickerStep::Calendar;
                             this.modal_focus = 0;
                         }
                         cx.notify();
@@ -4909,6 +4921,58 @@ impl FlowlistApp {
             .into_any_element()
     }
 
+    fn rule_date_button(
+        &self,
+        id: u64,
+        second: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let anchors = self.rule_date_anchors.clone();
+        let boxes = self.view_boxes.clone();
+        let anchor_key = format!("{id}:{second}");
+        let probe_key = format!("rule-date:{id}:{second}");
+        div()
+            .on_children_prepainted(move |bounds, _, _| {
+                if let Some(bounds) = bounds.first() {
+                    anchors
+                        .borrow_mut()
+                        .insert(anchor_key.clone(), *bounds);
+                    boxes.borrow_mut().insert(
+                        probe_key.clone(),
+                        [
+                            f32::from(bounds.origin.x),
+                            f32::from(bounds.origin.y),
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        ],
+                    );
+                }
+            })
+            .id(super::sid(format!("rule-date:{id}:{second}")))
+            .w(px(24.))
+            .h(px(24.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded_sm()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .text_color(theme.text_faint)
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.hover).text_color(theme.text))
+            .child(icons::icon(Icon::Calendar, 12.0, theme.text_faint))
+            .flow_tip(self, cx, theme, "Pick a date")
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.open_date_picker(
+                    PickerDateField::RuleDate { rule: id, second },
+                    cx,
+                )
+            }))
+            .into_any_element()
+    }
+
     fn rule_chip(
         &self,
         id: String,
@@ -5237,7 +5301,8 @@ impl FlowlistApp {
                                 .items_center()
                                 .gap_2()
                                 .child(div().text_xs().text_color(theme.text_faint).child("Date"))
-                                .child(self.rule_text_input(0, "YYYY-MM-DD", cx)),
+                                .child(self.rule_text_input(0, "YYYY-MM-DD", cx))
+                                .child(self.rule_date_button(id, false, cx)),
                         );
                     }
                     DateRangeFilter::Between { .. } => {
@@ -5248,8 +5313,10 @@ impl FlowlistApp {
                                 .gap_2()
                                 .child(div().text_xs().text_color(theme.text_faint).child("From"))
                                 .child(self.rule_text_input(0, "YYYY-MM-DD", cx))
+                                .child(self.rule_date_button(id, false, cx))
                                 .child(div().text_xs().text_color(theme.text_faint).child("To"))
-                                .child(self.rule_text_input(1, "YYYY-MM-DD", cx)),
+                                .child(self.rule_text_input(1, "YYYY-MM-DD", cx))
+                                .child(self.rule_date_button(id, true, cx)),
                         );
                     }
                     DateRangeFilter::InPast { unit, .. }

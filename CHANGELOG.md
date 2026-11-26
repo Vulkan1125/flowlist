@@ -23,6 +23,7 @@
   and a shared Presentation section. The icon background is a squircle.
 - **More duration and view options.** Estimated-duration rules now include
   **greater than** and **between**, with a custom-minutes field for less/greater.
+  Date-range rules have a calendar picker beside On/Between date fields.
   Grouping adds Tags (combined), Completed, Dropped, Added, Changed and Next
   Review. Sorting adds Due & Flagged, Tag, Added, Changed, Dropped and Next
   Review. The catalogue itself

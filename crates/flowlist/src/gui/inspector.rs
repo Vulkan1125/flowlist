@@ -372,7 +372,7 @@ fn inherited_date_suffix(
         DateField::Defer => task.defer,
         DateField::Planned => task.planned,
         DateField::Due => task.due,
-        DateField::Reminder => return None,
+        DateField::Reminder | DateField::RuleDate { .. } => return None,
     };
     if own.is_some() {
         return None;
@@ -391,7 +391,7 @@ fn inherited_date_suffix(
             DateField::Defer => ancestor.defer,
             DateField::Planned => ancestor.planned,
             DateField::Due => ancestor.due,
-            DateField::Reminder => None,
+            DateField::Reminder | DateField::RuleDate { .. } => None,
         };
         if value.is_some() {
             return Some("with parent");
@@ -405,7 +405,7 @@ fn inherited_date_suffix(
         DateField::Defer => project.defer,
         DateField::Planned => project.planned,
         DateField::Due => project.due,
-        DateField::Reminder => None,
+        DateField::Reminder | DateField::RuleDate { .. } => None,
     });
     value.is_some().then_some("with project")
 }
@@ -3263,7 +3263,10 @@ impl FlowlistApp {
             )
             .child(div().text_xs().text_color(theme.text_faint).child("⏎ pick"));
 
-        let hint = if timed {
+        let rule_date = matches!(field, DateField::RuleDate { .. });
+        let hint = if rule_date {
+            "←↑↓→ day · ⇞⇟ month · ⏎ pick"
+        } else if timed {
             "←↑↓→ day · ⇞⇟ month · a all-day · ⏎ clock"
         } else {
             "←↑↓→ day · ⇞⇟ month · a time · ⏎ pick"
@@ -3277,7 +3280,7 @@ impl FlowlistApp {
             .child(weekdays)
             .child(grid)
             .child(widgets::divider(theme))
-            .child(mode)
+            .when(!rule_date, |this| this.child(mode))
             .child(footer)
             .child(div().text_xs().text_color(theme.text_faint).child(hint))
             .into_any_element()

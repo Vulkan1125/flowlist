@@ -259,6 +259,9 @@ pub(super) enum DateField {
     Planned,
     Due,
     Reminder,
+    /// A date typed into a perspective rule. `second` selects the end of a
+    /// Between range; the rule id keeps the calendar attached to the right row.
+    RuleDate { rule: u64, second: bool },
 }
 
 /// The date popover is a two-step surface: pick a day on the calendar, then
@@ -286,6 +289,7 @@ impl DateField {
             DateField::Planned => EditField::Planned,
             DateField::Due => EditField::Due,
             DateField::Reminder => EditField::Reminder,
+            DateField::RuleDate { .. } => EditField::Due,
         }
     }
 
@@ -295,6 +299,7 @@ impl DateField {
             DateField::Planned => "planned",
             DateField::Due => "due",
             DateField::Reminder => "reminder",
+            DateField::RuleDate { .. } => "rule-date",
         }
     }
 
@@ -304,6 +309,7 @@ impl DateField {
             DateField::Planned => "Planned",
             DateField::Due => "Due",
             DateField::Reminder => "Reminder",
+            DateField::RuleDate { .. } => "Rule date",
         }
     }
 
@@ -313,6 +319,7 @@ impl DateField {
             DateField::Planned => "No planned date",
             DateField::Due => "No due date",
             DateField::Reminder => "No reminder time",
+            DateField::RuleDate { .. } => "Pick a date",
         }
     }
 
@@ -323,6 +330,7 @@ impl DateField {
             DateField::Planned => Icon::PlannedDate,
             DateField::Due => Icon::DueDate,
             DateField::Reminder => Icon::Clock,
+            DateField::RuleDate { .. } => Icon::Calendar,
         }
     }
 }
@@ -406,6 +414,7 @@ fn picker_default_time(
         DateField::Due | DateField::Planned => due.unwrap_or(fallback),
         DateField::Defer => defer.unwrap_or(fallback),
         DateField::Reminder => due.unwrap_or(fallback),
+        DateField::RuleDate { .. } => due.unwrap_or(fallback),
     }
 }
 
@@ -649,6 +658,7 @@ pub struct FlowlistApp {
     defer_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     planned_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     reminder_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    rule_date_anchors: Rc<RefCell<BTreeMap<String, Bounds<gpui::Pixels>>>>,
     /// Which date field's calendar is open, the month on screen and the day
     /// the arrow keys point at. `date_picker_time` is the time that will be
     /// written with the day, or None for an all-day date.
@@ -1158,6 +1168,7 @@ impl FlowlistApp {
             defer_anchor: Rc::new(Cell::new(None)),
             planned_anchor: Rc::new(Cell::new(None)),
             reminder_anchor: Rc::new(Cell::new(None)),
+            rule_date_anchors: Rc::new(RefCell::new(BTreeMap::new())),
             date_picker: None,
             date_picker_month: forecast_month,
             date_picker_cursor: today,
@@ -3842,6 +3853,7 @@ impl FlowlistApp {
             DateField::Planned => self.planned_anchor.clone(),
             DateField::Due => self.due_anchor.clone(),
             DateField::Reminder => self.reminder_anchor.clone(),
+            DateField::RuleDate { .. } => self.due_anchor.clone(),
         }
     }
 
@@ -3854,6 +3866,25 @@ impl FlowlistApp {
             DateField::Planned => task.planned,
             DateField::Due => task.due,
             DateField::Reminder => task.reminder_at,
+            DateField::RuleDate { rule, second } => {
+                let form = match &self.modal {
+                    Some(modals::Modal::Perspective { form }) => form,
+                    _ => return None,
+                };
+                let buffer = form.rule(rule).map(|node| {
+                    if second {
+                        &node.text2
+                    } else {
+                        &node.text
+                    }
+                })?;
+                flowlist_core::parse::parse_date(
+                    buffer.text().trim(),
+                    now(),
+                )
+                .ok()
+                .map(Stamp::date_only)
+            }
         }
     }
 
@@ -4074,6 +4105,25 @@ impl FlowlistApp {
             cx.notify();
             return;
         };
+        if let DateField::RuleDate { rule, second } = field {
+            self.date_picker = None;
+            self.date_picker_time = None;
+            self.date_picker_step = DatePickerStep::Calendar;
+            self.date_picker_unit = ClockUnit::Hour;
+            if let Some(modal) = self.modal.as_mut() {
+                if let modals::Modal::Perspective { form } = modal {
+                    if let Some(node) = form.rule_mut(rule) {
+                        if second {
+                            node.text2.set(date.format("%Y-%m-%d").to_string());
+                        } else {
+                            node.text.set(date.format("%Y-%m-%d").to_string());
+                        }
+                    }
+                }
+            }
+            cx.notify();
+            return;
+        }
         let stamp = picker_stamp(date, self.date_picker_time);
         if let Some(message) = self.date_order_error(field, date) {
             self.date_picker = None;
@@ -4096,6 +4146,7 @@ impl FlowlistApp {
                 patch.reminder_at = Some(Some(stamp));
                 patch.reminder_match_due = Some(false);
             }
+            DateField::RuleDate { .. } => unreachable!("handled before the task patch"),
         }
         let conflicts =
             flowlist_core::command::date_conflicts_for_task_patch(self.store.db(), &id, &patch);
@@ -4125,6 +4176,7 @@ impl FlowlistApp {
         let id = self.selected_one()?;
         let task = self.store.db().tasks.get(&id)?;
         match field {
+            DateField::RuleDate { .. } => None,
             DateField::Defer if task.due.is_some_and(|due| date > due.local_date()) => {
                 Some("The defer date can't be after the due date")
             }
@@ -4144,6 +4196,25 @@ impl FlowlistApp {
         let Some(field) = self.date_picker else {
             return;
         };
+        if let DateField::RuleDate { rule, second } = field {
+            self.date_picker = None;
+            self.date_picker_time = None;
+            self.date_picker_step = DatePickerStep::Calendar;
+            self.date_picker_unit = ClockUnit::Hour;
+            if let Some(modal) = self.modal.as_mut() {
+                if let modals::Modal::Perspective { form } = modal {
+                    if let Some(node) = form.rule_mut(rule) {
+                        if second {
+                            node.text2.clear();
+                        } else {
+                            node.text.clear();
+                        }
+                    }
+                }
+            }
+            cx.notify();
+            return;
+        }
         let Some(id) = self.selected_one() else {
             self.date_picker = None;
             cx.notify();
@@ -4163,6 +4234,19 @@ impl FlowlistApp {
             DateField::Planned => patch.planned = Some(None),
             DateField::Due => patch.due = Some(None),
             DateField::Reminder => patch.reminder_at = Some(None),
+            DateField::RuleDate { rule, second } => {
+                if let Some(modal) = self.modal.as_mut() {
+                    if let modals::Modal::Perspective { form } = modal {
+                        if let Some(node) = form.rule_mut(rule) {
+                            if second {
+                                node.text2.clear();
+                            } else {
+                                node.text.clear();
+                            }
+                        }
+                    }
+                }
+            }
         }
         self.execute(Command::UpdateTask { id, patch });
         cx.notify();
@@ -5089,6 +5173,9 @@ impl FlowlistApp {
         self.modal_focus = 0;
         self.pending_modal = None;
         self.modal_error = None;
+        self.date_picker = None;
+        self.date_picker_time = None;
+        self.date_picker_step = DatePickerStep::Calendar;
         self.view_menu = None;
         self.view_menu_cursor = 0;
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
@@ -5102,6 +5189,9 @@ impl FlowlistApp {
             return;
         };
         let uninstall = matches!(modal, modals::Modal::Uninstall { .. });
+        self.date_picker = None;
+        self.date_picker_time = None;
+        self.date_picker_step = DatePickerStep::Calendar;
         self.view_menu = None;
         self.view_menu_cursor = 0;
         self.command_error = None;
@@ -8168,6 +8258,7 @@ impl FlowlistApp {
             DateField::Planned => "planned",
             DateField::Due => "due",
             DateField::Reminder => "reminder",
+            DateField::RuleDate { .. } => "rule-date",
         }));
         state["date_picker_time"] = serde_json::json!(
             self.date_picker_time
@@ -9419,22 +9510,6 @@ impl Render for FlowlistApp {
                     .child(self.render_repeat_unit_menu(&id, cx)),
             ));
         }
-        if let Some(field) = self.date_picker
-            && let Some(anchor) = self.date_anchor(field).get()
-        {
-            let (x, y) =
-                date_picker_position(anchor, viewport, DATE_PICKER_WIDTH, DATE_PICKER_HEIGHT);
-            root = root.child(fade_in(
-                "date-picker-fade",
-                div()
-                    .id("date-picker-layer")
-                    .absolute()
-                    .occlude()
-                    .left(px(x))
-                    .top(px(y))
-                    .child(self.render_date_picker(cx)),
-            ));
-        }
         if self.toast.is_some() {
             root = root.child(self.render_toast(cx));
         }
@@ -9449,6 +9524,29 @@ impl Render for FlowlistApp {
         }
         if let Some(layer) = self.render_view_menu_layer(cx) {
             root = root.child(layer);
+        }
+        if let Some(field) = self.date_picker
+            && let Some(anchor) = match field {
+                DateField::RuleDate { rule, second } => self
+                    .rule_date_anchors
+                    .borrow()
+                    .get(&format!("{rule}:{second}"))
+                    .copied(),
+                _ => self.date_anchor(field).get(),
+            }
+        {
+            let (x, y) =
+                date_picker_position(anchor, viewport, DATE_PICKER_WIDTH, DATE_PICKER_HEIGHT);
+            root = root.child(fade_in(
+                "date-picker-fade",
+                div()
+                    .id("date-picker-layer")
+                    .absolute()
+                    .occlude()
+                    .left(px(x))
+                    .top(px(y))
+                    .child(self.render_date_picker(cx)),
+            ));
         }
         // Written after the body renders, so measurements taken during this
         // frame (such as the title slot width) are current in the file.
