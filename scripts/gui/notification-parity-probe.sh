@@ -84,7 +84,11 @@ settled_box() {
 click_box() {
   set -- $(settled_box "$1" "$2")
   "$helpers/flowctl" mouse $((wx + $1)) $((wy + $2))
-  sleep 0.9
+  sleep 0.5
+  # Force the next frame so moved rows and the Add button update in the probe
+  # state before the next click.
+  "$helpers/flowctl" move $((wx + 1000)) $((wy + 800))
+  sleep 0.4
 }
 wait_for() {
   for _ in $(seq 1 80); do
@@ -138,11 +142,11 @@ sleep 0.2
 sleep 1
 task_json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d["custom_notifications"])==1 and "10:00" in d["custom_notifications"][0], d; print("   custom notification added")'
 
-echo "4. Full-screen reminder lives inside Notifications"
-click_box notification_boxes notification-fullscreen
-task_json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["fullscreen_reminder"] is True, d; print("   full-screen reminder enabled")'
-click_box notification_boxes notification-fullscreen
-task_json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["fullscreen_reminder"] is False, d; print("   full-screen reminder disabled")'
+echo "4. Each notification can open a full-screen reminder"
+click_box notification_boxes notification-fsr:default.due
+task_json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["fullscreen_reminder"] is True, d; print("   full-screen reminder checked")'
+click_box notification_boxes notification-fsr:default.due
+task_json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["fullscreen_reminder"] is False, d; print("   full-screen reminder unchecked")'
 
 echo "5. The Notifications header collapses and expands"
 wait_collapsed() {

@@ -130,15 +130,21 @@ leaving the list.
   and a clock-face time picker. A defer date after the due date is refused with
   a toast, so the picker stays open for another choice. Planned never changes
   availability.
-- **Repeat** uses OmniFocus-style controls: a repeat checkbox, an every-number
-  stepper, day/week/month/year chips, and segmented choices for **Due Date** or
-  **Defer Until Date** and for **Completion** or **Assigned Dates**. The
-  compact advanced-rule field keeps endings and other less common options
-  available.
+- **Repeat** uses OmniFocus-style controls: a repeat checkbox, an editable
+  every-number field, day/week/month/year chips, and segmented choices for
+  **Due Date** or **Defer Until Date** and for **Completion** or **Assigned
+  Dates**. The line beneath them says in plain words what the choices mean,
+  such as “Every 2 weeks, from completion, scheduling the next due date.”
+- **Tags** is its own section with a bordered chip box and a `+` control.
+  Clicking the box or `+` opens the add field; Enter adds the tag.
 - **Notifications** is the only place for alerts now. Add a default back, a
   relative alert or an absolute custom time from **Add Notification**; no
-  separate Alerts field is needed. The full-screen reminder switch and its
-  schedule live in the same section.
+  separate Alerts field is needed. Every task notification row has a checkbox
+  that opens a full-screen reminder at that notification’s time. Only one can
+  be checked at a time.
+- **Empty sections start folded.** For example, a task with no notes does not
+  spend space on Notes & Attachments, and a task with no notifications folds
+  that section until one is added.
 - **To project** converts the task and its subtasks into a project. **Delete**
   and **Complete** finish the task.
 
@@ -175,8 +181,9 @@ The Notifications section sorts rows by time and shows the label and firing
 time. **Add Notification** lists the removed defaults that apply to the item,
 then **Before Due…** for a relative alert and **Custom Notification…** for an
 absolute one. The relative sheet takes an event and a timing such as `-15m` or
-`+1h`. Relative alerts no longer need a separate text field at the top of the
-inspector.
+`+1h`. Each task row’s checkbox makes that notification open a full-screen
+reminder; checking another notification moves the reminder. Relative alerts no longer
+need a separate text field at the top of the inspector.
 
 Date-only relative alerts use 9:00 local. Date-only custom notifications use the
 custom-notification default time from Settings. Alerts follow inherited
@@ -186,11 +193,8 @@ relative alerts to the next occurrence; absolute custom notifications are
 removed from the generated next occurrence.
 
 The inspector lists default, relative and custom notifications and lets you
-remove them or add more. Projects, not only tasks, use the same schedule.
-**Full-screen reminder** is part of that section too: its switch marks the task
-or project, and a marked task shows the match-due or custom reminder time
-below it. CLI/MCP can set the same fields, including on `add` and
-`project edit`.
+remove them or add more. Projects, not only tasks, use the same schedule. CLI/MCP
+can set the same fields, including on `add` and `project edit`.
 
 Flowlist still uses the system local time zone. OmniFocus can attach a floating
 or fixed time zone to each date; that changes the date model, sync and Android

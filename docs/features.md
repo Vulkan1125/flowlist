@@ -232,10 +232,13 @@ working domain and GUI. This page tracks what is implemented and verified.
       Per-date floating/fixed time zones are still a date-model gap.
 - [x] Collapsible inspector sections for Title, Action, Dates, Repeat,
       Notifications, Notes & Attachments, Subtasks and the project sections.
-- [x] OmniFocus-style Repeat controls and a Review section with Next Review,
-      cadence and Last Reviewed.
-- [x] One Notifications section with an Add Notification menu and the
-      full-screen reminder; the separate Alerts text field is retired.
+- [x] OmniFocus-style Repeat controls with an editable interval field and a
+      plain-language summary, plus a Review section with Next Review, cadence
+      and Last Reviewed.
+- [x] One Notifications section with an Add Notification menu and a per-row
+      full-screen reminder checkbox; the separate Alerts text field is retired.
+- [x] OmniFocus-style tag chips in their own section, with a `+` add control.
+- [x] Empty inspector sections start folded and populated ones start open.
 - [x] Forecast tag and flagged undated actions: a designated tag and an
       optional Flagged section above the usual Forecast buckets
 - [x] Complete/reopen, flag/unflag, delete, undo/redo and post-delete focus

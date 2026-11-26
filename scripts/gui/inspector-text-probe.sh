@@ -62,6 +62,7 @@ PY
     then
       return 0
     fi
+    "$helpers/flowctl" move $((WX + 600)) $((WY + 300))
     sleep 0.1
   done
   echo "FAIL: $1 never appeared" >&2
@@ -90,6 +91,23 @@ box_xy() {
 }
 
 echo "1. The add-subtask field takes a click and selects a word"
+for _ in $(seq 1 80); do
+  if python3 - "$state" <<'PY'
+import json, sys
+sys.exit(0 if "task:subtasks" in json.load(open(sys.argv[1])).get("inspector_section_boxes", {}) else 1)
+PY
+  then break; fi
+  "$helpers/flowctl" move $((WX + 600)) $((WY + 300))
+  sleep 0.1
+done
+python3 - "$state" > "$tmp/section-point" <<'PY'
+import json, sys
+b = json.load(open(sys.argv[1]))["inspector_section_boxes"]["task:subtasks"]
+print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
+PY
+set -- $(cat "$tmp/section-point")
+"$helpers/flowctl" mouse $((WX + $1)) $((WY + $2))
+sleep 0.6
 wait_state subtask_add
 add=$(value subtask_add)
 set -- $(box_xy "$add")

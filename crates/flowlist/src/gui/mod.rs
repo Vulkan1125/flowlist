@@ -60,7 +60,7 @@ use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, T
 use flowlist_core::model::{
     BuiltinPerspective, GroupBy, Priority, ProjectKind, SortBy, TagStatus, TaskAlert,
 };
-use flowlist_core::parse::{parse_duration, parse_quick, parse_repeat, parse_stamp};
+use flowlist_core::parse::{parse_duration, parse_quick, parse_stamp};
 use flowlist_core::paths::DataPaths;
 use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::store::Store;
@@ -2854,6 +2854,8 @@ impl FlowlistApp {
             .iter()
             .filter(|child| db.tasks.get(child).is_some_and(|task| !task.is_trashed()))
             .count();
+        self.inspector_sections
+            .insert("task:subtasks".to_string(), false);
         // Converting to one-off steps is destructive: each child becomes a
         // checklist row with only its title and completion left. Ask first.
         if mode == TaskStepMode::OneOff && children > 0 {
@@ -2865,6 +2867,8 @@ impl FlowlistApp {
     }
 
     fn apply_task_step_mode(&mut self, id: TaskId, mode: TaskStepMode, cx: &mut Context<Self>) {
+        self.inspector_sections
+            .insert("task:subtasks".to_string(), false);
         self.execute(Command::SetTaskStepMode {
             id,
             sequential: mode == TaskStepMode::Sequential,
@@ -4021,7 +4025,7 @@ impl FlowlistApp {
             EditField::Repeat => task
                 .repeat
                 .as_ref()
-                .map(|rule| rule.description())
+                .map(|rule| rule.every.max(1).to_string())
                 .unwrap_or_default(),
         };
         self.field.set(value);
@@ -4161,19 +4165,27 @@ impl FlowlistApp {
                 patch.estimate_min = Some(estimate);
             }
             EditField::Repeat => {
-                let repeat = if value.is_empty() {
-                    None
-                } else {
-                    match parse_repeat(&value, now()) {
-                        Ok(rule) => Some(rule),
-                        Err(error) => {
-                            self.field_error = Some(error.to_string());
-                            cx.notify();
-                            return false;
-                        }
+                let every = match value.parse::<u32>() {
+                    Ok(every) if (1..=999).contains(&every) => every,
+                    _ => {
+                        self.field_error = Some("Repeat every must be 1–999".to_string());
+                        cx.notify();
+                        return false;
                     }
                 };
-                patch.repeat = Some(repeat);
+                let Some(mut rule) = self
+                    .store
+                    .db()
+                    .tasks
+                    .get(&id)
+                    .and_then(|task| task.repeat.clone())
+                else {
+                    self.field_error = Some("Turn on Repeat first".to_string());
+                    cx.notify();
+                    return false;
+                };
+                rule.every = every;
+                patch.repeat = Some(Some(rule));
             }
         }
         let conflicts =

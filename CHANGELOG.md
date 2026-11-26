@@ -6,14 +6,21 @@
   Notifications, Notes & Attachments and Subtasks each fold from their header;
   the choice is remembered per device. Project sections cover Project, Dates,
   Review, Notifications, Tags and Attachments.
-- **OmniFocus-style Repeat and Review.** Repeat now has an every-number
-  stepper, unit chips, and segmented choices for Due Date / Defer Until Date and
-  Completion / Assigned Dates. Review shows Next Review, an inline cadence
-  stepper and Last Reviewed, with a sheet for the exact date and interval.
+- **OmniFocus-style Repeat and Review.** Repeat has an editable every-number
+  field, unit chips, segmented choices for Due Date / Defer Until Date and
+  Completion / Assigned Dates, and a plain-language summary beneath them.
+  Review shows Next Review, an inline cadence stepper and Last Reviewed, with a
+  sheet for the exact date and interval.
 - **One Notifications section.** The separate top Alerts field is gone.
   Notifications are a chronological list; Add Notification restores a removed
-  default or adds a relative or custom alert. The full-screen reminder and its
-  schedule moved into the same section.
+  default or adds a relative or custom alert. Every task notification has a
+  checkbox that opens a full-screen reminder at that time (one at a time).
+- **OmniFocus-style Tags.** Tags are a separate section with a bordered chip
+  box, a `+` control and an inline add field. Project tags use the same chip
+  box without the input.
+- **Empty sections start folded.** Action, Dates, Tags, Repeat, Notifications,
+  Notes & Attachments and Subtasks open by default only when they have data.
+  Populated sections stay open.
 - **Notification parity, except date time zones.** Default notifications can be
   enabled separately for Defer, Planned, Latest Start and Due. Each task or
   project can remove or restore any default, add relative alerts or absolute

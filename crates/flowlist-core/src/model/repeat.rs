@@ -75,6 +75,30 @@ impl RepeatRule {
         }
     }
 
+    /// A plain-language sentence for the inspector. It is derived only from
+    /// the controls above it, so the UI never has to ask the user to read the
+    /// compact rule syntax.
+    pub fn summary(&self) -> String {
+        let every = self.unit.label(self.every.max(1));
+        let every = format!("{}{}", every[..1].to_uppercase(), &every[1..]);
+        let origin = match self.schedule {
+            RepeatSchedule::Fixed => "from the assigned dates",
+            RepeatSchedule::AfterCompletion => "from completion",
+        };
+        let next = match self.mode {
+            RepeatMode::DueAgain => "the next due date",
+            RepeatMode::DeferAnother => "the next defer date",
+        };
+        let end = match self.end {
+            RepeatEnd::Never => String::new(),
+            RepeatEnd::OnDate(date) => format!(" and ends on {}", date.format("%b %-d, %Y")),
+            RepeatEnd::AfterCount(count) => {
+                format!(" and ends after {count} occurrence{}", if count == 1 { "" } else { "s" })
+            }
+        };
+        format!("{every}, {origin}, scheduling {next}{end}.")
+    }
+
     pub fn description(&self) -> String {
         let schedule = match self.schedule {
             RepeatSchedule::Fixed => String::new(),
@@ -313,6 +337,22 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn summary_reads_like_the_inspector_copy() {
+        let mut rule = RepeatRule::new(RepeatMode::DeferAnother, 2, IntervalUnit::Weeks);
+        rule.schedule = RepeatSchedule::AfterCompletion;
+        rule.end = RepeatEnd::AfterCount(5);
+        assert_eq!(
+            rule.summary(),
+            "Every 2 weeks, from completion, scheduling the next defer date and ends after 5 occurrences."
+        );
+        let rule = RepeatRule::new(RepeatMode::DueAgain, 1, IntervalUnit::Months);
+        assert_eq!(
+            rule.summary(),
+            "Every month, from the assigned dates, scheduling the next due date."
+        );
+    }
+
     fn repeat_titles_increment_their_last_number() {
         assert_eq!(increment_repeat_title("Week 3 review"), "Week 4 review");
         assert_eq!(increment_repeat_title("Invoice 007"), "Invoice 008");

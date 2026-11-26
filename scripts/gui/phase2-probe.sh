@@ -107,6 +107,7 @@ expect() {
 }
 
 echo "1. Attaching a website link from the inspector"
+click_box inspector_section_boxes task:notes
 click_box view_boxes attach-link
 expect "modal title" "$(value modal)" "Attach link"
 field_label=$(python3 - "$state" <<'PY'

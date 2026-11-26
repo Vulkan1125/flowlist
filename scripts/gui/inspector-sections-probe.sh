@@ -124,7 +124,13 @@ echo "   expanded"
 echo "2. The repeat controls build a rule"
 click_box theme_boxes repeat-toggle
 wait_json task repeat 'd["repeat"] == "every week"'
-click_box theme_boxes repeat-every-plus
+click_box theme_boxes field-box:repeat-every
+"$helpers/flowctl" key 0 cmd
+printf '2' | pbcopy
+"$helpers/flowctl" key 9 cmd
+sleep 0.3
+"$helpers/flowctl" key 36
+sleep 0.5
 wait_json task repeat_every 'd["repeat"].startswith("every 2 weeks")'
 click_box theme_boxes repeat-unit:months
 wait_json task repeat_unit 'd["repeat"].startswith("every 2 months")'
@@ -134,7 +140,18 @@ click_box theme_boxes repeat-mode:defer
 wait_json task repeat_mode '"defer another" in d["repeat"]'
 echo "   every 2 months, after completion, defer until"
 
-echo "3. The Review section steps the cadence"
+echo "3. Tags use the OmniFocus chip box"
+click_box inspector_section_boxes task:tags
+click_box theme_boxes tag-add
+printf 'errand' | pbcopy
+"$helpers/flowctl" key 9 cmd
+sleep 0.3
+"$helpers/flowctl" key 36
+sleep 0.6
+wait_json task tag_added 'd["tags"] == ["errand"]'
+echo "   tag added from the chip box"
+
+echo "4. The Review section steps the cadence"
 kill "$pid" 2>/dev/null || true
 wait "$pid" 2>/dev/null || true
 launch "project:$project" "-"
@@ -146,7 +163,7 @@ click_box theme_boxes review-every-plus
 wait_json project review_days 'd["review_interval_days"] == 14'
 echo "   review every 2 weeks"
 
-echo "4. The Review sheet edits Next Review"
+echo "5. The Review sheet edits Next Review"
 click_box theme_boxes project-review-edit
 python3 - "$state" <<'PY'
 import json, sys
@@ -179,7 +196,7 @@ wait_json project next_review 'd["next_review"] == "2027-01-15"'
 wait_json project review_days_kept 'd["review_interval_days"] == 14'
 echo "   next review set to 2027-01-15"
 
-echo "5. Review section disclosure collapses and expands"
+echo "6. Review section disclosure collapses and expands"
 click_box inspector_section_boxes project:review
 for _ in $(seq 1 80); do
   if python3 - "$state" <<'PY'

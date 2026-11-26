@@ -182,8 +182,41 @@ fn notification_menu_item(
         .into_any_element()
 }
 
+fn notification_checkbox(
+    theme: super::theme::Theme,
+    checked: bool,
+    id: String,
+    probe: impl Fn(Vec<gpui::Bounds<gpui::Pixels>>, &mut Window, &mut gpui::App) + 'static,
+    on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) + 'static,
+) -> AnyElement {
+    div()
+        .on_children_prepainted(probe)
+        .id(super::sid(id))
+        .size(px(15.))
+        .flex_shrink_0()
+        .rounded_sm()
+        .border_1()
+        .border_color(if checked {
+            theme.accent
+        } else {
+            theme.border
+        })
+        .bg(if checked { theme.accent } else { theme.field })
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .when(checked, |this| {
+            this.child(icons::icon(Icon::Check, 10.0, theme.bg))
+        })
+        .when(!checked, |this| this.child(div().size(px(1.))))
+        .on_click(on_click)
+        .into_any_element()
+}
+
 fn notification_row(
     theme: super::theme::Theme,
+    check: Option<AnyElement>,
     label: &str,
     detail: Option<&str>,
     date: &str,
@@ -195,6 +228,7 @@ fn notification_row(
         .flex()
         .items_center()
         .gap_2()
+        .when_some(check, |this, check| this.child(check))
         .min_h(px(28.))
         .px_2()
         .py_1()
@@ -516,9 +550,6 @@ impl FlowlistApp {
             self.render_empty_inspector().into_any_element()
         };
 
-        // Only reserve the scrollbar gutter while the thumb can actually
-        // appear; a short inspector should use the full width.
-        let scrolls = f32::from(self.inspector_scroll.max_offset().height) > 1.0;
         panel.child(
             div()
                 .relative()
@@ -530,7 +561,6 @@ impl FlowlistApp {
                     div()
                         .id("inspector-scroll")
                         .size_full()
-                        .pr(px(if scrolls { 22. } else { 0. }))
                         .overflow_y_scroll()
                         .track_scroll(&self.inspector_scroll)
                         .child(content),
@@ -1114,6 +1144,110 @@ impl FlowlistApp {
         cx.notify();
     }
 
+    fn set_fullscreen_notification(
+        &mut self,
+        target: &NotificationTarget,
+        checked: bool,
+        at: chrono::DateTime<chrono::Utc>,
+        match_due: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let NotificationTarget::Task(id) = target else {
+            return;
+        };
+        let mut patch = TaskPatch {
+            fullscreen_reminder: Some(checked),
+            ..Default::default()
+        };
+        if checked {
+            patch.reminder_match_due = Some(match_due);
+            patch.reminder_at = if match_due {
+                Some(None)
+            } else {
+                Some(Some(Stamp {
+                    at,
+                    has_time: true,
+                }))
+            };
+        }
+        self.execute(Command::UpdateTask {
+            id: id.clone(),
+            patch,
+        });
+        cx.notify();
+    }
+
+    fn notifications_have_data(&self, target: &NotificationTarget) -> bool {
+        let db = self.store.db();
+        let settings = &db.settings;
+        let (due, defer, planned, estimate, removed, custom, alerts) = match target {
+            NotificationTarget::Task(id) => {
+                let task = db.tasks.get(id);
+                (
+                    db.effective_due(id),
+                    db.effective_defer(id),
+                    db.effective_planned(id),
+                    task.and_then(|task| task.estimate_min),
+                    task.map(|task| task.removed_notifications.clone())
+                        .unwrap_or_default(),
+                    task.map(|task| task.custom_notifications.clone())
+                        .unwrap_or_default(),
+                    task.map(|task| task.alerts.clone()).unwrap_or_default(),
+                )
+            }
+            NotificationTarget::Project(id) => {
+                let project = db.projects.get(id);
+                (
+                    project.and_then(|project| project.due),
+                    project.and_then(|project| project.defer),
+                    project.and_then(|project| project.planned),
+                    None,
+                    project
+                        .map(|project| project.removed_notifications.clone())
+                        .unwrap_or_default(),
+                    project
+                        .map(|project| project.custom_notifications.clone())
+                        .unwrap_or_default(),
+                    project.map(|project| project.alerts.clone()).unwrap_or_default(),
+                )
+            }
+        };
+        if !custom.is_empty() {
+            return true;
+        }
+        for alert in &alerts {
+            let base = match alert.event {
+                AlertEvent::Due => due,
+                AlertEvent::Defer => defer,
+                AlertEvent::Planned => planned,
+            };
+            if base.is_some() {
+                return true;
+            }
+        }
+        for kind in DefaultNotification::ALL {
+            let global = match kind {
+                DefaultNotification::Defer => settings.default_defer_notification,
+                DefaultNotification::Planned => settings.default_planned_notification,
+                DefaultNotification::LatestStart => settings.default_latest_start_notification,
+                DefaultNotification::Due => settings.default_due_notification,
+            };
+            if !global || removed.contains(&kind) {
+                continue;
+            }
+            let exists = match kind {
+                DefaultNotification::Defer => defer.is_some(),
+                DefaultNotification::Planned => planned.is_some(),
+                DefaultNotification::LatestStart => due.is_some() && estimate.is_some(),
+                DefaultNotification::Due => due.is_some(),
+            };
+            if exists {
+                return true;
+            }
+        }
+        false
+    }
+
     fn inspector_notifications(
         &self,
         target: NotificationTarget,
@@ -1154,33 +1288,21 @@ impl FlowlistApp {
                 )
             }
         };
-        let (due_text, reminder_text, reminder_match_due, wants_fullscreen, fullscreen) =
-            match &target {
-                NotificationTarget::Task(id) => {
-                    let task = db.tasks.get(id);
-                    (
-                        db.effective_due(id)
-                            .map(|stamp| human_date(&stamp, now()))
-                            .unwrap_or_default(),
-                        task.and_then(|task| task.reminder_at)
-                            .map(|stamp| human_date(&stamp, now()))
-                            .unwrap_or_default(),
-                        task.map(|task| task.reminder_match_due).unwrap_or(true),
-                        db.wants_fullscreen_reminder(id),
-                        task.map(|task| task.fullscreen_reminder).unwrap_or(false),
-                    )
-                }
-                NotificationTarget::Project(id) => (
-                    String::new(),
-                    String::new(),
-                    true,
-                    false,
-                    db.projects
-                        .get(id)
-                        .map(|project| project.fullscreen_reminder)
-                        .unwrap_or(false),
-                ),
-            };
+        let is_task = matches!(target, NotificationTarget::Task(_));
+        let fullscreen = match &target {
+            NotificationTarget::Task(id) => db
+                .tasks
+                .get(id)
+                .map(|task| task.fullscreen_reminder)
+                .unwrap_or(false),
+            NotificationTarget::Project(_) => false,
+        };
+        let fsr_at = match &target {
+            NotificationTarget::Task(id) if fullscreen => {
+                db.reminder_stamp(id).map(super::notifications::reminder_at)
+            }
+            _ => None,
+        };
 
         let mut rows: Vec<(chrono::DateTime<chrono::Utc>, AnyElement)> = Vec::new();
         for kind in DefaultNotification::ALL {
@@ -1232,8 +1354,28 @@ impl FlowlistApp {
                     );
                 }))
                 .into_any_element();
+            let check = is_task.then(|| {
+                let checked = fsr_at == Some(at);
+                let fsr_target = target.clone();
+                notification_checkbox(
+                    theme,
+                    checked,
+                    format!("notification-fsr:default.{}", kind.slug()),
+                    self.notification_probe(format!("notification-fsr:default.{}", kind.slug())),
+                    cx.listener(move |this, _, _, cx| {
+                        this.set_fullscreen_notification(
+                            &fsr_target,
+                            !checked,
+                            at,
+                            kind == DefaultNotification::Due,
+                            cx,
+                        );
+                    }),
+                )
+            });
             let row = notification_row(
                 theme,
+                check,
                 label,
                 None,
                 &format_notification_time(at),
@@ -1277,8 +1419,29 @@ impl FlowlistApp {
                     );
                 }))
                 .into_any_element();
+            let check = is_task.then(|| {
+                let checked = fsr_at == Some(at);
+                let fsr_target = target.clone();
+                let key = format!("notification-fsr:alert.{index}");
+                notification_checkbox(
+                    theme,
+                    checked,
+                    key.clone(),
+                    self.notification_probe(key),
+                    cx.listener(move |this, _, _, cx| {
+                        this.set_fullscreen_notification(
+                            &fsr_target,
+                            !checked,
+                            at,
+                            false,
+                            cx,
+                        );
+                    }),
+                )
+            });
             let row = notification_row(
                 theme,
+                check,
                 &label,
                 detail.as_deref(),
                 &format_notification_time(at),
@@ -1312,8 +1475,29 @@ impl FlowlistApp {
                     );
                 }))
                 .into_any_element();
+            let check = is_task.then(|| {
+                let checked = fsr_at == Some(at);
+                let fsr_target = target.clone();
+                let key = format!("notification-fsr:custom.{index}");
+                notification_checkbox(
+                    theme,
+                    checked,
+                    key.clone(),
+                    self.notification_probe(key),
+                    cx.listener(move |this, _, _, cx| {
+                        this.set_fullscreen_notification(
+                            &fsr_target,
+                            !checked,
+                            at,
+                            false,
+                            cx,
+                        );
+                    }),
+                )
+            });
             let row = notification_row(
                 theme,
+                check,
                 "Custom",
                 None,
                 &format_notification_time(at),
@@ -1337,104 +1521,18 @@ impl FlowlistApp {
             }
         }
 
-        let fsr_target = target.clone();
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(list)
-            .child(widgets::divider(theme))
-            .child(
+        let mut body = div().flex().flex_col().gap_2().child(list);
+        if is_task {
+            body = body.child(widgets::divider(theme)).child(
                 div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
+                    .text_xs()
+                    .whitespace_normal()
+                    .text_color(theme.text_faint)
                     .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_w_0()
-                            .gap_0p5()
-                            .child(div().text_sm().child("Full-screen reminder"))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .whitespace_normal()
-                                    .text_color(theme.text_faint)
-                                    .child(if fullscreen {
-                                        "Takes over the screen when this item is due."
-                                    } else if wants_fullscreen && !fullscreen {
-                                        "On via a parent task, project or folder."
-                                    } else {
-                                        "Take over the screen when this item is due."
-                                    }),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .on_children_prepainted(
-                                self.notification_probe("notification-fullscreen".to_string()),
-                            )
-                            .id("inspector-fullscreen")
-                            .child(widgets::switch(theme, fullscreen))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                let enabled = match &fsr_target {
-                                    NotificationTarget::Task(id) => this
-                                        .store
-                                        .db()
-                                        .tasks
-                                        .get(id)
-                                        .map(|task| task.fullscreen_reminder)
-                                        .unwrap_or(false),
-                                    NotificationTarget::Project(id) => this
-                                        .store
-                                        .db()
-                                        .projects
-                                        .get(id)
-                                        .map(|project| project.fullscreen_reminder)
-                                        .unwrap_or(false),
-                                };
-                                match &fsr_target {
-                                    NotificationTarget::Task(id) => {
-                                        this.execute(Command::UpdateTask {
-                                            id: id.clone(),
-                                            patch: TaskPatch {
-                                                fullscreen_reminder: Some(!enabled),
-                                                ..Default::default()
-                                            },
-                                        });
-                                    }
-                                    NotificationTarget::Project(id) => {
-                                        this.execute(Command::UpdateProject {
-                                            id: id.clone(),
-                                            patch: flowlist_core::command::ProjectPatch {
-                                                fullscreen_reminder: Some(!enabled),
-                                                ..Default::default()
-                                            },
-                                        });
-                                    }
-                                }
-                                cx.notify();
-                            })),
+                        "Check a notification to open a full-screen reminder at that time. One at a time.",
                     ),
-            )
-            .when(
-                matches!(target, NotificationTarget::Task(_)) && wants_fullscreen,
-                |this| {
-                    this.child(self.inspector_reminder_schedule(
-                        match &target {
-                            NotificationTarget::Task(id) => id,
-                            NotificationTarget::Project(_) => unreachable!(),
-                        },
-                        reminder_match_due,
-                        &due_text,
-                        &reminder_text,
-                        cx,
-                    ))
-                },
             );
+        }
         let add_target = target.clone();
         let boxes = self.notification_boxes.clone();
         let anchor = self.notification_anchor.clone();
@@ -1617,6 +1715,10 @@ impl FlowlistApp {
         alerts: Option<Vec<flowlist_core::model::TaskAlert>>,
         cx: &mut Context<Self>,
     ) {
+        let section = match target {
+            NotificationTarget::Task(_) => "task:notifications",
+            NotificationTarget::Project(_) => "project:notifications",
+        };
         match target {
             NotificationTarget::Task(id) => {
                 let patch = TaskPatch {
@@ -1637,6 +1739,10 @@ impl FlowlistApp {
                 self.execute(Command::UpdateProject { id, patch });
             }
         }
+        // Removing the last row must not fold the section and hide the Add
+        // Notification control.
+        self.inspector_sections.insert(section.to_string(), false);
+        self.save_session();
         cx.notify();
     }
 
@@ -1683,7 +1789,6 @@ impl FlowlistApp {
         let planned_suffix = inherited_date_suffix(db, task, DateField::Planned);
         let due_suffix = inherited_date_suffix(db, task, DateField::Due);
         let estimate = task.estimate_min.map(format_duration);
-        let repeat = task.repeat.as_ref().map(|rule| rule.description());
         let repeat_rule = task.repeat.clone();
         let attachments = task.attachments.clone();
         let sequential = task.sequential;
@@ -1700,12 +1805,21 @@ impl FlowlistApp {
             .to_string();
         let delete_id = id.clone();
         let tag_open_id = project_id.clone();
+        let has_action = priority.is_some() || project_id.is_some();
+        let has_dates = defer.is_some() || planned.is_some() || due.is_some() || estimate.is_some();
+        let has_notes = !notes.is_empty() || !attachments.is_empty();
+        let has_subtasks = db
+            .tasks
+            .get(&id)
+            .is_some_and(|task| !task.child_order.is_empty());
+        let notifications_target = NotificationTarget::Task(id.clone());
+        let has_notifications = self.notifications_have_data(&notifications_target);
 
         let title_content = div()
             .flex()
             .flex_col()
             .gap_2()
-            .child(self.inspector_text_field("Title", EditField::Title, &title, cx))
+            .child(self.inspector_text_field("Title", EditField::Title, &title, false, cx))
             .into_any_element();
         let action_content = div()
             .flex()
@@ -1713,8 +1827,8 @@ impl FlowlistApp {
             .gap_2()
             .child(self.inspector_priority(&id, priority, cx))
             .child(self.inspector_project_row(project, project_id.clone(), cx))
-            .child(self.inspector_tag_section(&tags, cx))
             .into_any_element();
+        let tags_content = self.inspector_tag_section(&tags, cx).into_any_element();
         let dates_content = div()
             .flex()
             .flex_col()
@@ -1741,14 +1855,14 @@ impl FlowlistApp {
                 "Estimate",
                 EditField::Estimate,
                 &estimate.unwrap_or_default(),
+                true,
                 cx,
             ))
             .into_any_element();
         let repeat_content = self
-            .inspector_repeat_task(&id, repeat_rule.clone(), &repeat.unwrap_or_default(), cx)
+            .inspector_repeat_task(&id, repeat_rule.clone(), cx)
             .into_any_element();
-        let notifications_content =
-            self.inspector_notifications(NotificationTarget::Task(id.clone()), cx);
+        let notifications_content = self.inspector_notifications(notifications_target, cx);
         let notes_content = div()
             .flex()
             .flex_col()
@@ -1823,8 +1937,27 @@ impl FlowlistApp {
                     ),
             )
             .child(self.inspector_section("task:title", "Title", true, title_content, cx))
-            .child(self.inspector_section("task:action", "Action", true, action_content, cx))
-            .child(self.inspector_section("task:dates", "Dates", true, dates_content, cx))
+            .child(self.inspector_section(
+                "task:action",
+                "Action",
+                has_action,
+                action_content,
+                cx,
+            ))
+            .child(self.inspector_section(
+                "task:tags",
+                "Tags",
+                !tags.is_empty(),
+                tags_content,
+                cx,
+            ))
+            .child(self.inspector_section(
+                "task:dates",
+                "Dates",
+                has_dates,
+                dates_content,
+                cx,
+            ))
             .child(self.inspector_section(
                 "task:repeat",
                 "Repeat",
@@ -1835,21 +1968,21 @@ impl FlowlistApp {
             .child(self.inspector_section(
                 "task:notifications",
                 "Notifications",
-                true,
+                has_notifications,
                 notifications_content,
                 cx,
             ))
             .child(self.inspector_section(
                 "task:notes",
                 "Notes & Attachments",
-                true,
+                has_notes,
                 notes_content,
                 cx,
             ))
             .child(self.inspector_section(
                 "task:subtasks",
                 "Subtasks",
-                true,
+                has_subtasks,
                 subtasks_content,
                 cx,
             ))
@@ -1994,7 +2127,6 @@ impl FlowlistApp {
         &self,
         id: &TaskId,
         rule: Option<RepeatRule>,
-        advanced: &str,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
@@ -2069,84 +2201,14 @@ impl FlowlistApp {
                     .when(enabled, |this| {
                         this.child(
                             div()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .on_children_prepainted(
-                                            self.theme_probe("repeat-every-minus".to_string()),
-                                        )
-                                        .id("repeat-every-minus")
-                                        .size(px(22.))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .rounded_md()
-                                        .border_1()
-                                        .border_color(theme.border)
-                                        .cursor_pointer()
-                                        .hover(|style| style.bg(theme.hover))
-                                        .child("−")
-                                        .on_click(cx.listener({
-                                            let id = id.clone();
-                                            let current = rule.clone();
-                                            move |this, _, _, cx| {
-                                                if let Some(current) = &current {
-                                                    this.update_task_repeat(
-                                                        &id,
-                                                        current,
-                                                        |rule| {
-                                                            rule.every =
-                                                                rule.every.saturating_sub(1).max(1)
-                                                        },
-                                                        cx,
-                                                    );
-                                                }
-                                            }
-                                        })),
-                                )
-                                .child(
-                                    div()
-                                        .min_w(px(28.))
-                                        .text_center()
-                                        .text_sm()
-                                        .child(every.to_string()),
-                                )
-                                .child(
-                                    div()
-                                        .on_children_prepainted(
-                                            self.theme_probe("repeat-every-plus".to_string()),
-                                        )
-                                        .id("repeat-every-plus")
-                                        .size(px(22.))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .rounded_md()
-                                        .border_1()
-                                        .border_color(theme.border)
-                                        .cursor_pointer()
-                                        .hover(|style| style.bg(theme.hover))
-                                        .child("+")
-                                        .on_click(cx.listener({
-                                            let id = id.clone();
-                                            let current = rule.clone();
-                                            move |this, _, _, cx| {
-                                                if let Some(current) = &current {
-                                                    this.update_task_repeat(
-                                                        &id,
-                                                        current,
-                                                        |rule| {
-                                                            rule.every =
-                                                                rule.every.saturating_add(1).max(1)
-                                                        },
-                                                        cx,
-                                                    );
-                                                }
-                                            }
-                                        })),
-                                ),
+                                .w(px(64.))
+                                .child(self.inspector_text_field(
+                                    "Repeat every",
+                                    EditField::Repeat,
+                                    &every.to_string(),
+                                    false,
+                                    cx,
+                                )),
                         )
                     }),
             );
@@ -2276,12 +2338,15 @@ impl FlowlistApp {
                         cx,
                     )),
             );
-            body = body.child(self.inspector_text_field(
-                "Advanced rule",
-                EditField::Repeat,
-                advanced,
-                cx,
-            ));
+            if let Some(rule) = &rule {
+                body = body.child(
+                    div()
+                        .text_xs()
+                        .whitespace_normal()
+                        .text_color(theme.text_faint)
+                        .child(rule.summary()),
+                );
+            }
         }
         body
     }
@@ -2356,6 +2421,7 @@ impl FlowlistApp {
         label: &'static str,
         field: EditField,
         value: &str,
+        show_label: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
@@ -2368,7 +2434,7 @@ impl FlowlistApp {
             EditField::Due => "No due date",
             EditField::Reminder => "No reminder time",
             EditField::Estimate => "No estimate (e.g. 45m)",
-            EditField::Repeat => "Does not repeat (e.g. every week)",
+            EditField::Repeat => "1",
             EditField::Project => "Inbox",
             EditField::Notes => "Notes",
         };
@@ -2376,7 +2442,9 @@ impl FlowlistApp {
             .flex()
             .flex_col()
             .gap_1()
-            .child(div().text_xs().text_color(theme.text_faint).child(label))
+            .when(show_label, |this| {
+                this.child(div().text_xs().text_color(theme.text_faint).child(label))
+            })
             .child(if editing {
                 let editor = if is_title {
                     // The read-only title clamps to two lines; editing must
@@ -2414,6 +2482,10 @@ impl FlowlistApp {
                     .into_any_element()
             } else {
                 let field_box = div()
+                    .on_children_prepainted(self.theme_probe(format!(
+                        "field-box:{}",
+                        label.to_lowercase().replace(' ', "-")
+                    )))
                     .id(super::sid(format!(
                         "field:{}",
                         label.to_lowercase().replace(' ', "-")
@@ -3162,128 +3234,6 @@ impl FlowlistApp {
             .into_any_element()
     }
 
-    fn inspector_reminder_schedule(
-        &self,
-        id: &TaskId,
-        match_due: bool,
-        due: &str,
-        reminder: &str,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let theme = self.theme;
-        let id = id.clone();
-        let detail = if match_due {
-            if due.is_empty() {
-                "Set a due date, or turn this off to choose a reminder time.".to_string()
-            } else {
-                format!("Uses the due time · {due}")
-            }
-        } else {
-            "Set the date and time this reminder should fire.".to_string()
-        };
-        div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .p_2()
-            .rounded_lg()
-            .border_1()
-            .border_color(theme.border_soft)
-            .bg(theme.field)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_w_0()
-                            .gap_0p5()
-                            .child(div().text_sm().child("Match due date & time"))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .whitespace_normal()
-                                    .text_color(theme.text_faint)
-                                    .child(detail),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .id("inspector-reminder-match-due")
-                            .child(widgets::switch(theme, match_due))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.execute(Command::UpdateTask {
-                                    id: id.clone(),
-                                    patch: flowlist_core::command::TaskPatch {
-                                        reminder_match_due: Some(!match_due),
-                                        ..Default::default()
-                                    },
-                                });
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(if match_due {
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child("Reminder"),
-                    )
-                    .child(
-                        div()
-                            .on_children_prepainted(
-                                self.theme_probe("inspector-reminder-locked".to_string()),
-                            )
-                            .id("inspector-reminder-locked")
-                            .h(px(28.))
-                            .flex()
-                            .items_center()
-                            .rounded_lg()
-                            .border_1()
-                            .border_color(theme.border_soft)
-                            .bg(theme.field.opacity(0.45))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .px_2()
-                                    .text_sm()
-                                    .text_color(theme.text_faint)
-                                    .child(if due.is_empty() {
-                                        "Matches the due date".to_string()
-                                    } else {
-                                        format!("Matches due · {due}")
-                                    }),
-                            )
-                            .child(div().px_2().child(icons::icon(
-                                Icon::Calendar,
-                                12.0,
-                                theme.text_faint,
-                            ))),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .whitespace_normal()
-                            .text_color(theme.text_faint)
-                            .child("Turn off Match due date & time to edit."),
-                    )
-                    .into_any_element()
-            } else {
-                self.inspector_date_field(DateField::Reminder, reminder, None, cx)
-                    .into_any_element()
-            })
-    }
-
     fn inspector_notes(&self, notes: &str, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let editing =
@@ -3395,66 +3345,110 @@ impl FlowlistApp {
     ) -> impl IntoElement {
         let theme = self.theme;
         let has_tag = self.selected_one();
-        let mut section =
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(div().text_xs().text_color(theme.text_faint).child("Tags"))
-                .child(div().flex().flex_wrap().gap_1().children(tags.iter().map(
-                    |(tag_id, path)| {
-                        let remove = tag_id.clone();
+        let active = self.focus == super::FocusArea::TagInput;
+        let mut row = div().flex().flex_wrap().items_center().gap_1();
+        for (tag_id, path) in tags {
+            let remove = tag_id.clone();
+            row = row.child(
+                div()
+                    .id(super::sid(format!("tag-chip:{tag_id}")))
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .px_2()
+                    .py_0p5()
+                    .rounded_md()
+                    .bg(theme.raised)
+                    .text_color(theme.text_dim)
+                    .text_xs()
+                    .child(path.clone())
+                    .child(
                         div()
-                            .id(super::sid(format!("tag-chip:{tag_id}")))
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .px_2()
-                            .py_0p5()
-                            .rounded_sm()
-                            .bg(theme.accent_soft)
-                            .text_color(theme.accent)
-                            .text_xs()
-                            .child(path.clone())
-                            .child(
-                                div()
-                                    .id(super::sid(format!("remove-tag:{}", remove)))
-                                    .cursor_pointer()
-                                    .hover(|style| style.text_color(theme.danger))
-                                    .flow_tip(self, cx, theme, "Remove tag")
-                                    .child(icons::icon(Icon::Close, 12.0, theme.text_faint))
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        if let Some(id) = this.selected_one() {
-                                            this.execute(Command::SetTaskTags {
-                                                ids: vec![id],
-                                                add: Vec::new(),
-                                                remove: vec![remove.clone()],
-                                            });
-                                            this.save_session();
-                                            cx.notify();
-                                        }
-                                    })),
-                            )
-                    },
-                )))
-                .child(
-                    div()
-                        .id("tag-input")
-                        .child(widgets::text_field_with_cursor(
-                            theme,
-                            &self.tag_buffer,
-                            "Add tag…",
-                            self.focus == super::FocusArea::TagInput,
-                            cx.listener(|this, hit: &widgets::TextHit, _, cx| {
-                                this.tag_text_hit(hit, cx)
-                            }),
-                        ))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.focus = super::FocusArea::TagInput;
-                            this.suggestion_index = 0;
-                            cx.notify();
-                        })),
-                );
+                            .id(super::sid(format!("remove-tag:{}", remove)))
+                            .cursor_pointer()
+                            .hover(|style| style.text_color(theme.danger))
+                            .flow_tip(self, cx, theme, "Remove tag")
+                            .child(icons::icon(Icon::Close, 11.0, theme.text_faint))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(id) = this.selected_one() {
+                                    this.execute(Command::SetTaskTags {
+                                        ids: vec![id],
+                                        add: Vec::new(),
+                                        remove: vec![remove.clone()],
+                                    });
+                                    this.inspector_sections
+                                        .insert("task:tags".to_string(), false);
+                                    this.save_session();
+                                    cx.notify();
+                                }
+                            })),
+                    ),
+            );
+        }
+        row = row.child(if active {
+            div()
+                .flex_1()
+                .min_w(px(140.))
+                .id("tag-input")
+                .child(widgets::text_field_with_cursor(
+                    theme,
+                    &self.tag_buffer,
+                    "Add tag…",
+                    true,
+                    cx.listener(|this, hit: &widgets::TextHit, _, cx| this.tag_text_hit(hit, cx)),
+                ))
+                .into_any_element()
+        } else {
+            div()
+                .on_children_prepainted(self.theme_probe("tag-add".to_string()))
+                .id("tag-add")
+                .size(px(24.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_md()
+                .border_1()
+                .border_color(theme.border)
+                .text_color(theme.text_faint)
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover))
+                .child("+")
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.focus = super::FocusArea::TagInput;
+                    this.suggestion_index = 0;
+                    cx.notify();
+                }))
+                .into_any_element()
+        });
+        let mut section = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_1()
+                    .p_2()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(if active {
+                        theme.accent
+                    } else {
+                        theme.border
+                    })
+                    .bg(theme.field)
+                    .cursor_pointer()
+                    .on_children_prepainted(self.theme_probe("tag-box".to_string()))
+                    .id("tag-box")
+                    .child(row)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.focus = super::FocusArea::TagInput;
+                        this.suggestion_index = 0;
+                        cx.notify();
+                    })),
+            );
         let suggestions = self.tag_suggestions();
         if !suggestions.is_empty() {
             section = section.child(self.inspector_suggestions(suggestions, true, cx));
@@ -3463,6 +3457,36 @@ impl FlowlistApp {
             section = section.opacity(0.6);
         }
         section
+    }
+
+    fn inspector_tags_readonly(&self, tags: &[String]) -> impl IntoElement {
+        let theme = self.theme;
+        let mut row = div().flex().flex_wrap().items_center().gap_1().p_2();
+        if tags.is_empty() {
+            row = row.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("No tags"),
+            );
+        } else {
+            for tag in tags {
+                row = row.child(
+                    div()
+                        .px_2()
+                        .py_0p5()
+                        .rounded_md()
+                        .bg(theme.raised)
+                        .text_color(theme.text_dim)
+                        .text_xs()
+                        .child(tag.clone()),
+                );
+            }
+        }
+        row.rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.field)
     }
 
     fn inspector_project_row(
@@ -3571,6 +3595,10 @@ impl FlowlistApp {
         let planned = project.planned.map(|stamp| human_date(&stamp, now()));
         let next_review = project.next_review.format("%b %-d, %Y").to_string();
         let review_days = project.review_interval_days;
+        let has_dates = defer.is_some() || planned.is_some() || due.is_some();
+        let has_attachments = !attachments.is_empty();
+        let notifications_target = NotificationTarget::Project(id.clone());
+        let has_notifications = self.notifications_have_data(&notifications_target);
         let last_reviewed = project
             .last_reviewed
             .map(|date| date.format("%b %-d, %Y").to_string())
@@ -3578,8 +3606,7 @@ impl FlowlistApp {
         let review_content = self
             .inspector_review_project(&project_id, &next_review, review_days, &last_reviewed, cx)
             .into_any_element();
-        let notifications_content =
-            self.inspector_notifications(NotificationTarget::Project(id.clone()), cx);
+        let notifications_content = self.inspector_notifications(notifications_target, cx);
         let meta_content = div()
             .flex()
             .flex_col()
@@ -3710,20 +3737,7 @@ impl FlowlistApp {
                 this.child(self.inspector_readonly("Due", &due))
             })
             .into_any_element();
-        let tags_content = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(if tags.is_empty() {
-                div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child("No tags")
-                    .into_any_element()
-            } else {
-                self.inspector_readonly("Tags", &tags.join(", ")).into_any_element()
-            })
-            .into_any_element();
+        let tags_content = self.inspector_tags_readonly(&tags).into_any_element();
         let attachments_content = self
             .inspector_attachments(
                 &attachments,
@@ -3738,20 +3752,32 @@ impl FlowlistApp {
             .gap_3()
             .p_3()
             .child(self.inspector_section("project:overview", "Project", true, meta_content, cx))
-            .child(self.inspector_section("project:dates", "Dates", true, dates_content, cx))
+            .child(self.inspector_section(
+                "project:dates",
+                "Dates",
+                has_dates,
+                dates_content,
+                cx,
+            ))
             .child(self.inspector_section("project:review", "Review", true, review_content, cx))
             .child(self.inspector_section(
                 "project:notifications",
                 "Notifications",
-                true,
+                has_notifications,
                 notifications_content,
                 cx,
             ))
-            .child(self.inspector_section("project:tags", "Tags", true, tags_content, cx))
+            .child(self.inspector_section(
+                "project:tags",
+                "Tags",
+                !tags.is_empty(),
+                tags_content,
+                cx,
+            ))
             .child(self.inspector_section(
                 "project:attachments",
                 "Attachments",
-                true,
+                has_attachments,
                 attachments_content,
                 cx,
             ))

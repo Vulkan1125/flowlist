@@ -126,7 +126,13 @@ open_panel() {
   # This harness does not hand the brand-new panel the keyboard until it is
   # clicked; a real user's shortcut press does. Clicking also proves the
   # panel's hit area is where the window is drawn.
-  "$helpers/flowctl" mouse "$PANEL_X" "$PANEL_Y"
+  panel=$("$helpers/window" "$pid" layers | awk -F'\t' '$2 >= 3 { print $3, $4, $5, $6; exit }')
+  if [ -n "$panel" ]; then
+    set -- $panel
+    "$helpers/flowctl" mouse $((${1%.*} + ${3%.*} / 2)) $((${2%.*} + 40))
+  else
+    "$helpers/flowctl" mouse "$PANEL_X" "$PANEL_Y"
+  fi
   sleep 0.4
 }
 paste() { printf '%s' "$1" | pbcopy; "$helpers/flowctl" key 9 cmd; sleep 0.4; }
