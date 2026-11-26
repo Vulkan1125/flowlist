@@ -238,15 +238,15 @@ flowlist convert [OPTIONS] <ID>
 
 ## `checklist`
 
-### `flowlist checklist list <TASK> [--hide-done]`
+**`flowlist checklist list <TASK> [--hide-done]`**
 
-### `flowlist checklist add <TASK> <TITLE>... [--before <INDEX>]`
+**`flowlist checklist add <TASK> <TITLE>... [--before <INDEX>]`**
 
-### `flowlist checklist set <TASK> <ITEM> [--title <TITLE>] [--done] [--undone]`
+**`flowlist checklist set <TASK> <ITEM> [--title <TITLE>] [--done] [--undone]`**
 
-### `flowlist checklist move <TASK> <ITEM> --to <INDEX>`
+**`flowlist checklist move <TASK> <ITEM> --to <INDEX>`**
 
-### `flowlist checklist remove <TASK> <ITEM>`
+**`flowlist checklist remove <TASK> <ITEM>`**
 
 Checklist items are lightweight steps. They never appear as tasks in a
 perspective.
@@ -262,7 +262,7 @@ Both default to one step. The history is shared by every surface.
 
 ## `tag`
 
-### `flowlist tag add <PATH>`
+**`flowlist tag add <PATH>`**
 
 | Option | Meaning |
 | --- | --- |
@@ -270,7 +270,7 @@ Both default to one step. The history is shared by every surface.
 | `--status <STATUS>` | `available`, `blocked`, `on-hold`. |
 | `--lat <LAT>` / `--lon <LON>` | Optional location. |
 
-### `flowlist tag set <ID>`
+**`flowlist tag set <ID>`**
 
 | Option | Meaning |
 | --- | --- |
@@ -280,15 +280,15 @@ Both default to one step. The history is shared by every surface.
 | `--lat <LAT>` / `--lon <LON>` | Location. |
 | `--clear-location` | Remove coordinates. |
 
-### `flowlist tag remove <ID>`
+**`flowlist tag remove <ID>`**
 
-### `flowlist tags`
+**`flowlist tags`**
 
 List tags with their paths and usage.
 
 ## `project`
 
-### `flowlist project add <NAME>`
+**`flowlist project add <NAME>`**
 
 | Option | Meaning |
 | --- | --- |
@@ -301,40 +301,40 @@ List tags with their paths and usage.
 | `--icon <ICON>` | Named icon or one emoji. |
 | `--attach <ATTACHMENTS>` | File or link. Repeatable. |
 
-### `flowlist project list [--closed]`
+**`flowlist project list [--closed]`**
 
-### `flowlist project edit <ID>`
+**`flowlist project edit <ID>`**
 
 Options: `--name`, `--note`, `--folder`, `--due`, `--defer`, `--planned`,
 `--review-days`, `--next-review`, `--sequential`, `--kind`, `--icon`,
 `--attach`, `--clear-attachments`, `--alerts`, `--remove-notification`,
 `--restore-notification`, `--custom-notification`, `--clear-custom-notifications`.
 
-### `flowlist project status <ID> <STATUS>`
+**`flowlist project status <ID> <STATUS>`**
 
 `active`, `on-hold`, `done`, `dropped`.
 
-### `flowlist project review <ID> [--on <DATE>]`
+**`flowlist project review <ID> [--on <DATE>]`**
 
-### `flowlist project delete <ID>`
+**`flowlist project delete <ID>`**
 
 The project’s tasks move to Trash.
 
 ## `folder`
 
-### `flowlist folder add <PATH>`
+**`flowlist folder add <PATH>`**
 
-### `flowlist folder list`
+**`flowlist folder list`**
 
-### `flowlist folder rename <ID> <NAME>`
+**`flowlist folder rename <ID> <NAME>`**
 
-### `flowlist folder remove <ID>`
+**`flowlist folder remove <ID>`**
 
 Nested folders and their projects are removed; tasks move to Trash.
 
 ## `perspective`
 
-### `flowlist perspective add <NAME>`
+**`flowlist perspective add <NAME>`**
 
 | Option | Meaning |
 | --- | --- |
@@ -346,9 +346,9 @@ Nested folders and their projects are removed; tasks move to Trash.
 | `--icon <ICON>` | Named icon or one emoji. |
 | `--description <TEXT>` | One-line subtitle. |
 
-### `flowlist perspective list`
+**`flowlist perspective list`**
 
-### `flowlist perspective remove <ID>`
+**`flowlist perspective remove <ID>`**
 
 Filter JSON uses the shared tree shape:
 
