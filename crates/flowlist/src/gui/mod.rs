@@ -7457,6 +7457,7 @@ impl FlowlistApp {
             "focus_banner_enabled": self.show_focus_banner,
             "focus_banner_transient": self.focus_banner_until.is_some(),
             "toolbar_labels": self.show_toolbar_labels,
+            "header_height": if self.show_toolbar_labels { 64.0 } else { 46.0 },
             "modal": self.modal.as_ref().map(|modal| modal.title()),
             "modal_message": self.modal_error.clone(),
             "date_error": self.date_error.as_ref().map(|(_, field, message)| {
@@ -7960,11 +7961,11 @@ impl FlowlistApp {
             .flex()
             .flex_col()
             .items_center()
-            .gap_0p5()
+            .gap(px(4.))
             .child(content)
             .child(
                 div()
-                    .text_size(px(9.5))
+                    .text_size(px(10.))
                     .text_color(self.theme.text_faint)
                     .child(label),
             )
@@ -8115,12 +8116,13 @@ impl FlowlistApp {
         let (search_left, search_width) = search_slot(window_width);
         let can_back = self.can_go_back();
         let can_forward = self.can_go_forward();
+        let header_height = if self.show_toolbar_labels { 64. } else { 46. };
         div()
             .flex()
             .items_center()
             .justify_between()
             .relative()
-            .h(px(46.))
+            .h(px(header_height))
             .border_b_1()
             .border_color(theme.border)
             .bg(theme.glass)
@@ -8163,7 +8165,7 @@ impl FlowlistApp {
                             .ml_2()
                             .flex()
                             .items_center()
-                            .gap_0p5()
+                            .gap(px(if self.show_toolbar_labels { 5. } else { 2. }))
                             .child(self.history_button(
                                 "history-back",
                                 Icon::ArrowLeft,
@@ -8249,7 +8251,7 @@ impl FlowlistApp {
                     .flex()
                     .flex_shrink_0()
                     .items_center()
-                    .gap_1()
+                    .gap(px(if self.show_toolbar_labels { 8. } else { 4. }))
                     .pr_3()
                     .child(
                         div()

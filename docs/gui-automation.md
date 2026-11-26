@@ -184,7 +184,7 @@ message. `focus_targets` lists the focused `project:` / `folder:` keys,
 and `focus_eye` gives the header eye. `last_focus_targets` is the restorable
 focus, and `focus_banner_enabled` / `focus_banner_transient` cover the Settings
 choice and the self-dismissing notice. `toolbar_labels` reports the header-title
-setting. `view_subtitle`
+setting and `header_height` is 64 with titles, 46 without. `view_subtitle`
 reports the line under the view title. `view_form.description` carries the
 saved-view description. `icon_picker` reports whether an icon card is open and
 its first Return match. The saved-view and project icon cards
