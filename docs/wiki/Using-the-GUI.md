@@ -315,13 +315,13 @@ titles itself **Search** and ranks the closest matches first.
   Simple; a view with nested or advanced rules opens on Comprehensive so
   nothing is flattened silently. Both tabs share the icon, Group actions by
   and Sort actions by controls.
-- **Comprehensive rules** use a single bordered table. Every row has an
-  enable checkbox, a rule pop-up, and minus/plus buttons. **All / Any / None**
-  rows say “of the following are true” and indent their children. Click the
-  rule pop-up to edit its options, click the operator to cycle All / Any /
-  None, and use plus on a row to add another card right below it (choose
-  **Availability** again to create a second Availability card). Drag a row onto
-  a group to nest it. **Comment** rows annotate the tree without filtering.
+- **Comprehensive rules** use a quiet OmniFocus 4-style contents list: indented
+  rule text in one soft rounded panel, with a faint **Add a new rule** at the
+  bottom. Click a row to edit it. Hover a row for a small plus and a `⋯` menu;
+  the menu has Edit, Add Rule After/Inside, Turn Off, Duplicate, Move and
+  Delete. **All / Any / None** rows end with a colon and indent their children.
+  Drag a row onto a group to nest it. Choose **Availability** again to create a
+  second Availability row. **Comment** rows annotate the tree without filtering.
   The rule catalogue and its headings are indented, and the whole sheet can be
   resized from its bottom-right grip; the size is remembered.
   The catalogue covers **Status: Due Soon / Flagged**, all five

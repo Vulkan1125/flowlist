@@ -239,14 +239,16 @@ rows = (json.load(open(sys.argv[1])).get("view_form") or {}).get("rows") or []
 print(next(row["id"] for row in rows if "Due Soon" in (row.get("label") or "")))
 PY
 )
-click_map view_boxes "rule-check:$row_id"
+click_map view_boxes "rule-menu:$row_id"
+click_map view_boxes "rule-menu-item:$row_id:turn-off"
 python3 - "$state" "$row_id" <<'PY'
 import json, sys
 rows = (json.load(open(sys.argv[1])).get("view_form") or {}).get("rows") or []
 row = next(row for row in rows if str(row["id"]) == sys.argv[2])
 assert row["enabled"] is False, row
 PY
-click_map view_boxes "rule-check:$row_id"
+click_map view_boxes "rule-menu:$row_id"
+click_map view_boxes "rule-menu-item:$row_id:turn-on"
 
 echo "4. Editing a rule changes its value"
 click_map view_boxes "rule-select:$row_id"

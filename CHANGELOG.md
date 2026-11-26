@@ -18,8 +18,8 @@
   it, and date fields accept the same natural phrases as the rest of Flowlist.
 - **Two-tab view editor.** The previous simple editor is the first tab, with
   its familiar checkbox and pop-up filters. **Comprehensive** is a single
-  OmniFocus-style rule table: enable checkbox, rule pop-up, minus/plus on every
-  row, indented groups and a shared Presentation section. The catalogue itself
+  quiet OmniFocus 4-style contents list: indented rule text, hover-revealed
+  add/menu controls, a faint Add a new rule, and a shared Presentation section. The catalogue itself
   is indented, another Availability card is one plus-click away, and the sheet
   resizes in both directions with a remembered size. Scrolling a rule menu or
   an inline tag/project picker stays inside that control instead of moving the

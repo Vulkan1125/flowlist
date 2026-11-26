@@ -3290,18 +3290,18 @@ impl FlowlistApp {
         let icon_row = div()
             .flex()
             .items_center()
-            .gap_3()
+            .gap_2()
             .child(
                 div()
                     .on_children_prepainted(self.theme_probe("perspective-icon-row".to_string()))
                     .id("modal-perspective-icon")
                     .relative()
-                    .w(px(56.))
-                    .h(px(56.))
+                    .w(px(32.))
+                    .h(px(32.))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded_lg()
+                    .rounded_full()
                     .border_1()
                     .border_color(if icon_open {
                         theme.accent
@@ -3315,13 +3315,13 @@ impl FlowlistApp {
                     })
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover))
-                    .child(widgets::icon_spec(&display_icon, 24.0, theme.text_dim))
+                    .child(widgets::icon_spec(&display_icon, 16.0, theme.text_dim))
                     .child(
                         div()
                             .absolute()
-                            .bottom(px(4.))
-                            .right(px(4.))
-                            .child(icons::icon(Icon::ChevronDown, 9.0, theme.text_faint)),
+                            .bottom(px(1.))
+                            .right(px(1.))
+                            .child(icons::icon(Icon::ChevronDown, 8.0, theme.text_faint)),
                     )
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(Modal::Perspective { form }) = &mut this.modal {
@@ -3333,21 +3333,9 @@ impl FlowlistApp {
                         cx.notify();
                     })),
             )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child("Icon"),
-                    )
-                    .when(has_icon_label, |this| {
-                        this.child(div().text_sm().text_color(theme.text_dim).child(icon_label))
-                    }),
-            );
+            .when(has_icon_label, |this| {
+                this.child(div().text_xs().text_color(theme.text_faint).child(icon_label))
+            });
 
         let mut tabs = div()
             .id("modal-perspective-tabs")
@@ -3486,7 +3474,14 @@ impl FlowlistApp {
             .flex()
             .flex_col()
             .gap_2()
-            .child(icon_row)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .child(icon_row)
+                    .child(tabs),
+            )
             .when(icon_open, |this| {
                 this.child(self.render_icon_picker_card(
                     IconTarget::Perspective,
@@ -3496,7 +3491,6 @@ impl FlowlistApp {
                     cx,
                 ))
             })
-            .child(tabs)
             .child(widgets::divider(theme))
             .child(content)
             .child(widgets::divider(theme))
@@ -4076,36 +4070,56 @@ impl FlowlistApp {
             .flex()
             .flex_col()
             .gap_2()
+            .child(heading("CONTENTS"))
             .child(
                 div()
                     .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(heading("FILTER RULES"))
+                    .flex_col()
+                    .gap(px(1.))
+                    .p_2()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(theme.border_soft)
+                    .bg(theme.field)
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child("Use + on a row to add another rule"),
-                    ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .whitespace_normal()
-                    .text_color(theme.text_faint)
+                            .flex()
+                            .flex_col()
+                            .gap(px(1.))
+                            .children(self.render_rule_rows(&form.root, 0, None, true, cx)),
+                    )
                     .child(
-                        "All means every card must match; Any means one is enough; None excludes matches. The checkbox turns a rule off without deleting it.",
+                        div()
+                            .id("rule-add-bottom")
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .h(px(30.))
+                            .pl(px(12.))
+                            .pr_2()
+                            .rounded_sm()
+                            .text_sm()
+                            .text_color(theme.text_faint)
+                            .cursor_pointer()
+                            .hover(|style| {
+                                style
+                                    .bg(theme.hover)
+                                    .text_color(theme.text)
+                            })
+                            .child(icons::icon(Icon::Plus, 10.0, theme.text_faint))
+                            .child("Add a new rule")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(Modal::Perspective { form }) = &mut this.modal {
+                                    form.add_menu = Some(form.root.id);
+                                    form.add_after = None;
+                                    form.editing = None;
+                                    form.row_menu = None;
+                                    this.rule_menu_scroll
+                                        .set_offset(point(px(0.), px(0.)));
+                                }
+                                cx.notify();
+                            })),
                     ),
-            )
-            .child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(theme.border)
-                    .overflow_hidden()
-                    .children(self.render_rule_rows(&form.root, 0, None, true, cx)),
             )
     }
 
@@ -4277,213 +4291,138 @@ impl FlowlistApp {
         let id = node.id;
         let is_group = node.kind.is_group();
         let editing = matches!(&self.modal, Some(Modal::Perspective { form }) if form.editing == Some(id));
+        let menu_open = matches!(&self.modal, Some(Modal::Perspective { form }) if form.row_menu == Some(id));
         let disabled = !node.enabled;
         let summary = rule_summary(db, node);
-        let indent = (depth as f32) * 24.0;
-
-        let checkbox = div()
-            .on_children_prepainted(self.view_probe(format!("rule-check:{id}")))
-            .id(super::sid(format!("rule-check:{id}")))
-            .w(px(26.))
-            .h(px(26.))
-            .flex()
-            .items_center()
-            .justify_center()
-            .cursor_pointer()
-            .child(view_checkbox(theme, node.enabled))
-            .flow_tip(self, cx, theme, "Turn this rule on or off")
-            .on_click(cx.listener(move |this, _, _, cx| {
-                cx.stop_propagation();
-                if let Some(Modal::Perspective { form }) = &mut this.modal {
-                    let enabled = form.is_rule_enabled(id);
-                    form.set_rule_enabled(id, !enabled);
-                }
-                cx.notify();
-            }));
-
-        let selector = if is_group {
-            let operator = match node.kind {
-                RuleKind::All(_) => GroupOperator::All,
-                RuleKind::Any(_) => GroupOperator::Any,
-                RuleKind::None(_) => GroupOperator::None,
-                _ => GroupOperator::All,
-            };
-            let next = match operator {
-                GroupOperator::All => GroupOperator::Any,
-                GroupOperator::Any => GroupOperator::None,
-                GroupOperator::None => GroupOperator::All,
-            };
-            div()
-                .id(super::sid(format!("rule-op:{id}")))
-                .h(px(26.))
-                .px_2()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .rounded_sm()
-                .border_1()
-                .border_color(theme.border)
-                .bg(theme.raised)
-                .text_sm()
-                .text_color(theme.text)
-                .cursor_pointer()
-                .hover(|style| style.bg(theme.hover))
-                .child(operator.label())
-                .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
-                .flow_tip(self, cx, theme, "Click to switch All / Any / None")
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    cx.stop_propagation();
-                    if let Some(Modal::Perspective { form }) = &mut this.modal {
-                        form.set_group_operator(id, next);
-                    }
-                    cx.notify();
-                }))
-                .into_any_element()
+        let indent = (depth as f32) * 18.0;
+        let group = format!("perspective-rule-{id}");
+        let base = if is_group {
+            format!("{summary}:")
         } else {
-            let label = if disabled {
-                format!("{summary}  (off)")
-            } else {
-                summary.clone()
-            };
-            div()
-                .on_children_prepainted(self.view_probe(format!("rule-select:{id}")))
-                .id(super::sid(format!("rule-select:{id}")))
-                .min_w_0()
-                .max_w(px(520.))
-                .h(px(26.))
-                .px_2()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .rounded_sm()
-                .border_1()
-                .border_color(if editing { theme.accent } else { theme.border })
-                .bg(theme.raised)
-                .text_sm()
-                .text_color(if disabled {
-                    theme.text_faint
-                } else if editing {
-                    theme.accent
-                } else {
-                    theme.text
-                })
-                .cursor_pointer()
-                .hover(|style| style.bg(theme.hover))
-                .child(
-                    div()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .child(label),
-                )
-                .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
-                .flow_tip(self, cx, theme, "Click to edit this rule")
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    cx.stop_propagation();
-                    if let Some(Modal::Perspective { form }) = &mut this.modal {
-                        form.editing = if form.editing == Some(id) {
-                            None
-                        } else {
-                            Some(id)
-                        };
-                        form.add_menu = None;
-                        form.add_after = None;
-                    }
-                    cx.notify();
-                }))
-                .into_any_element()
+            summary.clone()
+        };
+        let label = if disabled {
+            format!("{base}  · off")
+        } else {
+            base
         };
 
         let mut row = div()
-            .on_children_prepainted(self.view_probe(format!("rule:{id}")))
-            .id(super::sid(format!("rule:{id}")))
+            .on_children_prepainted(self.view_probe(format!("rule-select:{id}")))
+            .id(super::sid(format!("rule-select:{id}")))
+            .group(group.clone())
             .flex()
             .items_center()
             .gap_2()
-            .h(px(38.))
-            .pl(px(indent + 8.0))
+            .h(px(30.))
+            .pl(px(indent + 12.0))
             .pr_2()
-            .border_b_1()
-            .border_color(theme.border_soft)
-            .bg(if editing { theme.selection } else { theme.raised })
+            .rounded_sm()
+            .cursor_pointer()
+            .text_sm()
+            .text_color(if disabled {
+                theme.text_faint
+            } else if is_group {
+                theme.text
+            } else {
+                theme.text_dim
+            })
+            .bg(if editing { theme.selection } else { theme.clear })
             .hover(|style| style.bg(theme.hover))
-            .child(checkbox)
-            .child(selector);
-        if is_group {
-            row = row.child(
+            .child(
                 div()
-                    .text_sm()
-                    .text_color(theme.text_dim)
-                    .child("of the following are true"),
-            );
-        }
-        row = row.child(div().flex_grow());
-        if !is_root {
-            row = row.child(
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .when(is_group, |this| this.font_weight(gpui::FontWeight::MEDIUM))
+                    .child(label),
+            )
+            .child(div().flex_grow())
+            // Controls stay out of the way until the pointer is on the row.
+            .child(
                 div()
-                    .on_children_prepainted(self.view_probe(format!("rule-minus:{id}")))
-                    .id(super::sid(format!("rule-minus:{id}")))
-                    .w(px(22.))
-                    .h(px(22.))
+                    .opacity(0.0)
+                    .group_hover(group.clone(), |style| style.opacity(1.0))
                     .flex()
                     .items_center()
-                    .justify_center()
-                    .rounded_sm()
-                    .border_1()
-                    .border_color(theme.border)
-                    .bg(theme.raised)
-                    .text_sm()
-                    .text_color(theme.text_dim)
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover).text_color(theme.text))
-                    .child("−")
-                    .flow_tip(self, cx, theme, "Delete this rule")
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        if let Some(Modal::Perspective { form }) = &mut this.modal {
-                            form.delete_rule(id);
-                        }
-                        cx.notify();
-                    })),
+                    .gap_1()
+                    .child(
+                        div()
+                            .on_children_prepainted(self.view_probe(format!("rule-plus:{id}")))
+                            .id(super::sid(format!("rule-plus:{id}")))
+                            .w(px(20.))
+                            .h(px(20.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded_sm()
+                            .text_color(theme.text_faint)
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover).text_color(theme.text))
+                            .child(icons::icon(Icon::Plus, 10.0, theme.text_faint))
+                            .flow_tip(self, cx, theme, "Add a rule here")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                if let Some(Modal::Perspective { form }) = &mut this.modal {
+                                    if is_group {
+                                        form.add_menu = Some(id);
+                                        form.add_after = None;
+                                    } else {
+                                        form.add_menu = parent;
+                                        form.add_after = Some(id);
+                                    }
+                                    form.editing = None;
+                                    this.rule_menu_scroll
+                                        .set_offset(point(px(0.), px(0.)));
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .on_children_prepainted(self.view_probe(format!("rule-menu:{id}")))
+                            .id(super::sid(format!("rule-menu:{id}")))
+                            .w(px(20.))
+                            .h(px(20.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded_sm()
+                            .text_color(if menu_open { theme.text } else { theme.text_faint })
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover).text_color(theme.text))
+                            .child("⋯")
+                            .flow_tip(self, cx, theme, "Rule actions")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                if let Some(Modal::Perspective { form }) = &mut this.modal {
+                                    form.row_menu = if form.row_menu == Some(id) {
+                                        None
+                                    } else {
+                                        Some(id)
+                                    };
+                                    form.editing = None;
+                                    form.add_menu = None;
+                                    form.add_after = None;
+                                }
+                                cx.notify();
+                            })),
+                    ),
             );
-        }
-        row = row.child(
-            div()
-                .on_children_prepainted(self.view_probe(format!("rule-plus:{id}")))
-                .id(super::sid(format!("rule-plus:{id}")))
-                .w(px(22.))
-                .h(px(22.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded_sm()
-                .border_1()
-                .border_color(theme.border)
-                .bg(theme.raised)
-                .text_color(theme.text_dim)
-                .cursor_pointer()
-                .hover(|style| style.bg(theme.hover).text_color(theme.text))
-                .child(icons::icon(Icon::Plus, 11.0, theme.text_dim))
-                .flow_tip(self, cx, theme, "Add a rule here")
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    cx.stop_propagation();
-                    if let Some(Modal::Perspective { form }) = &mut this.modal {
-                        if is_group {
-                            form.add_menu = Some(id);
-                            form.add_after = None;
-                        } else {
-                            form.add_menu = parent;
-                            form.add_after = Some(id);
-                        }
-                        form.editing = None;
-                        this.rule_menu_scroll
-                            .set_offset(point(px(0.), px(0.)));
-                    }
-                    cx.notify();
-                })),
-        );
+
+        row = row.on_click(cx.listener(move |this, _, _, cx| {
+            if let Some(Modal::Perspective { form }) = &mut this.modal {
+                form.editing = if form.editing == Some(id) {
+                    None
+                } else {
+                    Some(id)
+                };
+                form.row_menu = None;
+                form.add_menu = None;
+                form.add_after = None;
+            }
+            cx.notify();
+        }));
         if !is_root {
             let payload = DragRule::rule(id, summary.clone());
             row = row
@@ -4509,7 +4448,21 @@ impl FlowlistApp {
         if editing {
             out.push(self.render_rule_editor(node, depth + 1, cx));
         }
+        if menu_open {
+            out.push(self.render_rule_menu(node, parent, depth + 1, cx));
+        }
         if is_group {
+            if node.children().is_empty() {
+                out.push(
+                    div()
+                        .pl(px(((depth + 1) as f32) * 18.0 + 12.0))
+                        .py_1()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .child("No rules")
+                        .into_any_element(),
+                );
+            }
             for child in node.children() {
                 out.extend(self.render_rule_rows(child, depth + 1, Some(id), false, cx));
             }
@@ -4649,6 +4602,7 @@ impl FlowlistApp {
     fn render_rule_menu(
         &self,
         node: &RuleNode,
+        parent: Option<u64>,
         depth: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -4656,10 +4610,9 @@ impl FlowlistApp {
         let id = node.id;
         let enabled = node.enabled;
         let is_group = node.kind.is_group();
-        let label_for_edit = if is_group { "Add a new rule" } else { "Edit" };
         let mut menu = div()
-            .ml(px((depth as f32) * 14.0 + 20.0))
-            .w(px(180.))
+            .ml(px((depth as f32) * 18.0 + 12.0))
+            .w(px(176.))
             .flex()
             .flex_col()
             .gap(px(1.))
@@ -4671,7 +4624,8 @@ impl FlowlistApp {
             .shadow_md();
         let items: Vec<(String, Option<&'static str>)> = if is_group {
             vec![
-                ("Add a new rule".to_string(), None),
+                ("Edit Group".to_string(), Some("edit")),
+                ("Add Rule Inside".to_string(), Some("add-inside")),
                 (
                     if enabled { "Turn Off" } else { "Turn On" }.to_string(),
                     Some("toggle"),
@@ -4683,7 +4637,8 @@ impl FlowlistApp {
             ]
         } else {
             vec![
-                (label_for_edit.to_string(), None),
+                ("Edit Rule".to_string(), Some("edit")),
+                ("Add Rule After".to_string(), Some("add-after")),
                 (
                     if enabled { "Turn Off" } else { "Turn On" }.to_string(),
                     Some("toggle"),
@@ -4717,12 +4672,16 @@ impl FlowlistApp {
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(Modal::Perspective { form }) = &mut this.modal {
                             match action {
-                                None => {
-                                    if is_group {
-                                        form.add_menu = Some(id);
-                                    } else {
-                                        form.editing = Some(id);
-                                    }
+                                Some("edit") => {
+                                    form.editing = Some(id);
+                                }
+                                Some("add-inside") => {
+                                    form.add_menu = Some(id);
+                                    form.add_after = None;
+                                }
+                                Some("add-after") => {
+                                    form.add_menu = parent;
+                                    form.add_after = Some(id);
                                 }
                                 Some("toggle") => {
                                     let now = form.is_rule_enabled(id);
@@ -4758,7 +4717,7 @@ impl FlowlistApp {
         let theme = self.theme;
         let id = node.id;
         let mut card = div()
-            .ml(px((depth as f32) * 14.0 + 20.0))
+            .ml(px((depth as f32) * 18.0 + 12.0))
             .flex()
             .flex_col()
             .gap_2()
@@ -4801,12 +4760,42 @@ impl FlowlistApp {
                 ),
         );
         if node.kind.is_group() {
-            card = card.child(
-                div()
-                    .text_xs()
-                    .text_color(theme.text_dim)
-                    .child("Rules nested here are combined by the operator chosen in the row above."),
-            );
+            let current = match node.kind {
+                RuleKind::All(_) => GroupOperator::All,
+                RuleKind::Any(_) => GroupOperator::Any,
+                RuleKind::None(_) => GroupOperator::None,
+                _ => GroupOperator::All,
+            };
+            let mut chips = div().flex().items_center().gap_1();
+            for operator in [
+                GroupOperator::All,
+                GroupOperator::Any,
+                GroupOperator::None,
+            ] {
+                chips = chips.child(
+                    div()
+                        .id(super::sid(format!("rule-op-choice:{id}:{}", operator.label())))
+                        .child(widgets::toggle_chip(
+                            theme,
+                            operator.label(),
+                            operator == current,
+                        ))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(Modal::Perspective { form }) = &mut this.modal {
+                                form.set_group_operator(id, operator);
+                            }
+                            cx.notify();
+                        })),
+                );
+            }
+            card = card
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.text_dim)
+                        .child("Combine the rules below with"),
+                )
+                .child(chips);
         } else if matches!(node.kind, RuleKind::Comment) {
             card = card.child(self.rule_text_input(0, "Comment", cx));
         } else if let Some(condition) = node.condition_ref().cloned() {
