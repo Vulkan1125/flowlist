@@ -256,10 +256,12 @@ pub struct ListArgs {
     /// Filter by planned window or date (`today`, `next7`, `2026-12-01`).
     #[arg(long)]
     pub planned: Option<String>,
-    /// manual | due | defer | planned | name | flagged | estimate | created | completed
+    /// manual | due | defer | planned | name | flagged | estimate | created | completed |
+    /// due_flagged | tag | added | changed | dropped | review
     #[arg(long, default_value = "manual")]
     pub sort: String,
-    /// none | project | folder | tag | due | defer | planned | flagged | estimate
+    /// none | project | folder | tag | tags_combined | due | defer | planned |
+    /// completed | dropped | added | changed | review | flagged | estimate
     #[arg(long)]
     pub group: Option<String>,
     #[arg(long)]
@@ -672,7 +674,8 @@ pub struct PerspectiveAddArgs {
     /// A JSON filter tree, e.g. '{"type":"condition","condition":{"type":"flagged","value":true}}'
     #[arg(long)]
     pub filter: Option<String>,
-    /// none | project | folder | tag | due | defer | flagged | estimate
+    /// none | project | folder | tag | tags_combined | due | defer | planned |
+    /// completed | dropped | added | changed | review | flagged | estimate
     #[arg(long)]
     pub group_by: Option<String>,
     #[arg(long)]
@@ -2859,6 +2862,12 @@ fn parse_sort(value: &str) -> Result<SortBy> {
         "estimate" => Ok(SortBy::Estimate),
         "created" => Ok(SortBy::Created),
         "completed" | "completed-at" => Ok(SortBy::CompletedAt),
+        "due_flagged" | "due-flagged" | "due+flagged" => Ok(SortBy::DueFlagged),
+        "tag" | "tags" => Ok(SortBy::Tag),
+        "added" | "added-date" => Ok(SortBy::AddedDate),
+        "changed" | "changed-date" => Ok(SortBy::ChangedDate),
+        "dropped" | "dropped-date" => Ok(SortBy::DroppedDate),
+        "review" | "next-review" => Ok(SortBy::NextReview),
         other => bail!("unknown sort: {other}"),
     }
 }
@@ -2869,6 +2878,12 @@ fn parse_group(value: &str) -> Result<GroupBy> {
         "project" => Ok(GroupBy::Project),
         "folder" => Ok(GroupBy::Folder),
         "tag" | "context" => Ok(GroupBy::Tag),
+        "tags_combined" | "tags-combined" | "tags" => Ok(GroupBy::TagsCombined),
+        "completed" | "completed-date" => Ok(GroupBy::CompletedDate),
+        "dropped" | "dropped-date" => Ok(GroupBy::DroppedDate),
+        "added" | "added-date" => Ok(GroupBy::AddedDate),
+        "changed" | "changed-date" => Ok(GroupBy::ChangedDate),
+        "review" | "next-review" => Ok(GroupBy::NextReview),
         "due" | "due-date" => Ok(GroupBy::DueDate),
         "defer" | "defer-date" => Ok(GroupBy::DeferDate),
         "planned" | "planned-date" => Ok(GroupBy::PlannedDate),
