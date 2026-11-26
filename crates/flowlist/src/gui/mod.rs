@@ -8035,6 +8035,11 @@ impl FlowlistApp {
         div()
             .id("focus-eye")
             .ml(px(if self.show_toolbar_labels { 10. } else { 0. }))
+            // Reserve the wider "Unfocus" slot even while the label says
+            // "Focus", so switching focus never shifts the eye icon.
+            .w(px(if self.show_toolbar_labels { 50. } else { 28. }))
+            .flex()
+            .justify_center()
             .opacity(if enabled { 1.0 } else { 0.35 })
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .flow_tip(self, cx, theme, tip)
