@@ -15,6 +15,9 @@ pub enum TagStatus {
     Blocked,
     /// Deliberately paused context.
     OnHold,
+    /// Retired context. Its actions stay visible in historical views but it is
+    /// not offered for new work.
+    Dropped,
 }
 
 impl TagStatus {
@@ -23,6 +26,7 @@ impl TagStatus {
             TagStatus::Available => "Available",
             TagStatus::Blocked => "Blocked",
             TagStatus::OnHold => "On Hold",
+            TagStatus::Dropped => "Dropped",
         }
     }
 }

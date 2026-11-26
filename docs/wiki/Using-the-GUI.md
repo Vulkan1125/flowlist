@@ -308,23 +308,37 @@ titles itself **Search** and ranks the closest matches first.
   project” (or “with parent”) instead of implying the task owns it.
 - **Right-click a folder** for Open, Rename, **Edit folder…**, New project here,
   New subfolder and Delete.
-- **Saved perspectives** share one editor with the phone: text, Inbox only,
-  Flagged only, Status, Projects, Tags with child tags, Priorities, Due,
-  Planned and Defer windows (including **Later / none**), full-screen reminder
-  marks (yes or no, including inherited marks), an estimate range, grouping,
-  sorting, completed tasks, **Icon** and **Description**. Pinned views sort to
-  the top of SAVED; pin or unpin from the row's context menu
-  (`perspective add --pinned` for the CLI). The description appears under the
-  view title; leave it empty and the view says “Saved perspective”.
-  `perspective add --description` sets it from the CLI. Each view can take a
-  named icon or emoji from a searchable card with **Icons** and **Emoji** tabs
-  (`perspective add --icon`, including `--icon 🏃`). A shipped **Running** view
-  lists started work that is not due yet. It can be edited or deleted like any
-  other saved view. Folding SAVED hides every saved view, pinned or not.
+- **Saved perspectives** use the OmniFocus contents tree. **Contents** starts
+  with one **All of the following** group. Change its operator to **Any** or
+  **None**, add rules from the catalogue, and nest **All / Any / None** groups
+  as deeply as needed. Every row has a three-dot menu for **Edit**,
+  **Turn Off**, **Move Up**, **Move Down** and **Delete**; drag the grip to
+  reorder. A new view begins with **Availability: Remaining**, exactly like
+  OmniFocus. **Comment** rows annotate the tree without filtering it.
+  The catalogue covers **Status: Due Soon / Flagged**, all five
+  **Availability** choices, **Has an estimated duration**, **less than**
+  5/15/30/60 minutes, **Has a due / planned / defer date**, **Has date in
+  range** (due, planned, defer, completed, dropped, added or changed; On,
+  Yesterday, Today, Tomorrow, In the past, In the next or Between),
+  **Is repeating**, **Is untagged**, all five **Has a tag that…** choices,
+  **Is tagged with any of / all of**, **Is a project, group, or neither**,
+  **Is in the Inbox**, **Is in a single actions list**, all seven
+  **Has a project that…** choices, **Is contained within project or folder**,
+  **Matches search terms** and the logic groups. **Due Soon** uses the
+  **Due soon (days)** value in Settings → Workflow → Forecast.
+  **Group by** and **Sort by** sit below Contents. The sheet previews how many
+  tasks the current tree matches before Save. Pinned views sort to the top of
+  SAVED; pin or unpin from the row's context menu (`perspective add --pinned`
+  for the CLI). The description appears under the view title; leave it empty
+  and the view says “Saved perspective”. `perspective add --description` sets
+  it from the CLI. Each view can take a named icon or emoji from a searchable
+  card with **Icons** and **Emoji** tabs (`perspective add --icon`, including
+  `--icon 🏃`). A shipped **Running** view lists started work that is not due
+  yet. It can be edited or deleted like any other saved view. Folding SAVED
+  hides every saved view, pinned or not.
   Both platforms offer project/folder/tag/due/defer/flagged/estimate
   grouping and manual/due/defer/name/priority/flagged/estimate/created
-  sorting; the Mac editor also offers Planned grouping, sorting and a Planned
-  dates filter.
+  sorting; the Mac editor also offers Planned grouping and sorting.
   Project grouping puts tasks with no project under **No project** instead of an
   Inbox heading.
 - Right-click a sidebar row for Open, Rename, Delete, New child, project status

@@ -665,12 +665,9 @@ pub struct FlowlistApp {
     /// Theme swatches and appearance chips in Settings, so a probe can click
     /// a family or light/dark without guessing at the grid.
     theme_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
-    /// The perspective editor's open select, the row the arrow keys point at,
-    /// and where each select painted so its menu can be a root overlay.
-    view_menu: Option<perspective::ViewField>,
-    view_menu_cursor: usize,
+    /// Where editor controls painted, so a GUI probe can click them without
+    /// guessing at pixels.
     view_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
-    view_menu_scroll: ScrollHandle,
     /// Archive project rows and their Reopen buttons, measured so a probe can
     /// open a finished project or bring it back without pixel guessing.
     archive_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
@@ -1162,10 +1159,7 @@ impl FlowlistApp {
             date_picker_unit: ClockUnit::Hour,
             date_picker_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             theme_boxes: Rc::new(RefCell::new(BTreeMap::new())),
-            view_menu: None,
-            view_menu_cursor: 0,
             view_boxes: Rc::new(RefCell::new(BTreeMap::new())),
-            view_menu_scroll: ScrollHandle::new(),
             archive_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             title_space: Rc::new(Cell::new(None)),
             title_visible: Rc::new(Cell::new(true)),
@@ -5039,8 +5033,6 @@ impl FlowlistApp {
         }
         self.modal = Some(modal);
         self.modal_focus = 0;
-        self.view_menu = None;
-        self.view_menu_cursor = 0;
         self.view_boxes.borrow_mut().clear();
         self.settings_toggle_boxes.borrow_mut().clear();
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
@@ -5082,8 +5074,6 @@ impl FlowlistApp {
         self.modal_focus = 0;
         self.pending_modal = None;
         self.modal_error = None;
-        self.view_menu = None;
-        self.view_menu_cursor = 0;
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
         self.focus = FocusArea::Content;
         self.save_session();
@@ -5095,8 +5085,6 @@ impl FlowlistApp {
             return;
         };
         let uninstall = matches!(modal, modals::Modal::Uninstall { .. });
-        self.view_menu = None;
-        self.view_menu_cursor = 0;
         self.command_error = None;
         let result = self
             .apply_modal(&modal)
@@ -5722,6 +5710,7 @@ impl FlowlistApp {
                 review_days,
                 completed_days,
                 changed_days,
+                due_soon_days,
                 radius,
                 trash_days,
                 vim_mode,
@@ -5780,6 +5769,11 @@ impl FlowlistApp {
                     .trim()
                     .parse::<u32>()
                     .map_err(|_| "Changed days must be a number".to_string())?;
+                let due_soon = due_soon_days
+                    .text()
+                    .trim()
+                    .parse::<u32>()
+                    .map_err(|_| "Due soon days must be a number".to_string())?;
                 let radius = radius
                     .text()
                     .trim()
@@ -5814,6 +5808,7 @@ impl FlowlistApp {
                     default_review_days: Some(review),
                     show_completed_days: Some(completed),
                     changed_days: Some(changed),
+                    due_soon_days: Some(due_soon),
                     nearby_radius_km: Some(radius),
                     trash_retention_days: Some(trash),
                     forecast_due_counts: Some(*forecast_due_counts),
@@ -6096,43 +6091,6 @@ impl FlowlistApp {
                 cx.notify();
                 return;
             }
-            if let Some(field) = self.view_menu {
-                let choices = self.view_choices(field);
-                let count = choices.len();
-                match stroke.key.as_str() {
-                    "escape" => {
-                        self.view_menu = None;
-                        cx.notify();
-                    }
-                    "down" | "j" => {
-                        if count > 0 {
-                            self.view_menu_cursor = (self.view_menu_cursor + 1) % count;
-                        }
-                        cx.notify();
-                    }
-                    "up" | "k" => {
-                        if count > 0 {
-                            self.view_menu_cursor = (self.view_menu_cursor + count - 1) % count;
-                        }
-                        cx.notify();
-                    }
-                    "home" => {
-                        self.view_menu_cursor = 0;
-                        cx.notify();
-                    }
-                    "end" => {
-                        self.view_menu_cursor = count.saturating_sub(1);
-                        cx.notify();
-                    }
-                    "enter" | "return" => {
-                        if let Some(choice) = choices.get(self.view_menu_cursor).cloned() {
-                            self.choose_view_choice(choice, cx);
-                        }
-                    }
-                    _ => {}
-                }
-                return;
-            }
             let paste = if mods.platform && stroke.key == "v" {
                 cx.read_from_clipboard().and_then(|item| item.text())
             } else {
@@ -6275,7 +6233,9 @@ impl FlowlistApp {
                             Some(modals::Modal::Settings { section, .. }) => {
                                 section.fields().to_vec()
                             }
-                            Some(modal) => (0..modal.field_count()).collect(),
+                            Some(modal) => (0..modal.field_count())
+                                .filter(|index| modal.field(*index).is_some())
+                                .collect(),
                             None => Vec::new(),
                         };
                         if !indices.is_empty() {
@@ -8078,6 +8038,7 @@ impl FlowlistApp {
         }));
         state["modal_fields"] = serde_json::json!(match &self.modal {
             Some(modal) => (0..modal.field_count())
+                .filter(|index| modal.field(*index).is_some())
                 .map(|index| {
                     serde_json::json!({
                         "label": modal.field_label(index),
@@ -8143,29 +8104,32 @@ impl FlowlistApp {
                 .and_then(|(_, index)| self.first_icon_match(index))
                 .map(|spec| spec.stored()),
         });
-        state["view_menu"] = serde_json::json!(self.view_menu.map(|field| field.key()));
         state["view_boxes"] = serde_json::json!(self.view_boxes.borrow().clone());
         state["view_form"] = serde_json::json!(match &self.modal {
             Some(modals::Modal::Perspective { form }) => Some(serde_json::json!({
                 "name": form.name.text(),
                 "description": form.description.text(),
-                "text": form.text.text(),
                 "icon": form.icon.as_ref().map(|icon| icon.stored()),
                 "icon_open": form.icon_open,
                 "pinned": form.pinned,
-                "inbox_only": form.inbox_only,
-                "flagged_only": form.flagged_only,
                 "show_completed": form.show_completed,
-                "tag_children": form.tag_children,
-                "status": form.status_label(),
-                "due": form.dues.iter().map(|choice| choice.label()).collect::<Vec<_>>(),
-                "defer": form.defers.iter().map(|choice| choice.label()).collect::<Vec<_>>(),
-                "projects": form.projects.iter().map(|id| id.to_string()).collect::<Vec<_>>(),
-                "tags": form.tags.iter().map(|id| id.to_string()).collect::<Vec<_>>(),
-                "priorities": form.priorities.iter().map(|priority| priority.label()).collect::<Vec<_>>(),
                 "group": form.group_label(),
                 "sort": form.sort_label(),
-                "extra": form.extra_condition_count(),
+                "filter": serde_json::to_value(form.filter()).ok(),
+                "editing": form.editing,
+                "add_menu": form.add_menu,
+                "row_menu": form.row_menu,
+                "rows": form
+                    .rows(self.store.db())
+                    .into_iter()
+                    .map(|(id, parent, label, enabled, group)| serde_json::json!({
+                        "id": id,
+                        "parent": parent,
+                        "label": label,
+                        "enabled": enabled,
+                        "group": group,
+                    }))
+                    .collect::<Vec<_>>(),
                 "matches": query::run(
                     self.store.db(),
                     &form.filter(),
@@ -9383,9 +9347,6 @@ impl Render for FlowlistApp {
         }
         if self.quick_open.is_some() {
             root = root.child(self.render_quick_open(window, cx));
-        }
-        if let Some(layer) = self.render_view_menu_layer(cx) {
-            root = root.child(layer);
         }
         // Written after the body renders, so measurements taken during this
         // frame (such as the title slot width) are current in the file.

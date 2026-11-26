@@ -150,10 +150,15 @@ integrations are tracked separately and are not part of this phase.
       Calendar and interleave them with due, planned and deferred tasks.
       Settings → Calendar enables it, lists every calendar with a show/hide
       switch, and keeps access read-only and per-device.
-- [ ] **Nested perspective rules** — an All / Any / None rule builder with
-      nesting, date-range rules, tag/project-status rules, and comments.
+- [x] **Nested perspective rules** — the OmniFocus contents tree: nested
+      All / Any / None groups, the full rule catalogue, date ranges, tag and
+      project status, comments, turning rules off, drag reordering, and the
+      same evaluator on the Mac and the phone.
 - [ ] **Project-level custom perspectives** — an “Entire Projects” structure
-      that lists and groups projects instead of individual actions.
+      that lists and groups projects instead of individual actions. Until this
+      lands, the **Is a project** rule never matches because custom
+      perspectives emit action rows only; **Is a group** matches an action
+      with children.
 - [ ] **Perspective favourites and navigation** — favourites bar, reorder,
       custom icons/colours, copy-as-link and a per-perspective shortcut.
 - [ ] **Configurable row layout** — per-perspective density, columns and

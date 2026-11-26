@@ -67,6 +67,22 @@ impl DragFolder {
     }
 }
 
+/// A perspective rule being reordered in the editor.
+#[derive(Clone, Debug)]
+pub struct DragRule {
+    pub id: u64,
+    pub label: String,
+}
+
+impl DragRule {
+    pub fn rule(id: u64, label: impl Into<String>) -> Self {
+        Self {
+            id,
+            label: label.into(),
+        }
+    }
+}
+
 /// Dragging the Forecast calendar's bottom grip. The payload carries no state:
 /// the live height comes from where the pointer sits under the calendar's top
 /// edge, so a resize always tracks the cursor exactly.
@@ -224,6 +240,17 @@ pub fn project_ghost(
 ) -> gpui::Entity<DragGhost> {
     let label = payload.label.clone();
     cx.new(|_| DragGhost::new(label, Icon::Project, position, theme))
+}
+
+/// Constructor used by a perspective rule row's `.on_drag`.
+pub fn rule_ghost(
+    payload: &DragRule,
+    position: Point<Pixels>,
+    _window: &mut Window,
+    cx: &mut App,
+    theme: Theme,
+) -> gpui::Entity<DragGhost> {
+    cx.new(|_| DragGhost::new(payload.label.clone(), Icon::ListChecks, position, theme))
 }
 
 /// Constructor used by a folder row's `.on_drag`.

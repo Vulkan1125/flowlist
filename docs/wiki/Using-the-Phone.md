@@ -233,15 +233,19 @@ change the order; the new order is remembered. **Priorities** uses a level
 icon, so it is not confused with **Flagged**.
 
 The drawer has a **Saved** section. **New perspective** opens as a card below
-the status bar and matches the Mac editor:
+the status bar with the simpler flat controls:
 text, Inbox only, Flagged only, Status, Projects, Tags with child tags,
 Priorities, Due and Defer windows, an estimate range, grouping, sorting and
-whether completed tasks appear. Grouping covers project, folder, tag, due,
-defer, flagged and estimate; sorting covers manual, due, defer, name, priority,
-flagged, estimate, created and completed. Saved perspectives use the Mac's
-`save_perspective` command, so they appear there too; the row menu edits or
-deletes them. Each list’s sort is remembered for that view, so changing Inbox
-does not reorder Today, Forecast or the other destinations.
+whether completed tasks appear. The phone evaluates the Mac's full nested
+contents tree, including All / Any / None groups, comments, turned-off rules,
+tag/project-status rules and date ranges, so a view built on the Mac lists the
+same tasks here. Building or rearranging that tree is a Mac editor feature.
+Grouping covers project, folder, tag, due, defer, flagged and estimate;
+sorting covers manual, due, defer, name, priority, flagged, estimate, created
+and completed. Saved perspectives use the Mac's `save_perspective` command, so
+they appear there too; the row menu edits or deletes them. Each list’s sort is
+remembered for that view, so changing Inbox does not reorder Today, Forecast or
+the other destinations.
 
 ## Perspectives and the drawer
 

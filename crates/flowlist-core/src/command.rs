@@ -268,6 +268,7 @@ pub struct SettingsPatch {
     pub nearby_radius_km: Option<f64>,
     pub trash_retention_days: Option<u32>,
     pub changed_days: Option<u32>,
+    pub due_soon_days: Option<u32>,
     pub forecast_due_counts: Option<bool>,
     #[serde(deserialize_with = "deserialize_double_option")]
     pub forecast_tag: Option<Option<TagId>>,
@@ -2113,6 +2114,9 @@ impl Command {
                 }
                 if let Some(value) = patch.changed_days {
                     settings.changed_days = value.clamp(1, 3650);
+                }
+                if let Some(value) = patch.due_soon_days {
+                    settings.due_soon_days = value.min(3650);
                 }
                 if let Some(value) = patch.forecast_due_counts {
                     settings.forecast_due_counts = value;

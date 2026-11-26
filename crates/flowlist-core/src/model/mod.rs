@@ -13,7 +13,9 @@ pub mod task;
 pub use folder::Folder;
 pub use icon::IconSpec;
 pub use perspective::{
-    BuiltinPerspective, Condition, DueWindow, FilterNode, GroupBy, Perspective, SortBy, TaskStatus,
+    AvailabilityFilter, BuiltinPerspective, Condition, DateField, DateRangeFilter, DateUnit,
+    DueWindow, FilterNode, FilterStatus, GroupBy, ItemKindFilter, Perspective, ProjectStatusFilter,
+    SortBy, TagStatusFilter, TaskStatus,
 };
 pub use project::{Project, ProjectIcon, ProjectKind, ProjectStatus};
 pub use repeat::{

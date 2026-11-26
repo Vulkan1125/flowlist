@@ -51,6 +51,7 @@ data class SettingsDto(
     @SerialName("default_defer_time") val defaultDeferTime: String? = null,
     @SerialName("current_location") val currentLocation: GeoDto? = null,
     @SerialName("nearby_radius_km") val nearbyRadiusKm: Double = 25.0,
+    @SerialName("due_soon_days") val dueSoonDays: Int = 2,
 )
 
 @Serializable
@@ -117,6 +118,9 @@ data class ProjectDto(
     val icon: String = "project",
     val tags: List<String> = emptyList(),
     val attachments: List<String> = emptyList(),
+    val due: StampDto? = null,
+    val defer: StampDto? = null,
+    val planned: StampDto? = null,
     @SerialName("modified_at") val modifiedAt: String = "",
 )
 

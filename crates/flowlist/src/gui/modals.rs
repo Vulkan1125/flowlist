@@ -8,24 +8,29 @@ use std::time::Duration;
 
 use gpui::{
     Animation, AnimationExt, AnyElement, Bounds, Context, CursorStyle, IntoElement, ObjectFit,
-    Window, div, img, point, prelude::*, px, rgb, rgba, size,
+    Window, div, img, point, prelude::*, px, rgb, rgba,
 };
 
 use flowlist_core::command::Command;
 use flowlist_core::db::DateConflict;
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    AlertEvent, BuiltinPerspective, GroupBy, IconSpec, Priority, ProjectIcon, ProjectKind,
-    SidebarOptions, SortBy, TaskStatus,
+    AlertEvent, AvailabilityFilter, BuiltinPerspective, Condition, DateField, DateRangeFilter,
+    DateUnit, DueWindow, FilterStatus, GroupBy, IconSpec, ItemKindFilter, Priority, ProjectIcon,
+    ProjectKind, ProjectStatusFilter, SidebarOptions, SortBy, TagStatusFilter, TaskStatus,
 };
 use flowlist_core::query;
 use flowlist_core::time::now;
 
 use super::drag::{
-    DragSettingsResize, DragSettingsScroll, settings_resize_ghost, settings_scroll_ghost,
+    DragRule, DragSettingsResize, DragSettingsScroll, rule_ghost, settings_resize_ghost,
+    settings_scroll_ghost,
 };
 use super::icons::Icon;
-use super::perspective::{DeferChoice, DueChoice, IconTab, PerspectiveForm, ViewChoice, ViewField};
+use super::perspective::{
+    GroupOperator, IconTab, LayoutField, PerspectiveForm, RuleKind, RuleNode, RuleTemplate,
+    rule_summary,
+};
 use super::screen_picker;
 use super::text::TextBuffer;
 use super::theme::{self, Appearance, PLAIN_ACCENTS, Theme, ThemeKind};
@@ -224,6 +229,7 @@ pub enum Modal {
         review_days: TextBuffer,
         completed_days: TextBuffer,
         changed_days: TextBuffer,
+        due_soon_days: TextBuffer,
         radius: TextBuffer,
         trash_days: TextBuffer,
         vim_mode: bool,
@@ -381,7 +387,7 @@ impl SettingsSection {
     /// scoped to it, so typing in Appearance can never edit a hidden default.
     pub fn fields(self) -> &'static [usize] {
         match self {
-            SettingsSection::Workflow => &[0, 1, 2, 5],
+            SettingsSection::Workflow => &[0, 1, 2, 5, 7],
             SettingsSection::Reminders => &[6],
             SettingsSection::Nearby => &[3],
             SettingsSection::Trash => &[4],
@@ -695,6 +701,7 @@ impl Modal {
             review_days: TextBuffer::new(settings.default_review_days.to_string()),
             completed_days: TextBuffer::new(settings.show_completed_days.to_string()),
             changed_days: TextBuffer::new(settings.changed_days.to_string()),
+            due_soon_days: TextBuffer::new(settings.due_soon_days.to_string()),
             radius: TextBuffer::new(settings.nearby_radius_km.to_string()),
             trash_days: TextBuffer::new(settings.trash_retention_days.to_string()),
             vim_mode: app.vim_mode,
@@ -1008,7 +1015,7 @@ impl Modal {
                 }
             }
             Modal::Import { .. } => 1,
-            Modal::Settings { .. } => 7,
+            Modal::Settings { .. } => 8,
             Modal::Location { .. } | Modal::TagLocation { .. } => 2,
             Modal::Help => 0,
         }
@@ -1063,9 +1070,8 @@ impl Modal {
             Modal::Perspective { form } => match index {
                 0 => Some(&form.name),
                 1 => Some(&form.description),
-                2 => Some(&form.text),
-                3 => Some(&form.estimate_min),
-                4 => Some(&form.estimate_max),
+                2 => form.editing_buffer(0),
+                3 => form.editing_buffer(1),
                 5 => Some(&form.icon_query),
                 _ => None,
             },
@@ -1074,6 +1080,7 @@ impl Modal {
                 review_days,
                 completed_days,
                 changed_days,
+                due_soon_days,
                 radius,
                 trash_days,
                 forecast_tag,
@@ -1088,6 +1095,7 @@ impl Modal {
                 4 if section.fields().contains(&4) => Some(trash_days),
                 5 if section.fields().contains(&5) => Some(forecast_tag),
                 6 if section.fields().contains(&6) => Some(custom_notification_time),
+                7 if section.fields().contains(&7) => Some(due_soon_days),
                 _ => None,
             },
             Modal::Location { lat, lon } | Modal::TagLocation { lat, lon, .. } => match index {
@@ -1148,9 +1156,8 @@ impl Modal {
             Modal::Perspective { form } => match index {
                 0 => Some(&mut form.name),
                 1 => Some(&mut form.description),
-                2 => Some(&mut form.text),
-                3 => Some(&mut form.estimate_min),
-                4 => Some(&mut form.estimate_max),
+                2 => form.editing_buffer_mut(0),
+                3 => form.editing_buffer_mut(1),
                 5 => Some(&mut form.icon_query),
                 _ => None,
             },
@@ -1159,6 +1166,7 @@ impl Modal {
                 review_days,
                 completed_days,
                 changed_days,
+                due_soon_days,
                 radius,
                 trash_days,
                 forecast_tag,
@@ -1173,6 +1181,7 @@ impl Modal {
                 4 if section.fields().contains(&4) => Some(trash_days),
                 5 if section.fields().contains(&5) => Some(forecast_tag),
                 6 if section.fields().contains(&6) => Some(custom_notification_time),
+                7 if section.fields().contains(&7) => Some(due_soon_days),
                 _ => None,
             },
             Modal::Location { lat, lon } | Modal::TagLocation { lat, lon, .. } => match index {
@@ -1224,9 +1233,8 @@ impl Modal {
             Modal::Perspective { .. } => match index {
                 0 => "Name",
                 1 => "Description",
-                2 => "Contains text",
-                3 => "Minimum estimate (minutes)",
-                4 => "Maximum estimate (minutes)",
+                2 => "Rule value",
+                3 => "Rule second value",
                 5 => "Search icons",
                 _ => "",
             },
@@ -1239,6 +1247,7 @@ impl Modal {
                 4 => "Trash retention (days, 0 keeps forever)",
                 5 => "Forecast tag (a tag path, or empty for none)",
                 6 => "Custom notification time (HH:MM)",
+                7 => "Due soon (days)",
                 _ => "",
             },
             Modal::Location { .. } => match index {
@@ -1778,25 +1787,6 @@ impl FlowlistApp {
                 if is_perspective {
                     body = body.child(self.render_modal_field(0, cx));
                     body = body.child(self.render_modal_field(1, cx));
-                    body = body.child(self.render_modal_field(2, cx));
-                    body = body.child(
-                        div()
-                            .flex()
-                            .items_start()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .child(self.render_modal_field(3, cx)),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .child(self.render_modal_field(4, cx)),
-                            ),
-                    );
                 } else if is_new_project {
                     for index in 0..6 {
                         body = body.child(self.render_modal_field(index, cx));
@@ -2305,6 +2295,7 @@ impl FlowlistApp {
         };
         let anchor = self.modal_field_anchor.clone();
         div()
+            .on_children_prepainted(self.view_probe(format!("modal-field:{index}")))
             .id(super::sid(format!("modal-field:{index}")))
             .flex()
             .flex_col()
@@ -2677,6 +2668,29 @@ impl FlowlistApp {
     /// The perspective editor is a small settings sheet rather than a row of
     /// cycling chips: every condition has its own labelled row and opens a menu
     /// of every value, so choosing one is a jump instead of a lap.
+    /// Record where a control painted so a GUI probe can click it without
+    /// guessing at pixels.
+    pub(super) fn view_probe(
+        &self,
+        key: String,
+    ) -> impl Fn(Vec<Bounds<gpui::Pixels>>, &mut Window, &mut gpui::App) + 'static {
+        let boxes = self.view_boxes.clone();
+        move |bounds, _, _| {
+            let Some(bounds) = bounds.first() else {
+                return;
+            };
+            boxes.borrow_mut().insert(
+                key.clone(),
+                [
+                    f32::from(bounds.origin.x),
+                    f32::from(bounds.origin.y),
+                    f32::from(bounds.size.width),
+                    f32::from(bounds.size.height),
+                ],
+            );
+        }
+    }
+
     fn render_perspective_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
         let Some(Modal::Perspective { form }) = &self.modal else {
@@ -2699,59 +2713,6 @@ impl FlowlistApp {
             None => if form.pinned { "Pin" } else { "Default" }.to_string(),
         };
         let has_icon_label = !icon_label.is_empty();
-        let project_label = match form.projects.len() {
-            0 => "Any".to_string(),
-            1 => db.project_path(form.projects.first().expect("length checked")),
-            count => format!("{count} projects"),
-        };
-        let tag_label = match form.tags.len() {
-            0 => "Any".to_string(),
-            1 => form
-                .tags
-                .first()
-                .and_then(|id| db.tags.get(id))
-                .map(|tag| format!("#{}", tag.name))
-                .unwrap_or_else(|| "Any".to_string()),
-            count => format!("{count} tags"),
-        };
-        let due_label = match form.dues.len() {
-            0 => "Any".to_string(),
-            1 => form
-                .dues
-                .first()
-                .expect("length checked")
-                .label()
-                .to_string(),
-            count => format!("{count} date filters"),
-        };
-        let planned_label = match form.planned.len() {
-            0 => "Any".to_string(),
-            1 => form
-                .planned
-                .first()
-                .expect("length checked")
-                .label()
-                .to_string(),
-            count => format!("{count} planned filters"),
-        };
-        let defer_label = match form.defers.len() {
-            0 => "Any".to_string(),
-            1 => form
-                .defers
-                .first()
-                .expect("length checked")
-                .label()
-                .to_string(),
-            count => format!("{count} defer filters"),
-        };
-        let fullscreen_label = match form.fullscreen {
-            None => "Any".to_string(),
-            Some(true) => "Has full-screen reminder".to_string(),
-            Some(false) => "No full-screen reminder".to_string(),
-        };
-        let extra = form.extra_condition_count();
-        // A live count turns the sheet into a preview: every change shows how
-        // many tasks the saved view would list.
         let preview = query::run(
             db,
             &form.filter(),
@@ -2761,75 +2722,6 @@ impl FlowlistApp {
             now(),
         );
         let matches = preview.iter().map(|group| group.rows.len()).sum::<usize>();
-
-        let toggle = |label: &'static str, active: bool, id: &'static str| {
-            div()
-                .id(id)
-                .child(widgets::toggle_chip(theme, label, active))
-        };
-        let toggles = div()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap_1()
-            .child(
-                div()
-                    .on_children_prepainted(self.theme_probe("modal-inbox".to_string()))
-                    .id("modal-inbox-wrap")
-                    .child(toggle("Inbox only", form.inbox_only, "modal-inbox"))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(Modal::Perspective { form }) = &mut this.modal {
-                            form.toggle_inbox();
-                        }
-                        cx.notify();
-                    })),
-            )
-            .child(
-                toggle("Flagged only", form.flagged_only, "modal-flagged").on_click(cx.listener(
-                    |this, _, _, cx| {
-                        if let Some(Modal::Perspective { form }) = &mut this.modal {
-                            form.flagged_only = !form.flagged_only;
-                        }
-                        cx.notify();
-                    },
-                )),
-            )
-            .child(
-                toggle("Completed", form.show_completed, "modal-completed")
-                    .flow_tip(self, cx, theme, "Include completed tasks")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(Modal::Perspective { form }) = &mut this.modal {
-                            form.show_completed = !form.show_completed;
-                        }
-                        cx.notify();
-                    })),
-            );
-
-        let priority_toggles = div()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap_1()
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child("Priority"),
-            )
-            .children(Priority::ALL.iter().map(|priority| {
-                let active = form.priorities.contains(priority);
-                div()
-                    .id(gpui::ElementId::Name(
-                        format!("modal-priority-{}", priority.slug()).into(),
-                    ))
-                    .child(widgets::toggle_chip(theme, priority.label(), active))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(Modal::Perspective { form }) = &mut this.modal {
-                            form.toggle_priority(*priority);
-                        }
-                        cx.notify();
-                    }))
-            }));
 
         let icon_row = div()
             .flex()
@@ -2879,115 +2771,6 @@ impl FlowlistApp {
                         cx.notify();
                     })),
             );
-        let project_tag_row = div()
-            .flex()
-            .items_start()
-            .gap_2()
-            .child(div().flex_1().min_w_0().child(self.perspective_select(
-                ViewField::Project,
-                project_label,
-                !form.projects.is_empty(),
-                cx,
-            )))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(self.perspective_select(
-                        ViewField::Tag,
-                        tag_label,
-                        !form.tags.is_empty(),
-                        cx,
-                    ))
-                    .when(!form.tags.is_empty(), |this| {
-                        this.child(
-                            div()
-                                .id("modal-tag-children")
-                                .flex()
-                                .flow_tip(self, cx, theme, "Match tasks tagged with a child tag")
-                                .child(widgets::toggle_chip(theme, "Child tags", form.tag_children))
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(Modal::Perspective { form }) = &mut this.modal {
-                                        form.tag_children = !form.tag_children;
-                                    }
-                                    cx.notify();
-                                })),
-                        )
-                    }),
-            );
-
-        let windows_row = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(
-                div()
-                    .flex()
-                    .items_start()
-                    .gap_2()
-                    .child(div().flex_1().min_w_0().child(self.perspective_select(
-                        ViewField::Status,
-                        form.status_label().to_string(),
-                        form.status != TaskStatus::Any,
-                        cx,
-                    )))
-                    .child(div().flex_1().min_w_0().child(self.perspective_select(
-                        ViewField::Due,
-                        due_label,
-                        !form.dues.is_empty(),
-                        cx,
-                    ))),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_start()
-                    .gap_2()
-                    .child(div().flex_1().min_w_0().child(self.perspective_select(
-                        ViewField::Planned,
-                        planned_label,
-                        !form.planned.is_empty(),
-                        cx,
-                    )))
-                    .child(div().flex_1().min_w_0().child(self.perspective_select(
-                        ViewField::Defer,
-                        defer_label,
-                        !form.defers.is_empty(),
-                        cx,
-                    ))),
-            );
-
-        let fullscreen_row =
-            div()
-                .flex()
-                .items_start()
-                .gap_2()
-                .child(div().flex_1().min_w_0().child(self.perspective_select(
-                    ViewField::Fullscreen,
-                    fullscreen_label,
-                    form.fullscreen.is_some(),
-                    cx,
-                )));
-
-        let layout_row = div()
-            .flex()
-            .items_start()
-            .gap_2()
-            .child(div().flex_1().min_w_0().child(self.perspective_select(
-                ViewField::Group,
-                form.group_label().to_string(),
-                form.group != GroupBy::None,
-                cx,
-            )))
-            .child(div().flex_1().min_w_0().child(self.perspective_select(
-                ViewField::Sort,
-                form.sort_label().to_string(),
-                false,
-                cx,
-            )));
 
         let heading = |text: &'static str| {
             div()
@@ -2996,6 +2779,7 @@ impl FlowlistApp {
                 .text_color(theme.text_faint)
                 .child(text)
         };
+
         let summary = div()
             .flex()
             .items_center()
@@ -3018,11 +2802,8 @@ impl FlowlistApp {
                         "{matches} {} match",
                         if matches == 1 { "task" } else { "tasks" }
                     )))
-                    .when(extra > 0, |this| {
-                        this.child(div().text_xs().text_color(theme.text_faint).child(format!(
-                            "· {extra} CLI condition{} kept",
-                            if extra == 1 { "" } else { "s" }
-                        )))
+                    .when(form.editing.is_some(), |this| {
+                        this.child(div().text_xs().text_color(theme.text_faint).child("· editing a rule"))
                     }),
             )
             .when(form.has_filters(), |this| {
@@ -3063,426 +2844,1849 @@ impl FlowlistApp {
                 ))
             })
             .child(widgets::divider(theme))
-            .child(heading("FILTERS"))
-            .child(toggles)
-            .child(priority_toggles)
-            .child(project_tag_row)
-            .child(windows_row)
-            .child(fullscreen_row)
+            .child(heading("CONTENTS"))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .children(self.render_rule_nodes(&form.root, 0, true, cx)),
+            )
             .child(widgets::divider(theme))
             .child(heading("LAYOUT"))
-            .child(layout_row)
+            .child(self.render_layout_select(
+                LayoutField::Group,
+                form.group_label().to_string(),
+                form.group != GroupBy::None,
+                cx,
+            ))
+            .child(self.render_layout_select(
+                LayoutField::Sort,
+                form.sort_label().to_string(),
+                false,
+                cx,
+            ))
             .child(widgets::divider(theme))
             .child(summary)
     }
 
-    /// Record where a perspective control painted so its menu can be a root
-    /// overlay and a GUI probe can click the control or one of its options.
-    pub(super) fn view_probe(
+    fn render_layout_select(
         &self,
-        key: String,
-    ) -> impl Fn(Vec<Bounds<gpui::Pixels>>, &mut Window, &mut gpui::App) + 'static {
-        let boxes = self.view_boxes.clone();
-        move |bounds, _, _| {
-            let Some(bounds) = bounds.first() else {
-                return;
-            };
-            boxes.borrow_mut().insert(
-                key.clone(),
-                [
-                    f32::from(bounds.origin.x),
-                    f32::from(bounds.origin.y),
-                    f32::from(bounds.size.width),
-                    f32::from(bounds.size.height),
-                ],
-            );
-        }
-    }
-
-    /// One labelled menu button in the perspective editor. The value reads like
-    /// a field and the chevron says it opens a list rather than cycling.
-    fn perspective_select(
-        &self,
-        field: ViewField,
+        field: LayoutField,
         value: String,
         active: bool,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
         let theme = self.theme;
-        let key = field.key().to_string();
-        div()
+        let open = matches!(
+            &self.modal,
+            Some(Modal::Perspective { form }) if form.layout_menu == Some(field)
+        );
+        let key = match field {
+            LayoutField::Group => "group",
+            LayoutField::Sort => "sort",
+        };
+        let label = match field {
+            LayoutField::Group => "Group by",
+            LayoutField::Sort => "Sort by",
+        };
+        let mut card = div()
             .flex()
             .flex_col()
             .gap_1()
-            .min_w_0()
+            .child(div().text_xs().text_color(theme.text_faint).child(label))
             .child(
                 div()
-                    .text_xs()
-                    .text_color(theme.text_faint)
-                    .child(field.label()),
-            )
-            .child(
-                div().on_children_prepainted(self.view_probe(key)).child(
+                    .id(super::sid(format!("layout-{key}")))
+                    .h(px(28.))
+                    .px_2()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(if active || open { theme.accent } else { theme.border })
+                    .bg(if active || open {
+                        theme.selection
+                    } else {
+                        theme.field
+                    })
+                    .text_sm()
+                    .text_color(if active { theme.accent } else { theme.text })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .child(value),
+                    )
+                    .child(icons::icon(
+                        Icon::ChevronDown,
+                        11.0,
+                        if active { theme.accent } else { theme.text_faint },
+                    ))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.layout_menu = if form.layout_menu == Some(field) {
+                                None
+                            } else {
+                                Some(field)
+                            };
+                        }
+                        cx.notify();
+                    })),
+            );
+        if open {
+            let choices: Vec<(String, String)> = match field {
+                LayoutField::Group => [
+                    (GroupBy::None, "None"),
+                    (GroupBy::Project, "Project"),
+                    (GroupBy::Folder, "Folder"),
+                    (GroupBy::Tag, "Tag"),
+                    (GroupBy::DueDate, "Due"),
+                    (GroupBy::DeferDate, "Defer"),
+                    (GroupBy::PlannedDate, "Planned"),
+                    (GroupBy::Flagged, "Flagged"),
+                    (GroupBy::Estimate, "Estimate"),
+                ]
+                .into_iter()
+                .map(|(group, label)| (group.slug().to_string(), label.to_string()))
+                .collect(),
+                LayoutField::Sort => [
+                    (SortBy::Manual, "Manual"),
+                    (SortBy::Due, "Due"),
+                    (SortBy::Defer, "Defer"),
+                    (SortBy::Planned, "Planned"),
+                    (SortBy::Name, "Name"),
+                    (SortBy::Priority, "Priority"),
+                    (SortBy::Flagged, "Flagged"),
+                    (SortBy::Estimate, "Estimate"),
+                    (SortBy::Created, "Created"),
+                    (SortBy::CompletedAt, "Completed"),
+                ]
+                .into_iter()
+                .map(|(sort, label)| (sort.slug().to_string(), label.to_string()))
+                .collect(),
+            };
+            let mut menu = div()
+                .id("layout-menu")
+                .flex()
+                .flex_col()
+                .gap(px(1.))
+                .p_1()
+                .rounded_md()
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.raised)
+                .max_h(px(220.))
+                .overflow_y_scroll();
+            for (slug, label) in choices {
+                let theme = theme;
+                let slug_for_id = slug.clone();
+                let captured = slug;
+                let captured_label = label.clone();
+                menu = menu.child(
                     div()
-                        .id(super::sid(format!("modal-{}", field.key())))
-                        .h(px(28.))
+                        .id(super::sid(format!("layout-option-{key}-{slug_for_id}")))
                         .px_2()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(if active { theme.accent } else { theme.border })
-                        .bg(if active { theme.selection } else { theme.field })
-                        .text_sm()
-                        .text_color(if active { theme.accent } else { theme.text })
+                        .py_1()
+                        .rounded_sm()
+                        .text_xs()
+                        .text_color(theme.text_dim)
                         .cursor_pointer()
                         .hover(|style| style.bg(theme.hover))
-                        .child(
-                            div()
-                                .min_w_0()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .child(value),
-                        )
-                        .child(icons::icon(
-                            Icon::ChevronDown,
-                            11.0,
-                            if active {
-                                theme.accent
-                            } else {
-                                theme.text_faint
-                            },
-                        ))
-                        .on_click(
-                            cx.listener(move |this, _, _, cx| this.toggle_view_menu(field, cx)),
-                        ),
-                ),
-            )
-    }
-
-    pub(super) fn view_choices(&self, field: ViewField) -> Vec<ViewChoice> {
-        let db = self.store.db();
-        match field {
-            ViewField::Project => {
-                let mut projects: Vec<_> = db.projects.values().collect();
-                projects.sort_by_cached_key(|project| project.name.to_lowercase());
-                let mut choices = vec![ViewChoice::Project(None)];
-                choices.extend(
-                    projects
-                        .into_iter()
-                        .map(|project| ViewChoice::Project(Some(project.id.clone()))),
+                        .child(captured_label)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(Modal::Perspective { form }) = &mut this.modal {
+                                match field {
+                                    LayoutField::Group => {
+                                        if let Some(group) = GroupBy::from_slug(&captured) {
+                                            form.group = group;
+                                        }
+                                    }
+                                    LayoutField::Sort => {
+                                        if let Some(sort) = SortBy::from_slug(&captured) {
+                                            form.sort = sort;
+                                        }
+                                    }
+                                }
+                                form.layout_menu = None;
+                            }
+                            cx.notify();
+                        })),
                 );
-                choices
             }
-            ViewField::Tag => {
-                let mut tags: Vec<_> = db.tags.values().collect();
-                tags.sort_by_cached_key(|tag| tag.name.to_lowercase());
-                let mut choices = vec![ViewChoice::Tag(None)];
-                choices.extend(
-                    tags.into_iter()
-                        .map(|tag| ViewChoice::Tag(Some(tag.id.clone()))),
-                );
-                choices
-            }
-            ViewField::Status => [
-                TaskStatus::Any,
-                TaskStatus::Available,
-                TaskStatus::Blocked,
-                TaskStatus::Deferred,
-                TaskStatus::Completed,
-            ]
-            .into_iter()
-            .map(ViewChoice::Status)
-            .collect(),
-            ViewField::Due => [
-                super::perspective::DueChoice::Any,
-                super::perspective::DueChoice::Overdue,
-                super::perspective::DueChoice::Today,
-                super::perspective::DueChoice::Tomorrow,
-                super::perspective::DueChoice::Next7Days,
-                super::perspective::DueChoice::Next30Days,
-                super::perspective::DueChoice::Later,
-                super::perspective::DueChoice::NoDate,
-            ]
-            .into_iter()
-            .map(ViewChoice::Due)
-            .collect(),
-            ViewField::Planned => [
-                super::perspective::DueChoice::Any,
-                super::perspective::DueChoice::Overdue,
-                super::perspective::DueChoice::Today,
-                super::perspective::DueChoice::Tomorrow,
-                super::perspective::DueChoice::Next7Days,
-                super::perspective::DueChoice::Next30Days,
-                super::perspective::DueChoice::Later,
-                super::perspective::DueChoice::NoDate,
-            ]
-            .into_iter()
-            .map(ViewChoice::Planned)
-            .collect(),
-            ViewField::Fullscreen => [None, Some(true), Some(false)]
-                .into_iter()
-                .map(ViewChoice::Fullscreen)
-                .collect(),
-            ViewField::Defer => [
-                super::perspective::DeferChoice::Any,
-                super::perspective::DeferChoice::Today,
-                super::perspective::DeferChoice::Tomorrow,
-                super::perspective::DeferChoice::Next7Days,
-                super::perspective::DeferChoice::Next30Days,
-                super::perspective::DeferChoice::NoDate,
-            ]
-            .into_iter()
-            .map(ViewChoice::Defer)
-            .collect(),
-            ViewField::Group => [
-                GroupBy::None,
-                GroupBy::Project,
-                GroupBy::Folder,
-                GroupBy::Tag,
-                GroupBy::DueDate,
-                GroupBy::DeferDate,
-                GroupBy::PlannedDate,
-                GroupBy::Flagged,
-                GroupBy::Estimate,
-            ]
-            .into_iter()
-            .map(ViewChoice::Group)
-            .collect(),
-            ViewField::Sort => [
-                SortBy::Manual,
-                SortBy::Due,
-                SortBy::Defer,
-                SortBy::Planned,
-                SortBy::Name,
-                SortBy::Priority,
-                SortBy::Flagged,
-                SortBy::Estimate,
-                SortBy::Created,
-                SortBy::CompletedAt,
-            ]
-            .into_iter()
-            .map(ViewChoice::Sort)
-            .collect(),
+            card = card.child(menu);
         }
+        card.into_any_element()
     }
 
-    fn view_choice_label(&self, choice: &ViewChoice) -> String {
-        match choice {
-            ViewChoice::Project(None) => "Any".to_string(),
-            ViewChoice::Project(Some(id)) => self.store.db().project_path(id),
-            ViewChoice::Tag(None) => "Any".to_string(),
-            ViewChoice::Tag(Some(id)) => self
-                .store
-                .db()
-                .tags
-                .get(id)
-                .map(|tag| tag.name.clone())
-                .unwrap_or_else(|| "Unknown tag".to_string()),
-            ViewChoice::Status(status) => match status {
-                TaskStatus::Any => "Any",
-                TaskStatus::Available => "Available",
-                TaskStatus::Blocked => "Blocked",
-                TaskStatus::Deferred => "Deferred",
-                TaskStatus::Completed => "Completed",
+    fn render_rule_nodes(
+        &self,
+        node: &RuleNode,
+        depth: usize,
+        is_root: bool,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let mut out = vec![self.render_rule_row(node, depth, is_root, cx)];
+        if node.kind.is_group() {
+            for child in node.children() {
+                out.extend(self.render_rule_nodes(child, depth + 1, false, cx));
             }
-            .to_string(),
-            ViewChoice::Due(choice) => choice.label().to_string(),
-            ViewChoice::Planned(choice) => choice.label().to_string(),
-            ViewChoice::Defer(choice) => choice.label().to_string(),
-            ViewChoice::Fullscreen(None) => "Any".to_string(),
-            ViewChoice::Fullscreen(Some(true)) => "Has full-screen reminder".to_string(),
-            ViewChoice::Fullscreen(Some(false)) => "No full-screen reminder".to_string(),
-            ViewChoice::Group(group) => super::group_label(Some(*group)).to_string(),
-            ViewChoice::Sort(sort) => super::sort_label(Some(*sort)).to_string(),
+            out.push(self.render_add_rule_row(node.id, depth + 1, cx));
         }
+        if matches!(&self.modal, Some(Modal::Perspective { form }) if form.editing == Some(node.id))
+        {
+            out.push(self.render_rule_editor(node, depth + 1, cx));
+        }
+        if matches!(&self.modal, Some(Modal::Perspective { form }) if form.row_menu == Some(node.id))
+        {
+            out.push(self.render_rule_menu(node, depth + 1, cx));
+        }
+        if matches!(&self.modal, Some(Modal::Perspective { form }) if form.add_menu == Some(node.id))
+        {
+            out.push(self.render_add_rule_menu(node.id, depth + 1, cx));
+        }
+        out
     }
 
-    fn view_choice_selected(&self, form: &PerspectiveForm, choice: &ViewChoice) -> bool {
-        match choice {
-            ViewChoice::Project(None) => form.projects.is_empty(),
-            ViewChoice::Project(Some(id)) => form.projects.contains(id),
-            ViewChoice::Tag(None) => form.tags.is_empty(),
-            ViewChoice::Tag(Some(id)) => form.tags.contains(id),
-            ViewChoice::Status(status) => form.status == *status,
-            ViewChoice::Due(choice) => {
-                (*choice == DueChoice::Any && form.dues.is_empty()) || form.dues.contains(choice)
-            }
-            ViewChoice::Planned(choice) => {
-                (*choice == DueChoice::Any && form.planned.is_empty())
-                    || form.planned.contains(choice)
-            }
-            ViewChoice::Defer(choice) => {
-                (*choice == DeferChoice::Any && form.defers.is_empty())
-                    || form.defers.contains(choice)
-            }
-            ViewChoice::Fullscreen(value) => form.fullscreen == *value,
-            ViewChoice::Group(group) => form.group == *group,
-            ViewChoice::Sort(sort) => form.sort == *sort,
-        }
-    }
-
-    fn toggle_view_menu(&mut self, field: ViewField, cx: &mut Context<Self>) {
-        if self.view_menu == Some(field) {
-            self.view_menu = None;
-        } else {
-            let cursor = {
-                let Some(Modal::Perspective { form }) = &self.modal else {
-                    return;
-                };
-                self.view_choices(field)
-                    .iter()
-                    .position(|choice| self.view_choice_selected(form, choice))
-                    .unwrap_or(0)
-            };
-            self.view_menu = Some(field);
-            self.view_menu_cursor = cursor;
-            self.view_menu_scroll.set_offset(point(px(0.), px(0.)));
-        }
-        cx.notify();
-    }
-
-    pub(super) fn choose_view_choice(&mut self, choice: ViewChoice, cx: &mut Context<Self>) {
-        let multi = matches!(
-            choice,
-            ViewChoice::Project(_)
-                | ViewChoice::Tag(_)
-                | ViewChoice::Due(_)
-                | ViewChoice::Planned(_)
-                | ViewChoice::Defer(_)
-        );
-        if let Some(Modal::Perspective { form }) = &mut self.modal {
-            match choice {
-                ViewChoice::Project(id) => form.toggle_project(id),
-                ViewChoice::Tag(id) => form.toggle_tag(id),
-                ViewChoice::Status(status) => form.status = status,
-                ViewChoice::Due(choice) => form.toggle_due(choice),
-                ViewChoice::Planned(choice) => form.toggle_planned(choice),
-                ViewChoice::Defer(choice) => form.toggle_defer(choice),
-                ViewChoice::Fullscreen(value) => form.fullscreen = value,
-                ViewChoice::Group(group) => form.group = group,
-                ViewChoice::Sort(sort) => form.sort = sort,
-            }
-        }
-        if !multi {
-            self.view_menu = None;
-        }
-        cx.notify();
-    }
-
-    fn render_view_menu(&self, field: ViewField, cx: &mut Context<Self>) -> AnyElement {
+    fn render_rule_row(
+        &self,
+        node: &RuleNode,
+        depth: usize,
+        is_root: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let theme = self.theme;
-        let Some(Modal::Perspective { form }) = &self.modal else {
-            return div().into_any_element();
+        let db = self.store.db();
+        let id = node.id;
+        let label = rule_summary(db, node);
+        let editing = matches!(&self.modal, Some(Modal::Perspective { form }) if form.editing == Some(id));
+        let disabled = !node.enabled;
+        let is_group = node.kind.is_group();
+        let indent = (depth as f32) * 14.0;
+        let mut row = div()
+            .on_children_prepainted(self.view_probe(format!("rule:{id}")))
+            .id(super::sid(format!("rule:{id}")))
+            .flex()
+            .items_center()
+            .gap_1()
+            .min_h(px(28.))
+            .pl(px(indent + 4.0))
+            .pr_1()
+            .rounded_md()
+            .text_sm()
+            .text_color(if disabled {
+                theme.text_faint
+            } else if is_group {
+                theme.text
+            } else {
+                theme.text_dim
+            })
+            .bg(if editing { theme.selection } else { theme.clear })
+            .hover(|style| style.bg(theme.hover));
+        if !is_root {
+            let payload = DragRule::rule(id, label.clone());
+            row = row.child(
+                div()
+                    .id(super::sid(format!("rule-drag:{id}")))
+                    .w(px(12.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_color(theme.text_faint)
+                    .cursor_pointer()
+                    .child("⠿")
+                    .on_drag(payload, move |payload, position, window, cx| {
+                        rule_ghost(payload, position, window, cx, theme)
+                    }),
+            );
+        } else {
+            row = row.child(div().w(px(12.)));
+        }
+        if let Some(group_label) = node.kind.group_label() {
+            row = row.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .min_w_0()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .child(group_label),
+                    )
+                    .child(self.group_operator_chips(node.id, node, cx)),
+            );
+        } else {
+            row = row.child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .child(if disabled {
+                        format!("{label}  (off)")
+                    } else {
+                        label.clone()
+                    }),
+            );
+        }
+        if !is_root {
+            row = row.child(
+                div()
+                    .on_children_prepainted(self.view_probe(format!("rule-menu:{id}")))
+                    .id(super::sid(format!("rule-menu:{id}")))
+                    .w(px(22.))
+                    .h(px(22.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_sm()
+                    .text_color(theme.text_faint)
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover).text_color(theme.text))
+                    .child("⋯")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.row_menu = if form.row_menu == Some(id) {
+                                None
+                            } else {
+                                Some(id)
+                            };
+                            form.editing = None;
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        row = row.on_click(cx.listener(move |this, _, _, cx| {
+            if let Some(Modal::Perspective { form }) = &mut this.modal {
+                if is_group {
+                    form.add_menu = if form.add_menu == Some(id) {
+                        None
+                    } else {
+                        Some(id)
+                    };
+                    form.row_menu = None;
+                } else {
+                    form.editing = if form.editing == Some(id) {
+                        None
+                    } else {
+                        Some(id)
+                    };
+                    form.row_menu = None;
+                }
+            }
+            cx.notify();
+        }));
+        if !is_root {
+            row = row.on_drop::<DragRule>(cx.listener(move |this, payload: &DragRule, _, cx| {
+                if let Some(Modal::Perspective { form }) = &mut this.modal
+                    && form.move_before(payload.id, id)
+                {
+                    form.row_menu = None;
+                    form.editing = None;
+                }
+                cx.notify();
+            }));
+        }
+        row.into_any_element()
+    }
+
+    fn group_operator_chips(
+        &self,
+        id: u64,
+        node: &RuleNode,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let current = match node.kind {
+            RuleKind::All(_) => GroupOperator::All,
+            RuleKind::Any(_) => GroupOperator::Any,
+            RuleKind::None(_) => GroupOperator::None,
+            _ => GroupOperator::All,
         };
-        let choices = self.view_choices(field);
+        let mut row = div().flex().items_center().gap(px(2.));
+        for operator in [
+            GroupOperator::All,
+            GroupOperator::Any,
+            GroupOperator::None,
+        ] {
+            let active = operator == current;
+            row = row.child(
+                div()
+                    .id(super::sid(format!("rule-op:{id}:{}", operator.label())))
+                    .h(px(18.))
+                    .px_1()
+                    .flex()
+                    .items_center()
+                    .rounded_sm()
+                    .text_size(px(10.))
+                    .text_color(if active { theme.accent } else { theme.text_faint })
+                    .bg(if active { theme.selection } else { theme.clear })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(operator.label())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.set_group_operator(id, operator);
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        row.into_any_element()
+    }
+
+    fn render_add_rule_row(
+        &self,
+        parent: u64,
+        depth: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let open = matches!(&self.modal, Some(Modal::Perspective { form }) if form.add_menu == Some(parent));
+        div()
+            .on_children_prepainted(self.view_probe(format!("rule-add:{parent}")))
+            .id(super::sid(format!("rule-add:{parent}")))
+            .flex()
+            .items_center()
+            .gap_1()
+            .min_h(px(24.))
+            .pl(px((depth as f32) * 14.0 + 20.0))
+            .rounded_md()
+            .text_xs()
+            .text_color(if open { theme.accent } else { theme.text_faint })
+            .cursor_pointer()
+            .hover(|style| style.text_color(theme.accent))
+            .child(icons::icon(Icon::Plus, 10.0, theme.text_faint))
+            .child("Add a new rule")
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if let Some(Modal::Perspective { form }) = &mut this.modal {
+                    form.add_menu = if form.add_menu == Some(parent) {
+                        None
+                    } else {
+                        Some(parent)
+                    };
+                    form.editing = None;
+                    form.row_menu = None;
+                }
+                cx.notify();
+            }))
+            .into_any_element()
+    }
+
+    fn render_add_rule_menu(
+        &self,
+        parent: u64,
+        depth: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
         let mut menu = div()
-            .id("view-menu")
-            .min_w(px(220.))
-            .max_w(px(320.))
-            .max_h(px(300.))
+            .id("rule-add-menu")
+            .ml(px((depth as f32) * 14.0 + 20.0))
             .flex()
             .flex_col()
             .gap(px(1.))
             .p_1()
-            .rounded_lg()
+            .rounded_md()
             .border_1()
             .border_color(theme.border)
             .bg(theme.raised)
-            .shadow_lg()
-            .overflow_y_scroll()
-            .track_scroll(&self.view_menu_scroll);
-        for (index, choice) in choices.iter().enumerate() {
-            let selected = self.view_choice_selected(form, choice);
-            let cursor = self.view_menu_cursor == index;
-            let label = self.view_choice_label(choice);
-            let slug = choice.slug();
-            let option_key = format!("option:{}:{slug}", field.key());
-            let captured = choice.clone();
+            .max_h(px(320.))
+            .overflow_y_scroll();
+        let mut category = "";
+        for template in RuleTemplate::ALL {
+            if template.category() != category {
+                category = template.category();
+                menu = menu.child(
+                    div()
+                        .px_2()
+                        .pt_2()
+                        .pb_1()
+                        .text_size(px(10.))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.text_faint)
+                        .child(category),
+                );
+            }
+            let label = template.label().to_string();
+            let slug = label
+                .chars()
+                .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+                .collect::<String>();
             menu = menu.child(
                 div()
-                    .on_children_prepainted(self.view_probe(option_key))
-                    .child(
-                        div()
-                            .id(super::sid(format!("view-option:{}:{slug}", field.key())))
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .px_2()
-                            .py_1()
-                            .rounded_sm()
-                            .text_xs()
-                            .text_color(if selected {
-                                theme.accent
-                            } else {
-                                theme.text_dim
-                            })
-                            .bg(if selected {
-                                theme.selection
-                            } else if cursor {
-                                theme.hover
-                            } else {
-                                theme.clear
-                            })
-                            .cursor_pointer()
-                            .hover(|style| style.bg(theme.hover))
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .child(label),
-                            )
-                            .child(if field.is_multi() {
-                                view_checkbox(theme, selected).into_any_element()
-                            } else if selected {
-                                icons::icon(Icon::Check, 11.0, theme.accent).into_any_element()
-                            } else {
-                                div().w(px(11.)).into_any_element()
-                            })
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.choose_view_choice(captured.clone(), cx);
-                            })),
-                    ),
+                    .on_children_prepainted(
+                        self.view_probe(format!("rule-option:{parent}:{slug}")),
+                    )
+                    .id(super::sid(format!("rule-option:{parent}:{slug}")))
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(theme.text_dim)
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover).text_color(theme.text))
+                    .child(label)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            form.add_rule(parent, template);
+                        }
+                        cx.notify();
+                    })),
             );
         }
         menu.into_any_element()
     }
 
-    /// The root-layer menu for the open perspective select. It paints after the
-    /// sheet so a project or tag list can extend past the card without being
-    /// clipped by the scrolling body.
-    pub(super) fn render_view_menu_layer(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let field = self.view_menu?;
-        let (x, y) = {
-            let boxes = self.view_boxes.borrow();
-            let [x, y, width, height] = *boxes.get(field.key())?;
-            let anchor = Bounds {
-                origin: point(px(x), px(y)),
-                size: size(px(width), px(height)),
-            };
-            let count = self.view_choices(field).len() as f32;
-            let menu_height = (count * 25.0 + 10.0).min(300.0);
-            super::menu_position(
-                anchor,
-                self.window_size.unwrap_or((1254.0, 1404.0)),
-                240.0,
-                menu_height,
-            )
+    fn render_rule_menu(
+        &self,
+        node: &RuleNode,
+        depth: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let id = node.id;
+        let enabled = node.enabled;
+        let is_group = node.kind.is_group();
+        let label_for_edit = if is_group { "Add a new rule" } else { "Edit" };
+        let mut menu = div()
+            .ml(px((depth as f32) * 14.0 + 20.0))
+            .w(px(180.))
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_md();
+        let items: Vec<(String, Option<&'static str>)> = if is_group {
+            vec![
+                ("Add a new rule".to_string(), None),
+                (
+                    if enabled { "Turn Off" } else { "Turn On" }.to_string(),
+                    Some("toggle"),
+                ),
+                ("Move Up".to_string(), Some("up")),
+                ("Move Down".to_string(), Some("down")),
+                ("Delete".to_string(), Some("delete")),
+            ]
+        } else {
+            vec![
+                (label_for_edit.to_string(), None),
+                (
+                    if enabled { "Turn Off" } else { "Turn On" }.to_string(),
+                    Some("toggle"),
+                ),
+                ("Move Up".to_string(), Some("up")),
+                ("Move Down".to_string(), Some("down")),
+                ("Delete".to_string(), Some("delete")),
+            ]
         };
-        Some(
+        for (label, action) in items {
+            let slug = label.replace(' ', "-").to_lowercase();
+            menu = menu.child(
+                div()
+                    .on_children_prepainted(
+                        self.view_probe(format!("rule-menu-item:{id}:{slug}")),
+                    )
+                    .id(super::sid(format!("rule-menu-item:{id}:{slug}")))
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if action == Some("delete") {
+                        theme.danger
+                    } else {
+                        theme.text_dim
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(label)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(Modal::Perspective { form }) = &mut this.modal {
+                            match action {
+                                None => {
+                                    if is_group {
+                                        form.add_menu = Some(id);
+                                    } else {
+                                        form.editing = Some(id);
+                                    }
+                                }
+                                Some("toggle") => {
+                                    let now = form.is_rule_enabled(id);
+                                    form.set_rule_enabled(id, !now);
+                                }
+                                Some("up") => {
+                                    form.move_rule(id, true);
+                                }
+                                Some("down") => {
+                                    form.move_rule(id, false);
+                                }
+                                Some("delete") => form.delete_rule(id),
+                                _ => {}
+                            }
+                            form.row_menu = None;
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        menu.into_any_element()
+    }
+
+    fn render_rule_editor(
+        &self,
+        node: &RuleNode,
+        depth: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let id = node.id;
+        let mut card = div()
+            .ml(px((depth as f32) * 14.0 + 20.0))
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_2()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.field);
+        let title = rule_summary(self.store.db(), node);
+        card = card.child(
             div()
-                .id("view-menu-layer")
-                .absolute()
-                .occlude()
-                .left(px(x))
-                .top(px(y))
-                .child(self.render_view_menu(field, cx))
-                .into_any_element(),
-        )
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.text_faint)
+                        .child(title),
+                )
+                .child(
+                    div()
+                        .on_children_prepainted(self.view_probe(format!("rule-close:{id}")))
+                        .id(super::sid(format!("rule-close:{id}")))
+                        .px_1()
+                        .rounded_sm()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .cursor_pointer()
+                        .hover(|style| style.bg(theme.hover).text_color(theme.text))
+                        .child("Done")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(Modal::Perspective { form }) = &mut this.modal {
+                                form.editing = None;
+                            }
+                            cx.notify();
+                        })),
+                ),
+        );
+        if node.kind.is_group() {
+            card = card.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_dim)
+                    .child("Rules nested here are combined by the operator chosen in the row above."),
+            );
+        } else if matches!(node.kind, RuleKind::Comment) {
+            card = card.child(self.rule_text_input(0, "Comment", cx));
+        } else if let Some(condition) = node.condition_ref().cloned() {
+            card = card.child(self.render_condition_editor(id, &condition, cx));
+        }
+        card.into_any_element()
+    }
+
+    fn rule_text_input(
+        &self,
+        index: usize,
+        placeholder: &str,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let Some(Modal::Perspective { form }) = &self.modal else {
+            return div().into_any_element();
+        };
+        let Some(buffer) = form.editing_buffer(index) else {
+            return div().into_any_element();
+        };
+        let focused = self.modal_focus == index;
+        let field = widgets::text_field_with_cursor(
+            theme,
+            buffer,
+            placeholder,
+            focused,
+            cx.listener(move |this, hit: &widgets::TextHit, _, cx| {
+                this.set_modal_cursor(index, hit.index, hit.extend, hit.click_count, cx);
+            }),
+        );
+        div()
+            .id(super::sid(format!("rule-text:{index}")))
+            .flex_1()
+            .min_w_0()
+            .child(field)
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.modal_focus = index;
+                this.focus = super::FocusArea::Modal;
+                cx.notify();
+            }))
+            .into_any_element()
+    }
+
+    fn rule_chip(
+        &self,
+        id: String,
+        label: String,
+        active: bool,
+        action: impl Fn(&mut Self, &mut Context<Self>) + 'static,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        div()
+            .on_children_prepainted(self.view_probe(id.clone()))
+            .id(super::sid(id))
+            .child(widgets::toggle_chip(theme, label, active))
+            .on_click(cx.listener(move |this, _, _, cx| action(this, cx)))
+            .into_any_element()
+    }
+
+    fn with_rule(
+        &mut self,
+        id: u64,
+        change: impl FnOnce(&mut RuleNode),
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(Modal::Perspective { form }) = &mut self.modal
+            && let Some(node) = form.rule_mut(id)
+        {
+            change(node);
+            node.sync_text();
+        }
+        cx.notify();
+    }
+
+    fn render_condition_editor(
+        &self,
+        id: u64,
+        condition: &Condition,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let mut body = div().flex().flex_col().gap_2();
+
+        let chip_row = |body: gpui::Div, children: Vec<AnyElement>| {
+            body.child(div().flex().flex_wrap().items_center().gap_1().children(children))
+        };
+
+        match condition {
+            Condition::StatusKind { value } => {
+                let mut chips = Vec::new();
+                for choice in FilterStatus::ALL {
+                    chips.push(self.rule_chip(
+                        format!("rule-state:{id}:{}", choice.label()),
+                        choice.label().to_string(),
+                        *value == choice,
+                        move |this, cx| {
+                            this.with_rule(
+                                id,
+                                |node| {
+                                    if let RuleKind::Condition(Condition::StatusKind { value }) =
+                                        &mut node.kind
+                                    {
+                                        *value = choice;
+                                    }
+                                },
+                                cx,
+                            )
+                        },
+                        cx,
+                    ));
+                }
+                body = chip_row(body, chips);
+            }
+            Condition::Availability { value } => {
+                let mut chips = Vec::new();
+                for choice in AvailabilityFilter::ALL {
+                    chips.push(self.rule_chip(
+                        format!("rule-availability:{id}:{}", choice.label()),
+                        choice.label().to_string(),
+                        *value == choice,
+                        move |this, cx| {
+                            this.with_rule(
+                                id,
+                                |node| {
+                                    if let RuleKind::Condition(Condition::Availability { value }) =
+                                        &mut node.kind
+                                    {
+                                        *value = choice;
+                                    }
+                                },
+                                cx,
+                            )
+                        },
+                        cx,
+                    ));
+                }
+                body = chip_row(body, chips);
+            }
+            Condition::EstimateLessThan { minutes } => {
+                let mut chips = Vec::new();
+                for choice in [5u32, 15, 30, 60] {
+                    chips.push(self.rule_chip(
+                        format!("rule-estimate:{id}:{choice}"),
+                        format!("{choice} minutes"),
+                        *minutes == choice,
+                        move |this, cx| {
+                            this.with_rule(
+                                id,
+                                |node| {
+                                    if let RuleKind::Condition(Condition::EstimateLessThan {
+                                        minutes,
+                                    }) = &mut node.kind
+                                    {
+                                        *minutes = choice;
+                                    }
+                                },
+                                cx,
+                            )
+                        },
+                        cx,
+                    ));
+                }
+                body = chip_row(body, chips);
+            }
+            Condition::HasDate { field, value } => {
+                let mut chips = Vec::new();
+                for choice in DateField::ALL {
+                    chips.push(self.rule_chip(
+                        format!("rule-hasdate-field:{id}:{}", choice.label()),
+                        choice.label().to_string(),
+                        *field == choice,
+                        move |this, cx| {
+                            this.with_rule(
+                                id,
+                                |node| {
+                                    if let RuleKind::Condition(Condition::HasDate { field, .. }) =
+                                        &mut node.kind
+                                    {
+                                        *field = choice;
+                                    }
+                                },
+                                cx,
+                            )
+                        },
+                        cx,
+                    ));
+                }
+                body = chip_row(body, chips);
+                body = chip_row(
+                    body,
+                    vec![
+                        self.rule_chip(
+                            format!("rule-hasdate:{id}:yes"),
+                            "Has".to_string(),
+                            *value,
+                            move |this, cx| {
+                                this.with_rule(
+                                    id,
+                                    |node| {
+                                        if let RuleKind::Condition(Condition::HasDate {
+                                            value, ..
+                                        }) = &mut node.kind
+                                        {
+                                            *value = true;
+                                        }
+                                    },
+                                    cx,
+                                )
+                            },
+                            cx,
+                        ),
+                        self.rule_chip(
+                            format!("rule-hasdate:{id}:no"),
+                            "Does not have".to_string(),
+                            !*value,
+                            move |this, cx| {
+                                this.with_rule(
+                                    id,
+                                    |node| {
+                                        if let RuleKind::Condition(Condition::HasDate {
+                                            value, ..
+                                        }) = &mut node.kind
+                                        {
+                                            *value = false;
+                                        }
+                                    },
+                                    cx,
+                                )
+                            },
+                            cx,
+                        ),
+                    ],
+                );
+            }
+            Condition::DateRange { field, range } => {
+                let mut field_chips = Vec::new();
+                for choice in DateField::ALL {
+                    field_chips.push(self.rule_chip(
+                        format!("rule-range-field:{id}:{}", choice.label()),
+                        choice.label().to_string(),
+                        *field == choice,
+                        move |this, cx| {
+                            this.with_rule(
+                                id,
+                                |node| {
+                                    if let RuleKind::Condition(Condition::DateRange {
+                                        field, ..
+                                    }) = &mut node.kind
+                                    {
+                                        *field = choice;
+                                    }
+                                },
+                                cx,
+                            )
+                        },
+                        cx,
+                    ));
+                }
+                body = chip_row(body, field_chips);
+
+                let modes: [(&str, DateRangeFilter); 7] = [
+                    ("On", DateRangeFilter::On { date: flowlist_core::time::local_date(now()) }),
+                    ("Yesterday", DateRangeFilter::Yesterday),
+                    ("Today", DateRangeFilter::Today),
+                    ("Tomorrow", DateRangeFilter::Tomorrow),
+                    (
+                        "In the past",
+                        DateRangeFilter::InPast {
+                            amount: 7,
+                            unit: DateUnit::Days,
+                        },
+                    ),
+                    (
+                        "In the next",
+                        DateRangeFilter::InNext {
+                            amount: 7,
+                            unit: DateUnit::Days,
+                        },
+                    ),
+                    (
+                        "Between",
+                        DateRangeFilter::Between {
+                            from: Some(flowlist_core::time::local_date(now())),
+                            to: Some(
+                                flowlist_core::time::local_date(now())
+                                    + chrono::Duration::days(7),
+                            ),
+                        },
+                    ),
+                ];
+                let mut mode_chips = Vec::new();
+                for (label, mode) in modes {
+                    let active = std::mem::discriminant(range) == std::mem::discriminant(&mode);
+                    mode_chips.push(self.rule_chip(
+                        format!("rule-range-mode:{id}:{label}"),
+                        label.to_string(),
+                        active,
+                        move |this, cx| {
+                            let today = flowlist_core::time::local_date(now());
+                            this.with_rule(
+                                id,
+                                |node| {
+                                    if let RuleKind::Condition(Condition::DateRange {
+                                        range, ..
+                                    }) = &mut node.kind
+                                    {
+                                        *range = mode.clone();
+                                        match &mode {
+                                            DateRangeFilter::On { date } => {
+                                                node.text.set(date.to_string());
+                                                node.text2.set(String::new());
+                                            }
+                                            DateRangeFilter::Between { from, to } => {
+                                                node.text.set(
+                                                    from.map(|date| date.to_string())
+                                                        .unwrap_or_default(),
+                                                );
+                                                node.text2.set(
+                                                    to.map(|date| date.to_string())
+                                                        .unwrap_or_default(),
+                                                );
+                                            }
+                                            DateRangeFilter::InPast { amount, .. }
+                                            | DateRangeFilter::InNext { amount, .. } => {
+                                                node.text.set(amount.to_string());
+                                            }
+                                            DateRangeFilter::Yesterday
+                                            | DateRangeFilter::Today
+                                            | DateRangeFilter::Tomorrow => {
+                                                node.text.set(today.to_string());
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                },
+                                cx,
+                            )
+                        },
+                        cx,
+                    ));
+                }
+                body = chip_row(body, mode_chips);
+
+                match range {
+                    DateRangeFilter::On { .. } => {
+                        body = body.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(div().text_xs().text_color(theme.text_faint).child("Date"))
+                                .child(self.rule_text_input(0, "YYYY-MM-DD", cx)),
+                        );
+                    }
+                    DateRangeFilter::Between { .. } => {
+                        body = body.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(div().text_xs().text_color(theme.text_faint).child("From"))
+                                .child(self.rule_text_input(0, "YYYY-MM-DD", cx))
+                                .child(div().text_xs().text_color(theme.text_faint).child("To"))
+                                .child(self.rule_text_input(1, "YYYY-MM-DD", cx)),
+                        );
+                    }
+                    DateRangeFilter::InPast { unit, .. }
+                    | DateRangeFilter::InNext { unit, .. } => {
+                        let current = *unit;
+                        body = body.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(div().text_xs().text_color(theme.text_faint).child("Amount"))
+                                .child(self.rule_text_input(0, "7", cx)),
+                        );
+                        let mut chips = Vec::new();
+                        for choice in DateUnit::ALL {
+                            chips.push(self.rule_chip(
+                                format!("rule-range-unit:{id}:{}", choice.label()),
+                                choice.label().to_string(),
+                                current == choice,
+                                move |this, cx| {
+                                    this.with_rule(
+                                        id,
+                                        |node| {
+                                            if let RuleKind::Condition(Condition::DateRange {
+                                                range, ..
+                                            }) = &mut node.kind
+                                            {
+                                                match range {
+                                                    DateRangeFilter::InPast { unit, .. }
+                                                    | DateRangeFilter::InNext { unit, .. } => {
+                                                        *unit = choice
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                        },
+                                        cx,
+                                    )
+                                },
+                                cx,
+                            ));
+                        }
+                        body = chip_row(body, chips);
+                    }
+                    _ => {}
+                }
+            }
+            Condition::TagStatus { value } => {
+                let mut chips = Vec::new();
+                for choice in TagStatusFilter::ALL {
+                    chips.push(self.rule_chip(
+                        format!("rule-tagstatus:{id}:{}", choice.label()),
+                        choice.label().to_string(),
+                        *value == choice,
+                        move |this, cx| {
+                            this.with_rule(
+                                id,
+                                |node| {
+                                    if let RuleKind::Condition(Condition::TagStatus { value }) =
+                                        &mut node.kind
+                                    {
+                                        *value = choice;
+                                    }
+                                },
+                                cx,
+                            )
+                        },
+                        cx,
+                    ));
+                }
+                body = chip_row(body, chips);
+            }
+            Condition::TagsAny {
+                ids,
+                include_children,
+            }
+            | Condition::TagsAll {
+                ids,
+                include_children,
+            } => {
+                let all = matches!(condition, Condition::TagsAll { .. });
+                body = body.child(self.render_tag_picker(id, ids, *include_children, all, cx));
+            }
+            Condition::IsUntagged { value } => {
+                body = chip_row(
+                    body,
+                    vec![
+                        self.rule_chip(
+                            format!("rule-untagged:{id}:yes"),
+                            "Is untagged".to_string(),
+                            *value,
+                            move |this, cx| {
+                                this.with_rule(
+                                    id,
+                                    |node| {
+                                        if let RuleKind::Condition(Condition::IsUntagged {
+                                            value,
+                                        }) = &mut node.kind
+                                        {
+                                            *value = true;
+                                        }
+                                    },
+                                    cx,
+                                )
+                            },
+                            cx,
+                        ),
+                        self.rule_chip(
+                            format!("rule-untagged:{id}:no"),
+                            "Is tagged".to_string(),
+                            !*value,
+                            move |this, cx| {
+                                this.with_rule(
+                                    id,
+                                    |node| {
+                                        if let RuleKind::Condition(Condition::IsUntagged {
+                                            value,
+                                        }) = &mut node.kind
+                                        {
+                                            *value = false;
+                                        }
+                                    },
+                                    cx,
+                                )
+                            },
+                            cx,
+                        ),
+                    ],
+                );
+            }
+            Condition::ItemKind { value } => {
+                let mut chips = Vec::new();
+                for choice in ItemKindFilter::ALL {
+                    chips.push(self.rule_chip(
+                        format!("rule-kind:{id}:{}", choice.label()),
+                        choice.label().to_string(),
+                        *value == choice,
+                        move |this, cx| {
+                            this.with_rule(
+                                id,
+                                |node| {
+                                    if let RuleKind::Condition(Condition::ItemKind { value }) =
+                                        &mut node.kind
+                                    {
+                                        *value = choice;
+                                    }
+                                },
+                                cx,
+                            )
+                        },
+                        cx,
+                    ));
+                }
+                body = chip_row(body, chips);
+            }
+            Condition::ProjectStatus { value } => {
+                let mut chips = Vec::new();
+                for choice in ProjectStatusFilter::ALL {
+                    chips.push(self.rule_chip(
+                        format!("rule-projectstatus:{id}:{}", choice.label()),
+                        choice.label().to_string(),
+                        *value == choice,
+                        move |this, cx| {
+                            this.with_rule(
+                                id,
+                                |node| {
+                                    if let RuleKind::Condition(Condition::ProjectStatus {
+                                        value,
+                                    }) = &mut node.kind
+                                    {
+                                        *value = choice;
+                                    }
+                                },
+                                cx,
+                            )
+                        },
+                        cx,
+                    ));
+                }
+                body = chip_row(body, chips);
+            }
+            Condition::Within {
+                project,
+                folder,
+                include_children,
+            } => {
+                body = body.child(self.render_within_picker(
+                    id,
+                    project.as_ref(),
+                    folder.as_ref(),
+                    *include_children,
+                    cx,
+                ));
+            }
+            Condition::Search { .. } => {
+                body = body.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("Terms, separated by commas. Every term must match."),
+                        )
+                        .child(self.rule_text_input(0, "deep, work", cx)),
+                );
+            }
+            Condition::Text { .. } => {
+                body = body.child(self.rule_text_input(0, "Text to find", cx));
+            }
+            Condition::Estimate { .. } => {
+                body = body.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(div().text_xs().text_color(theme.text_faint).child("Minimum"))
+                        .child(self.rule_text_input(0, "minutes", cx))
+                        .child(div().text_xs().text_color(theme.text_faint).child("Maximum"))
+                        .child(self.rule_text_input(1, "minutes", cx)),
+                );
+            }
+            Condition::Flagged { value } => {
+                body = chip_row(
+                    body,
+                    vec![
+                        self.rule_chip(
+                            format!("rule-flagged:{id}:yes"),
+                            "Is flagged".to_string(),
+                            *value,
+                            move |this, cx| {
+                                this.with_rule(
+                                    id,
+                                    |node| {
+                                        if let RuleKind::Condition(Condition::Flagged { value }) =
+                                            &mut node.kind
+                                        {
+                                            *value = true;
+                                        }
+                                    },
+                                    cx,
+                                )
+                            },
+                            cx,
+                        ),
+                        self.rule_chip(
+                            format!("rule-flagged:{id}:no"),
+                            "Is not flagged".to_string(),
+                            !*value,
+                            move |this, cx| {
+                                this.with_rule(
+                                    id,
+                                    |node| {
+                                        if let RuleKind::Condition(Condition::Flagged { value }) =
+                                            &mut node.kind
+                                        {
+                                            *value = false;
+                                        }
+                                    },
+                                    cx,
+                                )
+                            },
+                            cx,
+                        ),
+                    ],
+                );
+            }
+            Condition::HasRepeat { value } | Condition::HasEstimate { value } => {
+                let (yes, no) = if matches!(condition, Condition::HasRepeat { .. }) {
+                    ("Is repeating", "Is not repeating")
+                } else {
+                    ("Has an estimate", "Has no estimate")
+                };
+                body = chip_row(
+                    body,
+                    vec![
+                        self.rule_chip(
+                            format!("rule-bool:{id}:yes"),
+                            yes.to_string(),
+                            *value,
+                            move |this, cx| {
+                                this.with_rule(
+                                    id,
+                                    |node| match &mut node.kind {
+                                        RuleKind::Condition(Condition::HasRepeat { value })
+                                        | RuleKind::Condition(Condition::HasEstimate { value }) => {
+                                            *value = true
+                                        }
+                                        _ => {}
+                                    },
+                                    cx,
+                                )
+                            },
+                            cx,
+                        ),
+                        self.rule_chip(
+                            format!("rule-bool:{id}:no"),
+                            no.to_string(),
+                            !*value,
+                            move |this, cx| {
+                                this.with_rule(
+                                    id,
+                                    |node| match &mut node.kind {
+                                        RuleKind::Condition(Condition::HasRepeat { value })
+                                        | RuleKind::Condition(Condition::HasEstimate { value }) => {
+                                            *value = false
+                                        }
+                                        _ => {}
+                                    },
+                                    cx,
+                                )
+                            },
+                            cx,
+                        ),
+                    ],
+                );
+            }
+            Condition::FullscreenReminder { value } => {
+                body = chip_row(
+                    body,
+                    vec![
+                        self.rule_chip(
+                            format!("rule-fullscreen:{id}:yes"),
+                            "Has full-screen".to_string(),
+                            *value,
+                            move |this, cx| {
+                                this.with_rule(
+                                    id,
+                                    |node| {
+                                        if let RuleKind::Condition(
+                                            Condition::FullscreenReminder { value },
+                                        ) = &mut node.kind
+                                        {
+                                            *value = true;
+                                        }
+                                    },
+                                    cx,
+                                )
+                            },
+                            cx,
+                        ),
+                        self.rule_chip(
+                            format!("rule-fullscreen:{id}:no"),
+                            "No full-screen".to_string(),
+                            !*value,
+                            move |this, cx| {
+                                this.with_rule(
+                                    id,
+                                    |node| {
+                                        if let RuleKind::Condition(
+                                            Condition::FullscreenReminder { value },
+                                        ) = &mut node.kind
+                                        {
+                                            *value = false;
+                                        }
+                                    },
+                                    cx,
+                                )
+                            },
+                            cx,
+                        ),
+                    ],
+                );
+            }
+            Condition::Priority { value } => {
+                let mut chips = Vec::new();
+                for choice in Priority::ALL {
+                    chips.push(self.rule_chip(
+                        format!("rule-priority:{id}:{}", choice.slug()),
+                        choice.label().to_string(),
+                        *value == choice,
+                        move |this, cx| {
+                            this.with_rule(
+                                id,
+                                |node| {
+                                    if let RuleKind::Condition(Condition::Priority { value }) =
+                                        &mut node.kind
+                                    {
+                                        *value = choice;
+                                    }
+                                },
+                                cx,
+                            )
+                        },
+                        cx,
+                    ));
+                }
+                body = chip_row(body, chips);
+            }
+            Condition::Status { value } => {
+                let mut chips = Vec::new();
+                for choice in [
+                    TaskStatus::Any,
+                    TaskStatus::Available,
+                    TaskStatus::Blocked,
+                    TaskStatus::Deferred,
+                    TaskStatus::Completed,
+                ] {
+                    chips.push(self.rule_chip(
+                        format!("rule-taskstatus:{id}:{}", task_status_slug(choice)),
+                        task_status_label(choice).to_string(),
+                        *value == choice,
+                        move |this, cx| {
+                            this.with_rule(
+                                id,
+                                |node| {
+                                    if let RuleKind::Condition(Condition::Status { value }) =
+                                        &mut node.kind
+                                    {
+                                        *value = choice;
+                                    }
+                                },
+                                cx,
+                            )
+                        },
+                        cx,
+                    ));
+                }
+                body = chip_row(body, chips);
+            }
+            Condition::Due { window }
+            | Condition::Deferred { window }
+            | Condition::Planned { window } => {
+                let mut chips = Vec::new();
+                for choice in [
+                    DueWindow::Overdue,
+                    DueWindow::Today,
+                    DueWindow::Tomorrow,
+                    DueWindow::Next7Days,
+                    DueWindow::Next30Days,
+                    DueWindow::Later,
+                    DueWindow::NoDate,
+                ] {
+                    chips.push(self.rule_chip(
+                        format!("rule-window:{id}:{}", window_slug(choice)),
+                        window_label(choice),
+                        *window == choice,
+                        move |this, cx| {
+                            this.with_rule(
+                                id,
+                                |node| match &mut node.kind {
+                                    RuleKind::Condition(Condition::Due { window })
+                                    | RuleKind::Condition(Condition::Deferred { window })
+                                    | RuleKind::Condition(Condition::Planned { window }) => {
+                                        *window = choice
+                                    }
+                                    _ => {}
+                                },
+                                cx,
+                            )
+                        },
+                        cx,
+                    ));
+                }
+                body = chip_row(body, chips);
+            }
+            Condition::Project { id: project } => {
+                let selected = vec![project.clone()];
+                body = body.child(self.render_project_picker(id, &selected, false, cx));
+            }
+            Condition::Folder { id: folder, .. } => {
+                let selected = vec![folder.clone()];
+                body = body.child(self.render_folder_picker(id, &selected, false, cx));
+            }
+            Condition::Tag {
+                id: tag,
+                include_children,
+            } => {
+                let selected = vec![tag.clone()];
+                body = body.child(self.render_tag_picker(id, &selected, *include_children, false, cx));
+            }
+            Condition::InInbox | Condition::InSingleActionsList => {
+                body = body.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .child("This rule has no options."),
+                );
+            }
+        }
+
+        body.into_any_element()
+    }
+
+    fn render_tag_picker(
+        &self,
+        id: u64,
+        selected: &[TagId],
+        include_children: bool,
+        all: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let db = self.store.db();
+        let mut tags: Vec<_> = db.tags.values().collect();
+        tags.sort_by_cached_key(|tag| db.tag_path(&tag.id).to_lowercase());
+        let mut card = div()
+            .id("rule-tag-picker")
+            .flex()
+            .flex_col()
+            .gap_1()
+            .max_h(px(170.))
+            .overflow_y_scroll()
+            .p_1()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border_soft)
+            .bg(theme.clear);
+        for tag in tags {
+            let tag_id = tag.id.clone();
+            let active = selected.contains(&tag_id);
+            let label = format!("#{}", db.tag_path(&tag_id));
+            card = card.child(
+                div()
+                    .id(super::sid(format!("rule-tag:{id}:{tag_id}")))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if active { theme.accent } else { theme.text_dim })
+                    .bg(if active { theme.selection } else { theme.clear })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(view_checkbox(theme, active))
+                    .child(label)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let target = tag_id.clone();
+                        this.with_rule(
+                            id,
+                            move |node| {
+                                if let RuleKind::Condition(condition) = &mut node.kind {
+                                    match condition {
+                                        Condition::TagsAny { ids, .. }
+                                        | Condition::TagsAll { ids, .. } => {
+                                            if let Some(index) =
+                                                ids.iter().position(|id| id == &target)
+                                            {
+                                                ids.remove(index);
+                                            } else {
+                                                ids.push(target);
+                                            }
+                                        }
+                                        Condition::Tag { id, .. } => *id = target,
+                                        _ => {}
+                                    }
+                                }
+                            },
+                            cx,
+                        )
+                    })),
+            );
+        }
+        if matches!(
+            self.modal.as_ref(),
+            Some(Modal::Perspective { form })
+                if form
+                    .rule(id)
+                    .and_then(RuleNode::condition_ref)
+                    .is_some_and(|condition| matches!(condition, Condition::TagsAny { .. } | Condition::TagsAll { .. }))
+        ) {
+            let labels = if all {
+                ("Child tags", "Match every selected tag")
+            } else {
+                ("Child tags", "Match a child of a selected tag")
+            };
+            card = card.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .id(super::sid(format!("rule-tag-children:{id}")))
+                            .child(widgets::toggle_chip(theme, labels.0, include_children))
+                            .flow_tip(self, cx, theme, labels.1)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.with_rule(
+                                    id,
+                                    |node| {
+                                        if let RuleKind::Condition(condition) = &mut node.kind {
+                                            match condition {
+                                                Condition::TagsAny {
+                                                    include_children, ..
+                                                }
+                                                | Condition::TagsAll {
+                                                    include_children, ..
+                                                } => *include_children = !*include_children,
+                                                _ => {}
+                                            }
+                                        }
+                                    },
+                                    cx,
+                                )
+                            })),
+                    ),
+            );
+        }
+        card.into_any_element()
+    }
+
+    fn render_project_picker(
+        &self,
+        id: u64,
+        selected: &[ProjectId],
+        multiple: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let db = self.store.db();
+        let mut projects: Vec<_> = db.projects.values().collect();
+        projects.sort_by_cached_key(|project| db.project_path(&project.id).to_lowercase());
+        let mut card = div()
+            .id("rule-project-picker")
+            .flex()
+            .flex_col()
+            .gap_1()
+            .max_h(px(170.))
+            .overflow_y_scroll()
+            .p_1()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border_soft);
+        if selected.is_empty() {
+            card = card.child(
+                div()
+                    .px_2()
+                    .py_1()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("No project selected"),
+            );
+        }
+        for project in projects {
+            let project_id = project.id.clone();
+            let active = selected.contains(&project_id);
+            card = card.child(
+                div()
+                    .id(super::sid(format!("rule-project:{id}:{project_id}")))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if active { theme.accent } else { theme.text_dim })
+                    .bg(if active { theme.selection } else { theme.clear })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(view_checkbox(theme, active))
+                    .child(db.project_path(&project_id))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let target = project_id.clone();
+                        this.with_rule(
+                            id,
+                            move |node| {
+                                if let RuleKind::Condition(condition) = &mut node.kind {
+                                    match condition {
+                                        Condition::Project { id } => *id = target,
+                                        Condition::Within { project, folder, .. } => {
+                                            if project.as_ref() == Some(&target) {
+                                                *project = None;
+                                            } else {
+                                                *project = Some(target);
+                                                *folder = None;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            },
+                            cx,
+                        )
+                    })),
+            );
+        }
+        let _ = multiple;
+        card.into_any_element()
+    }
+
+    fn render_folder_picker(
+        &self,
+        id: u64,
+        selected: &[FolderId],
+        multiple: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let db = self.store.db();
+        let mut folders: Vec<_> = db.folders.values().collect();
+        folders.sort_by_cached_key(|folder| db.folder_path(&folder.id).to_lowercase());
+        let mut card = div()
+            .id("rule-folder-picker")
+            .flex()
+            .flex_col()
+            .gap_1()
+            .max_h(px(150.))
+            .overflow_y_scroll()
+            .p_1()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.border_soft);
+        if selected.is_empty() {
+            card = card.child(
+                div()
+                    .px_2()
+                    .py_1()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("No folder selected"),
+            );
+        }
+        for folder in folders {
+            let folder_id = folder.id.clone();
+            let active = selected.contains(&folder_id);
+            card = card.child(
+                div()
+                    .id(super::sid(format!("rule-folder:{id}:{folder_id}")))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if active { theme.accent } else { theme.text_dim })
+                    .bg(if active { theme.selection } else { theme.clear })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(view_checkbox(theme, active))
+                    .child(db.folder_path(&folder_id))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let target = folder_id.clone();
+                        this.with_rule(
+                            id,
+                            move |node| {
+                                if let RuleKind::Condition(condition) = &mut node.kind {
+                                    match condition {
+                                        Condition::Folder { id, .. } => *id = target,
+                                        Condition::Within { project, folder, .. } => {
+                                            if folder.as_ref() == Some(&target) {
+                                                *folder = None;
+                                            } else {
+                                                *folder = Some(target);
+                                                *project = None;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            },
+                            cx,
+                        )
+                    })),
+            );
+        }
+        let _ = multiple;
+        card.into_any_element()
+    }
+
+    fn render_within_picker(
+        &self,
+        id: u64,
+        project: Option<&ProjectId>,
+        folder: Option<&FolderId>,
+        include_children: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme;
+        let projects = project.cloned().into_iter().collect::<Vec<_>>();
+        let folders = folder.cloned().into_iter().collect::<Vec<_>>();
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("Projects"),
+            )
+            .child(self.render_project_picker(id, &projects, false, cx))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("Folders"),
+            )
+            .child(self.render_folder_picker(id, &folders, false, cx))
+            .child(
+                div()
+                    .id(super::sid(format!("rule-within-children:{id}")))
+                    .child(widgets::toggle_chip(theme, "Child folders", include_children))
+                    .flow_tip(self, cx, theme, "Include projects in nested folders")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.with_rule(
+                            id,
+                            |node| {
+                                if let RuleKind::Condition(Condition::Within {
+                                    include_children, ..
+                                }) = &mut node.kind
+                                {
+                                    *include_children = !*include_children;
+                                }
+                            },
+                            cx,
+                        )
+                    })),
+            )
+            .into_any_element()
     }
 
     fn render_tag_location_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -6384,6 +7588,7 @@ impl FlowlistApp {
                 .flex_col()
                 .gap_2()
                 .child(self.render_modal_field(5, cx))
+                .child(self.render_modal_field(7, cx))
                 .child(
                     div()
                         .flex()
@@ -7616,6 +8821,58 @@ fn help_body(theme: super::theme::Theme) -> impl IntoElement {
             .text_color(theme.text_faint)
             .child("The GUI, CLI and MCP server all write to the same library."),
     )
+}
+
+fn task_status_label(status: TaskStatus) -> &'static str {
+    match status {
+        TaskStatus::Any => "Any",
+        TaskStatus::Available => "Available",
+        TaskStatus::Blocked => "Blocked",
+        TaskStatus::Deferred => "Deferred",
+        TaskStatus::Completed => "Completed",
+    }
+}
+
+fn task_status_slug(status: TaskStatus) -> &'static str {
+    match status {
+        TaskStatus::Any => "any",
+        TaskStatus::Available => "available",
+        TaskStatus::Blocked => "blocked",
+        TaskStatus::Deferred => "deferred",
+        TaskStatus::Completed => "completed",
+    }
+}
+
+fn window_slug(window: flowlist_core::model::DueWindow) -> &'static str {
+    use flowlist_core::model::DueWindow;
+    match window {
+        DueWindow::Overdue => "overdue",
+        DueWindow::Today => "today",
+        DueWindow::Tomorrow => "tomorrow",
+        DueWindow::Next7Days => "next7",
+        DueWindow::Next30Days => "next30",
+        DueWindow::Later => "later",
+        DueWindow::NoDate => "none",
+        DueWindow::On(_) => "on",
+        DueWindow::Before(_) => "before",
+        DueWindow::After(_) => "after",
+    }
+}
+
+fn window_label(window: flowlist_core::model::DueWindow) -> String {
+    use flowlist_core::model::DueWindow;
+    match window {
+        DueWindow::Overdue => "Overdue".to_string(),
+        DueWindow::Today => "Today".to_string(),
+        DueWindow::Tomorrow => "Tomorrow".to_string(),
+        DueWindow::Next7Days => "Next 7 days".to_string(),
+        DueWindow::Next30Days => "Next 30 days".to_string(),
+        DueWindow::Later => "Later".to_string(),
+        DueWindow::NoDate => "No date".to_string(),
+        DueWindow::On(date) => format!("On {date}"),
+        DueWindow::Before(date) => format!("Before {date}"),
+        DueWindow::After(date) => format!("After {date}"),
+    }
 }
 
 /// Draws a pairing QR as a grid of pixel-snapped modules. True black on white

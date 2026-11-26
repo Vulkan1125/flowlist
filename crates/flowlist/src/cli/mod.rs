@@ -2920,6 +2920,7 @@ fn parse_tag_status(value: &str) -> Result<TagStatus> {
         "available" | "active" => Ok(TagStatus::Available),
         "blocked" => Ok(TagStatus::Blocked),
         "on-hold" | "on_hold" | "hold" => Ok(TagStatus::OnHold),
+        "dropped" | "drop" => Ok(TagStatus::Dropped),
         other => bail!("unknown tag status: {other}"),
     }
 }

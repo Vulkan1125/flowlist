@@ -213,5 +213,6 @@ pub fn tag_status_key(status: flowlist_core::model::TagStatus) -> &'static str {
         TagStatus::Available => "available",
         TagStatus::Blocked => "blocked",
         TagStatus::OnHold => "on_hold",
+        TagStatus::Dropped => "dropped",
     }
 }

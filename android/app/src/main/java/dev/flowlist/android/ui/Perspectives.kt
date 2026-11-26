@@ -892,12 +892,20 @@ private fun matchesFilter(db: Db?, task: TaskView, filter: JsonElement?): Boolea
     return matchesNode(db, task, filter)
 }
 
+private fun ignorable(element: JsonElement): Boolean {
+    val node = element as? JsonObject ?: return false
+    return node.text("type") == "comment" || node.text("type") == "disabled"
+}
+
 private fun matchesNode(db: Db?, task: TaskView, element: JsonElement): Boolean {
     val node = element as? JsonObject ?: return true
+    val children = (node["nodes"] as? JsonArray)?.filterNot(::ignorable) ?: emptyList()
     return when (node.text("type")) {
-        "all" -> (node["nodes"] as? JsonArray)?.all { matchesNode(db, task, it) } ?: true
-        "any" -> (node["nodes"] as? JsonArray)?.any { matchesNode(db, task, it) } ?: true
+        "all" -> children.all { matchesNode(db, task, it) }
+        "any" -> children.any { matchesNode(db, task, it) }
+        "none" -> children.none { matchesNode(db, task, it) }
         "not" -> (node["node"] as? JsonElement)?.let { !matchesNode(db, task, it) } ?: true
+        "comment", "disabled" -> true
         "condition" -> {
             val condition = node["condition"] as? JsonObject ?: return true
             matchesCondition(db, task, condition)
@@ -909,20 +917,22 @@ private fun matchesNode(db: Db?, task: TaskView, element: JsonElement): Boolean 
 private fun matchesCondition(db: Db?, task: TaskView, condition: JsonObject): Boolean {
     val today = LocalDate.now()
     val due = task.due?.local()?.toLocalDate()
+    val dto = db?.tasks?.get(task.id)
     return when (condition.text("type")) {
         "text" -> {
             val needle = condition.text("value").orEmpty().lowercase()
-            needle.isBlank() ||
-                task.title.lowercase().contains(needle) ||
-                task.notes.lowercase().contains(needle) ||
-                task.projectName?.lowercase()?.contains(needle) == true ||
-                task.tags.any { it.lowercase().contains(needle) }
+            needle.isBlank() || searchText(db, task).contains(needle)
         }
-        "project" -> task.projectId == condition.text("id")
+        "search" -> {
+            val haystack = searchText(db, task)
+            val terms = stringList(condition, "terms")
+            terms.all { it.isBlank() || haystack.contains(it.lowercase()) }
+        }
+        "project" -> effectiveProjectId(db, task) == condition.text("id")
         "folder" -> {
             val folder = condition.text("id") ?: return true
             val includeChildren = condition.boolean("include_children") ?: false
-            folderContains(db, task.projectId?.let { db?.projects?.get(it)?.folder }, folder, includeChildren)
+            folderContains(db, effectiveProjectId(db, task)?.let { db?.projects?.get(it)?.folder }, folder, includeChildren)
         }
         "tag" -> {
             val tagId = condition.text("id") ?: return true
@@ -930,30 +940,31 @@ private fun matchesCondition(db: Db?, task: TaskView, condition: JsonObject): Bo
             val names = tagNames(db, tagId, includeChildren)
             task.tags.any { it in names }
         }
-        "in_inbox" -> task.projectId == null && task.parent == null
+        "in_inbox" -> effectiveProjectId(db, task) == null
         "flagged" -> task.flagged == (condition.boolean("value") ?: true)
         "priority" -> task.priority == condition.text("value")
         "status" -> when (condition.text("value")) {
             "completed" -> task.completed
             "available" -> !task.completed && task.blockedByTag == null
             "blocked" -> !task.completed && task.blockedByTag != null
-            "deferred" -> task.defer?.local()?.toLocalDate()?.isAfter(today) == true
+            "deferred" -> task.defer?.local()?.isAfter(java.time.LocalDateTime.now()) == true
             else -> true
         }
         "due" -> windowMatches(due, condition.text("window"), today)
         "deferred" -> windowMatches(task.defer?.local()?.toLocalDate(), condition.text("window"), today)
+        "planned" -> windowMatches(task.planned?.local()?.toLocalDate(), condition.text("window"), today)
         "has_repeat" -> {
             val expected = condition.boolean("value") ?: true
-            (db?.tasks?.get(task.id)?.repeat != null) == expected
+            (dto?.repeat != null) == expected
         }
         "fullscreen_reminder" -> {
             val expected = condition.boolean("value") ?: true
             val data = db ?: return false
-            val dto = data.tasks[task.id] ?: return false
+            val taskDto = data.tasks[task.id] ?: return false
             // Match the Mac rule: a mark only counts when it has a due or
             // explicit reminder time to fire.
-            val effective = data.wantsFullscreenReminder(dto) &&
-                data.reminderStamp(dto) != null
+            val effective = data.wantsFullscreenReminder(taskDto) &&
+                data.reminderStamp(taskDto) != null
             effective == expected
         }
         "estimate" -> {
@@ -962,8 +973,255 @@ private fun matchesCondition(db: Db?, task: TaskView, condition: JsonObject): Bo
             val max = condition.number("max_minutes")
             (min == null || minutes >= min) && (max == null || minutes <= max)
         }
+        "status_kind" -> when (condition.text("value")) {
+            "flagged" -> task.flagged
+            "due_soon" -> {
+                val days = db?.settings?.dueSoonDays ?: 2
+                !task.completed && due != null && !due.isAfter(today.plusDays(days.toLong()))
+            }
+            else -> true
+        }
+        "availability" -> when (condition.text("value")) {
+            "first_available", "available" -> !task.completed && task.blockedByTag == null &&
+                (task.defer?.local()?.isAfter(java.time.LocalDateTime.now()) != true)
+            "remaining" -> !task.completed && projectStatus(db, task) != "dropped"
+            "completed" -> task.completed
+            "dropped" -> projectStatus(db, task) == "dropped"
+            else -> true
+        }
+        "has_estimate" -> {
+            val expected = condition.boolean("value") ?: true
+            (task.estimateMin != null) == expected
+        }
+        "estimate_less_than" -> {
+            val limit = condition.number("minutes") ?: return true
+            task.estimateMin?.let { it < limit } == true
+        }
+        "has_date" -> {
+            val field = condition.text("field") ?: return true
+            val expected = condition.boolean("value") ?: true
+            (dateFor(db, task, field) != null) == expected
+        }
+        "date_range" -> {
+            val field = condition.text("field") ?: return true
+            val range = condition["range"] as? JsonObject ?: return true
+            dateFor(db, task, field)?.let { rangeMatches(it, range, today) } == true
+        }
+        "is_untagged" -> {
+            val expected = condition.boolean("value") ?: true
+            effectiveTagIds(db, task).isEmpty() == expected
+        }
+        "tag_status" -> when (condition.text("value")) {
+            "active_or_on_hold" -> effectiveTagIds(db, task).any {
+                db?.tags?.get(it)?.status in listOf("available", "on_hold")
+            }
+            "on_hold" -> effectiveTagIds(db, task).any { db?.tags?.get(it)?.status == "on_hold" }
+            "dropped" -> effectiveTagIds(db, task).any { db?.tags?.get(it)?.status == "dropped" }
+            "active_with_available_actions" -> effectiveTagIds(db, task).any { tagId ->
+                db?.tags?.get(tagId)?.status == "available" && tagHasAvailableAction(db, tagId, task)
+            }
+            "active_with_no_available_actions" -> effectiveTagIds(db, task).any { tagId ->
+                db?.tags?.get(tagId)?.status == "available" && !tagHasAvailableAction(db, tagId, task)
+            }
+            else -> true
+        }
+        "tags_any" -> {
+            val ids = stringList(condition, "ids")
+            val includeChildren = condition.boolean("include_children") ?: false
+            val wanted = ids.flatMap { tagIds(db, it, includeChildren) }.toSet()
+            effectiveTagIds(db, task).any { it in wanted }
+        }
+        "tags_all" -> {
+            val ids = stringList(condition, "ids")
+            if (ids.isEmpty()) return true
+            val includeChildren = condition.boolean("include_children") ?: false
+            val tagged = effectiveTagIds(db, task)
+            ids.all { id -> tagIds(db, id, includeChildren).any { it in tagged } }
+        }
+        "item_kind" -> {
+            val group = hasChildren(db, task)
+            when (condition.text("value")) {
+                "project" -> false
+                "group" -> group
+                "project_or_group" -> group
+                "not_project_or_group" -> !group
+                else -> true
+            }
+        }
+        "in_single_actions_list" -> {
+            val project = effectiveProjectId(db, task)?.let { db?.projects?.get(it) }
+            project?.kind == "single_actions"
+        }
+        "project_status" -> {
+            val status = projectStatus(db, task)
+            when (condition.text("value")) {
+                "active" -> status == "active"
+                "active_or_on_hold" -> status == "active" || status == "on_hold"
+                "on_hold" -> status == "on_hold"
+                "completed" -> status == "done"
+                "dropped" -> status == "dropped"
+                "active_with_no_remaining_actions" -> {
+                    val targetProject = effectiveProjectId(db, task)
+                    status == "active" && db?.tasks?.values?.none {
+                        !it.completed && it.project == targetProject
+                    } == true
+                }
+                "active_with_future_defer" -> {
+                    val project = effectiveProjectId(db, task)?.let { db?.projects?.get(it) }
+                    status == "active" && project?.defer?.local()?.isAfter(java.time.LocalDateTime.now()) == true
+                }
+                else -> true
+            }
+        }
+        "within" -> {
+            val project = condition.text("project")
+            val folder = condition.text("folder")
+            val includeChildren = condition.boolean("include_children") ?: false
+            when {
+                project != null -> effectiveProjectId(db, task) == project
+                folder != null -> folderContains(
+                    db,
+                    effectiveProjectId(db, task)?.let { db?.projects?.get(it)?.folder },
+                    folder,
+                    includeChildren,
+                )
+                else -> true
+            }
+        }
         else -> true
     }
+}
+
+private fun stringList(condition: JsonObject, key: String): List<String> =
+    (condition[key] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content } ?: emptyList()
+
+private fun effectiveProjectId(db: Db?, task: TaskView): String? {
+    var project = task.projectId
+    var parent = task.parent
+    var guard = 0
+    while (project == null && parent != null && guard < 64) {
+        val ancestor = db?.tasks?.get(parent) ?: break
+        project = ancestor.project
+        parent = ancestor.parent
+        guard += 1
+    }
+    return project
+}
+
+private fun effectiveTagIds(db: Db?, task: TaskView): Set<String> {
+    val dto = db?.tasks?.get(task.id) ?: return task.tags.toSet()
+    val out = dto.tags.toMutableSet()
+    var parent = dto.parent
+    var guard = 0
+    while (parent != null && guard < 64) {
+        val ancestor = db?.tasks?.get(parent) ?: break
+        out.addAll(ancestor.tags)
+        parent = ancestor.parent
+        guard += 1
+    }
+    effectiveProjectId(db, task)?.let { projectId ->
+        db?.projects?.get(projectId)?.tags?.let { out.addAll(it) }
+    }
+    return out
+}
+
+private fun projectStatus(db: Db?, task: TaskView): String? =
+    effectiveProjectId(db, task)?.let { db?.projects?.get(it)?.status }
+
+private fun hasChildren(db: Db?, task: TaskView): Boolean =
+    db?.tasks?.values?.any { it.parent == task.id && !it.completed } == true
+
+private fun tagIds(db: Db?, root: String, includeChildren: Boolean): Set<String> {
+    if (db == null) return emptySet()
+    val ids = mutableSetOf(root)
+    if (includeChildren) {
+        var changed = true
+        while (changed) {
+            changed = false
+            db.tags.values.forEach { tag ->
+                if (tag.parent in ids && ids.add(tag.id)) changed = true
+            }
+        }
+    }
+    return ids
+}
+
+private fun tagHasAvailableAction(db: Db?, root: String, task: TaskView): Boolean {
+    val data = db ?: return false
+    val wanted = tagIds(data, root, true)
+    return data.tasks.values.any { candidate ->
+        !candidate.completed && candidate.trashedAt == null &&
+            candidate.tags.any { it in wanted } &&
+            data.taskViews().firstOrNull { it.id == candidate.id }?.blockedByTag == null
+    }
+}
+
+private fun searchText(db: Db?, task: TaskView): String {
+    val parts = mutableListOf(task.title, task.notes)
+    task.projectName?.let { parts.add(it) }
+    task.tags.forEach { parts.add(it) }
+    effectiveProjectId(db, task)?.let { projectId ->
+        db?.projects?.get(projectId)?.let { project ->
+            parts.add(project.name)
+            parts.add(project.notes)
+            project.folder?.let { parts.add(db.folders[it]?.name.orEmpty()) }
+        }
+    }
+    var parent = task.parent
+    var guard = 0
+    while (parent != null && guard < 64) {
+        val ancestor = db?.tasks?.get(parent) ?: break
+        parts.add(ancestor.title)
+        parent = ancestor.parent
+        guard += 1
+    }
+    return parts.joinToString("\n").lowercase()
+}
+
+private fun dateFor(db: Db?, task: TaskView, field: String): LocalDate? = when (field) {
+    "due" -> task.due?.local()?.toLocalDate()
+    "planned" -> task.planned?.local()?.toLocalDate()
+    "defer" -> task.defer?.local()?.toLocalDate()
+    "completed" -> task.completedAt?.let { parseDate(it) }
+    "added" -> parseDate(task.createdAt)
+    "changed" -> parseDate(task.modifiedAt)
+    else -> null
+}
+
+private fun parseDate(value: String): LocalDate? =
+    runCatching { java.time.Instant.parse(value).atZone(ZoneId.systemDefault()).toLocalDate() }.getOrNull()
+
+private fun rangeMatches(date: LocalDate, range: JsonObject, today: LocalDate): Boolean {
+    val mode = range.text("type") ?: return true
+    return when (mode) {
+        "on" -> date == range.text("date")?.let { LocalDate.parse(it) }
+        "yesterday" -> date == today.minusDays(1)
+        "today" -> date == today
+        "tomorrow" -> date == today.plusDays(1)
+        "in_past" -> {
+            val amount = range.number("amount") ?: 0
+            val shift = shiftDate(today, amount, range.text("unit"))
+            !date.isBefore(shift) && !date.isAfter(today)
+        }
+        "in_next" -> {
+            val amount = range.number("amount") ?: 0
+            val shift = shiftDate(today, amount, range.text("unit"))
+            !date.isBefore(today) && !date.isAfter(shift)
+        }
+        "between" -> {
+            val from = range.text("from")?.let { LocalDate.parse(it) }
+            val to = range.text("to")?.let { LocalDate.parse(it) }
+            (from == null || !date.isBefore(from)) && (to == null || !date.isAfter(to))
+        }
+        else -> true
+    }
+}
+
+private fun shiftDate(today: LocalDate, amount: Int, unit: String?): LocalDate = when (unit) {
+    "weeks" -> today.plusWeeks(amount.toLong())
+    "months" -> today.plusMonths(amount.toLong())
+    "years" -> today.plusYears(amount.toLong())
+    else -> today.plusDays(amount.toLong())
 }
 
 private fun windowMatches(date: LocalDate?, window: String?, today: LocalDate): Boolean {

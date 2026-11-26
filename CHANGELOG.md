@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **OmniFocus perspective rules.** The saved-view editor is now one contents
+  tree: nested **All / Any / None** groups, every OmniFocus 4 rule from
+  **Status: Due Soon** through **Matches search terms**, comments, turning a
+  rule off without deleting it, drag reordering, and the top-level operator.
+  New views start with **Availability: Remaining**. Date-range rules cover
+  due, planned, defer, completed, dropped, added and changed dates with On,
+  Yesterday, Today, Tomorrow, In the past, In the next and Between. The phone
+  evaluates the same tree. **Due soon (days)** now lives in Settings →
+  Workflow → Forecast. Custom perspectives still list actions only, so the
+  **Is a project** rule waits for project-level perspectives.
 - **Calendar events in Forecast.** Calendar now has its own Settings section.
   Turn on Forecast events, grant read-only access, and switch individual
   calendars (holidays, birthdays and the rest) on or off. Events sit above each

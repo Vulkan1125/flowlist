@@ -23,6 +23,10 @@ pub struct Settings {
     /// 0 = Monday ... 6 = Sunday, used by calendar views.
     #[serde(default)]
     pub week_starts_on: u8,
+    /// How many days ahead counts as “Due Soon”, matching OmniFocus's
+    /// Forecast setting of the same name.
+    #[serde(default = "default_due_soon_days")]
+    pub due_soon_days: u32,
     /// Time-of-day applied when a due date is entered without a time.
     #[serde(default = "default_due_time")]
     pub default_due_time: Option<NaiveTime>,
@@ -180,6 +184,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_due_soon_days() -> u32 {
+    2
+}
+
 fn default_review_days() -> u32 {
     7
 }
@@ -215,6 +223,7 @@ impl Default for Settings {
             show_completed_days: default_completed_days(),
             changed_days: default_changed_days(),
             week_starts_on: 0,
+            due_soon_days: default_due_soon_days(),
             default_due_time: default_due_time(),
             default_defer_time: None,
             current_location: None,
