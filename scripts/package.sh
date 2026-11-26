@@ -79,7 +79,14 @@ if [ -n "${FLOWLIST_SIGN_IDENTITY:-}" ]; then
 	fi
 	echo "signed with: $FLOWLIST_SIGN_IDENTITY"
 else
-	codesign --force --sign - "$app" >/dev/null 2>&1 || {
+	# A stable designated requirement matters for macOS privacy databases.
+	# A plain ad-hoc signature is tied to the CDHash, so every rebuild looks
+	# like a new app and Calendar/Notifications ask again. Keep the identifier
+	# stable across rebuilds instead.
+	codesign --force --sign - \
+		--identifier dev.flowlist.Flowlist \
+		-r='designated => identifier "dev.flowlist.Flowlist"' \
+		"$app" >/dev/null 2>&1 || {
 		echo "warning: ad-hoc signing failed; the bundle still runs locally" >&2
 	}
 	echo "warning: ad-hoc signed; notifications need FLOWLIST_SIGN_IDENTITY" >&2

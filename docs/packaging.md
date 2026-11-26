@@ -108,7 +108,13 @@ The same library can be open in the GUI and the CLI at once: writes are
 serialized through a cross-process lock and the GUI reloads when another
 process changes the library.
 
-## Signing and Gatekeeper
+## Signing
+
+Ad-hoc bundles carry a stable identifier-based designated requirement. That
+lets macOS privacy grants such as Calendar access survive later rebuilds
+signed the same way. A real Apple Development or Developer ID identity is still
+required for UserNotifications.
+ and Gatekeeper
 
 `scripts/package.sh` produces an ad-hoc signature, which is enough for local
 use. It is not Developer ID signed or notarized. On another Mac, Gatekeeper may

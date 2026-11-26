@@ -13,6 +13,9 @@
   last dragged to.
 - **Calendar event times stay on one line.** Forecast shows the full
   `start – end` range on one row instead of wrapping the end time below it.
+- **Calendar permission survives rebuilds.** Ad-hoc packages now use a stable
+  identifier-based designated requirement, so macOS does not treat every
+  rebuilt bundle as a different Calendar app.
 - **Collapsible inspector sections.** Title, Action, Notes & Attachments, Dates,
   Repeat, Tags and Notifications each fold from their header; the choice is
   remembered per device. Project sections cover Project, Dates, Review,
