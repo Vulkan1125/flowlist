@@ -139,6 +139,11 @@ pub enum Modal {
         id: FolderId,
         name: String,
     },
+    /// Delete several selected projects and folders in one undo step.
+    DeleteContainers {
+        projects: Vec<ProjectId>,
+        folders: Vec<FolderId>,
+    },
     /// Deleting a tag takes it off every task; the sheet names it first.
     DeleteTag {
         id: TagId,
@@ -238,6 +243,8 @@ pub enum Modal {
         keep_completed_subtasks: bool,
         /// Count only due items in Forecast badges.
         forecast_due_counts: bool,
+        /// Keep the Focus banner below the title bar.
+        focus_banner: bool,
         /// Drop saved views from the rail while their filter matches nothing.
         hide_empty_views: bool,
         follow_system: bool,
@@ -520,6 +527,10 @@ impl Modal {
         }
     }
 
+    pub fn delete_containers(projects: Vec<ProjectId>, folders: Vec<FolderId>) -> Self {
+        Modal::DeleteContainers { projects, folders }
+    }
+
     pub fn delete_task(app: &FlowlistApp, ids: Vec<TaskId>, title: String) -> Self {
         let occurrences = ids
             .iter()
@@ -655,6 +666,7 @@ impl Modal {
             reminder_wallpaper_note: None,
             keep_completed_subtasks: app.keep_completed_subtasks,
             forecast_due_counts: app.store.db().settings.forecast_due_counts,
+            focus_banner: app.show_focus_banner,
             hide_empty_views: app.hide_empty_views,
             follow_system: app.follow_system,
             theme: app.theme.kind(),
@@ -726,6 +738,7 @@ impl Modal {
             Modal::CreateProject { .. } => "Create project",
             Modal::DeleteProject { .. } => "Delete project",
             Modal::DeleteFolder { .. } => "Delete folder",
+            Modal::DeleteContainers { .. } => "Delete selected items",
             Modal::DeleteTag { .. } => "Delete tag",
             Modal::DeleteTask { .. } => "Delete repeating task",
             Modal::HideSubtasks { .. } => "Convert to one-off steps?",
@@ -785,6 +798,9 @@ impl Modal {
             Modal::DeleteFolder { .. } => {
                 "Its projects and their tasks move to Trash with it. Undo restores everything."
             }
+            Modal::DeleteContainers { .. } => {
+                "Their tasks move to Trash. Undo restores everything in one step."
+            }
             Modal::DeleteTag { .. } => {
                 "Tasks keep their other tags; this tag is removed from them."
             }
@@ -843,7 +859,7 @@ impl Modal {
         match self {
             Modal::CreateProject { .. } => "Create",
             Modal::DeleteProject { .. } | Modal::DeleteTag { .. } => "Delete",
-            Modal::DeleteFolder { .. } => "Delete",
+            Modal::DeleteFolder { .. } | Modal::DeleteContainers { .. } => "Delete",
             Modal::DeleteTask { .. } => "Delete",
             Modal::HideSubtasks { .. } => "Convert",
             Modal::PriorityScope { .. } => "Apply",
@@ -877,7 +893,7 @@ impl Modal {
             Modal::AdjustDates { .. } => 0,
             Modal::CreateProject { .. } => 0,
             Modal::DeleteProject { .. } => 0,
-            Modal::DeleteFolder { .. } | Modal::DeleteTag { .. } => 0,
+            Modal::DeleteFolder { .. } | Modal::DeleteContainers { .. } | Modal::DeleteTag { .. } => 0,
             Modal::DeleteTask { .. } => 0,
             Modal::HideSubtasks { .. } => 0,
             Modal::PriorityScope { .. } => 0,
@@ -926,7 +942,9 @@ impl Modal {
             Modal::AdjustDates { .. } => None,
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
-            Modal::DeleteFolder { .. } | Modal::DeleteTag { .. } => None,
+            Modal::DeleteFolder { .. }
+            | Modal::DeleteContainers { .. }
+            | Modal::DeleteTag { .. } => None,
             Modal::DeleteTask { .. } => None,
             Modal::HideSubtasks { .. } => None,
             Modal::PriorityScope { .. } => None,
@@ -999,7 +1017,9 @@ impl Modal {
             Modal::AdjustDates { .. } => None,
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
-            Modal::DeleteFolder { .. } | Modal::DeleteTag { .. } => None,
+            Modal::DeleteFolder { .. }
+            | Modal::DeleteContainers { .. }
+            | Modal::DeleteTag { .. } => None,
             Modal::DeleteTask { .. } => None,
             Modal::HideSubtasks { .. } => None,
             Modal::PriorityScope { .. } => None,
@@ -1063,7 +1083,7 @@ impl Modal {
             Modal::AdjustDates { .. } => "",
             Modal::CreateProject { .. } => "",
             Modal::DeleteProject { .. } => "",
-            Modal::DeleteFolder { .. } | Modal::DeleteTag { .. } => "",
+            Modal::DeleteFolder { .. } | Modal::DeleteContainers { .. } | Modal::DeleteTag { .. } => "",
             Modal::DeleteTask { .. } => "",
             Modal::HideSubtasks { .. } => "",
             Modal::PriorityScope { .. } => "",
@@ -1119,6 +1139,7 @@ impl Modal {
             Modal::Perspective { .. } => 680.0,
             Modal::IconPicker { .. } => 540.0,
             Modal::AdjustDates { .. } => 560.0,
+            Modal::DeleteContainers { .. } => 520.0,
             Modal::Settings { .. } => 880.0,
             Modal::Uninstall { .. } => 560.0,
             _ => 460.0,
@@ -1371,6 +1392,41 @@ impl FlowlistApp {
                     );
                 }
                 body = body.child(list);
+            }
+            if let Modal::DeleteContainers { projects, folders } = modal {
+                let db = self.store.db();
+                let mut names = Vec::new();
+                for id in projects.iter().take(8) {
+                    if let Some(project) = db.projects.get(id) {
+                        names.push(format!("Project · {}", db.project_path(&project.id)));
+                    }
+                }
+                for id in folders.iter().take(8) {
+                    if let Some(folder) = db.folders.get(id) {
+                        names.push(format!("Folder · {}", db.folder_path(&folder.id)));
+                    }
+                }
+                let more = projects.len() + folders.len();
+                body = body.child(
+                    div()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.danger)
+                        .bg(theme.field)
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .text_sm()
+                        .text_color(theme.text)
+                        .child(format!(
+                            "{} selected",
+                            super::plural(more, "item", "items")
+                        ))
+                        .children(names.into_iter().map(|name| {
+                            div().text_xs().text_color(theme.text_faint).child(name)
+                        })),
+                );
             }
             if let Modal::DeleteTag { name, .. } = modal {
                 body = body.child(
@@ -5909,6 +5965,39 @@ impl FlowlistApp {
                         })),
                 ),
         );
+        let focus_banner = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                focus_banner: true,
+                ..
+            })
+        );
+        let focus_card = self.settings_card(
+            "Focus",
+            Some("The eye beside the back and forward arrows always stays available. When the banner is off, a newly enabled focus still shows it for a few seconds."),
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(div().text_sm().child("Keep the Focus banner visible"))
+                .child(
+                    div()
+                        .on_children_prepainted(
+                            self.theme_probe("focus-banner-toggle".to_string()),
+                        )
+                        .id("focus-banner-toggle")
+                        .child(widgets::switch(theme, focus_banner))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(Modal::Settings {
+                                focus_banner, ..
+                            }) = &mut this.modal
+                            {
+                                *focus_banner = !*focus_banner;
+                            }
+                            cx.notify();
+                        })),
+                ),
+        );
         div()
             .flex()
             .flex_col()
@@ -5916,6 +6005,7 @@ impl FlowlistApp {
             .child(self.settings_card("Keyboard", None, keyboard))
             .child(subtasks_card)
             .child(forecast_card)
+            .child(focus_card)
             .child(
                 self.settings_card(
                     "Review and history",

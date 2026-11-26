@@ -3266,3 +3266,75 @@ fn forecast_puts_project_dates_above_the_tasks() {
     let groups = query::forecast_view(store.db(), Utc::now(), false);
     assert!(!groups.iter().any(|group| group.projects.contains(&planned_id)));
 }
+
+#[test]
+fn batch_project_status_and_deletion_are_single_steps() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let mut alpha = NewProject::new("Alpha");
+    alpha.position = ContainerPosition::End;
+    let alpha_id = store
+        .execute(Command::CreateProject(alpha))
+        .unwrap()
+        .created[0]
+        .clone();
+    let alpha_id = store.db().resolve_project(&alpha_id).unwrap();
+    let mut beta = NewProject::new("Beta");
+    beta.position = ContainerPosition::End;
+    let beta_id = store
+        .execute(Command::CreateProject(beta))
+        .unwrap()
+        .created[0]
+        .clone();
+    let beta_id = store.db().resolve_project(&beta_id).unwrap();
+
+    store
+        .execute(Command::SetProjectStatuses {
+            ids: vec![alpha_id.clone(), beta_id.clone()],
+            status: ProjectStatus::OnHold,
+        })
+        .unwrap();
+    assert_eq!(store.db().projects[&alpha_id].status, ProjectStatus::OnHold);
+    assert_eq!(store.db().projects[&beta_id].status, ProjectStatus::OnHold);
+    store.undo().unwrap();
+    assert_eq!(store.db().projects[&alpha_id].status, ProjectStatus::Active);
+    assert_eq!(store.db().projects[&beta_id].status, ProjectStatus::Active);
+
+    let folder_id = store
+        .execute(Command::CreateFolder {
+            name: "Work".to_string(),
+            parent: None,
+            position: ContainerPosition::End,
+            fullscreen_reminder: false,
+        })
+        .unwrap()
+        .created[0]
+        .clone();
+    let folder_id = store.db().resolve_folder(&folder_id).unwrap();
+    let mut gamma = NewProject::new("Gamma");
+    gamma.folder = Some(folder_id.clone());
+    gamma.position = ContainerPosition::End;
+    let gamma_id = store
+        .execute(Command::CreateProject(gamma))
+        .unwrap()
+        .created[0]
+        .clone();
+    let gamma_id = store.db().resolve_project(&gamma_id).unwrap();
+
+    store
+        .execute(Command::DeleteContainers {
+            projects: vec![alpha_id.clone()],
+            folders: vec![folder_id.clone()],
+        })
+        .unwrap();
+    assert!(!store.db().projects.contains_key(&alpha_id));
+    assert!(!store.db().projects.contains_key(&gamma_id));
+    assert!(store.db().projects.contains_key(&beta_id));
+    assert!(!store.db().folders.contains_key(&folder_id));
+
+    store.undo().unwrap();
+    assert!(store.db().projects.contains_key(&alpha_id));
+    assert!(store.db().projects.contains_key(&gamma_id));
+    assert!(store.db().folders.contains_key(&folder_id));
+}

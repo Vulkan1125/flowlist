@@ -3,12 +3,16 @@
 ## Unreleased
 
 - **Focus mode.** Focus on a project, a folder, or several of either. Cmd-click
-  rows in the sidebar to select them, then use **Focus on N selected** above the
-  creation buttons; a single row can still be focused from its context menu or
-  with Quick Open. Every perspective, search, Forecast calendar and Review/
-  Archive/Nearby list is scoped to the selected branches, and the sidebar dims
-  everything outside them. A full-width banner below the title bar names the
-  focus and clears it with its ✕. Opening a project or folder outside every
+  selects rows in the sidebar; right-click a selected row for **Focus on N
+  selected**, project status changes across the selected projects, or batch
+  delete. A single row can still be focused from its context menu or with Quick
+  Open. Every perspective, search, Forecast calendar and Review/Archive/Nearby
+  list is scoped to the selected branches, and the sidebar dims everything
+  outside them. A full-width, opaque OmniFocus-style banner below the title bar
+  names the focus and clears it with its ✕. The eye beside the history arrows
+  glows while focused, ends focus, and restores the previous focus. Settings can
+  hide the banner; the eye stays and a restored focus briefly announces itself
+  before the banner self-dismisses. Opening a project or folder outside every
   focused branch leaves focus. Inbox and Trash stay global.
 
 ## 0.9.50 — 2026-11-25

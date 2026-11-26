@@ -150,13 +150,17 @@ folders and can carry their own tags, dates, attachments and icon.
 ## Focus
 
 Right-click a project or folder and choose **Focus on …**, or type `focus on`
-in Quick Open. To focus several, Cmd-click projects and folders in the rail;
-each gets a dot and a **Focus on N selected** button appears above the creation
-buttons. Every perspective then shows only those branches, their descendants
-and their tasks. The sidebar dims everything outside the focus, and a full-width
-banner below the title bar names it. Click the banner's ✕ or choose **Stop
-focusing** from the same menu to clear it. Inbox and Trash stay global, and
-opening a project or folder outside every focused branch leaves focus.
+in Quick Open. Cmd-click selects rows in the rail without opening them; right-click
+a selected row for **Focus on N selected**, status changes across the selected
+projects, or **Delete N selected**. Every perspective then shows only those
+branches, their descendants and their tasks. The sidebar dims everything outside
+the focus, and a full-width banner below the title bar names it. Click the
+banner's ✕ to clear it. The eye beside the back/forward arrows glows while
+focused; click it to end focus, then click it again to restore the previous
+selection. Settings → Workflow can hide the banner; the eye remains, and a
+restored focus shows the banner briefly before it dismisses itself. Inbox and
+Trash stay global, and opening a project or folder outside every focused branch
+leaves focus.
 
 ## Views
 

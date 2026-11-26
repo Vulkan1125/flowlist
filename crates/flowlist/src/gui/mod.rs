@@ -403,8 +403,14 @@ pub struct FlowlistApp {
     view: View,
     /// Projects and folders scoping every perspective.
     focus_targets: Vec<FocusTarget>,
-    /// Projects and folders Cmd-clicked in the sidebar, waiting for Focus.
-    focus_selection: Vec<FocusTarget>,
+    /// The last focus, restored by the header eye.
+    last_focus_targets: Vec<FocusTarget>,
+    /// Keep the focus banner visible while focused.
+    show_focus_banner: bool,
+    /// When the banner is disabled, a freshly enabled focus shows it briefly.
+    focus_banner_until: Option<Instant>,
+    /// Projects and folders Cmd-clicked in the sidebar, waiting for a command.
+    sidebar_selection: Vec<FocusTarget>,
     /// First day of the month the Forecast calendar shows.
     forecast_month: chrono::NaiveDate,
     /// Monday of the week the collapsed Forecast strip shows.
@@ -457,8 +463,8 @@ pub struct FlowlistApp {
     settings_toggle_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// The focus banner, measured so a probe can clear focus by clicking it.
     focus_banner_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
-    /// The sidebar's "Focus on N selected" action.
-    focus_selected_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The header eye that clears or restores focus.
+    focus_eye_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// Collapsible sidebar headings, measured so a probe can fold a section.
     sidebar_section_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Sidebar count badges keyed by row, so a probe can see which numbers a
@@ -766,6 +772,12 @@ impl FlowlistApp {
             focus_targets.push(target);
         }
         focus_targets.dedup_by(|left, right| left.key() == right.key());
+        let last_focus_targets: Vec<FocusTarget> = session
+            .last_focus_targets
+            .iter()
+            .filter_map(|key| FocusTarget::from_key(store.db(), key))
+            .collect();
+        let show_focus_banner = session.focus_banner.unwrap_or(true);
         if let Some(target) = focus_targets.first()
             && matches!(view, View::Project(_) | View::Folder(_))
             && !focus_targets
@@ -921,7 +933,10 @@ impl FlowlistApp {
             app_icon,
             view,
             focus_targets,
-            focus_selection: Vec::new(),
+            last_focus_targets,
+            show_focus_banner,
+            focus_banner_until: None,
+            sidebar_selection: Vec::new(),
             forecast_month,
             forecast_week: {
                 let today = local_date(now());
@@ -950,7 +965,7 @@ impl FlowlistApp {
             history_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             settings_toggle_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             focus_banner_anchor: Rc::new(Cell::new(None)),
-            focus_selected_anchor: Rc::new(Cell::new(None)),
+            focus_eye_anchor: Rc::new(Cell::new(None)),
             sidebar_section_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             sidebar_count_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             sidebar_count_values: Rc::new(RefCell::new(BTreeMap::new())),
@@ -1469,6 +1484,12 @@ impl FlowlistApp {
                 .iter()
                 .map(FocusTarget::key)
                 .collect(),
+            last_focus_targets: self
+                .last_focus_targets
+                .iter()
+                .map(FocusTarget::key)
+                .collect(),
+            focus_banner: Some(self.show_focus_banner),
             view_options: {
                 let mut map = self.view_options.clone();
                 map.insert(self.view.key(), self.current_view_options());
@@ -1539,7 +1560,11 @@ impl FlowlistApp {
             FocusTarget::Project(id) => db.projects.contains_key(id),
             FocusTarget::Folder(id) => db.folders.contains_key(id),
         });
-        self.focus_selection.retain(|target| match target {
+        self.sidebar_selection.retain(|target| match target {
+            FocusTarget::Project(id) => db.projects.contains_key(id),
+            FocusTarget::Folder(id) => db.folders.contains_key(id),
+        });
+        self.last_focus_targets.retain(|target| match target {
             FocusTarget::Project(id) => db.projects.contains_key(id),
             FocusTarget::Folder(id) => db.folders.contains_key(id),
         });
@@ -1642,8 +1667,12 @@ impl FlowlistApp {
             self.collapsed_groups.remove(&key);
         }
         self.focus_targets = targets;
-        self.focus_selection.clear();
+        self.last_focus_targets = self.focus_targets.clone();
+        self.sidebar_selection.clear();
         self.focus_banner_anchor.set(None);
+        if !self.show_focus_banner {
+            self.show_focus_banner_transient(cx);
+        }
         let db = self.store.db();
         self.selected.retain(|id| {
             self.focus_targets
@@ -1658,50 +1687,75 @@ impl FlowlistApp {
         cx.notify();
     }
 
-    fn toggle_focus_selection(&mut self, target: FocusTarget, cx: &mut Context<Self>) {
+    fn toggle_sidebar_selection(&mut self, target: FocusTarget, cx: &mut Context<Self>) {
         if let Some(index) = self
-            .focus_selection
+            .sidebar_selection
             .iter()
             .position(|candidate| candidate == &target)
         {
-            self.focus_selection.remove(index);
+            self.sidebar_selection.remove(index);
         } else {
-            self.focus_selection.push(target);
+            self.sidebar_selection.push(target);
         }
         cx.notify();
     }
 
-    fn clear_focus_selection(&mut self, cx: &mut Context<Self>) {
-        if !self.focus_selection.is_empty() {
-            self.focus_selection.clear();
+    fn clear_sidebar_selection(&mut self, cx: &mut Context<Self>) {
+        if !self.sidebar_selection.is_empty() {
+            self.sidebar_selection.clear();
             cx.notify();
         }
-    }
-
-    fn focus_selection_now(&mut self, cx: &mut Context<Self>) {
-        if self.focus_selection.is_empty() {
-            return;
-        }
-        let targets = self.focus_selection.clone();
-        self.set_focus_targets(targets, cx);
     }
 
     /// A sidebar focus command uses the whole Cmd-click selection when the
     /// clicked row is part of it; otherwise it focuses that row alone.
     fn focus_from_sidebar(&mut self, target: FocusTarget, cx: &mut Context<Self>) {
-        if self.focus_selection.len() > 1 && self.focus_selection.contains(&target) {
-            let targets = self.focus_selection.clone();
+        if self.sidebar_selection.len() > 1 && self.sidebar_selection.contains(&target) {
+            let targets = self.sidebar_selection.clone();
             self.set_focus_targets(targets, cx);
         } else {
             self.set_focus_targets(vec![target], cx);
         }
     }
 
+    fn show_focus_banner_transient(&mut self, cx: &mut Context<Self>) {
+        self.focus_banner_until = Some(Instant::now() + Duration::from_secs(3));
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_secs(3))
+                .await;
+            this.update(cx, |this, cx| {
+                if this
+                    .focus_banner_until
+                    .is_some_and(|until| Instant::now() >= until)
+                {
+                    this.focus_banner_until = None;
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn toggle_focus_eye(&mut self, cx: &mut Context<Self>) {
+        if !self.focus_targets.is_empty() {
+            self.clear_focus(cx);
+            return;
+        }
+        if self.last_focus_targets.is_empty() {
+            return;
+        }
+        let targets = self.last_focus_targets.clone();
+        self.set_focus_targets(targets, cx);
+    }
+
     fn clear_focus(&mut self, cx: &mut Context<Self>) {
         if !self.focus_targets.is_empty() {
             self.focus_targets.clear();
-            self.focus_selection.clear();
+            self.sidebar_selection.clear();
             self.focus_banner_anchor.set(None);
+            self.focus_banner_until = None;
             self.save_session();
             cx.notify();
         }
@@ -2382,7 +2436,7 @@ impl FlowlistApp {
                 .any(|target| target.allows_view(self.store.db(), &view))
         {
             self.focus_targets.clear();
-            self.focus_selection.clear();
+            self.sidebar_selection.clear();
             self.focus_banner_anchor.set(None);
         }
         let key = view.key();
@@ -4975,6 +5029,19 @@ impl FlowlistApp {
                 }
                 self.save_session();
             }
+            modals::Modal::DeleteContainers { projects, folders } => {
+                self.execute(Command::DeleteContainers {
+                    projects: projects.clone(),
+                    folders: folders.clone(),
+                });
+                self.sidebar_selection.clear();
+                if !view_exists(self.store.db(), &self.view) {
+                    self.view = View::Builtin(BuiltinPerspective::Inbox);
+                    self.selected.clear();
+                    self.anchor = None;
+                }
+                self.save_session();
+            }
             modals::Modal::DeleteFolder { id, .. } => {
                 self.execute(Command::DeleteFolder { id: id.clone() });
                 if self.view == View::Folder(id.clone()) {
@@ -5262,6 +5329,7 @@ impl FlowlistApp {
                 wallpaper_opacity,
                 keep_completed_subtasks,
                 forecast_due_counts,
+                focus_banner,
                 hide_empty_views,
                 follow_system,
                 theme,
@@ -5328,6 +5396,10 @@ impl FlowlistApp {
                 self.use_wallpaper = *use_wallpaper;
                 self.wallpaper_opacity = *wallpaper_opacity;
                 self.keep_completed_subtasks = *keep_completed_subtasks;
+                self.show_focus_banner = *focus_banner;
+                if self.show_focus_banner {
+                    self.focus_banner_until = None;
+                }
                 self.hide_empty_views = *hide_empty_views;
                 self.notification_requested = false;
                 if self.due_notifications && !notifications::permission().allowed() {
@@ -7329,11 +7401,18 @@ impl FlowlistApp {
                 .iter()
                 .map(FocusTarget::key)
                 .collect::<Vec<_>>(),
-            "focus_selection": self
-                .focus_selection
+            "sidebar_selection": self
+                .sidebar_selection
                 .iter()
                 .map(FocusTarget::key)
                 .collect::<Vec<_>>(),
+            "last_focus_targets": self
+                .last_focus_targets
+                .iter()
+                .map(FocusTarget::key)
+                .collect::<Vec<_>>(),
+            "focus_banner_enabled": self.show_focus_banner,
+            "focus_banner_transient": self.focus_banner_until.is_some(),
             "modal": self.modal.as_ref().map(|modal| modal.title()),
             "modal_message": self.modal_error.clone(),
             "date_error": self.date_error.as_ref().map(|(_, field, message)| {
@@ -7614,7 +7693,7 @@ impl FlowlistApp {
         }));
         state["field_editor"] = serde_json::json!(anchor(self.field_editor_anchor.get()));
         state["focus_banner"] = serde_json::json!(anchor(self.focus_banner_anchor.get()));
-        state["focus_selected"] = serde_json::json!(anchor(self.focus_selected_anchor.get()));
+        state["focus_eye"] = serde_json::json!(anchor(self.focus_eye_anchor.get()));
         state["hide_past"] = serde_json::json!(self.hide_past);
         state["hide_past_anchor"] = serde_json::json!(anchor(self.hide_past_anchor.get()));
         state["forecast_calendar_open"] = serde_json::json!(self.forecast_calendar_open);
@@ -7871,9 +7950,46 @@ impl FlowlistApp {
             )
     }
 
+    /// The eye beside the back/forward arrows. It ends focus, or restores the
+    /// last focus when none is active. It glows while focused.
+    fn focus_eye_button(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let active = !self.focus_targets.is_empty();
+        let can_restore = !self.last_focus_targets.is_empty();
+        let enabled = active || can_restore;
+        let tip = if active {
+            "End focus"
+        } else if can_restore {
+            "Restore previous focus"
+        } else {
+            "Focus a project or folder first"
+        };
+        let anchor = self.focus_eye_anchor.clone();
+        div()
+            .id("focus-eye")
+            .opacity(if enabled { 1.0 } else { 0.35 })
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .flow_tip(self, cx, theme, tip)
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if enabled {
+                    this.toggle_focus_eye(cx);
+                }
+            }))
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            anchor.set(Some(*bounds));
+                        }
+                    })
+                    .child(widgets::icon_button(theme, Icon::Eye, active)),
+            )
+            .into_any_element()
+    }
+
     /// The full-width Focus banner below the title bar.
     fn render_focus_banner(&self, cx: &mut Context<Self>) -> AnyElement {
-        let theme = self.theme;
+        let (background, text, border, hover) = focus_banner_palette(self.theme);
         let labels: Vec<String> = self
             .focus_targets
             .iter()
@@ -7890,8 +8006,9 @@ impl FlowlistApp {
             .gap_2()
             .px_3()
             .border_b_1()
-            .border_color(theme.border_soft)
-            .bg(theme.selection)
+            .border_color(border)
+            .bg(background)
+            .text_color(text)
             .child(
                 div()
                     .flex_1()
@@ -7899,7 +8016,7 @@ impl FlowlistApp {
                     .truncate()
                     .text_sm()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(theme.text)
+                    .text_color(text)
                     .child(label),
             )
             .child(
@@ -7911,8 +8028,8 @@ impl FlowlistApp {
                     .justify_center()
                     .rounded_sm()
                     .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .child(icons::icon(Icon::Close, 11.0, theme.text_faint))
+                    .hover(|style| style.bg(hover))
+                    .child(icons::icon(Icon::Close, 11.0, text))
                     .on_click(cx.listener(|this, _, _, cx| this.clear_focus(cx))),
             );
         div()
@@ -7996,7 +8113,8 @@ impl FlowlistApp {
                                 true,
                                 cx,
                             )),
-                    ),
+                    )
+                    .child(self.focus_eye_button(cx)),
             )
             .child(
                 div()
@@ -8482,7 +8600,9 @@ impl Render for FlowlistApp {
             );
         }
         root = root.child(self.render_header(window, cx));
-        if !self.focus_targets.is_empty() {
+        if !self.focus_targets.is_empty()
+            && (self.show_focus_banner || self.focus_banner_until.is_some())
+        {
             root = root.child(self.render_focus_banner(cx));
         }
         let mut body = div().flex().flex_1().min_h_0();
@@ -8658,6 +8778,26 @@ fn raise_for_capture(window: &Window) {
 
 #[cfg(not(target_os = "macos"))]
 fn raise_for_capture(_window: &Window) {}
+
+/// OmniFocus-like opaque Focus banner colours. These are deliberately not the
+/// theme's translucent selection or ink: the banner must stay readable and must
+/// not let the wallpaper tint its right edge.
+fn focus_banner_palette(theme: Theme) -> (gpui::Hsla, gpui::Hsla, gpui::Hsla, gpui::Hsla) {
+    match theme.appearance() {
+        Appearance::Light => (
+            gpui::rgb(0xEFE7F7).into(),
+            gpui::rgb(0x241B31).into(),
+            gpui::rgb(0xD8CBE7).into(),
+            gpui::rgb(0xE4D8F0).into(),
+        ),
+        Appearance::Dark => (
+            gpui::rgb(0x332A42).into(),
+            gpui::rgb(0xF5F0FA).into(),
+            gpui::rgb(0x4B3E5E).into(),
+            gpui::rgb(0x423656).into(),
+        ),
+    }
+}
 
 fn date_conflict_message(conflict: &DateConflict) -> String {
     let container = conflict

@@ -368,6 +368,12 @@ pub struct Session {
     pub focus_targets: Vec<String>,
     #[serde(default)]
     pub focus: Option<String>,
+    /// Remember the last focused projects/folders so the eye can restore them.
+    #[serde(default)]
+    pub last_focus_targets: Vec<String>,
+    /// Keep the focus banner visible while a focus is active.
+    #[serde(default)]
+    pub focus_banner: Option<bool>,
     /// Per-perspective sort, grouping and filters.
     #[serde(default)]
     pub view_options: BTreeMap<String, ViewOptions>,
@@ -544,6 +550,8 @@ mod tests {
 
         let session = Session {
             focus_targets: vec![project.key(), folder.key()],
+            last_focus_targets: vec![project.key()],
+            focus_banner: Some(false),
             ..Session::default()
         };
         let restored: Session =
@@ -552,6 +560,8 @@ mod tests {
             restored.focus_targets,
             vec![project.key(), folder.key()]
         );
+        assert_eq!(restored.last_focus_targets, vec![project.key()]);
+        assert_eq!(restored.focus_banner, Some(false));
     }
 
     #[test]

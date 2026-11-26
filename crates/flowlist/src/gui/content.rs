@@ -2084,7 +2084,6 @@ impl FlowlistApp {
     /// command, so the change is undoable.
     fn render_archive(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.theme;
-        let db = self.store.db();
         if self.archive_sections().is_empty() {
             return self
                 .render_empty(

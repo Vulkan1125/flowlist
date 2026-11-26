@@ -29,6 +29,7 @@ pub enum Icon {
     ChevronUp,
     Pencil,
     Crosshair,
+    Eye,
     Close,
     Undo,
     Redo,
@@ -109,7 +110,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    pub const ALL: [Icon; 95] = [
+    pub const ALL: [Icon; 96] = [
         Icon::Inbox,
         Icon::Projects,
         Icon::Forecast,
@@ -128,6 +129,7 @@ impl Icon {
         Icon::ChevronUp,
         Icon::Pencil,
         Icon::Crosshair,
+        Icon::Eye,
         Icon::Close,
         Icon::Undo,
         Icon::Redo,
@@ -227,6 +229,7 @@ impl Icon {
             Icon::ChevronUp => "icons/chevron-up.svg",
             Icon::Pencil => "icons/pencil.svg",
             Icon::Crosshair => "icons/crosshair.svg",
+            Icon::Eye => "icons/eye.svg",
             Icon::Close => "icons/close.svg",
             Icon::Undo => "icons/undo.svg",
             Icon::Redo => "icons/redo.svg",
@@ -354,6 +357,9 @@ impl Icon {
             }
             Icon::Crosshair => {
                 r#"<circle cx="12" cy="12" r="10"/><path d="M22 12h-4"/><path d="M6 12H2"/><path d="M12 6V2"/><path d="M12 22v-4"/>"#
+            }
+            Icon::Eye => {
+                r#"<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>"#
             }
             Icon::Close => r#"<path d="M18 6 6 18"/><path d="m6 6 12 12"/>"#,
             Icon::Undo => {
@@ -613,7 +619,7 @@ mod tests {
 
     #[test]
     fn icon_set_is_complete_and_unique() {
-        assert_eq!(Icon::ALL.len(), 95);
+        assert_eq!(Icon::ALL.len(), 96);
         let mut paths: Vec<&str> = Icon::ALL.iter().map(|icon| icon.path()).collect();
         paths.sort_unstable();
         paths.dedup();

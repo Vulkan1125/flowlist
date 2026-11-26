@@ -180,8 +180,10 @@ open a folded section such as Forecast's `forecast:next-month`.
 maps Forecast project rows by project id. `modal_message` carries a form's
 inline refusal, and `date_error` names the inspector date field plus its
 message. `focus_targets` lists the focused `project:` / `folder:` keys,
-`focus_selection` lists Cmd-clicked rows, `focus_banner` gives the banner box
-and `focus_selected` gives the sidebar's multi-focus button. `view_subtitle`
+`sidebar_selection` lists Cmd-clicked rows, `focus_banner` gives the banner box,
+and `focus_eye` gives the header eye. `last_focus_targets` is the restorable
+focus, and `focus_banner_enabled` / `focus_banner_transient` cover the Settings
+choice and the self-dismissing notice. `view_subtitle`
 reports the line under the view title. `view_form.description` carries the
 saved-view description. `icon_picker` reports whether an icon card is open and
 its first Return match. The saved-view and project icon cards

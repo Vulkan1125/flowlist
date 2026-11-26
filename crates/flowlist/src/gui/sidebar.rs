@@ -377,7 +377,7 @@ impl FlowlistApp {
     }
 
     pub(super) fn sidebar_activate(&mut self, target: SidebarTarget, cx: &mut Context<Self>) {
-        self.focus_selection.clear();
+        self.sidebar_selection.clear();
         let view = match &target {
             SidebarTarget::Builtin(perspective) => View::Builtin(*perspective),
             SidebarTarget::Custom(id) => View::Custom(id.clone()),
@@ -398,7 +398,7 @@ impl FlowlistApp {
     /// its tree is unfolded; clicking the same, already-open folder folds the
     /// tree again rather than re-opening the view it is already on.
     pub(super) fn toggle_folder_row(&mut self, id: FolderId, cx: &mut Context<Self>) {
-        self.focus_selection.clear();
+        self.sidebar_selection.clear();
         let key = format!("folder:{id}");
         if self.view == View::Folder(id.clone()) {
             self.toggle_expanded(key, true, cx);
@@ -593,7 +593,97 @@ impl FlowlistApp {
         let target = menu.target.clone();
         let db = self.store.db();
         let mut items: Vec<AnyElement> = Vec::new();
+        let target_focus = match &target {
+            SidebarTarget::Project(id) => Some(FocusTarget::Project(id.clone())),
+            SidebarTarget::Folder(id) => Some(FocusTarget::Folder(id.clone())),
+            _ => None,
+        };
+        let multi = self.sidebar_selection.len() > 1
+            && target_focus
+                .as_ref()
+                .is_some_and(|target| self.sidebar_selection.contains(target));
 
+        if multi {
+            let selection = self.sidebar_selection.clone();
+            let count = selection.len();
+            let projects: Vec<ProjectId> = selection
+                .iter()
+                .filter_map(|target| match target {
+                    FocusTarget::Project(id) => Some(id.clone()),
+                    FocusTarget::Folder(_) => None,
+                })
+                .collect();
+            let folders: Vec<FolderId> = selection
+                .iter()
+                .filter_map(|target| match target {
+                    FocusTarget::Folder(id) => Some(id.clone()),
+                    FocusTarget::Project(_) => None,
+                })
+                .collect();
+            let same_focus = self.focus_targets.len() == count
+                && selection
+                    .iter()
+                    .all(|target| self.focus_targets.contains(target));
+            items.push(self.sidebar_menu_item(
+                "menu-focus-selection".to_string(),
+                if same_focus {
+                    "Stop focusing".to_string()
+                } else {
+                    format!("Focus on {count} selected")
+                },
+                false,
+                false,
+                cx,
+                move |this, cx| {
+                    if same_focus {
+                        this.clear_focus(cx);
+                    } else {
+                        this.set_focus_targets(selection.clone(), cx);
+                    }
+                },
+            ));
+            if !projects.is_empty() {
+                items.push(self.sidebar_menu_divider());
+                for option in ProjectStatus::ALL {
+                    let ids = projects.clone();
+                    items.push(self.sidebar_menu_item(
+                        format!("menu-selection-status:{}", option.slug()),
+                        if folders.is_empty() {
+                            option.label().to_string()
+                        } else {
+                            format!("Mark projects {}", option.label())
+                        },
+                        false,
+                        false,
+                        cx,
+                        move |this, cx| {
+                            this.execute(
+                                flowlist_core::command::Command::SetProjectStatuses {
+                                    ids: ids.clone(),
+                                    status: option,
+                                },
+                            );
+                            cx.notify();
+                        },
+                    ));
+                }
+            }
+            items.push(self.sidebar_menu_divider());
+            items.push(self.sidebar_menu_item(
+                "menu-delete-selection".to_string(),
+                format!("Delete {count} selected"),
+                true,
+                false,
+                cx,
+                move |this, cx| {
+                    let modal = modals::Modal::delete_containers(
+                        projects.clone(),
+                        folders.clone(),
+                    );
+                    this.open_modal(modal, cx);
+                },
+            ));
+        } else {
         match target.clone() {
             SidebarTarget::Builtin(perspective) => {
                 let open_target = SidebarTarget::Builtin(perspective);
@@ -745,8 +835,8 @@ impl FlowlistApp {
                 let focus_target = FocusTarget::Folder(id.clone());
                 let focused = self.focus_targets.len() == 1
                     && self.focus_targets[0] == focus_target;
-                let selected = self.focus_selection.contains(&focus_target);
-                let selection_count = self.focus_selection.len();
+                let selected = self.sidebar_selection.contains(&focus_target);
+                let selection_count = self.sidebar_selection.len();
                 items.push(self.sidebar_menu_item(
                     "menu-focus-folder".to_string(),
                     if selected && selection_count > 1 {
@@ -857,8 +947,8 @@ impl FlowlistApp {
                 let focus_target = FocusTarget::Project(id.clone());
                 let focused = self.focus_targets.len() == 1
                     && self.focus_targets[0] == focus_target;
-                let selected = self.focus_selection.contains(&focus_target);
-                let selection_count = self.focus_selection.len();
+                let selected = self.sidebar_selection.contains(&focus_target);
+                let selection_count = self.sidebar_selection.len();
                 items.push(self.sidebar_menu_item(
                     "menu-focus-project".to_string(),
                     if selected && selection_count > 1 {
@@ -1006,6 +1096,7 @@ impl FlowlistApp {
                     },
                 ));
             }
+        }
         }
 
         let menu_div = div()
@@ -1285,34 +1376,6 @@ impl FlowlistApp {
         }
 
         rail = rail.child(lower);
-        if !self.focus_selection.is_empty() {
-            let count = self.focus_selection.len();
-            let anchor = self.focus_selected_anchor.clone();
-            rail = rail.child(
-                div().p_2().border_t_1().border_color(theme.border_soft).child(
-                    div()
-                        .on_children_prepainted(move |bounds, _, _| {
-                            if let Some(bounds) = bounds.first() {
-                                anchor.set(Some(*bounds));
-                            }
-                        })
-                        .child(
-                            div()
-                                .id("focus-selected")
-                                .child(widgets::button(
-                                    theme,
-                                    format!("Focus on {count} selected"),
-                                    true,
-                                ))
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.focus_selection_now(cx)
-                                })),
-                        ),
-                ),
-            );
-        } else {
-            self.focus_selected_anchor.set(None);
-        }
         // Two explicit rows keep the four creation actions aligned instead
         // of letting wrap count decide the layout at different rail widths.
         let foot_row = |left: gpui::AnyElement, right: gpui::AnyElement| {
@@ -1698,7 +1761,7 @@ impl FlowlistApp {
                     let active = self.view == View::Folder(id.clone());
                     let cursor = self.sidebar_cursor_is(&SidebarTarget::Folder(target_id.clone()));
                     let focus_selected =
-                        self.focus_selection.contains(&FocusTarget::Folder(id.clone()));
+                        self.sidebar_selection.contains(&FocusTarget::Folder(id.clone()));
                     let move_key = key.clone();
                     let folder_move_key = key.clone();
                     let folder_move_target = id.clone();
@@ -1822,12 +1885,12 @@ impl FlowlistApp {
                         )
                         .on_click(cx.listener(move |this, event: &gpui::ClickEvent, _, cx| {
                             if event.modifiers().platform {
-                                this.toggle_focus_selection(
+                                this.toggle_sidebar_selection(
                                     FocusTarget::Folder(view_id.clone()),
                                     cx,
                                 );
                             } else {
-                                this.clear_focus_selection(cx);
+                                this.clear_sidebar_selection(cx);
                                 this.toggle_folder_row(view_id.clone(), cx);
                             }
                         }));
@@ -1899,7 +1962,7 @@ impl FlowlistApp {
                     let drop_id = id.clone();
                     let active = self.view == View::Project(id.clone());
                     let focus_selected =
-                        self.focus_selection.contains(&FocusTarget::Project(id.clone()));
+                        self.sidebar_selection.contains(&FocusTarget::Project(id.clone()));
                     let cursor = self.sidebar_cursor_is(&SidebarTarget::Project(target_id.clone()));
                     let drag_id = id.clone();
                     let drag_theme = self.theme;
@@ -2019,12 +2082,12 @@ impl FlowlistApp {
                         )
                         .on_click(cx.listener(move |this, event: &gpui::ClickEvent, _, cx| {
                             if event.modifiers().platform {
-                                this.toggle_focus_selection(
+                                this.toggle_sidebar_selection(
                                     FocusTarget::Project(view_id.clone()),
                                     cx,
                                 );
                             } else {
-                                this.clear_focus_selection(cx);
+                                this.clear_sidebar_selection(cx);
                                 this.sidebar_activate(
                                     SidebarTarget::Project(view_id.clone()),
                                     cx,

@@ -429,6 +429,17 @@ pub enum Command {
     DeleteFolder {
         id: FolderId,
     },
+    /// Set the same status on several projects in one undo step.
+    SetProjectStatuses {
+        ids: Vec<ProjectId>,
+        status: ProjectStatus,
+    },
+    /// Delete several projects and folders in one undo step. Nested folders
+    /// and projects are removed once, and their tasks move to Trash.
+    DeleteContainers {
+        projects: Vec<ProjectId>,
+        folders: Vec<FolderId>,
+    },
     CreateTag {
         name: String,
         parent: Option<TagId>,
@@ -588,6 +599,15 @@ impl Command {
             Command::DeleteFolder { id } => match folder_name(id) {
                 Some(name) => format!("Delete folder “{name}”"),
                 None => "Delete folder".to_string(),
+            },
+            Command::SetProjectStatuses { ids, status } => {
+                format!("Set {} to {}", item_count(ids.len(), "project", "projects"), status.label())
+            }
+            Command::DeleteContainers { projects, folders } => {
+                format!(
+                    "Delete {}",
+                    item_count(projects.len() + folders.len(), "item", "items")
+                )
             },
             Command::CreateTag { name, .. } => format!("Add tag “{name}”"),
             Command::UpdateTag { id, .. } => match tag_name(id) {
@@ -1677,6 +1697,71 @@ impl Command {
                     )
                 });
             }
+            Command::SetProjectStatuses { ids, status } => {
+                for id in ids.iter() {
+                    Command::SetProjectStatus {
+                        id: id.clone(),
+                        status,
+                    }
+                    .apply(db, at)?;
+                }
+                outcome.affected.extend(ids.iter().map(|id| id.to_string()));
+                outcome.message = Some(format!(
+                    "{} marked {}",
+                    item_count(ids.len(), "project", "projects"),
+                    status.label().to_lowercase()
+                ));
+            }
+            Command::DeleteContainers { projects, folders } => {
+                let selected_folders: Vec<FolderId> = folders
+                    .iter()
+                    .filter(|id| db.folders.contains_key(*id))
+                    .cloned()
+                    .collect();
+                let mut folder_ids = BTreeSet::new();
+                for folder in &selected_folders {
+                    folder_ids.insert(folder.clone());
+                    folder_ids.extend(db.folder_descendants(folder));
+                }
+                let mut project_ids: BTreeSet<ProjectId> = projects
+                    .iter()
+                    .filter(|id| db.projects.contains_key(*id))
+                    .cloned()
+                    .collect();
+                for project in db.projects.values() {
+                    if project
+                        .folder
+                        .as_ref()
+                        .is_some_and(|folder| folder_ids.contains(folder))
+                    {
+                        project_ids.insert(project.id.clone());
+                    }
+                }
+                let mut trashed = 0;
+                for project in &project_ids {
+                    trashed += trash_project(db, project, at);
+                }
+                for folder in &selected_folders {
+                    if db.folders.contains_key(folder) {
+                        remove_folder_tree(db, folder);
+                    }
+                }
+                db.touch();
+                outcome.affected.extend(project_ids.iter().map(|id| id.to_string()));
+                outcome.affected.extend(selected_folders.iter().map(|id| id.to_string()));
+                outcome.message = Some(if trashed == 0 {
+                    format!(
+                        "{} deleted",
+                        item_count(project_ids.len() + selected_folders.len(), "item", "items")
+                    )
+                } else {
+                    format!(
+                        "{} deleted; {} moved to Trash",
+                        item_count(project_ids.len() + selected_folders.len(), "item", "items"),
+                        task_count(trashed)
+                    )
+                });
+            }
             Command::CreateTag {
                 name,
                 parent,
@@ -2619,6 +2704,10 @@ fn purge_tasks(db: &mut Db, ids: &[TaskId]) -> usize {
         db.tasks.remove(id);
     }
     removed.len()
+}
+
+fn item_count(count: usize, singular: &str, plural: &str) -> String {
+    format!("{count} {}", if count == 1 { singular } else { plural })
 }
 
 fn task_count(count: usize) -> String {

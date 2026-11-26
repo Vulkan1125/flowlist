@@ -70,11 +70,12 @@ keeps but does not show.
 
 **Focus** is a temporary scope, not a saved setting. Choose **Focus on …** from
 a project or folder's sidebar menu, or search for it in Quick Open. Cmd-click
-several project and folder rows to select them, then use **Focus on N selected**
-above the creation buttons. Every perspective, search and dashboard then shows
-only those branches; outside rows in the sidebar dim. A full-width banner under
-the title bar clears focus, as does opening a project or folder outside it.
-Inbox and Trash remain global.
+selects sidebar rows for general multi-actions; right-click a selected row for
+**Focus on N selected**, project status changes or batch delete. Every
+perspective, search and dashboard then shows only those branches; outside rows
+in the sidebar dim. A full-width banner under the title bar clears focus, and
+the eye beside the history arrows ends or restores it. Inbox and Trash remain
+global.
 
 ### Content header
 

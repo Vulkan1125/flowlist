@@ -138,8 +138,8 @@ integrations are tracked separately and are not part of this phase.
 - [ ] **Batch editing** — select several tasks and edit tags, project, dates,
       priority, flag and estimate together in the inspector as one undo step.
 - [x] **Focus mode** — scope every perspective to one or more projects/folders.
-      Cmd-click selects rows in the sidebar, a banner names the focus and clears
-      it, the sidebar dims outside the branch, and Inbox/Trash stay global.
+      Cmd-click selects rows for general multi-actions and focus; a banner names
+      the focus, the eye clears/restores it, and Inbox/Trash stay global.
 - [ ] **Forecast tag and extra Forecast contents** — a designated tag that
       enters Forecast without a date, plus flagged items, on-hold projects and
       custom notification dates.
