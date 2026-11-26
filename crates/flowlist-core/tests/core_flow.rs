@@ -3338,3 +3338,76 @@ fn batch_project_status_and_deletion_are_single_steps() {
     assert!(store.db().projects.contains_key(&gamma_id));
     assert!(store.db().folders.contains_key(&folder_id));
 }
+
+#[test]
+fn batch_task_updates_commit_once_and_roll_back_on_conflict() {
+    use chrono::Duration;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let today = local_date(Utc::now());
+    let day = |offset: i64| Stamp::date_only(today + Duration::days(offset));
+
+    let mut one = NewTask::new("One");
+    let one_id = store
+        .execute(Command::CreateTask(one))
+        .unwrap()
+        .created[0]
+        .clone();
+    let one_id = store.db().resolve_task(&one_id).unwrap();
+    let mut two = NewTask::new("Two");
+    two.due = Some(day(6));
+    let two_id = store
+        .execute(Command::CreateTask(two))
+        .unwrap()
+        .created[0]
+        .clone();
+    let two_id = store.db().resolve_task(&two_id).unwrap();
+
+    store
+        .execute(Command::BatchUpdateTasks {
+            ids: vec![one_id.clone(), two_id.clone()],
+            patch: TaskPatch {
+                priority: Some(Some(Priority::High)),
+                flagged: Some(true),
+                estimate_min: Some(Some(45)),
+                ..Default::default()
+            },
+            add_tags: vec!["Batch/Phone".to_string()],
+            remove_tags: Vec::new(),
+        })
+        .unwrap();
+    for id in [&one_id, &two_id] {
+        let task = &store.db().tasks[id];
+        assert_eq!(task.priority, Some(Priority::High));
+        assert!(task.flagged);
+        assert_eq!(task.estimate_min, Some(45));
+        assert_eq!(task.tags.len(), 1);
+    }
+    store.undo().unwrap();
+    assert_eq!(store.db().tasks[&one_id].priority, None);
+    assert!(!store.db().tasks[&one_id].flagged);
+    assert!(store.db().tasks[&one_id].tags.is_empty());
+
+    let mut project = NewProject::new("Batch project");
+    project.due = Some(day(2));
+    let project_id = store
+        .execute(Command::CreateProject(project))
+        .unwrap()
+        .created[0]
+        .clone();
+    let project_id = store.db().resolve_project(&project_id).unwrap();
+    assert!(store
+        .execute(Command::BatchUpdateTasks {
+            ids: vec![one_id.clone(), two_id.clone()],
+            patch: TaskPatch {
+                project: Some(Some(project_id.clone())),
+                ..Default::default()
+            },
+            add_tags: Vec::new(),
+            remove_tags: Vec::new(),
+        })
+        .is_err());
+    assert_eq!(store.db().tasks[&one_id].project, None);
+    assert_eq!(store.db().tasks[&two_id].project, None);
+}

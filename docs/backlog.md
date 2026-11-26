@@ -135,8 +135,9 @@ integrations are tracked separately and are not part of this phase.
 - [ ] **Full notification model** — defer/available alerts, per-item custom
       notification schedules, and richer notification payloads beyond due
       reminders and full-screen reminders.
-- [ ] **Batch editing** — select several tasks and edit tags, project, dates,
-      priority, flag and estimate together in the inspector as one undo step.
+- [x] **Batch editing** — select several tasks and edit tags, project,
+      defer/planned/due, priority, flag and estimate in the inspector as one
+      undo step. Strict dates make the batch atomic.
 - [x] **Focus mode** — scope every perspective to one or more projects/folders.
       Cmd-click selects rows for general multi-actions and focus; a banner names
       the focus, the eye clears/restores it, and Inbox/Trash stay global.

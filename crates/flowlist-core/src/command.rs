@@ -290,6 +290,16 @@ pub enum Command {
         id: TaskId,
         patch: TaskPatch,
     },
+    /// Apply one patch to several tasks as a single undo step. Tag paths are
+    /// resolved (and added tags created) inside the same command.
+    BatchUpdateTasks {
+        ids: Vec<TaskId>,
+        patch: TaskPatch,
+        #[serde(default)]
+        add_tags: Vec<String>,
+        #[serde(default)]
+        remove_tags: Vec<String>,
+    },
     CompleteTasks {
         ids: Vec<TaskId>,
         completed: bool,
@@ -524,6 +534,9 @@ impl Command {
                 format!("Move {}", task_count(ids.len()))
             }
             Command::UpdateTaskAdjusted { .. } => "Change task".to_string(),
+            Command::BatchUpdateTasks { ids, .. } => {
+                format!("Edit {}", task_count(ids.len()))
+            }
             Command::UpdateProjectAdjusted { .. } => "Change project".to_string(),
             Command::SetTaskTags { ids, .. } => format!("Tag {}", task_count(ids.len())),
             Command::SetTaskFlag { ids, flagged } => {
@@ -725,6 +738,43 @@ impl Command {
                 } else {
                     "Task updated".to_string()
                 });
+            }
+            Command::BatchUpdateTasks {
+                ids,
+                patch,
+                add_tags,
+                remove_tags,
+            } => {
+                if ids.is_empty() {
+                    return Ok(outcome);
+                }
+                for id in ids.iter() {
+                    Command::UpdateTask {
+                        id: id.clone(),
+                        patch: patch.clone(),
+                    }
+                    .apply(db, at)?;
+                }
+                let add: Vec<TagId> = add_tags
+                    .iter()
+                    .map(|path| path.trim())
+                    .filter(|path| !path.is_empty())
+                    .map(|path| db.ensure_tag_path(path, true))
+                    .collect::<Result<Vec<_>>>()?;
+                let remove: Vec<TagId> = remove_tags
+                    .iter()
+                    .filter_map(|path| db.find_tag_path(path.trim()))
+                    .collect();
+                if !add.is_empty() || !remove.is_empty() {
+                    Command::SetTaskTags {
+                        ids: ids.clone(),
+                        add,
+                        remove,
+                    }
+                    .apply(db, at)?;
+                }
+                outcome.affected.extend(ids.iter().map(|id| id.to_string()));
+                outcome.message = Some(format!("Edited {}", task_count(ids.len())));
             }
             Command::UpdateTask { id, patch } => {
                 // Resolve or create a project path before borrowing the task so

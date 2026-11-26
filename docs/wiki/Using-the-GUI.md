@@ -129,6 +129,19 @@ leaving the list.
 - **To project** converts the task and its subtasks into a project. **Delete**
   and **Complete** finish the task.
 
+## Batch editing
+
+Select two or more tasks with `Cmd`-click or `Shift`-click. The inspector becomes
+a batch editor for **Project**, **Tags**, **Defer**, **Planned**, **Due**,
+**Priority**, **Flag** and **Estimate**.
+
+- Empty fields stay unchanged.
+- `none` or `clear` clears a date, project or estimate.
+- Tags accept comma-separated names; prefix one with `-` to remove it.
+- **Apply** changes every selected task in one undoable step. If strict project
+  or parent dates reject any task, the entire batch rolls back and the reason
+  stays in the inspector.
+
 ## Projects and reviews
 
 Create a project with `⇧⌘N` (or **＋ Project** at the bottom of the rail). A

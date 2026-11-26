@@ -201,6 +201,13 @@ follows the pane that is actually visible, so it re-centres when the inspector
 closes (the search field keeps the inspector's column reserved instead).
 Settings previews each theme family as a miniature window.
 
+## Batch editing
+
+Selecting more than one task turns the inspector into a batch editor. Project,
+tags, defer/planned/due, priority, flag and estimate can be set across the
+selection. Empty fields are ignored, `none`/`clear` clears a value, and tags
+accept `+tag` / `-tag`. Apply runs one atomic command and one undo step.
+
 ## Projects, review and archive
 
 Projects can be parallel, sequential or single-action and carry a status of

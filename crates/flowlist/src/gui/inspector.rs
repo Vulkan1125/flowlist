@@ -6,10 +6,11 @@ use gpui::{
     AnyElement, Context, CursorStyle, IntoElement, MouseButton, Window, div, prelude::*, px,
 };
 
-use flowlist_core::command::Command;
+use flowlist_core::command::{Command, TaskPatch};
 use flowlist_core::ids::{ChecklistId, TaskId};
 use flowlist_core::model::{IconSpec, Priority, ProjectStatus};
-use flowlist_core::time::{format_duration, human_date, local_date, now};
+use flowlist_core::parse::{parse_duration, parse_stamp};
+use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
 
 use super::content::month_grid;
 use super::drag::{
@@ -17,7 +18,86 @@ use super::drag::{
 };
 use super::icons::Icon;
 use super::widgets::TipExt;
-use super::{ClockUnit, DateField, DatePickerStep, EditField, FlowlistApp, View, icons, widgets};
+use super::{
+    BatchDraft, BatchField, ClockUnit, DateField, DatePickerStep, EditField, FlowlistApp, View,
+    icons, widgets,
+};
+
+fn batch_choice(
+    theme: super::theme::Theme,
+    label: impl Into<String>,
+    active: bool,
+    id: &str,
+    boxes: std::rc::Rc<std::cell::RefCell<std::collections::BTreeMap<String, [f32; 4]>>>,
+    cx: &mut Context<FlowlistApp>,
+    on_click: impl Fn(&mut FlowlistApp, &mut Context<FlowlistApp>) + 'static,
+) -> AnyElement {
+    let key = id.to_string();
+    div()
+        .on_children_prepainted(move |bounds, _, _| {
+            if let Some(bounds) = bounds.first() {
+                boxes.borrow_mut().insert(
+                    key.clone(),
+                    [
+                        f32::from(bounds.origin.x),
+                        f32::from(bounds.origin.y),
+                        f32::from(bounds.size.width),
+                        f32::from(bounds.size.height),
+                    ],
+                );
+            }
+        })
+        .id(super::sid(id.to_string()))
+        .child(widgets::toggle_chip(theme, label, active))
+        .on_click(cx.listener(move |this, _, _, cx| on_click(this, cx)))
+        .into_any_element()
+}
+
+fn parse_batch_date(value: &str) -> Result<Option<Option<Stamp>>, String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(None);
+    }
+    if matches!(value.to_lowercase().as_str(), "none" | "clear" | "-") {
+        return Ok(Some(None));
+    }
+    parse_stamp(value, now())
+        .map(|stamp| Some(Some(stamp)))
+        .map_err(|error| error.to_string())
+}
+
+fn parse_batch_estimate(value: &str) -> Result<Option<u32>, String> {
+    let value = value.trim();
+    if matches!(value.to_lowercase().as_str(), "none" | "clear" | "-") {
+        return Ok(None);
+    }
+    parse_duration(value)
+        .map(Some)
+        .map_err(|error| error.to_string())
+}
+
+fn parse_batch_tags(value: &str) -> (Vec<String>, Vec<String>) {
+    let mut add = Vec::new();
+    let mut remove = Vec::new();
+    for token in value.split(',') {
+        let token = token.trim();
+        if token.is_empty() {
+            continue;
+        }
+        if let Some(tag) = token.strip_prefix('-') {
+            let tag = tag.trim();
+            if !tag.is_empty() {
+                remove.push(tag.to_string());
+            }
+        } else {
+            let tag = token.strip_prefix('+').unwrap_or(token).trim();
+            if !tag.is_empty() {
+                add.push(tag.to_string());
+            }
+        }
+    }
+    (add, remove)
+}
 
 /// Where an effective date comes from when the task itself has no value.
 fn inherited_date_suffix(
@@ -72,6 +152,11 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
+        if self.batch_selection != self.selected {
+            self.batch_selection = self.selected.clone();
+            self.batch_draft = BatchDraft::default();
+            self.batch_editing = None;
+        }
         let mut panel = div()
             .flex()
             .flex_col()
@@ -125,7 +210,9 @@ impl FlowlistApp {
             }),
         );
 
-        let content = if let Some(id) = self.selected_one() {
+        let content = if self.selected.len() > 1 {
+            self.render_batch_inspector(cx).into_any_element()
+        } else if let Some(id) = self.selected_one() {
             self.render_task_inspector(&id, window, cx)
                 .into_any_element()
         } else if let View::Project(id) = self.view.clone() {
@@ -269,6 +356,478 @@ impl FlowlistApp {
                     .text_color(theme.text_faint)
                     .child("Select a task to see and edit its details."),
             )
+    }
+
+    fn render_batch_inspector(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let count = self.selected.len();
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .p_3()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child(format!("{count} tasks selected")),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("Set a field to change every selected task. Empty fields stay unchanged."),
+            )
+            .child(self.batch_text_field(BatchField::Project, &self.batch_draft.project, cx))
+            .child(self.batch_text_field(BatchField::Tags, &self.batch_draft.tags, cx))
+            .child(self.batch_priority(cx))
+            .child(self.batch_text_field(BatchField::Defer, &self.batch_draft.defer, cx))
+            .child(self.batch_text_field(BatchField::Planned, &self.batch_draft.planned, cx))
+            .child(self.batch_text_field(BatchField::Due, &self.batch_draft.due, cx))
+            .child(self.batch_flag(cx))
+            .child(self.batch_text_field(BatchField::Estimate, &self.batch_draft.estimate, cx));
+        if let Some(error) = &self.batch_draft.error {
+            body = body.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.warning)
+                    .whitespace_normal()
+                    .child(error.clone()),
+            );
+        }
+        body.child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(
+                    div()
+                        .id("batch-clear")
+                        .px_2()
+                        .py_1()
+                        .rounded_md()
+                        .text_xs()
+                        .text_color(theme.text_dim)
+                        .cursor_pointer()
+                        .hover(|style| style.bg(theme.hover))
+                        .child("Clear")
+                        .on_click(cx.listener(|this, _, _, cx| this.clear_batch(cx))),
+                )
+                .child(
+                    {
+                        let boxes = self.batch_boxes.clone();
+                        div()
+                            .on_children_prepainted(move |bounds, _, _| {
+                                if let Some(bounds) = bounds.first() {
+                                    boxes.borrow_mut().insert(
+                                        "batch-apply".to_string(),
+                                        [
+                                            f32::from(bounds.origin.x),
+                                            f32::from(bounds.origin.y),
+                                            f32::from(bounds.size.width),
+                                            f32::from(bounds.size.height),
+                                        ],
+                                    );
+                                }
+                            })
+                            .id("batch-apply")
+                            .px_2()
+                        .py_1()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.accent)
+                        .text_xs()
+                        .text_color(theme.accent)
+                        .cursor_pointer()
+                        .hover(|style| style.bg(theme.selection))
+                            .child(format!("Apply to {count} tasks"))
+                            .on_click(cx.listener(|this, _, _, cx| this.apply_batch(cx)))
+                    },
+                ),
+        )
+    }
+
+    fn batch_text_field(
+        &self,
+        field: BatchField,
+        value: &str,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let editing =
+            self.batch_editing == Some(field) && self.focus == super::FocusArea::Field;
+        let icon = match field {
+            BatchField::Project => Icon::Project,
+            BatchField::Tags => Icon::Tag,
+            BatchField::Defer => Icon::DeferDate,
+            BatchField::Planned => Icon::PlannedDate,
+            BatchField::Due => Icon::DueDate,
+            BatchField::Estimate => Icon::Clock,
+        };
+        let mut row = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(icons::icon(icon, 11.0, theme.text_faint))
+                    .child(field.label()),
+            )
+            .child(if editing {
+                div()
+                    .id("batch-field-editor")
+                    .child(widgets::text_field_with_cursor(
+                        theme,
+                        &self.field,
+                        field.placeholder(),
+                        true,
+                        cx.listener(|this, hit: &widgets::TextHit, _, cx| {
+                            this.field_text_hit(hit, cx)
+                        }),
+                    ))
+                    .into_any_element()
+            } else {
+                let boxes = self.batch_boxes.clone();
+                let key = format!("batch-field:{}", field.slug());
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            boxes.borrow_mut().insert(
+                                key.clone(),
+                                [
+                                    f32::from(bounds.origin.x),
+                                    f32::from(bounds.origin.y),
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
+                                ],
+                            );
+                        }
+                    })
+                    .id(super::sid(format!("batch-field:{}", field.slug())))
+                    .h(px(28.))
+                    .flex()
+                    .items_center()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.field)
+                    .px_2()
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .text_color(if value.is_empty() {
+                        theme.text_faint
+                    } else {
+                        theme.text
+                    })
+                    .child(if value.is_empty() {
+                        field.placeholder().to_string()
+                    } else {
+                        value.to_string()
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.begin_batch_edit(field, cx)
+                    }))
+                    .into_any_element()
+            });
+        if editing {
+            row = row.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("⏎ next · ⇥ next · esc cancel"),
+            );
+        }
+        row
+    }
+
+    fn batch_priority(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let current = self.batch_draft.priority;
+        let mut row = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(icons::icon(Icon::Flagged, 11.0, theme.text_faint))
+                    .child("Priority"),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(batch_choice(
+                        theme,
+                        "Unchanged",
+                        current.is_none(),
+                        "batch-priority:unchanged",
+                        self.batch_boxes.clone(),
+                        cx,
+                        |this, cx| {
+                            this.batch_draft.priority = None;
+                            this.batch_draft.error = None;
+                            cx.notify();
+                        },
+                    ))
+                    .child(batch_choice(
+                        theme,
+                        "None",
+                        current == Some(None),
+                        "batch-priority:none",
+                        self.batch_boxes.clone(),
+                        cx,
+                        |this, cx| {
+                            this.batch_draft.priority = Some(None);
+                            this.batch_draft.error = None;
+                            cx.notify();
+                        },
+                    )),
+            );
+        let mut options = div().flex().items_center().gap_1();
+        for priority in Priority::ALL {
+            let selected = current == Some(Some(priority));
+            options = options.child(batch_choice(
+                theme,
+                priority.label(),
+                selected,
+                &format!("batch-priority:{}", priority.slug()),
+                self.batch_boxes.clone(),
+                cx,
+                move |this, cx| {
+                    this.batch_draft.priority = Some(Some(priority));
+                    this.batch_draft.error = None;
+                    cx.notify();
+                },
+            ));
+        }
+        row.child(options)
+    }
+
+    fn batch_flag(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.theme;
+        let current = self.batch_draft.flagged;
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(icons::icon(Icon::Flagged, 11.0, theme.text_faint))
+                    .child("Flag"),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(batch_choice(
+                        theme,
+                        "Unchanged",
+                        current.is_none(),
+                        "batch-flag:unchanged",
+                        self.batch_boxes.clone(),
+                        cx,
+                        |this, cx| {
+                            this.batch_draft.flagged = None;
+                            this.batch_draft.error = None;
+                            cx.notify();
+                        },
+                    ))
+                    .child(batch_choice(
+                        theme,
+                        "Flag all",
+                        current == Some(true),
+                        "batch-flag:true",
+                        self.batch_boxes.clone(),
+                        cx,
+                        |this, cx| {
+                            this.batch_draft.flagged = Some(true);
+                            this.batch_draft.error = None;
+                            cx.notify();
+                        },
+                    ))
+                    .child(batch_choice(
+                        theme,
+                        "Unflag all",
+                        current == Some(false),
+                        "batch-flag:false",
+                        self.batch_boxes.clone(),
+                        cx,
+                        |this, cx| {
+                            this.batch_draft.flagged = Some(false);
+                            this.batch_draft.error = None;
+                            cx.notify();
+                        },
+                    )),
+            )
+    }
+
+    pub(super) fn begin_batch_edit(&mut self, field: BatchField, cx: &mut Context<Self>) {
+        if self.batch_editing.is_some() {
+            let _ = self.commit_batch_field(cx);
+        }
+        let value = match field {
+            BatchField::Project => self.batch_draft.project.clone(),
+            BatchField::Tags => self.batch_draft.tags.clone(),
+            BatchField::Defer => self.batch_draft.defer.clone(),
+            BatchField::Planned => self.batch_draft.planned.clone(),
+            BatchField::Due => self.batch_draft.due.clone(),
+            BatchField::Estimate => self.batch_draft.estimate.clone(),
+        };
+        self.field.set(value);
+        self.field.select_all();
+        self.batch_editing = Some(field);
+        self.batch_draft.error = None;
+        self.focus = super::FocusArea::Field;
+        cx.notify();
+    }
+
+    pub(super) fn commit_batch_field(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(field) = self.batch_editing else {
+            return true;
+        };
+        let value = self.field.text().trim().to_string();
+        match field {
+            BatchField::Project => self.batch_draft.project = value,
+            BatchField::Tags => self.batch_draft.tags = value,
+            BatchField::Defer => self.batch_draft.defer = value,
+            BatchField::Planned => self.batch_draft.planned = value,
+            BatchField::Due => self.batch_draft.due = value,
+            BatchField::Estimate => self.batch_draft.estimate = value,
+        }
+        self.batch_editing = None;
+        self.batch_draft.error = None;
+        cx.notify();
+        true
+    }
+
+    fn clear_batch(&mut self, cx: &mut Context<Self>) {
+        self.batch_draft = BatchDraft::default();
+        self.batch_editing = None;
+        self.field_error = None;
+        cx.notify();
+    }
+
+    fn apply_batch(&mut self, cx: &mut Context<Self>) {
+        if self.batch_editing.is_some() {
+            let _ = self.commit_batch_field(cx);
+        }
+        let ids = self.selected.clone();
+        if ids.len() < 2 {
+            return;
+        }
+        let mut patch = TaskPatch::default();
+        let mut changed = false;
+        let project_text = self.batch_draft.project.trim().to_string();
+        if !project_text.is_empty() {
+            let clear = matches!(
+                project_text.to_lowercase().as_str(),
+                "none" | "clear" | "inbox" | "-"
+            );
+            if clear {
+                patch.project = Some(None);
+            } else {
+                let db = self.store.db();
+                let found = db
+                    .find_project_by_path(&project_text)
+                    .or_else(|| db.find_project_by_name(&project_text));
+                match found {
+                    Some(project) => patch.project = Some(Some(project)),
+                    None => {
+                        self.batch_draft.error =
+                            Some(format!("Project not found: {project_text}"));
+                        cx.notify();
+                        return;
+                    }
+                }
+            }
+            changed = true;
+        }
+        if let Some(priority) = self.batch_draft.priority {
+            patch.priority = Some(priority);
+            changed = true;
+        }
+        if let Some(flagged) = self.batch_draft.flagged {
+            patch.flagged = Some(flagged);
+            changed = true;
+        }
+        for (field, value) in [
+            (BatchField::Defer, &self.batch_draft.defer),
+            (BatchField::Planned, &self.batch_draft.planned),
+            (BatchField::Due, &self.batch_draft.due),
+        ] {
+            match parse_batch_date(value) {
+                Ok(Some(change)) => {
+                    match field {
+                        BatchField::Defer => patch.defer = Some(change),
+                        BatchField::Planned => patch.planned = Some(change),
+                        BatchField::Due => patch.due = Some(change),
+                        _ => {}
+                    }
+                    changed = true;
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    self.batch_draft.error = Some(format!("{}: {error}", field.label()));
+                    cx.notify();
+                    return;
+                }
+            }
+        }
+        if !self.batch_draft.estimate.trim().is_empty() {
+            match parse_batch_estimate(&self.batch_draft.estimate) {
+                Ok(change) => {
+                    patch.estimate_min = Some(change);
+                    changed = true;
+                }
+                Err(error) => {
+                    self.batch_draft.error = Some(format!("Estimate: {error}"));
+                    cx.notify();
+                    return;
+                }
+            }
+        }
+        let (add_tags, remove_tags) = parse_batch_tags(&self.batch_draft.tags);
+        if !add_tags.is_empty() || !remove_tags.is_empty() {
+            changed = true;
+        }
+        if !changed {
+            self.batch_draft.error = Some("Nothing to apply".to_string());
+            cx.notify();
+            return;
+        }
+        let _ = self.execute(Command::BatchUpdateTasks {
+            ids,
+            patch,
+            add_tags,
+            remove_tags,
+        });
+        if let Some(error) = self.command_error.take() {
+            self.toast = None;
+            self.batch_draft.error = Some(error);
+            cx.notify();
+            return;
+        }
+        self.batch_draft = BatchDraft::default();
+        self.batch_editing = None;
+        self.focus = super::FocusArea::Content;
+        cx.notify();
     }
 
     fn render_task_inspector(

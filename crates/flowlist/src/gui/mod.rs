@@ -148,6 +148,83 @@ impl EditField {
     }
 }
 
+/// Fields in the multi-task inspector. They are staged locally and committed
+/// together by the Apply button.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BatchField {
+    Project,
+    Tags,
+    Defer,
+    Planned,
+    Due,
+    Estimate,
+}
+
+impl BatchField {
+    const ALL: [BatchField; 6] = [
+        BatchField::Project,
+        BatchField::Tags,
+        BatchField::Defer,
+        BatchField::Planned,
+        BatchField::Due,
+        BatchField::Estimate,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            BatchField::Project => "Project",
+            BatchField::Tags => "Tags",
+            BatchField::Defer => "Defer",
+            BatchField::Planned => "Planned",
+            BatchField::Due => "Due",
+            BatchField::Estimate => "Estimate",
+        }
+    }
+
+    fn placeholder(self) -> &'static str {
+        match self {
+            BatchField::Project => "Leave unchanged, or type a project path",
+            BatchField::Tags => "Add tags, or -tag to remove",
+            BatchField::Defer => "Leave unchanged, or clear",
+            BatchField::Planned => "Leave unchanged, or clear",
+            BatchField::Due => "Leave unchanged, or clear",
+            BatchField::Estimate => "Leave unchanged, or clear",
+        }
+    }
+
+    fn slug(self) -> &'static str {
+        match self {
+            BatchField::Project => "project",
+            BatchField::Tags => "tags",
+            BatchField::Defer => "defer",
+            BatchField::Planned => "planned",
+            BatchField::Due => "due",
+            BatchField::Estimate => "estimate",
+        }
+    }
+}
+
+impl Default for BatchField {
+    fn default() -> Self {
+        BatchField::Project
+    }
+}
+
+#[derive(Clone, Default)]
+struct BatchDraft {
+    project: String,
+    tags: String,
+    defer: String,
+    planned: String,
+    due: String,
+    estimate: String,
+    /// None leaves priority untouched; Some(None) clears it.
+    priority: Option<Option<Priority>>,
+    /// None leaves the flag untouched.
+    flagged: Option<bool>,
+    error: Option<String>,
+}
+
 /// The two task dates that can be changed from the inspector's calendar
 /// popover. Each has its own measured anchor so the popover opens under the
 /// field it belongs to.
@@ -592,6 +669,13 @@ pub struct FlowlistApp {
     modal_error: Option<String>,
     /// A date warning shown under the inspector field that caused it.
     date_error: Option<(TaskId, DateField, String)>,
+    /// The multi-task inspector's staged values.
+    batch_draft: BatchDraft,
+    batch_editing: Option<BatchField>,
+    /// Which selection the staged batch belongs to.
+    batch_selection: Vec<TaskId>,
+    /// Batch inspector controls, measured for GUI probes.
+    batch_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// A click's mouse-up closed the sort or group menu. The chip under the
     /// same click must not immediately reopen it.
     sort_closed_on_up: bool,
@@ -1085,6 +1169,10 @@ impl FlowlistApp {
             command_error: None,
             modal_error: None,
             date_error: None,
+            batch_draft: BatchDraft::default(),
+            batch_editing: None,
+            batch_selection: Vec::new(),
+            batch_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             theme_on_open: None,
             plain_accent_light,
             plain_accent_dark,
@@ -3954,6 +4042,9 @@ impl FlowlistApp {
     /// open (an empty title, an unparseable date, or a project that needs
     /// confirmation), so callers can avoid advancing to the next field.
     fn commit_field(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.batch_editing.is_some() {
+            return self.commit_batch_field(cx);
+        }
         let Some(field) = self.editing else {
             self.focus = FocusArea::Content;
             cx.notify();
@@ -6935,6 +7026,7 @@ impl FlowlistApp {
             FocusArea::Search => self.search.clear(),
             FocusArea::Field => {
                 self.editing = None;
+                self.batch_editing = None;
                 self.field_error = None;
                 self.draft_task = None;
             }
@@ -6961,6 +7053,22 @@ impl FlowlistApp {
 
     fn tab_focus(&mut self, backwards: bool, wrap: bool, cx: &mut Context<Self>) {
         match self.focus {
+            FocusArea::Field if self.batch_editing.is_some() => {
+                let current = self.batch_editing.unwrap_or_default();
+                let index = BatchField::ALL
+                    .iter()
+                    .position(|field| *field == current)
+                    .unwrap_or(0);
+                if !self.commit_batch_field(cx) {
+                    return;
+                }
+                let next = if backwards {
+                    (index + BatchField::ALL.len() - 1) % BatchField::ALL.len()
+                } else {
+                    (index + 1) % BatchField::ALL.len()
+                };
+                self.begin_batch_edit(BatchField::ALL[next], cx);
+            }
             FocusArea::Field => {
                 // Save first; only move on when validation accepted the value.
                 // A failed field (empty title, bad date, project confirm)
@@ -7488,6 +7596,7 @@ impl FlowlistApp {
             "focus": format!("{:?}", self.focus),
             "field": self.editing.map(|field| format!("{field:?}")),
             "selected": self.selected.len(),
+            "selected_ids": self.selected.iter().map(|id| id.to_string()).collect::<Vec<_>>(),
             "draft": self.draft_task.is_some(),
             "suggestions": self.project_suggestions().len(),
             "window": self.window_size,
@@ -7911,6 +8020,18 @@ impl FlowlistApp {
             serde_json::json!(self.content_row_boxes.borrow().clone());
         state["content_projects"] =
             serde_json::json!(self.content_project_boxes.borrow().clone());
+        state["batch_boxes"] = serde_json::json!(self.batch_boxes.borrow().clone());
+        state["batch"] = serde_json::json!(if self.selected.len() > 1 {
+            Some(serde_json::json!({
+                "count": self.selected.len(),
+                "editing": self.batch_editing.map(|field| field.slug()),
+                "priority": self.batch_draft.priority.map(|priority| priority.map(|p| p.slug())),
+                "flagged": self.batch_draft.flagged,
+                "error": self.batch_draft.error,
+            }))
+        } else {
+            None
+        });
         state["task_disclosures"] = serde_json::json!(self.task_disclosures.borrow().clone());
         state["inspector_subtasks"] = serde_json::json!(self.inspector_boxes.borrow().clone());
         let text = state.to_string();

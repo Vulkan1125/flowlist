@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Batch task editing.** Select two or more tasks and the inspector becomes a
+  batch editor for project, tags, defer/planned/due, priority, flag and
+  estimate. Empty fields stay unchanged, `none`/`clear` clears a value, and
+  tags accept `+tag` or `-tag`. Apply sends one `BatchUpdateTasks` command, so
+  the whole batch either lands or rolls back together; Undo reverses it in one
+  step.
+
 ## 0.9.51 — 2026-11-26
 
 ### What's new
