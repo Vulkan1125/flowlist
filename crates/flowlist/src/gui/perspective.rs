@@ -475,14 +475,18 @@ fn condition_text(condition: &Condition) -> (String, String) {
     }
 }
 
+fn parse_date_input(value: &str) -> Option<chrono::NaiveDate> {
+    flowlist_core::parse::parse_date(value.trim(), flowlist_core::time::now()).ok()
+}
+
 fn edited_range(range: &DateRangeFilter, text: &str, text2: &str) -> DateRangeFilter {
     match range {
         DateRangeFilter::On { date } => DateRangeFilter::On {
-            date: text.trim().parse().unwrap_or(*date),
+            date: parse_date_input(text).unwrap_or(*date),
         },
         DateRangeFilter::Between { from, to } => DateRangeFilter::Between {
-            from: text.trim().parse().ok().or(*from),
-            to: text2.trim().parse().ok().or(*to),
+            from: parse_date_input(text).or(*from),
+            to: parse_date_input(text2).or(*to),
         },
         DateRangeFilter::InPast { amount, unit } => DateRangeFilter::InPast {
             amount: parse_u32(text).unwrap_or(*amount),
@@ -716,6 +720,30 @@ impl PerspectiveForm {
 
     pub fn move_rule(&mut self, id: u64, up: bool) -> bool {
         move_rule(&mut self.root, id, up)
+    }
+
+    /// Drag a rule into a group. A group cannot be dropped inside itself or
+    /// one of its own descendants.
+    pub fn move_into(&mut self, drag: u64, group: u64) -> bool {
+        if drag == group || drag == self.root.id {
+            return false;
+        }
+        let Some(dragged) = find_rule(&self.root, drag).cloned() else {
+            return false;
+        };
+        if find_rule(&dragged, group).is_some() {
+            return false;
+        }
+        if !remove_rule(&mut self.root, drag) {
+            return false;
+        }
+        if let Some(target) = find_rule_mut(&mut self.root, group)
+            && let Some(children) = target.children_mut()
+        {
+            children.push(dragged);
+            return true;
+        }
+        false
     }
 
     /// Drag-and-drop reordering: put `drag` immediately before `target` in the

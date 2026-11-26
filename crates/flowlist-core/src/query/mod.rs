@@ -107,7 +107,37 @@ pub fn run(
         rows.push(row_for(db, &id, at));
     }
     sort::sort_rows(db, &mut rows, sort);
-    group_rows(db, rows, group_by, at)
+    let projects: Vec<ProjectId> = db
+        .flatten_containers()
+        .into_iter()
+        .filter_map(|row| match row.container {
+            ContainerId::Project(id) => Some(id),
+            ContainerId::Folder(_) => None,
+        })
+        .filter(|id| {
+            let Some(project) = db.projects.get(id) else {
+                return false;
+            };
+            if !show_completed && project.status.is_closed() {
+                return false;
+            }
+            perspective::matches_project(db, project, filter, at)
+        })
+        .collect();
+    let mut groups = group_rows(db, rows, group_by, at);
+    if !projects.is_empty() {
+        groups.insert(
+            0,
+            Group {
+                projects,
+                key: "projects".to_string(),
+                title: "Projects".to_string(),
+                position: i64::MIN,
+                rows: Vec::new(),
+            },
+        );
+    }
+    groups
 }
 
 pub fn custom(db: &Db, perspective: &Perspective, at: DateTime<Utc>) -> Vec<Group> {

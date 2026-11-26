@@ -1371,7 +1371,14 @@ impl FlowlistApp {
 
         // Ordinary modals scroll as one column. Settings is different: its
         // rail must stay put while only the chosen section scrolls, so the
-        // sheet owns that scroll region (see render_settings_sheet).
+        // sheet owns that scroll region (see render_settings_sheet). While a
+        // perspective menu is open, the menu owns scrolling so a wheel over it
+        // can never move the sheet behind it.
+        let inner_scroll = matches!(
+            &self.modal,
+            Some(Modal::Perspective { form })
+                if form.add_menu.is_some() || form.layout_menu.is_some()
+        );
         let mut body = div()
             .id("modal-body")
             .flex()
@@ -1393,7 +1400,7 @@ impl FlowlistApp {
                     .child(error.clone()),
             );
         }
-        if !is_settings {
+        if !is_settings && !inner_scroll {
             body = body
                 .pr(px(14.))
                 .overflow_y_scroll()
@@ -1890,7 +1897,7 @@ impl FlowlistApp {
             .min_h_0()
             .w_full()
             .child(body);
-        if !is_settings {
+        if !is_settings && !inner_scroll {
             body = body.child(self.modal_scrollbar(theme, cx));
         }
         // The settings sheet carries the theme grid, the accent picker and the
@@ -2721,7 +2728,10 @@ impl FlowlistApp {
             form.show_completed,
             now(),
         );
-        let matches = preview.iter().map(|group| group.rows.len()).sum::<usize>();
+        let matches = preview
+            .iter()
+            .map(|group| group.rows.len() + group.projects.len())
+            .sum::<usize>();
 
         let icon_row = div()
             .flex()
@@ -3189,11 +3199,16 @@ impl FlowlistApp {
         }));
         if !is_root {
             row = row.on_drop::<DragRule>(cx.listener(move |this, payload: &DragRule, _, cx| {
-                if let Some(Modal::Perspective { form }) = &mut this.modal
-                    && form.move_before(payload.id, id)
-                {
-                    form.row_menu = None;
-                    form.editing = None;
+                if let Some(Modal::Perspective { form }) = &mut this.modal {
+                    let moved = if is_group {
+                        form.move_into(payload.id, id)
+                    } else {
+                        form.move_before(payload.id, id)
+                    };
+                    if moved {
+                        form.row_menu = None;
+                        form.editing = None;
+                    }
                 }
                 cx.notify();
             }));
@@ -3293,6 +3308,7 @@ impl FlowlistApp {
     ) -> AnyElement {
         let theme = self.theme;
         let mut menu = div()
+            .on_children_prepainted(self.view_probe("rule-add-menu".to_string()))
             .id("rule-add-menu")
             .ml(px((depth as f32) * 14.0 + 20.0))
             .flex()

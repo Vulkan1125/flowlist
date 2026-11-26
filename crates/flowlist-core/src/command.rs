@@ -221,6 +221,7 @@ pub struct ProjectPatch {
     #[serde(deserialize_with = "deserialize_double_option")]
     pub folder: Option<Option<FolderId>>,
     pub tags: Option<BTreeSet<TagId>>,
+    pub flagged: Option<bool>,
     #[serde(deserialize_with = "deserialize_double_option")]
     pub due: Option<Option<Stamp>>,
     #[serde(deserialize_with = "deserialize_double_option")]
@@ -1543,6 +1544,9 @@ impl Command {
                     if let Some(tags) = patch.tags {
                         project.tags = tags;
                     }
+                    if let Some(flagged) = patch.flagged {
+                        project.flagged = flagged;
+                    }
                     if let Some(due) = patch.due {
                         project.due = due;
                     }
@@ -1623,6 +1627,20 @@ impl Command {
                     let project = db.project_mut(&id)?;
                     project.status = status;
                     project.modified_at = at;
+                    match status {
+                        ProjectStatus::Done => {
+                            project.completed_at = Some(at);
+                            project.dropped_at = None;
+                        }
+                        ProjectStatus::Dropped => {
+                            project.dropped_at = Some(at);
+                            project.completed_at = None;
+                        }
+                        ProjectStatus::Active | ProjectStatus::OnHold => {
+                            project.completed_at = None;
+                            project.dropped_at = None;
+                        }
+                    }
                 }
                 if status == ProjectStatus::Done {
                     let tasks = db.tasks_in_project(&id, true);

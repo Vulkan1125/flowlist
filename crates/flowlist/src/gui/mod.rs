@@ -914,7 +914,7 @@ impl FlowlistApp {
             .filter_map(|key| FocusTarget::from_key(store.db(), key))
             .collect();
         let show_focus_banner = session.focus_banner.unwrap_or(true);
-        let show_toolbar_labels = session.toolbar_labels.unwrap_or(true);
+        let show_toolbar_labels = session.toolbar_labels.unwrap_or(false);
         if let Some(target) = focus_targets.first()
             && matches!(view, View::Project(_) | View::Folder(_))
             && !focus_targets
@@ -8139,7 +8139,7 @@ impl FlowlistApp {
                     now(),
                 )
                 .iter()
-                .map(|group| group.rows.len())
+                .map(|group| group.rows.len() + group.projects.len())
                 .sum::<usize>(),
             })),
             _ => None,

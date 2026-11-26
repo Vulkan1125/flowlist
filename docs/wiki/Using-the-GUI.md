@@ -325,7 +325,12 @@ titles itself **Search** and ranks the closest matches first.
   **Is in the Inbox**, **Is in a single actions list**, all seven
   **Has a project that…** choices, **Is contained within project or folder**,
   **Matches search terms** and the logic groups. **Due Soon** uses the
-  **Due soon (days)** value in Settings → Workflow → Forecast.
+  **Due soon (days)** value in Settings → Workflow → Forecast. Rules also
+  filter projects, so **Is a project**, project-status, project-tag and
+  project-date rules put matching projects above the task rows. Drag a rule
+  onto a group to nest it. Date fields accept the same natural phrases as the
+  rest of Flowlist, not only `YYYY-MM-DD`. **First Available** shows one action
+  per parallel project (all available actions in a single-actions list).
   **Group by** and **Sort by** sit below Contents. The sheet previews how many
   tasks the current tree matches before Save. Pinned views sort to the top of
   SAVED; pin or unpin from the row's context menu (`perspective add --pinned`

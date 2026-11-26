@@ -154,11 +154,12 @@ integrations are tracked separately and are not part of this phase.
       All / Any / None groups, the full rule catalogue, date ranges, tag and
       project status, comments, turning rules off, drag reordering, and the
       same evaluator on the Mac and the phone.
-- [ ] **Project-level custom perspectives** — an “Entire Projects” structure
-      that lists and groups projects instead of individual actions. Until this
-      lands, the **Is a project** rule never matches because custom
-      perspectives emit action rows only; **Is a group** matches an action
-      with children.
+- [ ] **Project-level custom perspectives** — the “Entire Projects”
+      organized structure, with projects grouped by folder, review date or a
+      project-level date and their matching actions nested underneath. Custom
+      perspectives already list matching projects as rows and the
+      **Is a project** rule works; what remains is the organized project
+      outline and project grouping/sorting choices.
 - [ ] **Perspective favourites and navigation** — favourites bar, reorder,
       custom icons/colours, copy-as-link and a per-perspective shortcut.
 - [ ] **Configurable row layout** — per-perspective density, columns and

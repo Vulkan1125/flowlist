@@ -387,6 +387,15 @@ pub struct Project {
     pub folder: Option<FolderId>,
     #[serde(default)]
     pub status: ProjectStatus,
+    /// A project-level flag, independent of the flags on its actions.
+    #[serde(default)]
+    pub flagged: bool,
+    /// When the project was marked done. Older files may not carry it.
+    #[serde(default)]
+    pub completed_at: Option<DateTime<Utc>>,
+    /// When the project was dropped. Older files may not carry it.
+    #[serde(default)]
+    pub dropped_at: Option<DateTime<Utc>>,
     /// Opt the project's tasks into full-screen reminders.
     #[serde(default)]
     pub fullscreen_reminder: bool,
@@ -455,6 +464,9 @@ impl Project {
             notes: String::new(),
             folder: None,
             status: ProjectStatus::Active,
+            flagged: false,
+            completed_at: None,
+            dropped_at: None,
             fullscreen_reminder: false,
             tags: BTreeSet::new(),
             due: None,

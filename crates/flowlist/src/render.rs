@@ -80,6 +80,7 @@ pub fn groups_value(db: &Db, groups: &[Group]) -> Value {
         "groups": groups.iter().map(|group| json!({
             "key": group.key,
             "title": group.title,
+            "projects": group.projects.iter().map(|id| project_value(db, id)).collect::<Vec<_>>(),
             "tasks": group.rows.iter().map(|row| {
                 let mut value = task_value(db, &row.id);
                 if let Some(object) = value.as_object_mut() {
@@ -89,7 +90,7 @@ pub fn groups_value(db: &Db, groups: &[Group]) -> Value {
                 value
             }).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
-        "count": groups.iter().map(|group| group.rows.len()).sum::<usize>(),
+        "count": groups.iter().map(|group| group.rows.len() + group.projects.len()).sum::<usize>(),
     })
 }
 
@@ -106,6 +107,9 @@ pub fn project_value(db: &Db, id: &ProjectId) -> Value {
         "notes": project.notes,
         "status": project.status.label(),
         "status_key": status_key(project.status),
+        "flagged": project.flagged,
+        "completed_at": project.completed_at.map(|at| at.to_rfc3339()),
+        "dropped_at": project.dropped_at.map(|at| at.to_rfc3339()),
         "folder": project.folder.as_ref().map(ToString::to_string),
         "folder_path": project.folder.as_ref().map(|folder| db.folder_path(folder)),
         "tags": project.tags.iter().filter_map(|tag| tag_path(db, tag)).collect::<Vec<_>>(),

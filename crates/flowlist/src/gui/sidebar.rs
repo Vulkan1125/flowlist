@@ -223,7 +223,7 @@ impl FlowlistApp {
             now(),
         )
         .iter()
-        .any(|group| !group.rows.is_empty())
+        .any(|group| !group.rows.is_empty() || !group.projects.is_empty())
     }
 
     pub(super) fn sidebar_targets(&self) -> Vec<SidebarTarget> {
@@ -1641,7 +1641,7 @@ impl FlowlistApp {
             .map(|perspective| {
                 query::custom(self.store.db(), perspective, now())
                     .iter()
-                    .map(|group| group.rows.len())
+                    .map(|group| group.rows.len() + group.projects.len())
                     .sum()
             })
             .unwrap_or(0);

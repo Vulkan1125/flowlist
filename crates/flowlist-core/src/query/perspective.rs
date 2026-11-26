@@ -8,11 +8,253 @@ use crate::db::Db;
 use crate::ids::TagId;
 use crate::model::{
     AvailabilityFilter, Condition, DateField, DateRangeFilter, DateUnit, DueWindow, FilterNode,
-    FilterStatus, ItemKindFilter, ProjectStatus, ProjectStatusFilter, TagStatus, TagStatusFilter,
-    Task, TaskStatus,
+    FilterStatus, ItemKindFilter, Project, ProjectKind, ProjectStatus, ProjectStatusFilter,
+    TagStatus, TagStatusFilter, Task, TaskStatus,
 };
 use crate::query::availability::{self, Availability};
 use crate::time::{Stamp, local_date};
+
+/// Evaluate a saved filter against a project. Custom perspectives can list
+/// projects alongside actions, so every rule has a project meaning too.
+pub fn matches_project(
+    db: &Db,
+    project: &Project,
+    node: &FilterNode,
+    at: DateTime<Utc>,
+) -> bool {
+    match node {
+        FilterNode::All(nodes) => nodes
+            .iter()
+            .filter(|node| !node.is_ignorable())
+            .all(|node| matches_project(db, project, node, at)),
+        FilterNode::Any(nodes) => nodes
+            .iter()
+            .filter(|node| !node.is_ignorable())
+            .any(|node| matches_project(db, project, node, at)),
+        FilterNode::None(nodes) => !nodes
+            .iter()
+            .filter(|node| !node.is_ignorable())
+            .any(|node| matches_project(db, project, node, at)),
+        FilterNode::Not(inner) => !matches_project(db, project, inner, at),
+        FilterNode::Condition(condition) => project_condition_matches(db, project, condition, at),
+        FilterNode::Comment(_) | FilterNode::Disabled(_) => true,
+    }
+}
+
+fn project_condition_matches(
+    db: &Db,
+    project: &Project,
+    condition: &Condition,
+    at: DateTime<Utc>,
+) -> bool {
+    match condition {
+        Condition::Project { id } => &project.id == id,
+        Condition::Folder {
+            id,
+            include_children,
+        } => db.project_is_in_folder(&project.id, id, *include_children),
+        Condition::Tag {
+            id,
+            include_children,
+        } => {
+            let wanted = tag_set(db, std::slice::from_ref(id), *include_children);
+            project.tags.iter().any(|tag| wanted.contains(tag))
+        }
+        Condition::InInbox => false,
+        Condition::Flagged { value } => project.flagged == *value,
+        Condition::Priority { .. } => false,
+        Condition::Status { value } => match value {
+            TaskStatus::Any => true,
+            TaskStatus::Completed => project.status == ProjectStatus::Done,
+            TaskStatus::Available => project_is_available(db, project, at),
+            TaskStatus::Blocked => false,
+            TaskStatus::Deferred => project.defer.is_some_and(|stamp| stamp.at > at),
+        },
+        Condition::Due { window } => window_matches(project.due, *window, at),
+        Condition::Deferred { window } => window_matches(project.defer, *window, at),
+        Condition::Planned { window } => window_matches(project.planned, *window, at),
+        Condition::HasRepeat { .. } => false,
+        Condition::FullscreenReminder { value } => project.fullscreen_reminder == *value,
+        Condition::Estimate { .. } => false,
+        Condition::Text { value } => {
+            let needle = value.trim().to_lowercase();
+            needle.is_empty()
+                || project.name.to_lowercase().contains(&needle)
+                || project.notes.to_lowercase().contains(&needle)
+        }
+        Condition::StatusKind { value } => match value {
+            FilterStatus::Flagged => project.flagged,
+            FilterStatus::DueSoon => {
+                if project.status.is_closed() {
+                    return false;
+                }
+                let days = db.settings.due_soon_days as i64;
+                project
+                    .due
+                    .is_some_and(|due| due.local_date() <= local_date(at) + Duration::days(days))
+            }
+        },
+        Condition::Availability { value } => match value {
+            AvailabilityFilter::FirstAvailable | AvailabilityFilter::Available => {
+                project_is_available(db, project, at)
+            }
+            AvailabilityFilter::Remaining => project.status.is_open(),
+            AvailabilityFilter::Completed => project.status == ProjectStatus::Done,
+            AvailabilityFilter::Dropped => project.status == ProjectStatus::Dropped,
+        },
+        Condition::HasEstimate { .. } => false,
+        Condition::EstimateLessThan { .. } => false,
+        Condition::HasDate { field, value } => {
+            project_date_for(project, *field).is_some() == *value
+        }
+        Condition::DateRange { field, range } => project_date_for(project, *field)
+            .is_some_and(|date| range_matches(date, range, at)),
+        Condition::IsUntagged { value } => project.tags.is_empty() == *value,
+        Condition::TagStatus { value } => project_tag_status_matches(db, project, *value, at),
+        Condition::TagsAny {
+            ids,
+            include_children,
+        } => {
+            let wanted = tag_set(db, ids, *include_children);
+            project.tags.iter().any(|tag| wanted.contains(tag))
+        }
+        Condition::TagsAll {
+            ids,
+            include_children,
+        } => {
+            if ids.is_empty() {
+                return true;
+            }
+            let wanted = tag_set(db, ids, *include_children);
+            wanted.iter().all(|tag| project.tags.contains(tag))
+        }
+        Condition::ItemKind { value } => match value {
+            ItemKindFilter::Project | ItemKindFilter::ProjectOrGroup => true,
+            ItemKindFilter::Group | ItemKindFilter::NotProjectOrGroup => false,
+        },
+        Condition::InSingleActionsList => project.kind == ProjectKind::SingleActions,
+        Condition::ProjectStatus { value } => project_status_rule_matches(db, project, *value, at),
+        Condition::Within {
+            project: target,
+            folder,
+            include_children,
+        } => match (target, folder) {
+            (Some(id), _) => &project.id == id,
+            (None, Some(id)) => db.project_is_in_folder(&project.id, id, *include_children),
+            (None, None) => true,
+        },
+        Condition::Search { terms } => {
+            let mut haystack = format!("{}\n{}", project.name, project.notes).to_lowercase();
+            if let Some(folder) = &project.folder {
+                haystack.push('\n');
+                haystack.push_str(&db.folder_path(folder).to_lowercase());
+            }
+            for tag in &project.tags {
+                if let Some(tag) = db.tags.get(tag) {
+                    haystack.push('\n');
+                    haystack.push_str(&tag.name.to_lowercase());
+                }
+            }
+            terms.iter().all(|term| {
+                let needle = term.trim().to_lowercase();
+                needle.is_empty() || haystack.contains(&needle)
+            })
+        }
+    }
+}
+
+fn project_is_available(db: &Db, project: &Project, at: DateTime<Utc>) -> bool {
+    if project.status != ProjectStatus::Active {
+        return false;
+    }
+    if project.defer.is_some_and(|stamp| stamp.at > at) {
+        return false;
+    }
+    if project.kind == ProjectKind::SingleActions {
+        return project_has_available_action(db, project, at);
+    }
+    let has_remaining = db
+        .tasks
+        .values()
+        .any(|task| !task.completed && db.effective_project(&task.id).as_ref() == Some(&project.id));
+    !has_remaining || project_has_available_action(db, project, at)
+}
+
+fn project_has_available_action(db: &Db, project: &Project, at: DateTime<Utc>) -> bool {
+    db.tasks.values().any(|task| {
+        !task.completed
+            && db.effective_project(&task.id).as_ref() == Some(&project.id)
+            && availability::availability(db, &task.id, at).is_available()
+    })
+}
+
+fn project_status_rule_matches(
+    db: &Db,
+    project: &Project,
+    value: ProjectStatusFilter,
+    at: DateTime<Utc>,
+) -> bool {
+    match value {
+        ProjectStatusFilter::Active => project.status == ProjectStatus::Active,
+        ProjectStatusFilter::ActiveOrOnHold => project.status.is_open(),
+        ProjectStatusFilter::OnHold => project.status == ProjectStatus::OnHold,
+        ProjectStatusFilter::Completed => project.status == ProjectStatus::Done,
+        ProjectStatusFilter::Dropped => project.status == ProjectStatus::Dropped,
+        ProjectStatusFilter::ActiveWithNoRemainingActions => {
+            project.status == ProjectStatus::Active
+                && !db.tasks.values().any(|task| {
+                    !task.completed
+                        && db.effective_project(&task.id).as_ref() == Some(&project.id)
+                })
+        }
+        ProjectStatusFilter::ActiveWithFutureDefer => {
+            project.status == ProjectStatus::Active
+                && project.defer.is_some_and(|stamp| stamp.at > at)
+        }
+    }
+}
+
+fn project_tag_status_matches(
+    db: &Db,
+    project: &Project,
+    value: TagStatusFilter,
+    at: DateTime<Utc>,
+) -> bool {
+    project.tags.iter().any(|id| {
+        let Some(tag) = db.tags.get(id) else {
+            return false;
+        };
+        match value {
+            TagStatusFilter::ActiveOrOnHold => {
+                matches!(tag.status, TagStatus::Available | TagStatus::OnHold)
+            }
+            TagStatusFilter::OnHold => tag.status == TagStatus::OnHold,
+            TagStatusFilter::Dropped => tag.status == TagStatus::Dropped,
+            TagStatusFilter::ActiveWithAvailableActions => {
+                tag.status == TagStatus::Available && tag_has_available_action(db, id, at)
+            }
+            TagStatusFilter::ActiveWithNoAvailableActions => {
+                tag.status == TagStatus::Available && !tag_has_available_action(db, id, at)
+            }
+        }
+    })
+}
+
+fn project_date_for(project: &Project, field: DateField) -> Option<DateTime<Utc>> {
+    match field {
+        DateField::Due => project.due.map(|stamp| stamp.at),
+        DateField::Planned => project.planned.map(|stamp| stamp.at),
+        DateField::Defer => project.defer.map(|stamp| stamp.at),
+        DateField::Completed => project.completed_at.or_else(|| {
+            (project.status == ProjectStatus::Done).then_some(project.modified_at)
+        }),
+        DateField::Dropped => project.dropped_at.or_else(|| {
+            (project.status == ProjectStatus::Dropped).then_some(project.modified_at)
+        }),
+        DateField::Added => Some(project.created_at),
+        DateField::Changed => Some(project.modified_at),
+    }
+}
 
 pub fn matches(db: &Db, task: &Task, node: &FilterNode, at: DateTime<Utc>) -> bool {
     match node {
@@ -208,13 +450,40 @@ fn availability_matches(
 ) -> bool {
     let availability = availability::availability(db, &task.id, at);
     match value {
-        AvailabilityFilter::FirstAvailable | AvailabilityFilter::Available => {
-            availability.is_available()
-        }
+        AvailabilityFilter::FirstAvailable => task_is_first_available(db, task, at),
+        AvailabilityFilter::Available => availability.is_available(),
         AvailabilityFilter::Remaining => !task.completed && !project_dropped(db, task),
         AvailabilityFilter::Completed => task.completed,
         AvailabilityFilter::Dropped => project_dropped(db, task),
     }
+}
+
+fn task_is_first_available(db: &Db, task: &Task, at: DateTime<Utc>) -> bool {
+    if !availability::availability(db, &task.id, at).is_available() {
+        return false;
+    }
+    let Some(project_id) = db.effective_project(&task.id) else {
+        // The Inbox has no project structure, so every available action is
+        // also first available there.
+        return true;
+    };
+    let Some(project) = db.projects.get(&project_id) else {
+        return true;
+    };
+    if project.kind == ProjectKind::SingleActions {
+        return true;
+    }
+    db.project_outline(&project_id, true)
+        .into_iter()
+        .map(|row| row.task)
+        .find(|id| {
+            db.tasks.get(id).is_some_and(|candidate| {
+                !candidate.completed
+                    && availability::availability(db, id, at).is_available()
+            })
+        })
+        .as_ref()
+        == Some(&task.id)
 }
 
 fn item_kind_matches(db: &Db, task: &Task, value: ItemKindFilter) -> bool {
@@ -322,7 +591,7 @@ fn date_for(
         DateField::Planned => db.effective_planned(&task.id).map(|stamp| stamp.at),
         DateField::Defer => db.effective_defer(&task.id).map(|stamp| stamp.at),
         DateField::Completed => task.completed_at,
-        DateField::Dropped => None,
+        DateField::Dropped => task.trashed_at,
         DateField::Added => Some(task.created_at),
         DateField::Changed => Some(task.modified_at),
     }
@@ -621,6 +890,80 @@ mod tests {
             value: ItemKindFilter::NotProjectOrGroup,
         });
         assert!(matches(&db, &task, &kind, Utc::now()));
+    }
+
+    #[test]
+    fn project_rules_match_projects_and_appear_as_project_groups() {
+        let mut db = Db::new();
+        let mut project = Project::new("Paused work");
+        project.status = ProjectStatus::OnHold;
+        let project_id = db.add_project(project);
+        let filter = FilterNode::all(vec![
+            FilterNode::condition(Condition::ItemKind {
+                value: ItemKindFilter::Project,
+            }),
+            FilterNode::condition(Condition::ProjectStatus {
+                value: ProjectStatusFilter::OnHold,
+            }),
+        ]);
+        let at = Utc::now();
+        let project = db.projects.get(&project_id).unwrap();
+        assert!(matches_project(&db, project, &filter, at));
+
+        let groups = crate::query::run(&db, &filter, crate::model::SortBy::Manual, crate::model::GroupBy::None, false, at);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].key, "projects");
+        assert_eq!(groups[0].projects, vec![project_id]);
+        assert!(groups[0].rows.is_empty());
+    }
+
+    #[test]
+    fn first_available_shows_one_action_in_a_parallel_project() {
+        let mut db = Db::new();
+        let project_id = db.add_project(Project::new("Parallel"));
+        let mut first = Task::new("First");
+        let mut second = Task::new("Second");
+        first.project = Some(project_id.clone());
+        second.project = Some(project_id.clone());
+        let first_id = db.add_task_to_inbox(first);
+        let second_id = db.add_task_to_inbox(second);
+        db.tasks.get_mut(&first_id).unwrap().project = Some(project_id.clone());
+        db.tasks.get_mut(&second_id).unwrap().project = Some(project_id.clone());
+        db.projects.get_mut(&project_id).unwrap().task_order =
+            vec![first_id.clone(), second_id.clone()];
+
+        let at = Utc::now();
+        let first_rule = FilterNode::condition(Condition::Availability {
+            value: AvailabilityFilter::FirstAvailable,
+        });
+        assert!(matches(&db, &db.tasks[&first_id], &first_rule, at));
+        assert!(!matches(&db, &db.tasks[&second_id], &first_rule, at));
+
+        let available = FilterNode::condition(Condition::Availability {
+            value: AvailabilityFilter::Available,
+        });
+        assert!(matches(&db, &db.tasks[&second_id], &available, at));
+    }
+
+    #[test]
+    fn project_dropped_date_is_queryable() {
+        let mut db = Db::new();
+        let mut project = Project::new("Old");
+        project.status = ProjectStatus::Dropped;
+        project.dropped_at = Some(Utc::now());
+        let project_id = db.add_project(project);
+        let today = local_date(Utc::now());
+        let filter = FilterNode::condition(Condition::DateRange {
+            field: DateField::Dropped,
+            range: DateRangeFilter::Today,
+        });
+        assert!(matches_project(
+            &db,
+            db.projects.get(&project_id).unwrap(),
+            &filter,
+            Utc::now()
+        ));
+        assert_eq!(today, local_date(Utc::now()));
     }
 
     #[test]

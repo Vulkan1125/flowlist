@@ -1298,7 +1298,7 @@ impl FlowlistApp {
                 .filter(|project| self.focus_allows_project(project))
                 .count()
         } else {
-            groups.iter().map(|group| group.rows.len()).sum::<usize>()
+            groups.iter().map(|group| group.rows.len() + group.projects.len()).sum::<usize>()
         };
         let shows_completed =
             matches!(self.view, View::Project(_) | View::Folder(_) | View::Tag(_));
@@ -2112,16 +2112,18 @@ impl FlowlistApp {
                 // Forecast puts a project's own deadline above the day's
                 // actions. Every other view has an empty list here.
                 if !group.projects.is_empty() {
-                    list = list.child(
-                        div()
-                            .px_4()
-                            .pt_2()
-                            .pb_1()
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(theme.text_faint)
-                            .child("Projects"),
-                    );
+                    if group.key != "projects" {
+                        list = list.child(
+                            div()
+                                .px_4()
+                                .pt_2()
+                                .pb_1()
+                                .text_xs()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(theme.text_faint)
+                                .child("Projects"),
+                        );
+                    }
                     for project in &group.projects {
                         list = list.child(self.render_forecast_project_row(project, cx));
                     }

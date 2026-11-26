@@ -1542,22 +1542,23 @@ impl FlowlistApp {
             rows.push((at, row));
         }
         rows.sort_by_key(|(at, _)| *at);
+        let has_notifications = !rows.is_empty();
         let mut list = div().flex().flex_col().gap_1();
-        if rows.is_empty() {
+        if has_notifications {
+            for (_, row) in rows {
+                list = list.child(row);
+            }
+        } else {
             list = list.child(
                 div()
                     .text_xs()
                     .text_color(theme.text_faint)
                     .child("No notifications"),
             );
-        } else {
-            for (_, row) in rows {
-                list = list.child(row);
-            }
         }
 
         let mut body = div().flex().flex_col().gap_2().child(list);
-        if is_task {
+        if is_task && has_notifications {
             body = body.child(
                 div()
                     .text_xs()

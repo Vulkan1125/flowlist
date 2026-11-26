@@ -19,6 +19,8 @@ swiftc -O "$root/scripts/gui/window.swift" -o "$helpers/window"
 state=$tmp/state.json
 "$bin" --data-dir "$lib" add 'Write the handover notes' >/dev/null
 "$bin" --data-dir "$lib" add 'Read the strategy doc' >/dev/null
+"$bin" --data-dir "$lib" project add 'Harbour plan' >/dev/null
+"$bin" --data-dir "$lib" add 'Draft the brief' -p 'Harbour plan' >/dev/null
 
 launch() {
   rm -f "$state"
@@ -151,6 +153,23 @@ import json, sys
 form = json.load(open(sys.argv[1])).get("view_form") or {}
 assert form.get("add_menu") == 1, form.get("add_menu")
 PY
+wait_map view_boxes "rule-add-menu"
+point=$(python3 - "$state" <<'PY'
+import json, sys
+b = json.load(open(sys.argv[1]))["view_boxes"]["rule-add-menu"]
+print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
+PY
+)
+before=$(value settings_scroll)
+"$helpers/flowctl" scroll $((WX + ${point% *})) $((WY + ${point#* })) 8
+sleep 0.4
+after=$(value settings_scroll)
+if [ "$before" != "$after" ]; then
+  echo "FAIL: scrolling the rule menu moved the sheet from $before to $after" >&2
+  exit 1
+fi
+"$helpers/flowctl" scroll $((WX + ${point% *})) $((WY + ${point#* })) -8
+sleep 0.3
 click_map view_boxes "rule-option:1:Status--Due-Soon"
 wait_row "Status is Due Soon"
 

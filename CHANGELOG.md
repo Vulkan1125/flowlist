@@ -10,8 +10,18 @@
   due, planned, defer, completed, dropped, added and changed dates with On,
   Yesterday, Today, Tomorrow, In the past, In the next and Between. The phone
   evaluates the same tree. **Due soon (days)** now lives in Settings →
-  Workflow → Forecast. Custom perspectives still list actions only, so the
-  **Is a project** rule waits for project-level perspectives.
+  Workflow → Forecast. Custom perspectives now include matching projects as
+  rows, so **Is a project**, project-status, project-tag and project-date
+  rules work. **First Available** now means one action per parallel project
+  (all of them in a single-actions list), and projects carry completed and
+  dropped timestamps for date-range rules. Dragging a rule onto a group nests
+  it, and date fields accept the same natural phrases as the rest of Flowlist.
+- **Icons-only header by default.** A fresh session shows the toolbar icons
+  without the small titles. The titles are still available in Settings.
+- **Quieter empty notifications.** The full-screen hint appears only when a
+  task actually has a notification; an empty list just says “No notifications”.
+- **Perspective menus own their scrolling.** Scrolling the rule catalogue or a
+  layout menu no longer moves the whole sheet behind it.
 - **Calendar events in Forecast.** Calendar now has its own Settings section.
   Turn on Forecast events, grant read-only access, and switch individual
   calendars (holidays, birthdays and the rest) on or off. Events sit above each
