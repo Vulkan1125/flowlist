@@ -404,6 +404,10 @@ pub struct Project {
     pub review_interval_days: u32,
     #[serde(default = "today")]
     pub next_review: NaiveDate,
+    /// The last date this project was marked reviewed. Derived from the review
+    /// command, not edited directly.
+    #[serde(default)]
+    pub last_reviewed: Option<NaiveDate>,
     /// Legacy boolean kept for older files. New writes use `kind`.
     #[serde(default)]
     pub sequential: bool,
@@ -458,6 +462,7 @@ impl Project {
             planned: None,
             review_interval_days: default_review_days(),
             next_review: local_date(at) + chrono::Duration::days(default_review_days() as i64),
+            last_reviewed: None,
             sequential: false,
             kind: ProjectKind::Parallel,
             icon: IconSpec::default(),

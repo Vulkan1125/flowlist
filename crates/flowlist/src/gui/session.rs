@@ -380,6 +380,10 @@ pub struct Session {
     /// Per-perspective sort, grouping and filters.
     #[serde(default)]
     pub view_options: BTreeMap<String, ViewOptions>,
+    /// Inspector disclosure choices keyed by section, where true means the
+    /// section is collapsed. Missing sections use their content-aware default.
+    #[serde(default)]
+    pub inspector_sections: BTreeMap<String, bool>,
 }
 
 impl Session {

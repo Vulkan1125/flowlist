@@ -122,14 +122,23 @@ leaving the list.
   preview an image or PDF in the app; PDFs step with `←` / `→`. `open` hands the
   file to its default app. Removing an attachment asks first and leaves the
   file on disk; Undo restores the row.
+- Every inspector section has a disclosure triangle. Collapsing a section
+  shortens the sheet without hiding the others, and the choice is remembered
+  per device.
 - **Tags**, **Project**, **Defer**, **Planned**, **Due**, **Estimate**,
-  **Repeat** and **Alerts** are one click away. A date opens a calendar and a
-  clock-face time picker. A defer date after the due date is refused with a
-  toast, so the picker stays open for another choice. Planned never changes
+  **Repeat** and **Notifications** are one click away. A date opens a calendar
+  and a clock-face time picker. A defer date after the due date is refused with
+  a toast, so the picker stays open for another choice. Planned never changes
   availability.
-- **Alerts** controls custom notifications per task. Use `due:-15m`, `defer`,
-  `planned:+1h`, and so on, separated by commas. A task with alerts replaces the
-  default due reminder; `none` restores it.
+- **Repeat** uses OmniFocus-style controls: a repeat checkbox, an every-number
+  stepper, day/week/month/year chips, and segmented choices for **Due Date** or
+  **Defer Until Date** and for **Completion** or **Assigned Dates**. The
+  compact advanced-rule field keeps endings and other less common options
+  available.
+- **Notifications** is the only place for alerts now. Add a default back, a
+  relative alert or an absolute custom time from **Add Notification**; no
+  separate Alerts field is needed. The full-screen reminder switch and its
+  schedule live in the same section.
 - **To project** converts the task and its subtasks into a project. **Delete**
   and **Complete** finish the task.
 
@@ -155,20 +164,19 @@ Notifications are built from three layers:
    - Planned
    - Latest start (due minus estimate)
    - Due
-2. **Per-item defaults**, shown in the inspector’s Notifications section. Each
-   default can be removed from a task or project and restored later.
+2. **Per-item notifications**, shown in the inspector’s Notifications section.
+   Defaults that are removed disappear from the list and can be added back from
+   **Add Notification**.
 3. **Extra alerts**:
    - relative alerts anchored to Due, Defer/Available or Planned,
    - absolute custom notifications for a specific date and time.
 
-The inspector’s **Alerts** field is the compact relative form:
-
-| Example | Meaning |
-| --- | --- |
-| `due` | At the due time |
-| `due:-15m` | 15 minutes before due |
-| `defer` | When the defer date makes the task available |
-| `planned:+1h` | One hour after the planned time |
+The Notifications section sorts rows by time and shows the label and firing
+time. **Add Notification** lists the removed defaults that apply to the item,
+then **Before Due…** for a relative alert and **Custom Notification…** for an
+absolute one. The relative sheet takes an event and a timing such as `-15m` or
+`+1h`. Relative alerts no longer need a separate text field at the top of the
+inspector.
 
 Date-only relative alerts use 9:00 local. Date-only custom notifications use the
 custom-notification default time from Settings. Alerts follow inherited
@@ -178,8 +186,11 @@ relative alerts to the next occurrence; absolute custom notifications are
 removed from the generated next occurrence.
 
 The inspector lists default, relative and custom notifications and lets you
-remove them or add a custom one. Projects, not only tasks, use the same schedule.
-CLI/MCP can set the same fields, including on `add` and `project edit`.
+remove them or add more. Projects, not only tasks, use the same schedule.
+**Full-screen reminder** is part of that section too: its switch marks the task
+or project, and a marked task shows the match-due or custom reminder time
+below it. CLI/MCP can set the same fields, including on `add` and
+`project edit`.
 
 Flowlist still uses the system local time zone. OmniFocus can attach a floating
 or fixed time zone to each date; that changes the date model, sync and Android
@@ -200,8 +211,9 @@ folders and can carry their own tags, dates, attachments and icon.
   type.
 - Click **Review now** after a review; the next date moves on by the project's
   interval.
-- Click the review line (*Review Nov 28 · every 7 day(s)*) to change the
-  interval later. The same line in the inspector opens the same sheet.
+- The inspector’s **Review** section shows **Next Review**, an inline
+  **Review Every** stepper and the derived **Last Reviewed** date. **Change**
+  opens a small sheet for the exact next date and cadence.
 - Drag a project onto a folder, onto the LIBRARY heading or onto empty space to
   move it back to the root.
 
@@ -366,12 +378,12 @@ eight sections on the left (`⌘1`…`⌘8` jump between them):
 
 ### Reminders
 
-**Settings → Reminders** (its own sidebar item) can schedule a macOS notification for every
-task due in the next 30 days. Timestamped tasks remind at their time; date-only
-tasks remind at 09:00 local. Toggling it on asks macOS for permission, and
-Tasks with custom **Alerts** schedule those instead of the default due reminder;
-the notification body includes the project, up to two tags and whether the
-alert is early, on time or late. **Send test** checks that banners are working. **Pause media on full-screen
+**Settings → Reminders** switches on macOS notifications per type: Defer,
+Planned, Latest Start and Due. Timestamped items remind at their time; date-only
+items remind at 09:00 local. Toggling notifications on asks macOS for
+permission. Relative alerts are extra to those defaults; the notification body
+includes the project, up to two tags and whether the alert is early, on time or
+late. **Send test** checks that banners are working. **Pause media on full-screen
 reminders** stops system playback when a reminder opens; Flowlist deliberately
 does not start it again when the reminder closes. macOS asks for **Device
 control and data access** for this; allow Flowlist under Privacy & Security.

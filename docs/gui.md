@@ -204,13 +204,14 @@ Settings previews each theme family as a miniature window.
 ## Notifications
 
 Notifications have per-type defaults for Defer, Planned, Latest Start and Due,
-plus per-item removal/restoration, relative alerts and absolute custom times.
-The inspector shows the schedule; the **Alerts** field uses syntax such as
-`due:-15m, defer, planned:+1h`. Latest Start is due minus estimate. Date-only
-alerts use 9:00 local; custom date-only notifications use their own default
-time. Relative alerts carry to repeating-task occurrences; absolute custom
-notifications do not. Flowlist currently schedules in the system local time
-zone.
+plus per-item removal, relative alerts and absolute custom times. The inspector
+shows a chronological list and an **Add Notification** menu; removed defaults,
+**Before Due…** and **Custom Notification…** all live there. The full-screen
+reminder switch and its schedule are in the same section. Latest Start is due
+minus estimate. Date-only alerts use 9:00 local; custom date-only notifications
+use their own default time. Relative alerts carry to repeating-task occurrences;
+absolute custom notifications do not. Flowlist currently schedules in the
+system local time zone.
 
 
 ## Batch editing

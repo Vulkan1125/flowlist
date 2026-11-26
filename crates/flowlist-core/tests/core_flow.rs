@@ -3565,3 +3565,29 @@ fn settings_patch_controls_default_notifications() {
     let reopened = Store::open(paths).unwrap();
     assert!(!reopened.db().settings.default_due_notification);
 }
+
+#[test]
+fn completing_a_review_records_the_last_reviewed_date() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let project = NewProject::new("Review cadence");
+    let id = store
+        .execute(Command::CreateProject(project))
+        .unwrap()
+        .created[0]
+        .clone();
+    let project_id = store.db().resolve_project(&id).unwrap();
+    let reviewed_on = flowlist_core::time::local_date(Utc::now());
+    store
+        .execute(Command::CompleteReview {
+            id: project_id.clone(),
+            reviewed_on,
+        })
+        .unwrap();
+    let project = store.db().projects.get(&project_id).unwrap();
+    assert_eq!(project.last_reviewed, Some(reviewed_on));
+    assert_eq!(
+        project.next_review,
+        reviewed_on + chrono::Duration::days(project.review_interval_days as i64)
+    );
+}

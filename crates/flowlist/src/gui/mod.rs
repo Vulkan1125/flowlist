@@ -58,7 +58,7 @@ use flowlist_core::command::{
 use flowlist_core::db::{ContainerPosition, DateConflict, Db, OrderKey, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    AlertEvent, BuiltinPerspective, GroupBy, Priority, ProjectKind, SortBy, TagStatus, TaskAlert,
+    BuiltinPerspective, GroupBy, Priority, ProjectKind, SortBy, TagStatus, TaskAlert,
 };
 use flowlist_core::parse::{parse_duration, parse_quick, parse_repeat, parse_stamp};
 use flowlist_core::paths::DataPaths;
@@ -107,7 +107,6 @@ pub enum EditField {
     Reminder,
     Estimate,
     Repeat,
-    Alerts,
 }
 
 impl EditField {
@@ -131,14 +130,13 @@ impl EditField {
             EditField::Due => EditField::Reminder,
             EditField::Reminder => EditField::Estimate,
             EditField::Estimate => EditField::Repeat,
-            EditField::Repeat => EditField::Alerts,
-            EditField::Alerts => EditField::Title,
+            EditField::Repeat => EditField::Title,
         }
     }
 
     fn previous(self) -> Self {
         match self {
-            EditField::Title => EditField::Alerts,
+            EditField::Title => EditField::Repeat,
             EditField::Notes => EditField::Title,
             EditField::Project => EditField::Notes,
             EditField::Planned => EditField::Defer,
@@ -147,7 +145,6 @@ impl EditField {
             EditField::Reminder => EditField::Due,
             EditField::Estimate => EditField::Reminder,
             EditField::Repeat => EditField::Estimate,
-            EditField::Alerts => EditField::Repeat,
         }
     }
 }
@@ -689,6 +686,14 @@ pub struct FlowlistApp {
     batch_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Notification inspector controls, measured for GUI probes.
     notification_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Inspector section headers, measured so a probe can collapse one.
+    inspector_section_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Explicit inspector disclosure choices: true means collapsed. Sections
+    /// absent from the map use their content-aware default.
+    inspector_sections: BTreeMap<String, bool>,
+    /// The open "Add Notification" menu and the control it points at.
+    notification_menu: Option<NotificationTarget>,
+    notification_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// A click's mouse-up closed the sort or group menu. The chip under the
     /// same click must not immediately reopen it.
     sort_closed_on_up: bool,
@@ -1189,6 +1194,10 @@ impl FlowlistApp {
             batch_selection: Vec::new(),
             batch_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             notification_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            inspector_section_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            inspector_sections: session.inspector_sections.clone(),
+            notification_menu: None,
+            notification_anchor: Rc::new(Cell::new(None)),
             theme_on_open: None,
             plain_accent_light,
             plain_accent_dark,
@@ -1597,6 +1606,7 @@ impl FlowlistApp {
                 .map(FocusTarget::key)
                 .collect(),
             focus_banner: Some(self.show_focus_banner),
+            inspector_sections: self.inspector_sections.clone(),
             toolbar_labels: Some(self.show_toolbar_labels),
             view_options: {
                 let mut map = self.view_options.clone();
@@ -4013,7 +4023,6 @@ impl FlowlistApp {
                 .as_ref()
                 .map(|rule| rule.description())
                 .unwrap_or_default(),
-            EditField::Alerts => TaskAlert::format_list(&task.alerts),
         };
         self.field.set(value);
         if field == EditField::Project {
@@ -4166,14 +4175,6 @@ impl FlowlistApp {
                 };
                 patch.repeat = Some(repeat);
             }
-            EditField::Alerts => match TaskAlert::parse_list(&value) {
-                Ok(alerts) => patch.alerts = Some(alerts),
-                Err(error) => {
-                    self.field_error = Some(error);
-                    cx.notify();
-                    return false;
-                }
-            },
         }
         let conflicts =
             flowlist_core::command::date_conflicts_for_task_patch(self.store.db(), &id, &patch);
@@ -5162,6 +5163,63 @@ impl FlowlistApp {
                     }
                 }
             }
+            modals::Modal::RelativeNotification {
+                target,
+                event,
+                offset,
+            } => {
+                let offset_text = offset.text().trim();
+                let spec = if offset_text.is_empty() {
+                    "0"
+                } else {
+                    offset_text
+                };
+                let parsed = TaskAlert::parse_list(&format!("{}:{spec}", event.slug()))
+                    .map_err(|error| format!("Invalid alert timing: {error}"))?;
+                let Some(alert) = parsed.into_iter().next() else {
+                    return Err("Enter a timing such as -15m".to_string());
+                };
+                match target {
+                    NotificationTarget::Task(id) => {
+                        let mut alerts = self
+                            .store
+                            .db()
+                            .tasks
+                            .get(id)
+                            .map(|task| task.alerts.clone())
+                            .unwrap_or_default();
+                        if !alerts.contains(&alert) {
+                            alerts.push(alert);
+                        }
+                        self.execute(Command::UpdateTask {
+                            id: id.clone(),
+                            patch: TaskPatch {
+                                alerts: Some(alerts),
+                                ..Default::default()
+                            },
+                        });
+                    }
+                    NotificationTarget::Project(id) => {
+                        let mut alerts = self
+                            .store
+                            .db()
+                            .projects
+                            .get(id)
+                            .map(|project| project.alerts.clone())
+                            .unwrap_or_default();
+                        if !alerts.contains(&alert) {
+                            alerts.push(alert);
+                        }
+                        self.execute(Command::UpdateProject {
+                            id: id.clone(),
+                            patch: ProjectPatch {
+                                alerts: Some(alerts),
+                                ..Default::default()
+                            },
+                        });
+                    }
+                }
+            }
             modals::Modal::DeleteProject { id, .. } => {
                 self.execute(Command::DeleteProject { id: id.clone() });
                 if self.view == View::Project(id.clone()) {
@@ -5403,7 +5461,12 @@ impl FlowlistApp {
             modals::Modal::AdjustDates { command, .. } => {
                 self.execute(command.clone());
             }
-            modals::Modal::ReviewInterval { id, days, .. } => {
+            modals::Modal::ReviewInterval {
+                id,
+                days,
+                next_review,
+                ..
+            } => {
                 let value = days
                     .text()
                     .trim()
@@ -5412,10 +5475,16 @@ impl FlowlistApp {
                 if !(1..=365).contains(&value) {
                     return Err("Review days must be between 1 and 365".to_string());
                 }
+                let next = flowlist_core::parse::parse_date(
+                    next_review.text().trim(),
+                    now(),
+                )
+                .map_err(|error| format!("Next review: {error}"))?;
                 self.execute(Command::UpdateProject {
                     id: id.clone(),
                     patch: ProjectPatch {
                         review_interval_days: Some(value),
+                        next_review: Some(next),
                         ..Default::default()
                     },
                 });
@@ -6411,11 +6480,13 @@ impl FlowlistApp {
                 if self.sort_menu_open
                     || self.group_menu_open
                     || self.priority_menu_open
+                    || self.notification_menu.is_some()
                     || self.sidebar_menu.is_some()
                 {
                     self.sort_menu_open = false;
                     self.group_menu_open = false;
                     self.priority_menu_open = false;
+                    self.notification_menu = None;
                     self.sidebar_menu = None;
                     cx.notify();
                     return;
@@ -6549,11 +6620,13 @@ impl FlowlistApp {
                 if self.sort_menu_open
                     || self.group_menu_open
                     || self.priority_menu_open
+                    || self.notification_menu.is_some()
                     || self.sidebar_menu.is_some()
                 {
                     self.sort_menu_open = false;
                     self.group_menu_open = false;
                     self.priority_menu_open = false;
+                    self.notification_menu = None;
                     self.sidebar_menu = None;
                     return;
                 }
@@ -7178,7 +7251,7 @@ impl FlowlistApp {
                 };
                 // Enter on the last field finishes editing. Tab keeps cycling
                 // through the fields, so the keyboard never traps the focus.
-                if !wrap && !backwards && current == Some(EditField::Alerts) {
+                if !wrap && !backwards && current == Some(EditField::Repeat) {
                     // The first-time task stops being a draft only when the
                     // whole field session ends, not when its title is saved,
                     // so Delete/Complete stay out of the way while the user
@@ -8102,6 +8175,14 @@ impl FlowlistApp {
         state["content_projects"] = serde_json::json!(self.content_project_boxes.borrow().clone());
         state["batch_boxes"] = serde_json::json!(self.batch_boxes.borrow().clone());
         state["notification_boxes"] = serde_json::json!(self.notification_boxes.borrow().clone());
+        state["inspector_section_boxes"] =
+            serde_json::json!(self.inspector_section_boxes.borrow().clone());
+        state["inspector_sections"] = serde_json::json!(self.inspector_sections);
+        state["notification_menu"] =
+            serde_json::json!(self.notification_menu.as_ref().map(|target| match target {
+                NotificationTarget::Task(id) => format!("task:{id}"),
+                NotificationTarget::Project(id) => format!("project:{id}"),
+            }));
         state["batch"] = serde_json::json!(if self.selected.len() > 1 {
             Some(serde_json::json!({
                 "count": self.selected.len(),
@@ -8917,6 +8998,7 @@ impl Render for FlowlistApp {
         if self.sort_menu_open
             || self.group_menu_open
             || self.priority_menu_open
+            || self.notification_menu.is_some()
             || self.sidebar_menu.is_some()
             || self.date_picker.is_some()
         {
@@ -8939,6 +9021,7 @@ impl Render for FlowlistApp {
                             this.sort_menu_open = false;
                             this.group_menu_open = false;
                             this.priority_menu_open = false;
+                            this.notification_menu = None;
                             this.sidebar_menu = None;
                             this.date_picker = None;
                             cx.notify();
@@ -8950,6 +9033,7 @@ impl Render for FlowlistApp {
                             this.sort_menu_open = false;
                             this.group_menu_open = false;
                             this.priority_menu_open = false;
+                            this.notification_menu = None;
                             this.sidebar_menu = None;
                             this.date_picker = None;
                             cx.notify();
@@ -9007,6 +9091,21 @@ impl Render for FlowlistApp {
                     .left(px(x))
                     .top(px(y))
                     .child(self.render_priority_menu(cx)),
+            ));
+        }
+        if let Some(target) = self.notification_menu.clone()
+            && let Some(anchor) = self.notification_anchor.get()
+        {
+            let (x, y) = menu_position(anchor, viewport, 210.0, 280.0);
+            root = root.child(fade_in(
+                "notification-menu-fade",
+                div()
+                    .id("notification-menu-layer")
+                    .absolute()
+                    .occlude()
+                    .left(px(x))
+                    .top(px(y))
+                    .child(self.render_notification_menu(&target, cx)),
             ));
         }
         if let Some(field) = self.date_picker

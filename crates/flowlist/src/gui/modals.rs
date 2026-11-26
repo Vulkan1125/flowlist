@@ -14,8 +14,8 @@ use flowlist_core::command::Command;
 use flowlist_core::db::DateConflict;
 use flowlist_core::ids::{ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    BuiltinPerspective, GroupBy, IconSpec, Priority, ProjectIcon, ProjectKind, SidebarOptions,
-    SortBy, TaskStatus,
+    AlertEvent, BuiltinPerspective, GroupBy, IconSpec, Priority, ProjectIcon, ProjectKind,
+    SidebarOptions, SortBy, TaskStatus,
 };
 use flowlist_core::query;
 use flowlist_core::time::now;
@@ -87,6 +87,7 @@ pub enum Modal {
         id: ProjectId,
         name: String,
         days: TextBuffer,
+        next_review: TextBuffer,
     },
     NewProject {
         /// None creates a project; Some edits that project in place.
@@ -140,6 +141,12 @@ pub enum Modal {
     CustomNotification {
         target: super::NotificationTarget,
         at: TextBuffer,
+    },
+    /// Add one relative notification anchored to Defer, Planned or Due.
+    RelativeNotification {
+        target: super::NotificationTarget,
+        event: AlertEvent,
+        offset: TextBuffer,
     },
     /// Delete several selected projects and folders in one undo step.
     DeleteContainers {
@@ -549,6 +556,17 @@ impl Modal {
         }
     }
 
+    pub fn relative_notification(
+        target: super::NotificationTarget,
+        event: AlertEvent,
+    ) -> Self {
+        Modal::RelativeNotification {
+            target,
+            event,
+            offset: TextBuffer::new("-15m"),
+        }
+    }
+
     pub fn delete_containers(projects: Vec<ProjectId>, folders: Vec<FolderId>) -> Self {
         Modal::DeleteContainers { projects, folders }
     }
@@ -764,13 +782,18 @@ impl Modal {
             id,
             name,
             days: TextBuffer::new(days.to_string()),
+            next_review: TextBuffer::new(
+                project
+                    .map(|project| project.next_review.format("%Y-%m-%d").to_string())
+                    .unwrap_or_default(),
+            ),
         }
     }
 
     pub fn title(&self) -> &'static str {
         match self {
             Modal::Rename { .. } => "Rename",
-            Modal::ReviewInterval { .. } => "Review interval",
+            Modal::ReviewInterval { .. } => "Review",
             Modal::NewProject { editing, .. } => {
                 if editing.is_some() {
                     "Edit project"
@@ -784,6 +807,7 @@ impl Modal {
             Modal::DeleteProject { .. } => "Delete project",
             Modal::DeleteFolder { .. } => "Delete folder",
             Modal::CustomNotification { .. } => "Custom notification",
+            Modal::RelativeNotification { .. } => "Relative notification",
             Modal::DeleteContainers { .. } => "Delete selected items",
             Modal::DeleteTag { .. } => "Delete tag",
             Modal::DeleteTask { .. } => "Delete repeating task",
@@ -813,7 +837,9 @@ impl Modal {
     pub fn subtitle(&self) -> &'static str {
         match self {
             Modal::Rename { .. } => "Names are shared by the sidebar, CLI and MCP server.",
-            Modal::ReviewInterval { .. } => "How often this project comes back for a review.",
+            Modal::ReviewInterval { .. } => {
+                "When the next review is due, and how often it comes back."
+            }
             Modal::NewProject { editing, .. } => {
                 if editing.is_some() {
                     "Change the project's name, notes, review cadence, type or icon."
@@ -844,6 +870,9 @@ impl Modal {
             }
             Modal::CustomNotification { .. } => {
                 "An absolute date and time for this item. It does not follow the item's dates."
+            }
+            Modal::RelativeNotification { .. } => {
+                "An alert that moves with the item's dates. Negative fires before; positive after."
             }
             Modal::DeleteContainers { .. } => {
                 "Their tasks move to Trash. Undo restores everything in one step."
@@ -907,7 +936,7 @@ impl Modal {
             Modal::CreateProject { .. } => "Create",
             Modal::DeleteProject { .. } | Modal::DeleteTag { .. } => "Delete",
             Modal::DeleteFolder { .. } | Modal::DeleteContainers { .. } => "Delete",
-            Modal::CustomNotification { .. } => "Add",
+            Modal::CustomNotification { .. } | Modal::RelativeNotification { .. } => "Add",
             Modal::DeleteTask { .. } => "Delete",
             Modal::HideSubtasks { .. } => "Convert",
             Modal::PriorityScope { .. } => "Apply",
@@ -929,7 +958,7 @@ impl Modal {
     pub fn field_count(&self) -> usize {
         match self {
             Modal::Rename { .. } => 1,
-            Modal::ReviewInterval { .. } => 1,
+            Modal::ReviewInterval { .. } => 2,
             Modal::NewProject { icon_open, .. } => {
                 if *icon_open {
                     7
@@ -941,7 +970,7 @@ impl Modal {
             Modal::AdjustDates { .. } => 0,
             Modal::CreateProject { .. } => 0,
             Modal::DeleteProject { .. } => 0,
-            Modal::CustomNotification { .. } => 1,
+            Modal::CustomNotification { .. } | Modal::RelativeNotification { .. } => 1,
             Modal::DeleteFolder { .. }
             | Modal::DeleteContainers { .. }
             | Modal::DeleteTag { .. } => 0,
@@ -969,7 +998,11 @@ impl Modal {
     pub fn field(&self, index: usize) -> Option<&TextBuffer> {
         match self {
             Modal::Rename { name, .. } => (index == 0).then_some(name),
-            Modal::ReviewInterval { days, .. } => (index == 0).then_some(days),
+            Modal::ReviewInterval { days, next_review, .. } => match index {
+                0 => Some(days),
+                1 => Some(next_review),
+                _ => None,
+            },
             Modal::NewProject {
                 name,
                 notes,
@@ -992,6 +1025,7 @@ impl Modal {
             Modal::IconPicker { query, .. } => (index == 0).then_some(query),
             Modal::AdjustDates { .. } => None,
             Modal::CustomNotification { at, .. } => (index == 0).then_some(at),
+            Modal::RelativeNotification { offset, .. } => (index == 0).then_some(offset),
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. }
@@ -1049,7 +1083,11 @@ impl Modal {
     pub fn field_mut(&mut self, index: usize) -> Option<&mut TextBuffer> {
         match self {
             Modal::Rename { name, .. } => (index == 0).then_some(name),
-            Modal::ReviewInterval { days, .. } => (index == 0).then_some(days),
+            Modal::ReviewInterval { days, next_review, .. } => match index {
+                0 => Some(days),
+                1 => Some(next_review),
+                _ => None,
+            },
             Modal::NewProject {
                 name,
                 notes,
@@ -1072,6 +1110,7 @@ impl Modal {
             Modal::IconPicker { query, .. } => (index == 0).then_some(query),
             Modal::AdjustDates { .. } => None,
             Modal::CustomNotification { at, .. } => (index == 0).then_some(at),
+            Modal::RelativeNotification { offset, .. } => (index == 0).then_some(offset),
             Modal::CreateProject { .. } => None,
             Modal::DeleteProject { .. } => None,
             Modal::DeleteFolder { .. }
@@ -1129,7 +1168,11 @@ impl Modal {
     pub fn field_label(&self, index: usize) -> &'static str {
         match self {
             Modal::Rename { .. } => "Name",
-            Modal::ReviewInterval { .. } => "Every (days)",
+            Modal::ReviewInterval { .. } => match index {
+                0 => "Every (days)",
+                1 => "Next review (YYYY-MM-DD)",
+                _ => "",
+            },
             Modal::NewProject { .. } => match index {
                 0 => "Name",
                 1 => "Notes",
@@ -1143,6 +1186,7 @@ impl Modal {
             Modal::IconPicker { .. } => "Search icons",
             Modal::AdjustDates { .. } => "",
             Modal::CustomNotification { .. } => "Date and time",
+            Modal::RelativeNotification { .. } => "Timing (e.g. -15m)",
             Modal::CreateProject { .. } => "",
             Modal::DeleteProject { .. } => "",
             Modal::DeleteFolder { .. }
@@ -1206,7 +1250,7 @@ impl Modal {
             Modal::IconPicker { .. } => 540.0,
             Modal::AdjustDates { .. } => 560.0,
             Modal::DeleteContainers { .. } => 520.0,
-            Modal::CustomNotification { .. } => 520.0,
+            Modal::CustomNotification { .. } | Modal::RelativeNotification { .. } => 520.0,
             Modal::Settings { .. } => 880.0,
             Modal::Uninstall { .. } => 560.0,
             _ => 460.0,
@@ -1745,6 +1789,55 @@ impl FlowlistApp {
                         body = body.child(self.render_modal_field(index, cx));
                     }
                 }
+            }
+            if let Modal::RelativeNotification { event, .. } = modal {
+                let current = *event;
+                let chip = |label: &'static str, active: bool, key: &'static str| {
+                    div()
+                        .on_children_prepainted(self.view_probe(key.to_string()))
+                        .id(key)
+                        .child(widgets::toggle_chip(theme, label, active))
+                };
+                body = body.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(
+                            chip("Deferred", current == AlertEvent::Defer, "relative-event:defer")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::RelativeNotification { event, .. }) =
+                                        &mut this.modal
+                                    {
+                                        *event = AlertEvent::Defer;
+                                    }
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            chip("Planned", current == AlertEvent::Planned, "relative-event:planned")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::RelativeNotification { event, .. }) =
+                                        &mut this.modal
+                                    {
+                                        *event = AlertEvent::Planned;
+                                    }
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            chip("Due", current == AlertEvent::Due, "relative-event:due").on_click(
+                                cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::RelativeNotification { event, .. }) =
+                                        &mut this.modal
+                                    {
+                                        *event = AlertEvent::Due;
+                                    }
+                                    cx.notify();
+                                }),
+                            ),
+                        ),
+                );
             }
             if is_icon_picker {
                 if let Modal::IconPicker { project, tab, .. } = modal {

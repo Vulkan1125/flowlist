@@ -1652,6 +1652,7 @@ impl Command {
                 let interval = db.project(&id)?.review_interval_days.max(1) as i64;
                 let project = db.project_mut(&id)?;
                 project.next_review = reviewed_on + chrono::Duration::days(interval);
+                project.last_reviewed = Some(reviewed_on);
                 project.modified_at = at;
                 db.touch();
                 outcome.affected.push(id.to_string());

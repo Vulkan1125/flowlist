@@ -297,8 +297,11 @@ library:
   section shortcuts, Plain's keyboard accent presets, Cancel's undo pair, the
   saved accent pair, relaunch persistence and Reset to ink.
 - `scripts/gui/notification-parity-probe.sh` removes and restores a default
-  notification, adds an absolute custom notification through the sheet, and
-  removes it again from the task inspector.
+  notification, adds relative and custom notifications through the Add
+  Notification menu, checks the full-screen reminder and collapses the section.
+- `scripts/gui/inspector-sections-probe.sh` builds a repeat rule from the
+  stepper, unit and segmented controls, then edits a project's review cadence
+  and next review date and folds the Review section.
 
 Both build the release binary first (`cargo build --release`) and compile the
 Swift helpers themselves.

@@ -503,7 +503,7 @@ fn push_item_notifications(
     }
 }
 
-fn custom_reminder_at(stamp: Stamp, settings: &Settings) -> chrono::DateTime<chrono::Utc> {
+pub(super) fn custom_reminder_at(stamp: Stamp, settings: &Settings) -> chrono::DateTime<chrono::Utc> {
     if stamp.has_time {
         stamp.at
     } else {

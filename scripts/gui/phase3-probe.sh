@@ -15,7 +15,7 @@ swiftc -O "$root/scripts/gui/flowctl.swift" -o "$helpers/flowctl"
 swiftc -O "$root/scripts/gui/window.swift" -o "$helpers/window"
 
 state=$tmp/state.json
-task=$("$bin" --data-dir "$lib" add 'Week 1 review' --due today --repeat 'every week' --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+task=$("$bin" --data-dir "$lib" add 'Week 1 review' --repeat 'every week' --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 echo "task=$task"
 
 python3 - "$lib/session.json" "$task" <<'PY'
@@ -59,8 +59,10 @@ wait_value() {
   echo "FAIL: $key never became '$want' (got '$(value "$key")')" >&2
   exit 1
 }
-inbox_titles() {
-  "$bin" --data-dir "$lib" list --inbox --json | python3 -c 'import json,sys; print([t["title"] for g in json.load(sys.stdin)["groups"] for t in g["tasks"]])'
+open_titles() {
+  # Inbox is deliberately unscheduled-only, so a dated next occurrence is not
+  # in the Inbox view. Check every project-less open task instead.
+  "$bin" --data-dir "$lib" list --json | python3 -c 'import json,sys; print([t["title"] for g in json.load(sys.stdin)["groups"] for t in g["tasks"] if t["project"] is None and not t["completed"]])'
 }
 completed_titles() {
   "$bin" --data-dir "$lib" list --completed --json | python3 -c 'import json,sys; print(sorted(t["title"] for g in json.load(sys.stdin)["groups"] for t in g["tasks"]))'
@@ -71,6 +73,9 @@ trash_titles() {
 series_id() {
   "$bin" --data-dir "$lib" list "$1" --json | python3 -c 'import json,sys; print([t["repeat_series"] for g in json.load(sys.stdin)["groups"] for t in g["tasks"]][0])'
 }
+open_series_id() {
+  "$bin" --data-dir "$lib" list --json | python3 -c 'import json,sys; print([t["repeat_series"] for g in json.load(sys.stdin)["groups"] for t in g["tasks"] if t["project"] is None and not t["completed"]][0])'
+}
 expect() {
   if [ "$2" != "$3" ]; then echo "FAIL: $1: got '$2', wanted '$3'" >&2; exit 1; fi
   echo "  $1: $2"
@@ -79,9 +84,9 @@ expect() {
 echo "1. Completing a repeating task names the next occurrence"
 "$helpers/flowctl" mouse $((WX + 700)) $((WY + 120)); sleep 0.5
 "$helpers/flowctl" key 49; sleep 1.2
-expect "inbox has the next occurrence" "$(inbox_titles)" "['Week 2 review']"
+expect "open list has the next occurrence" "$(open_titles)" "['Week 2 review']"
 expect "completed history keeps the first" "$(completed_titles)" "['Week 1 review']"
-expect "next occurrence shares the series" "$(series_id --inbox)" "$task"
+expect "next occurrence shares the series" "$(open_series_id)" "$task"
 expect "completed occurrence shares the series" "$(series_id --completed)" "$task"
 
 echo "2. Delete defaults to this occurrence"
@@ -95,7 +100,7 @@ expect "completed history is untouched" "$(completed_titles)" "['Week 1 review']
 
 "$helpers/flowctl" key 6 cmd; sleep 1.0
 expect "undo restores the occurrence" "$(trash_titles)" "[]"
-expect "inbox is back" "$(inbox_titles)" "['Week 2 review']"
+expect "open list is back" "$(open_titles)" "['Week 2 review']"
 
 echo "3. Tab switches to the whole series"
 "$helpers/flowctl" key 38; sleep 0.3
@@ -105,12 +110,12 @@ wait_value modal "Delete repeating task"
 expect "switched choice" "$(value delete_series)" "True"
 "$helpers/flowctl" key 36; sleep 1.0
 expect "the whole series is trashed" "$(trash_titles)" "['Week 1 review', 'Week 2 review']"
-expect "inbox is empty" "$(inbox_titles)" "[]"
+expect "open list is empty" "$(open_titles)" "[]"
 expect "completed history is gone" "$(completed_titles)" "[]"
 
 "$helpers/flowctl" key 6 cmd; sleep 1.0
 expect "one undo restores the series" "$(trash_titles)" "[]"
-expect "inbox is back" "$(inbox_titles)" "['Week 2 review']"
+expect "inbox is back" "$(open_titles)" "['Week 2 review']"
 expect "completed history is back" "$(completed_titles)" "['Week 1 review']"
 
 echo "PHASE 3 PROBE PASSED"

@@ -54,6 +54,8 @@ for _ in $(seq 1 30); do
   sleep 0.3
 done
 echo "window=$window"
+osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $pid) to true" 2>/dev/null || true
+sleep 0.5
 
 value() {
   python3 - "$state" "$1" <<'PY'

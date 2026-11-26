@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Collapsible inspector sections.** Title, Action, Dates, Repeat,
+  Notifications, Notes & Attachments and Subtasks each fold from their header;
+  the choice is remembered per device. Project sections cover Project, Dates,
+  Review, Notifications, Tags and Attachments.
+- **OmniFocus-style Repeat and Review.** Repeat now has an every-number
+  stepper, unit chips, and segmented choices for Due Date / Defer Until Date and
+  Completion / Assigned Dates. Review shows Next Review, an inline cadence
+  stepper and Last Reviewed, with a sheet for the exact date and interval.
+- **One Notifications section.** The separate top Alerts field is gone.
+  Notifications are a chronological list; Add Notification restores a removed
+  default or adds a relative or custom alert. The full-screen reminder and its
+  schedule moved into the same section.
 - **Notification parity, except date time zones.** Default notifications can be
   enabled separately for Defer, Planned, Latest Start and Due. Each task or
   project can remove or restore any default, add relative alerts or absolute
@@ -17,7 +29,8 @@
   anchored to Due, Defer/Available or Planned with a signed minute offset.
   Examples: `due:-15m`, `defer`, `planned:+1h`. Alerts are extra to the default
   notifications, and project/tag context is included in the notification. The
-  inspector has an **Alerts** field, and the CLI/MCP accept `alerts`.
+  inspector’s Notifications section adds them through **Add Notification**, and
+  the CLI/MCP accept `alerts`.
 - **Rupee icon.** Projects can use the rupee symbol from the icon picker.
 - **Batch task editing.** Select two or more tasks and the inspector becomes a
   batch editor for project, tags, defer/planned/due, priority, flag and
