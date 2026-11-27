@@ -2159,7 +2159,10 @@ impl FlowlistApp {
             first_group = false;
             let open = self.is_open(&group.key, super::group_default_open(&group.key));
             let completed_group = group.key.starts_with("project-completed:");
-            if show_headers || completed_group {
+            let heading_shown = completed_group
+                || (show_headers && !(groups.len() == 1 && group.key == "all"));
+            let indented = heading_shown;
+            if heading_shown {
                 list = list.child(self.render_group_header(group, open, cx));
             }
             if open {
@@ -2197,7 +2200,7 @@ impl FlowlistApp {
                             if self.row_is_hidden(&row.id) {
                                 continue;
                             }
-                            list = list.child(self.render_task_row(row, cx));
+                            list = list.child(self.render_task_row(row, indented, cx));
                         }
                     }
                     for row in nested_rows.iter().filter(|row| {
@@ -2208,7 +2211,7 @@ impl FlowlistApp {
                         if self.row_is_hidden(&row.id) {
                             continue;
                         }
-                        list = list.child(self.render_task_row(row, cx));
+                        list = list.child(self.render_task_row(row, indented, cx));
                     }
                 } else {
                     // Forecast puts a project's own deadline above the day's
@@ -2258,7 +2261,7 @@ impl FlowlistApp {
                                 list.child(self.render_root_drop_zone(Some(row.id.clone()), cx));
                             first_root = false;
                         }
-                        list = list.child(self.render_task_row(&row, cx));
+                        list = list.child(self.render_task_row(&row, indented, cx));
                     }
                     if group.rows.is_empty()
                         && group.projects.is_empty()
@@ -2268,7 +2271,8 @@ impl FlowlistApp {
                     {
                         list = list.child(
                             div()
-                                .px_4()
+                                .pl(px(if indented { 62.0 } else { 16.0 }))
+                                .pr_4()
                                 .py_2()
                                 .text_sm()
                                 .text_color(theme.text_faint)
@@ -2873,7 +2877,12 @@ impl FlowlistApp {
         row
     }
 
-    fn render_task_row(&self, row: &TaskRow, cx: &mut Context<Self>) -> AnyElement {
+    fn render_task_row(
+        &self,
+        row: &TaskRow,
+        indented: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let theme = self.theme;
         let db = self.store.db();
         let Some(task) = db.tasks.get(&row.id) else {
@@ -3264,24 +3273,7 @@ impl FlowlistApp {
             .gap_2()
             .min_h(px(32.))
             .w_full()
-            .pl(px(18.0
-                + if matches!(
-                    self.view,
-                    View::Builtin(
-                        BuiltinPerspective::Projects
-                            | BuiltinPerspective::Today
-                            | BuiltinPerspective::Forecast
-                            | BuiltinPerspective::Flagged
-                            | BuiltinPerspective::Tags
-                            | BuiltinPerspective::Attachments
-                    ) | View::Folder(_)
-                        | View::Custom(_)
-                ) {
-                    36.0
-                } else {
-                    0.0
-                }
-                + row.depth as f32 * 18.0))
+            .pl(px(18.0 + if indented { 36.0 } else { 0.0 } + row.depth as f32 * 18.0))
             .py_1()
             .text_sm()
             .cursor_pointer()
@@ -3721,7 +3713,7 @@ impl FlowlistApp {
                         div()
                             .flex_1()
                             .min_w_0()
-                            .child(self.render_task_row(&row, cx)),
+                            .child(self.render_task_row(&row, false, cx)),
                     ),
             );
         }
