@@ -523,6 +523,7 @@ pub enum ProjectCommand {
     /// List projects.
     #[command(alias = "ls")]
     List {
+        /// Include done, dropped and archived projects.
         #[arg(long)]
         closed: bool,
     },
@@ -530,6 +531,13 @@ pub enum ProjectCommand {
     Status {
         id: String,
         status: String,
+    },
+    /// Archive projects, or unarchive them with --undo.
+    Archive {
+        #[arg(value_name = "ID", required = true)]
+        ids: Vec<String>,
+        #[arg(long)]
+        undo: bool,
     },
     /// Delete a project, moving its tasks to Trash.
     Delete {
@@ -648,6 +656,12 @@ pub enum FolderCommand {
     Rename {
         id: String,
         name: String,
+    },
+    /// Archive every project inside a folder, or unarchive them with --undo.
+    Archive {
+        id: String,
+        #[arg(long)]
+        undo: bool,
     },
     /// Delete a folder, its nested folders and their projects; tasks move to Trash.
     #[command(alias = "rm")]
@@ -2187,6 +2201,37 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
                 );
             }
         }
+        ProjectCommand::Archive { ids, undo } => {
+            let mut projects = Vec::new();
+            for id in ids {
+                projects.push(resolve_project(store.db(), &id)?);
+            }
+            let archived = !undo;
+            let outcome = store.execute(CoreCommand::ArchiveProjects {
+                ids: projects.clone(),
+                archived,
+            })?;
+            if cli.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json!({
+                        "archived": archived,
+                        "projects": projects.iter().map(|id| render::project_value(store.db(), id)).collect::<Vec<_>>(),
+                        "message": outcome.message,
+                    }))?
+                );
+            } else {
+                println!(
+                    "{} {}",
+                    paint.green(if archived { "Archived" } else { "Unarchived" }),
+                    projects
+                        .iter()
+                        .map(|id| paint.cyan(id.short()))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
         ProjectCommand::Delete { id } => {
             let id = resolve_project(store.db(), &id)?;
             store.execute(CoreCommand::DeleteProject { id: id.clone() })?;
@@ -2413,6 +2458,43 @@ fn cmd_folder(cli: &Cli, args: FolderArgs, paint: &Paint) -> Result<()> {
                     "{} {}",
                     paint.green("Renamed folder"),
                     paint.cyan(id.short())
+                );
+            }
+        }
+        FolderCommand::Archive { id, undo } => {
+            let folder = resolve_folder(store.db(), &id)?;
+            let projects: Vec<ProjectId> = store
+                .db()
+                .projects
+                .values()
+                .filter(|project| {
+                    store
+                        .db()
+                        .project_is_in_folder(&project.id, &folder, true)
+                })
+                .map(|project| project.id.clone())
+                .collect();
+            let archived = !undo;
+            let outcome = store.execute(CoreCommand::ArchiveProjects {
+                ids: projects.clone(),
+                archived,
+            })?;
+            if cli.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json!({
+                        "folder": store.db().folder_path(&folder),
+                        "archived": archived,
+                        "projects": projects.iter().map(|id| render::project_value(store.db(), id)).collect::<Vec<_>>(),
+                        "message": outcome.message,
+                    }))?
+                );
+            } else {
+                println!(
+                    "{} {}  {}",
+                    paint.green(if archived { "Archived" } else { "Unarchived" }),
+                    paint.cyan(folder.short()),
+                    paint.dim(&format!("{} project(s)", projects.len()))
                 );
             }
         }
@@ -2849,6 +2931,14 @@ fn resolve_tasks(db: &Db, specs: &[String]) -> Result<Vec<TaskId>> {
         .iter()
         .map(|spec| db.resolve_task(spec).map_err(|error| anyhow!("{error}")))
         .collect()
+}
+
+fn resolve_folder(db: &Db, spec: &str) -> Result<FolderId> {
+    if let Ok(id) = db.resolve_folder(spec) {
+        return Ok(id);
+    }
+    db.find_folder_path(spec)
+        .ok_or_else(|| anyhow!("folder not found: {spec}"))
 }
 
 fn resolve_project(db: &Db, spec: &str) -> Result<ProjectId> {

@@ -235,6 +235,8 @@ pub struct ProjectPatch {
     pub sequential: Option<bool>,
     pub kind: Option<ProjectKind>,
     pub complete_with_last_action: Option<bool>,
+    /// Hide or restore the project in Archive without changing its status.
+    pub archived: Option<bool>,
     pub icon: Option<IconSpec>,
     #[serde(default)]
     pub alerts: Option<Vec<TaskAlert>>,
@@ -668,11 +670,6 @@ impl Command {
                     status.label()
                 )
             }
-            Command::ArchiveProjects { ids, archived } => format!(
-                "{} {}",
-                if *archived { "Archive" } else { "Unarchive" },
-                item_count(ids.len(), "project", "projects")
-            ),
             Command::DeleteContainers { projects, folders } => {
                 format!(
                     "Delete {}",
@@ -1647,6 +1644,9 @@ impl Command {
                     ensure_dates_in_order(project.due, project.defer)?;
                     if let Some(complete) = patch.complete_with_last_action {
                         project.complete_with_last_action = complete;
+                    }
+                    if let Some(archived) = patch.archived {
+                        project.archived = Some(archived);
                     }
                     if let Some(interval) = patch.review_interval_days {
                         project.review_interval_days = interval.max(1);

@@ -183,7 +183,7 @@ eight-character suffix. Human-readable `list` output shows progress as `☑ n/m`
 flowlist project add <NAME> [--folder <PATH>] [--note ...] [--due ...] \
   [--planned ...] \
   [--defer ...] [--review-days N] [--sequential] [--icon <ICON>]
-flowlist project list [--closed]
+flowlist project list [--closed]  # open, or done/dropped/archived
 flowlist project edit <ID> [--name ...] [--note ...] [--folder <PATH>|none] \
   [--planned ...] \
   [--due ...] [--defer ...] [--review-days N] [--next-review DATE] \
@@ -191,12 +191,14 @@ flowlist project edit <ID> [--name ...] [--note ...] [--folder <PATH>|none] \
   [--remove-notification TYPE]... [--restore-notification TYPE]... \
   [--custom-notification DATE]... [--clear-custom-notifications]
 flowlist project status <ID> active|on-hold|done|dropped
+flowlist project archive <ID>... [--undo]
 flowlist project delete <ID>      # tasks move to Trash; undo restores both
 flowlist project review <ID> [--on DATE]
 
 flowlist folder add <PATH>
 flowlist folder list
 flowlist folder rename <ID> <NAME>
+flowlist folder archive <ID> [--undo]  # every project inside the folder
 flowlist folder remove <ID>      # nested folders and projects go too; tasks move to Trash
 ```
 

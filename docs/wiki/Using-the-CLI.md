@@ -304,6 +304,8 @@ List tags with their paths and usage.
 
 **`flowlist project list [--closed]`**
 
+`--closed` includes Done, Dropped and archived projects.
+
 **`flowlist project edit <ID>`**
 
 Options: `--name`, `--note`, `--folder`, `--due`, `--defer`, `--planned`,
@@ -320,6 +322,11 @@ marks the project done with its last open task; `manual` keeps it active.
 when Settings → Workflow → Archive is on; otherwise they stay in the library
 with a tick or ×.
 
+**`flowlist project archive <ID>... [--undo]`**
+
+Archives one or more projects in one undoable step. `--undo` restores them.
+Archived projects stay out of the active project list and perspectives.
+
 **`flowlist project review <ID> [--on <DATE>]`**
 
 **`flowlist project delete <ID>`**
@@ -333,6 +340,11 @@ The project’s tasks move to Trash.
 **`flowlist folder list`**
 
 **`flowlist folder rename <ID> <NAME>`**
+
+**`flowlist folder archive <ID> [--undo]`**
+
+Archives every project inside the folder, including nested folders, in one
+undoable step. `--undo` restores them.
 
 **`flowlist folder remove <ID>`**
 

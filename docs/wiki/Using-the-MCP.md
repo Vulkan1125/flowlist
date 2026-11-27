@@ -118,10 +118,12 @@ Checklist steps are not tasks and never appear as tasks in a list.
 
 | Tool | What it does |
 | --- | --- |
-| `list_projects` | Projects in library order. |
+| `list_projects` | Projects in library order; `include_closed` adds Done, Dropped and archived projects. |
 | `create_project` | Create a project, optionally inside a folder path. |
-| `update_project` | Name, notes, folder, dates, review interval, kind, completion mode, icon, attachments and notifications. |
+| `update_project` | Name, notes, folder, dates, review interval, kind, completion mode, icon, attachments, notifications and `archived`. |
 | `set_project_status` | `active`, `on-hold`, `done` or `dropped`. |
+| `archive_projects` | Archive or unarchive several projects in one undo step. |
+| `archive_folder` | Archive or unarchive every project inside a folder. |
 | `delete_project` | Delete a project; its tasks move to Trash. |
 
 ### Tags and folders

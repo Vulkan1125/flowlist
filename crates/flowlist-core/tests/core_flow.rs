@@ -1528,6 +1528,35 @@ fn archived_projects_leave_active_counters() {
 }
 
 #[test]
+fn project_patch_archives_and_restores() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let project = add_project_in(&mut store, "Patched", None);
+
+    store
+        .execute(Command::UpdateProject {
+            id: project.clone(),
+            patch: ProjectPatch {
+                archived: Some(true),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert!(store.db().projects[&project].is_archived());
+
+    store
+        .execute(Command::UpdateProject {
+            id: project.clone(),
+            patch: ProjectPatch {
+                archived: Some(false),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert!(!store.db().projects[&project].is_archived());
+}
+
+#[test]
 fn archived_project_actions_leave_active_views() {
     use flowlist_core::query;
     use flowlist_core::stats;

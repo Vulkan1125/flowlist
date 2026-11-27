@@ -307,7 +307,9 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Project archive** — a separate archive flag with an inspector icon and
       right-click actions. Folder menus archive every project inside them.
       Settings → Workflow controls automatic archiving of Done and Dropped
-      projects; when off they stay visible with a tick or ×.
+      projects; when off they stay visible with a tick or ×. CLI
+      `project archive` / `folder archive` and MCP `archive_projects` /
+      `archive_folder` / `update_project.archived` share the same flag.
 - [x] **Currency project icons** — dollar, rupee, euro, pound, yen, won, ruble,
       bitcoin, franc and lira, shared with the phone picker.
 - [x] **Mac completion clears the inspector** — completing a task clears the

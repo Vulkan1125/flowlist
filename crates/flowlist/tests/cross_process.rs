@@ -171,3 +171,75 @@ fn notification_flags_round_trip_through_the_cli() {
             .starts_with("2026-12-03")
     );
 }
+
+#[test]
+fn cli_archives_projects_and_folders() {
+    let (_dir, paths) = library();
+    run_cli(&paths.root, &["folder", "add", "Work", "--json"]);
+    let alpha = json(&run_cli(
+        &paths.root,
+        &["project", "add", "Work/Alpha", "--json"],
+    ))["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    json(&run_cli(&paths.root, &["project", "add", "Beta", "--json"]));
+
+    let archived = json(&run_cli(
+        &paths.root,
+        &["project", "archive", &alpha, "--json"],
+    ));
+    assert_eq!(archived["archived"], true);
+    assert_eq!(archived["projects"][0]["name"], "Alpha");
+
+    let open_names = |out: &Output| -> Vec<String> {
+        json(out)
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|project| project["name"].as_str().map(str::to_string))
+            .collect()
+    };
+    assert_eq!(
+        open_names(&run_cli(&paths.root, &["project", "list", "--json"])),
+        ["Beta"]
+    );
+    assert_eq!(
+        open_names(&run_cli(
+            &paths.root,
+            &["project", "list", "--closed", "--json"]
+        )),
+        ["Alpha", "Beta"]
+    );
+
+    let restored = json(&run_cli(
+        &paths.root,
+        &["project", "archive", &alpha, "--undo", "--json"],
+    ));
+    assert_eq!(restored["archived"], false);
+    assert_eq!(
+        open_names(&run_cli(&paths.root, &["project", "list", "--json"])),
+        ["Alpha", "Beta"]
+    );
+
+    let folder = json(&run_cli(
+        &paths.root,
+        &["folder", "archive", "Work", "--json"],
+    ));
+    assert_eq!(folder["archived"], true);
+    assert_eq!(folder["projects"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        open_names(&run_cli(&paths.root, &["project", "list", "--json"])),
+        ["Beta"]
+    );
+
+    let folder = json(&run_cli(
+        &paths.root,
+        &["folder", "archive", "Work", "--undo", "--json"],
+    ));
+    assert_eq!(folder["archived"], false);
+    assert_eq!(
+        open_names(&run_cli(&paths.root, &["project", "list", "--json"])),
+        ["Alpha", "Beta"]
+    );
+}

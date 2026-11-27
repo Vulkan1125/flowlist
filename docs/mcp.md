@@ -109,10 +109,12 @@ unchecked.
 
 | Tool | Purpose |
 | --- | --- |
-| `list_projects` | projects in library order |
+| `list_projects` | projects in library order; `include_closed` adds Done, Dropped and archived |
 | `create_project` | create a project, optionally under a folder path |
-| `update_project` | rename, move, date, review interval or notes |
+| `update_project` | rename, move, date, review interval, notes or `archived` |
 | `set_project_status` | `active`, `on-hold`, `done`, `dropped` |
+| `archive_projects` | archive or unarchive several projects in one undo step |
+| `archive_folder` | archive or unarchive every project inside a folder |
 | `delete_project` | delete a project and move its tasks to Trash |
 | `list_tags` | tags with usage counts |
 | `create_tag` | create a nested tag path |

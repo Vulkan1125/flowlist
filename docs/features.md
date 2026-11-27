@@ -103,8 +103,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] `--archive` on `list` for archived projects
 - [x] `checklist list|add|set|move|remove`
 - [x] `tag add|remove|set`, `tags`
-- [x] `project add|list|status|review|edit`
-- [x] `folder add|list|rename|remove`
+- [x] `project add|list|status|review|edit|archive`
+- [x] `folder add|list|rename|remove|archive`
 - [x] `perspective add|list|remove`
 - [x] `review`, `review done`
 - [x] `search`, `stats`, `where`
@@ -123,7 +123,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Priority and attachment fields on task tools; `kind` and `icon` on
       project tools
 - [x] Checklist tools: list/add/update/delete/move
-- [x] Project tools: list/create/update/status
+- [x] Project tools: list/create/update/status/archive
 - [x] Tag tools: list/create/delete
 - [x] Folder tools: list/create
 - [x] Review list and complete

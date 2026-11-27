@@ -34,6 +34,10 @@
   project list, Today, Forecast, Flagged, Tags, Changed, Attachments, Nearby,
   the status bar, the rail counts and the reminder scheduler. The Archive
   still lists them.
+- **CLI and MCP controls.** `project archive` (and `--undo`) archives one or
+  more projects, `folder archive` archives every project in a folder, MCP adds
+  `archive_projects` and `archive_folder`, and `update_project` accepts
+  `archived`.
 - **On Hold rail marker.** On Hold projects show a pause mark instead of a
   count; their tasks and subtasks stay dimmed and cannot be completed.
 

@@ -203,6 +203,8 @@ impl Server {
             "create_project" => self.tool_create_project(args),
             "update_project" => self.tool_update_project(args),
             "set_project_status" => self.tool_set_project_status(args),
+            "archive_projects" => self.tool_archive_projects(args),
+            "archive_folder" => self.tool_archive_folder(args),
             "delete_project" => self.tool_delete_project(args),
             "list_tags" => self.tool_list_tags(args),
             "create_tag" => self.tool_create_tag(args),
@@ -323,7 +325,6 @@ impl Server {
         }
         patch.due = stamp_patch(args, "due", reference)?;
         patch.defer = stamp_patch(args, "defer", reference)?;
-        patch.planned = stamp_patch(args, "planned", reference)?;
         patch.planned = stamp_patch(args, "planned", reference)?;
         patch.estimate_min = estimate_patch(args)?;
         if let Some(flagged) = bool_arg(args, "flagged") {
@@ -881,6 +882,7 @@ impl Server {
         }
         patch.due = stamp_patch(args, "due", reference)?;
         patch.defer = stamp_patch(args, "defer", reference)?;
+        patch.planned = stamp_patch(args, "planned", reference)?;
         if let Some(days) = args.get("review_interval_days").and_then(Value::as_u64) {
             patch.review_interval_days = Some(days as u32);
         }
@@ -894,6 +896,9 @@ impl Server {
         }
         if let Some(complete) = bool_arg(args, "complete_with_last_action") {
             patch.complete_with_last_action = Some(complete);
+        }
+        if let Some(archived) = bool_arg(args, "archived") {
+            patch.archived = Some(archived);
         }
         if let Some(icon) = string_arg(args, "icon") {
             patch.icon = Some(parse_project_icon(&icon)?);
@@ -951,6 +956,54 @@ impl Server {
             status,
         })?;
         Ok(render::project_value(self.store.db(), &id))
+    }
+
+    fn tool_archive_projects(&mut self, args: &Value) -> Result<Value> {
+        let specs = id_list(args, "ids")?;
+        if specs.is_empty() {
+            bail!("provide at least one project id");
+        }
+        let mut ids = Vec::new();
+        for spec in specs {
+            ids.push(self.store.db().resolve_project(&spec)?);
+        }
+        let archived = bool_arg(args, "archived").unwrap_or(true);
+        let outcome = self.store.execute(CoreCommand::ArchiveProjects {
+            ids: ids.clone(),
+            archived,
+        })?;
+        Ok(json!({
+            "archived": archived,
+            "projects": ids.iter().map(|id| render::project_value(self.store.db(), id)).collect::<Vec<_>>(),
+            "message": outcome.message,
+        }))
+    }
+
+    fn tool_archive_folder(&mut self, args: &Value) -> Result<Value> {
+        let folder = resolve_folder(self.store.db(), &require_string(args, "folder")?)?;
+        let ids: Vec<ProjectId> = self
+            .store
+            .db()
+            .projects
+            .values()
+            .filter(|project| {
+                self.store
+                    .db()
+                    .project_is_in_folder(&project.id, &folder, true)
+            })
+            .map(|project| project.id.clone())
+            .collect();
+        let archived = bool_arg(args, "archived").unwrap_or(true);
+        let outcome = self.store.execute(CoreCommand::ArchiveProjects {
+            ids: ids.clone(),
+            archived,
+        })?;
+        Ok(json!({
+            "folder": self.store.db().folder_path(&folder),
+            "archived": archived,
+            "projects": ids.iter().map(|id| render::project_value(self.store.db(), id)).collect::<Vec<_>>(),
+            "message": outcome.message,
+        }))
     }
 
     fn tool_delete_project(&mut self, args: &Value) -> Result<Value> {
@@ -1620,10 +1673,12 @@ fn tool_definitions() -> Vec<Value> {
                     "notes": s("Project notes"),
                     "due": s("Due date"),
                     "defer": s("Defer date"),
+                    "planned": s("Planned date; never changes availability"),
                     "review_interval_days": n("Review interval in days"),
                     "kind": s("parallel | sequential | single_actions"),
                     "sequential": b("Work through top-level tasks in order"),
                     "complete_with_last_action": b("Mark the project done when its last task is completed"),
+                    "archived": b("Hide the project in Archive; false restores it"),
                     "icon": s("project | folder | star | briefcase | home | heart | book | code | rocket | coffee, or one emoji"),
                     "attachments": arr("Local file paths or http(s) links to reference"),
                 }),
@@ -1641,6 +1696,7 @@ fn tool_definitions() -> Vec<Value> {
                     "folder": s("Folder path, or null to move to the root"),
                     "due": s("Due date, or null"),
                     "defer": s("Defer date, or null"),
+                    "planned": s("Planned date, or null"),
                     "review_interval_days": n("Review interval in days"),
                     "next_review": s("Next review date"),
                     "kind": s("parallel | sequential | single_actions"),
@@ -1665,6 +1721,28 @@ fn tool_definitions() -> Vec<Value> {
                     "status": s("active | on-hold | done | dropped"),
                 }),
                 &["id", "status"],
+            ),
+        ),
+        tool(
+            "archive_projects",
+            "Archive projects, or unarchive them with archived: false.",
+            schema(
+                json!({
+                    "ids": arr("Project ids or unambiguous prefixes"),
+                    "archived": b("true archives (default), false unarchives"),
+                }),
+                &["ids"],
+            ),
+        ),
+        tool(
+            "archive_folder",
+            "Archive every project inside a folder, or unarchive them with archived: false.",
+            schema(
+                json!({
+                    "folder": s("Folder id, prefix or path"),
+                    "archived": b("true archives (default), false unarchives"),
+                }),
+                &["folder"],
             ),
         ),
         tool(
@@ -1913,6 +1991,14 @@ fn find_perspective(db: &Db, spec: &str) -> Result<flowlist_core::ids::Perspecti
         .map_err(|error| anyhow!("{error}"))
 }
 
+fn resolve_folder(db: &Db, spec: &str) -> Result<FolderId> {
+    if let Ok(id) = db.resolve_folder(spec) {
+        return Ok(id);
+    }
+    db.find_folder_path(spec)
+        .ok_or_else(|| anyhow!("folder not found: {spec}"))
+}
+
 fn resolve_tag(db: &Db, spec: &str) -> Result<TagId> {
     if let Some(id) = db.find_tag_path(spec) {
         return Ok(id);
@@ -2013,4 +2099,70 @@ fn due_window(
     Ok(flowlist_core::model::DueWindow::On(
         parse_stamp(value, at)?.local_date(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn server() -> (TempDir, Server) {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = DataPaths::new(dir.path().join("library"));
+        let store = Store::open(paths).unwrap();
+        (
+            dir,
+            Server {
+                store,
+                protocol: MODERN_PROTOCOL.to_string(),
+                shutting_down: false,
+            },
+        )
+    }
+
+    #[test]
+    fn archive_tools_hide_and_restore_projects() {
+        let (_dir, mut server) = server();
+        server
+            .tool_create_folder(&json!({"path": "Work"}))
+            .unwrap();
+        let alpha = server
+            .tool_create_project(&json!({"name": "Alpha", "folder": "Work"}))
+            .unwrap();
+        let beta = server
+            .tool_create_project(&json!({"name": "Beta", "folder": "Work"}))
+            .unwrap();
+        let alpha_id = alpha["id"].as_str().unwrap().to_string();
+        let beta_id = beta["id"].as_str().unwrap().to_string();
+
+        let archived = server
+            .tool_archive_projects(&json!({
+                "ids": [alpha_id.clone(), beta_id.clone()],
+                "archived": true,
+            }))
+            .unwrap();
+        assert_eq!(archived["archived"], true);
+        assert_eq!(archived["projects"].as_array().unwrap().len(), 2);
+        let alpha_key = server.store.db().resolve_project(&alpha_id).unwrap();
+        assert!(server.store.db().projects[&alpha_key].is_archived());
+
+        let restored = server
+            .tool_update_project(&json!({"id": alpha_id.clone(), "archived": false}))
+            .unwrap();
+        assert_eq!(restored["archived"], false);
+        assert!(!server.store.db().projects[&alpha_key].is_archived());
+
+        let folder = server
+            .tool_archive_folder(&json!({"folder": "Work", "archived": true}))
+            .unwrap();
+        assert_eq!(folder["projects"].as_array().unwrap().len(), 2);
+        let beta_key = server.store.db().resolve_project(&beta_id).unwrap();
+        assert!(server.store.db().projects[&beta_key].is_archived());
+
+        let folder = server
+            .tool_archive_folder(&json!({"folder": "Work", "archived": false}))
+            .unwrap();
+        assert_eq!(folder["projects"].as_array().unwrap().len(), 2);
+        assert!(!server.store.db().projects[&beta_key].is_archived());
+    }
 }
