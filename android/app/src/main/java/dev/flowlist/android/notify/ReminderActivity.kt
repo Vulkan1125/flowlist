@@ -2,6 +2,9 @@ package dev.flowlist.android.notify
 
 import android.content.Intent
 import android.content.res.Configuration
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -100,6 +103,8 @@ import kotlin.math.roundToInt
 
 /** The alarm-style task reminder. Shown over the lock screen by a full-screen intent. */
 class ReminderActivity : ComponentActivity() {
+    private var audioFocusRequest: AudioFocusRequest? = null
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -142,6 +147,9 @@ class ReminderActivity : ComponentActivity() {
         }
         val preferences = PreferencesStore(this).load()
         val repository = (application as FlowlistApplication).repository
+        if (preferences.pauseMediaOnReminder) {
+            requestMediaPause()
+        }
         val reminderBackground = preferences.reminderBackgroundFor(theme, darkMode)
         // Ambient presets carry their own light/dark variants. A photo is
         // always veiled, so white type stays readable there.
@@ -170,12 +178,18 @@ class ReminderActivity : ComponentActivity() {
                     initialSnoozeMinutes = preferences.snoozeMinutes,
                     lightContent = lightContent,
                     onComplete = {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            repository.dismissReminder(taskId)
+                        }
                         lifecycleScope.launch {
                             runCatching { repository.complete(taskId, true) }
                             finish()
                         }
                     },
                     onSnooze = { minutes ->
+                        CoroutineScope(Dispatchers.IO).launch {
+                            repository.dismissReminder(taskId)
+                        }
                         TaskReminders.snooze(
                             this,
                             taskId,
@@ -225,6 +239,32 @@ class ReminderActivity : ComponentActivity() {
             finish()
         }
     }
+
+    /// Hold transient audio focus so a playing video or song pauses while the
+    /// reminder owns the screen. Releasing it on close lets the app resume.
+    private fun requestMediaPause() {
+        val manager = getSystemService(AudioManager::class.java) ?: return
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build(),
+            )
+            .setOnAudioFocusChangeListener { }
+            .build()
+        if (manager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            audioFocusRequest = request
+        }
+    }
+
+    override fun onDestroy() {
+        audioFocusRequest?.let {
+            getSystemService(AudioManager::class.java)?.abandonAudioFocusRequest(it)
+        }
+        audioFocusRequest = null
+        super.onDestroy()
+    }
 }
 
 private val reminderGreen = Color(0xFF18C66B)
@@ -232,7 +272,7 @@ private val LocalReminderInk = staticCompositionLocalOf { Color.White }
 private val reminderInk: Color @Composable get() = LocalReminderInk.current
 
 @Composable
-private fun ReminderScreen(
+internal fun ReminderScreen(
     title: String,
     project: String?,
     dueAt: Long,

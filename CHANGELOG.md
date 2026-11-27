@@ -104,13 +104,17 @@
 - **Adjustable snooze.** Minus and plus decrease or increase the snooze in
   five-minute steps; the centre pill snoozes for the chosen length. Open
   Flowlist stays available below.
-- **Cross-device dismiss.** Dismissing a full-screen reminder on either the
-  Mac or the phone clears the matching reminder on the other device through a
-  short-lived list on the mobile server. Both devices keep working locally when
-  the server is offline.
-- **Unlocked launch.** The alarm now opens the reminder activity directly as
-  well as posting the full-screen notification, so an unlocked phone gets the
-  full-screen reminder instead of only a heads-up banner.
+- **Cross-device dismiss.** Dismissing, snoozing or completing a full-screen
+  reminder on either the Mac or the phone clears the matching reminder on the
+  other device through a short-lived list on the mobile server. Both devices
+  keep working locally when the server is offline.
+- **Over any app.** With **Display over other apps** allowed, the reminder now
+  draws above whichever app is in front, such as a video, instead of only
+  opening over Flowlist or the lock screen. The alarm notification stays as the
+  fallback, and Settings → Notifications offers the permission row.
+- **Pause media.** Audio and video pause while the reminder is on screen and
+  resume when it closes. Settings → Notifications → **Pause media** turns this
+  off for phones that should keep playing.
 - **Settings child pages.** Opening Appearance, Tasks, Library, Notifications,
   Connection or About now makes that name the main heading and hides the bottom
   bar until Back returns to the Settings home.

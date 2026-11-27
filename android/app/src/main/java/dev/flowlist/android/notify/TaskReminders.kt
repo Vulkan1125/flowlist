@@ -144,18 +144,34 @@ object TaskReminders {
     ) {
         if (at <= System.currentTimeMillis()) return
         val manager = context.getSystemService(AlarmManager::class.java)
-        val pending = PendingIntent.getBroadcast(
+        val reminder = Intent(context, ReminderActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("task_id", taskId)
+            putExtra("title", title)
+            putExtra("project", project)
+            putExtra("due_at", at)
+        }
+        val broadcast = PendingIntent.getBroadcast(
             context,
             requestCode(taskId),
             intentFor(context, taskId, title, project, at),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val show = PendingIntent.getActivity(
+            context,
+            requestCode(taskId) + 1,
+            reminder,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             manager.canScheduleExactAlarms()
         if (exact) {
-            manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
+            // Alarm clocks get the system's strongest delivery path and are
+            // exempt from Doze. The broadcast then raises the overlay (phone
+            // unlocked) or the full-screen intent (phone locked).
+            manager.setAlarmClock(AlarmManager.AlarmClockInfo(at, show), broadcast)
         } else {
-            manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
+            manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, broadcast)
         }
     }
 
@@ -166,14 +182,22 @@ object TaskReminders {
             val intent = Intent(context, ReminderReceiver::class.java).apply {
                 action = ACTION
             }
-            val pending = PendingIntent.getBroadcast(
+            val broadcast = PendingIntent.getBroadcast(
                 context,
                 code,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-            manager.cancel(pending)
-            pending.cancel()
+            manager.cancel(broadcast)
+            broadcast.cancel()
+            val show = PendingIntent.getActivity(
+                context,
+                code + 1,
+                Intent(context, ReminderActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            manager.cancel(show)
+            show.cancel()
             NotificationManagerCompat.from(context).cancel(code)
         }
         prefs.edit().putString(SCHEDULED, "").apply()

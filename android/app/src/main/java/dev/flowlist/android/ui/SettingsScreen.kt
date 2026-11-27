@@ -902,8 +902,29 @@ private fun NotificationSettings(
                     Text("Allow exact alarms", color = flow.accent)
                 }
             }
+            if (!Settings.canDrawOverlays(context)) {
+                TextButton(onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}"),
+                            ),
+                        )
+                    }
+                }) {
+                    Text("Allow display over other apps", color = flow.accent)
+                }
+            }
             TextButton(onClick = { TaskReminders.preview(context) }) {
                 Text("Preview a full-screen reminder", color = flow.accent)
+            }
+            ToggleRow(
+                title = "Pause media",
+                detail = "Pause audio and video while a reminder is on screen",
+                checked = preferences.pauseMediaOnReminder,
+            ) {
+                onPreferencesChange(preferences.copy(pauseMediaOnReminder = it))
             }
             Spacer(modifier = Modifier.height(8.dp))
             SmallLabel("Snooze length")

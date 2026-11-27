@@ -135,7 +135,10 @@ impl Reminder {
             return;
         };
         if let Some(app) = self.app.upgrade() {
-            let _ = app.update(cx, |app, cx| app.complete_reminder_task(&task.id, cx));
+            let _ = app.update(cx, |app, cx| {
+                app.complete_reminder_task(&task.id, cx);
+                app.dismiss_reminder_task(&task.id);
+            });
         }
         self.advance(window, cx, true);
     }
@@ -150,6 +153,7 @@ impl Reminder {
             let _ = app.update(cx, |app, _| {
                 app.snooze_reminder_task(&task.id, minutes as i64);
                 app.set_reminder_snooze_minutes(minutes);
+                app.dismiss_reminder_task(&task.id);
             });
         }
         self.advance(window, cx, true);

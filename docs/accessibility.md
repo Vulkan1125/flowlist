@@ -314,4 +314,5 @@ the shown length, **⌘Enter** completes the task, **O** opens it in the main
 window, **V** opens the temporary Full-screen list when several share a time,
 and **Esc**
 dismisses the reminder. Every action is also a labelled
-button. On Android the same actions are buttons on the alarm screen.
+button. On Android the same actions are buttons on the alarm screen; TalkBack
+still reaches them when the reminder is drawn over another app.

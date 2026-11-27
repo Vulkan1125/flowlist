@@ -20,6 +20,8 @@ data class AppPreferences(
     val nearbyReminders: Boolean = true,
     /// Take over the screen when a task comes due, not just a banner.
     val fullScreenReminders: Boolean = false,
+    /// Pause other media while a full-screen reminder is on screen.
+    val pauseMediaOnReminder: Boolean = true,
     /// Show the user-picked image behind the app.
     val useWallpaper: Boolean = true,
     /// How strongly the wallpaper shows through the app and reminder.
@@ -86,6 +88,7 @@ class PreferencesStore(context: Context) {
             keepCompletedSubtasks = prefs.getBoolean("keep_completed_subtasks", false),
             nearbyReminders = prefs.getBoolean("nearby_reminders", true),
             fullScreenReminders = prefs.getBoolean("full_screen_reminders", false),
+            pauseMediaOnReminder = prefs.getBoolean("pause_media_on_reminder", true),
             useWallpaper = prefs.getBoolean("use_wallpaper", true),
             wallpaperOpacity = prefs.getFloat("wallpaper_opacity", 0.35f),
             customWallpaper = prefs.getString("custom_wallpaper", null),
@@ -116,6 +119,7 @@ class PreferencesStore(context: Context) {
             .putBoolean("keep_completed_subtasks", value.keepCompletedSubtasks)
             .putBoolean("nearby_reminders", value.nearbyReminders)
             .putBoolean("full_screen_reminders", value.fullScreenReminders)
+            .putBoolean("pause_media_on_reminder", value.pauseMediaOnReminder)
             .putBoolean("use_wallpaper", value.useWallpaper)
             .putFloat("wallpaper_opacity", value.wallpaperOpacity)
             .putString("custom_wallpaper", value.customWallpaper)
