@@ -466,6 +466,11 @@ integrations are tracked separately and are not part of this phase.
       built-in Full-screen view; marks with no due or explicit time are
       ignored; and Settings can keep one wallpaper or separate light/dark
       wallpapers for both the main window and the reminder.
+- [x] **Android reminders over other apps** — with **Display over other apps**
+      granted, the phone draws the full-screen reminder above whatever app is
+      in front, keeps the alarm notification as the fallback, pauses media
+      while it is open (with a Settings switch), and now clears the Mac
+      reminder on snooze and complete as well as dismiss.
 - [x] **Settings and saved-view polish** — the Settings rail stays fixed while
       a section scrolls, full-screen reminder times earlier than now are
       refused, saved views can filter on full-screen reminder marks (including
