@@ -207,6 +207,15 @@ integrations are tracked separately and are not part of this phase.
 - [ ] **Stalled and On Hold projects** — dim and reject completion for On Hold
       projects, mark stalled projects in the drawer, and reveal a project's
       completed roots behind a Completed (n) row.
+- [ ] **Sequential blocking in the Android task list** — the task editor dims
+      children after the first incomplete one and the command layer refuses the
+      tick, but the main list still looks normal and only reports the refusal in
+      a snackbar. Dim and lock blocked rows there too, with the blocker on the
+      row.
+- [ ] **Single-action list behaviour on Android** — tasks in a Single action
+      project still show the Parallel / Sequential / One-off chips and subtask
+      controls; hide them to match the Mac inspector, where single-action lists
+      have no steps.
 - [ ] **Focus mode** — scope the phone's perspectives and search to chosen
       projects and folders, with the same clear-focus banner as the Mac.
 - [ ] **Calendar events in Forecast** — read the phone's own calendars (with
