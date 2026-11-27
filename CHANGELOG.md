@@ -93,16 +93,18 @@
 
 ### Android full-screen reminder
 
-- **Immersive reminder layout.** The phone's full-screen reminder now fills the
-  screen with the task's ambient backdrop under a dark green wash: a week strip
-  at the top, a bell, the task title, time and project, then the actions. The
-  system bars stay light over the scrim.
+- **Immersive reminder layout.** The phone's full-screen reminder fills the
+  screen with the dark side of the selected theme or reminder preset, a bell,
+  the task title, time and project, then a compact top-right **Dismiss** and
+  the actions. The system bars stay light over the scrim.
 - **Slide to complete.** The completion button is an iOS-style track: drag the
-  white check to the end to finish, with a haptic tick. Dismiss remains a
-  translucent pill.
+  white check to the end to finish, with a haptic tick.
 - **Adjustable snooze.** Minus and plus decrease or increase the snooze in
   five-minute steps; the centre pill snoozes for the chosen length. Open
   Flowlist stays available below.
+- **Settings child pages.** Opening Appearance, Tasks, Library, Notifications,
+  Connection or About now makes that name the main heading and hides the bottom
+  bar until Back returns to the Settings home.
 
 ### Currency icons
 

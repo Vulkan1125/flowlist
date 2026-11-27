@@ -320,6 +320,7 @@ fun MainScreen(
     var detail by remember { mutableStateOf<TaskView?>(null) }
     var project by remember { mutableStateOf<ProjectDto?>(null) }
     var moreView by remember { mutableStateOf<MoreView?>(null) }
+    var settingsSection by rememberSaveable { mutableStateOf<String?>(null) }
     var projectEditor by remember { mutableStateOf<ProjectEditorTarget?>(null) }
     var folderEditor by remember { mutableStateOf<FolderEditorTarget?>(null) }
     var tagEditor by remember { mutableStateOf<TagEditorTarget?>(null) }
@@ -655,7 +656,7 @@ fun MainScreen(
                     onTrash = bulkTrash,
                     onPurge = bulkPurge,
                 )
-            } else if (!wide) {
+            } else if (!wide && !(tab == Tab.Settings && settingsSection != null)) {
             Column {
             HorizontalDivider(
                 thickness = 1.dp,
@@ -696,6 +697,7 @@ fun MainScreen(
                     selected = tab == Tab.Settings && moreView == null && savedPerspective == null,
                     onClick = {
                         tab = Tab.Settings
+                        settingsSection = null
                         moreView = null
                         savedPerspective = null
                     },
@@ -772,6 +774,7 @@ fun MainScreen(
                     onPerspective = { item -> openPerspective(item) },
                     onSettings = {
                         tab = Tab.Settings
+                        settingsSection = null
                         moreView = null
                         savedPerspective = null
                     },
@@ -817,6 +820,7 @@ fun MainScreen(
             }
             val currentSort = preferences.sortFor(sortKey)
             val headerSort = activeSaved?.sort ?: currentSort
+            if (!(tab == Tab.Settings && settingsSection != null)) {
             Header(
                 title = activeSaved?.name ?: activeMore?.label ?: tab.label,
                 subtitle = when {
@@ -846,6 +850,7 @@ fun MainScreen(
                     null
                 },
             )
+            }
             if (offlineWarning) {
                 OfflineNotice(onRetry = { scope.launch { repository.sync() } })
             }
@@ -961,6 +966,8 @@ fun MainScreen(
                 )
                 Tab.Settings -> SettingsScreen(
                     state = state,
+                    section = settingsSection,
+                    onSectionChange = { settingsSection = it },
                     theme = theme,
                     onThemeChange = onThemeChange,
                     preferences = preferences,

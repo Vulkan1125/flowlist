@@ -71,7 +71,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -117,6 +116,8 @@ enum class SettingsSection(val label: String, val icon: ImageVector) {
 @Composable
 fun SettingsScreen(
     state: AppState,
+    section: String?,
+    onSectionChange: (String?) -> Unit,
     theme: ThemeSettings,
     onThemeChange: (ThemeSettings) -> Unit,
     preferences: AppPreferences,
@@ -129,9 +130,8 @@ fun SettingsScreen(
     onRemoveAllSaved: () -> Unit,
 ) {
     val context = LocalContext.current
-    var section by rememberSaveable { mutableStateOf<String?>(null) }
     val current = SettingsSection.entries.firstOrNull { it.name == section }
-    BackHandler(enabled = current != null) { section = null }
+    BackHandler(enabled = current != null) { onSectionChange(null) }
 
     Column(
         modifier = Modifier
@@ -144,14 +144,14 @@ fun SettingsScreen(
                 librarySettings = librarySettings,
                 state = state,
                 context = context,
-                onOpen = { section = it.name },
+                onOpen = { onSectionChange(it.name) },
             )
         } else {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 16.dp, top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = { section = null }) {
+                IconButton(onClick = { onSectionChange(null) }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Back",

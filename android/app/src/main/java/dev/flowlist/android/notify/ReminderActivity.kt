@@ -37,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -55,7 +56,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -80,19 +80,14 @@ import dev.flowlist.android.FlowlistApplication
 import dev.flowlist.android.MainActivity
 import dev.flowlist.android.data.PreferencesStore
 import dev.flowlist.android.data.ThemeStore
+import dev.flowlist.android.ui.AppearanceMode
 import dev.flowlist.android.ui.FlowlistTheme
-import dev.flowlist.android.ui.isDark
 import dev.flowlist.android.ui.reminderBackgroundFor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.time.DayOfWeek
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
-import java.time.temporal.TemporalAdjusters
-import java.util.Locale
 import kotlin.math.roundToInt
 
 /** The alarm-style task reminder. Shown over the lock screen by a full-screen intent. */
@@ -136,19 +131,21 @@ class ReminderActivity : ComponentActivity() {
         TaskReminders.markFired(this, taskId)
         getSystemService(android.app.NotificationManager::class.java)?.cancel(taskId.hashCode())
         val theme = ThemeStore(this).load()
+        // A reminder is an alarm screen: use the dark side of the selected
+        // theme family so the white type stays legible at any hour.
+        val reminderTheme = theme.copy(mode = AppearanceMode.Dark)
         val preferences = PreferencesStore(this).load()
 
         setContent {
             FlowlistTheme(
-                theme,
-                background = preferences.reminderBackgroundFor(theme, theme.isDark()),
+                reminderTheme,
+                background = preferences.reminderBackgroundFor(reminderTheme, true),
             ) {
                 ReminderScreen(
                     title = title,
                     project = project,
                     dueAt = dueAt,
                     initialSnoozeMinutes = preferences.snoozeMinutes,
-                    weekStartsMonday = preferences.weekStartsMonday,
                     onComplete = {
                         lifecycleScope.launch {
                             runCatching {
@@ -194,7 +191,6 @@ private fun ReminderScreen(
     project: String?,
     dueAt: Long,
     initialSnoozeMinutes: Int,
-    weekStartsMonday: Boolean,
     onComplete: () -> Unit,
     onSnooze: (Int) -> Unit,
     onOpen: () -> Unit,
@@ -206,9 +202,6 @@ private fun ReminderScreen(
     val whenText = remember(dueInstant) {
         dueInstant.format(DateTimeFormatter.ofPattern("HH:mm"))
     }
-    val today = remember { LocalDate.now() }
-    val dueDate = remember(dueInstant) { dueInstant.toLocalDate() }
-
     Box(modifier = Modifier.fillMaxSize()) {
         ReminderBackdrop()
         Column(
@@ -219,25 +212,24 @@ private fun ReminderScreen(
                 .padding(horizontal = 24.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
-            WeekStrip(
-                today = today,
-                dueDate = dueDate,
-                weekStartsMonday = weekStartsMonday,
-            )
-            Spacer(modifier = Modifier.weight(1.2f))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                DismissLink(onDismiss = onDismiss)
+            }
+            Spacer(modifier = Modifier.weight(1.15f))
             ReminderHero(
                 title = title,
                 project = project,
                 whenText = whenText,
             )
-            Spacer(modifier = Modifier.weight(0.8f))
+            Spacer(modifier = Modifier.weight(0.85f))
             ReminderControls(
                 initialSnoozeMinutes = initialSnoozeMinutes,
                 onComplete = onComplete,
                 onSnooze = onSnooze,
                 onOpen = onOpen,
-                onDismiss = onDismiss,
             )
         }
     }
@@ -249,27 +241,15 @@ private fun ReminderBackdrop() {
         modifier = Modifier
             .fillMaxSize()
             .drawBehind {
+                // Keep the selected theme or ambient preset visible; the
+                // neutral scrim only buys contrast for the white type.
                 drawRect(
                     brush = Brush.verticalGradient(
                         listOf(
-                            Color(0xF20A1A11),
-                            Color(0xE60E3320),
-                            Color(0xFA04100A),
+                            Color(0x40000000),
+                            Color(0x1A000000),
+                            Color(0x80000000),
                         ),
-                    ),
-                )
-                drawRect(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color(0x663BD07E), Color.Transparent),
-                        center = Offset(size.width * 0.86f, size.height * 0.22f),
-                        radius = size.width * 0.85f,
-                    ),
-                )
-                drawRect(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color(0x44D6C85A), Color.Transparent),
-                        center = Offset(size.width * 0.08f, size.height * 0.78f),
-                        radius = size.width * 0.8f,
                     ),
                 )
             },
@@ -277,57 +257,27 @@ private fun ReminderBackdrop() {
 }
 
 @Composable
-private fun WeekStrip(
-    today: LocalDate,
-    dueDate: LocalDate,
-    weekStartsMonday: Boolean,
-) {
-    val start = remember(today, weekStartsMonday) {
-        val firstDay = if (weekStartsMonday) DayOfWeek.MONDAY else DayOfWeek.SUNDAY
-        today.with(TemporalAdjusters.previousOrSame(firstDay))
-    }
+private fun DismissLink(onDismiss: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier
+            .clip(RoundedCornerShape(percent = 50))
+            .clickable(role = Role.Button, onClick = onDismiss)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        for (index in 0..6) {
-            val date = start.plusDays(index.toLong())
-            val isToday = date == today
-            val isDue = date == dueDate
-            val letter = date.dayOfWeek
-                .getDisplayName(TextStyle.NARROW, Locale.getDefault())
-                .take(1)
-            val circle = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .then(
-                    if (isToday) {
-                        Modifier.background(Color.White.copy(alpha = 0.22f))
-                    } else {
-                        Modifier
-                    },
-                )
-                .then(
-                    if (isDue && !isToday) {
-                        Modifier.border(1.5.dp, Color.White.copy(alpha = 0.82f), CircleShape)
-                    } else {
-                        Modifier
-                    },
-                )
-            Box(modifier = circle, contentAlignment = Alignment.Center) {
-                Text(
-                    text = letter,
-                    color = if (isToday || isDue) {
-                        reminderInk
-                    } else {
-                        reminderInk.copy(alpha = 0.55f)
-                    },
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        }
+        Icon(
+            imageVector = Icons.Rounded.Close,
+            contentDescription = null,
+            tint = reminderInk.copy(alpha = 0.78f),
+            modifier = Modifier.size(17.dp),
+        )
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            text = "Dismiss",
+            color = reminderInk.copy(alpha = 0.78f),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 
@@ -384,7 +334,6 @@ private fun ReminderControls(
     onComplete: () -> Unit,
     onSnooze: (Int) -> Unit,
     onOpen: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -392,18 +341,10 @@ private fun ReminderControls(
             .widthIn(max = 440.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        PillButton(
-            label = "Dismiss",
-            onClick = onDismiss,
-            modifier = Modifier
-                .widthIn(max = 260.dp)
-                .fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(14.dp))
         SlideToComplete(
             onComplete = onComplete,
             modifier = Modifier
-                .widthIn(max = 260.dp)
+                .widthIn(max = 300.dp)
                 .fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(22.dp))
@@ -420,29 +361,6 @@ private fun ReminderControls(
         ) {
             Text("Open Flowlist", fontWeight = FontWeight.Medium)
         }
-    }
-}
-
-@Composable
-private fun PillButton(
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .height(56.dp)
-            .clip(RoundedCornerShape(percent = 50))
-            .background(Color.White.copy(alpha = 0.17f))
-            .clickable(role = Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            color = reminderInk,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
     }
 }
 
