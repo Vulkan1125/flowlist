@@ -2,15 +2,14 @@
 
 use chrono::Utc;
 use flowlist_core::command::{
-    Command, ContainerPlacement, ImportMode, NewProject, NewTask, ProjectPatch, TaskPatch,
-    TaskPlacement,
+    Command, ContainerPlacement, ImportMode, NewProject, NewTask, ProjectPatch, SettingsPatch,
+    TaskPatch, TaskPlacement,
 };
 use flowlist_core::db::{ContainerPosition, Position};
 use flowlist_core::ids::{FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    Condition, FilterNode, GroupBy, IconSpec, Priority, ProjectKind, ProjectStatus, RepeatMode,
-    RepeatRule, SortBy,
-    TagStatus, Task,
+    BuiltinPerspective, Condition, FilterNode, GroupBy, IconSpec, Priority, ProjectKind,
+    ProjectStatus, RepeatMode, RepeatRule, SortBy, TagStatus, Task,
 };
 use flowlist_core::paths::DataPaths;
 use flowlist_core::store::Store;
@@ -1440,6 +1439,72 @@ fn project_completes_with_last_action_unless_manual_or_single_actions() {
         })
         .unwrap();
     assert_eq!(store.db().projects[&single].status, ProjectStatus::Active);
+}
+
+#[test]
+fn auto_archive_controls_whether_closed_projects_leave_the_library() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    store
+        .execute(Command::UpdateSettings(SettingsPatch {
+            auto_archive_closed_projects: Some(false),
+            ..Default::default()
+        }))
+        .unwrap();
+
+    let project = add_project_in(&mut store, "Visible done", None);
+    store
+        .execute(Command::SetProjectStatus {
+            id: project.clone(),
+            status: ProjectStatus::Done,
+        })
+        .unwrap();
+    assert!(!store.db().projects[&project].is_archived());
+    assert!(flowlist_core::query::archived_projects(store.db()).is_empty());
+    assert!(
+        flowlist_core::query::view(store.db(), BuiltinPerspective::Projects, Utc::now())
+            .iter()
+            .any(|group| group.key == format!("project:{project}"))
+    );
+
+    store
+        .execute(Command::ArchiveProjects {
+            ids: vec![project.clone()],
+            archived: true,
+        })
+        .unwrap();
+    assert!(store.db().projects[&project].is_archived());
+    assert_eq!(
+        flowlist_core::query::archived_projects(store.db()),
+        vec![project.clone()]
+    );
+
+    // Reopening an archived active project unarchives it.
+    store
+        .execute(Command::SetProjectStatus {
+            id: project.clone(),
+            status: ProjectStatus::Active,
+        })
+        .unwrap();
+    assert!(!store.db().projects[&project].is_archived());
+
+    store
+        .execute(Command::UpdateSettings(SettingsPatch {
+            auto_archive_closed_projects: Some(true),
+            ..Default::default()
+        }))
+        .unwrap();
+    store
+        .execute(Command::SetProjectStatus {
+            id: project.clone(),
+            status: ProjectStatus::Dropped,
+        })
+        .unwrap();
+    assert!(store.db().projects[&project].is_archived());
+    assert_eq!(
+        flowlist_core::query::archived_projects(store.db()),
+        vec![project]
+    );
 }
 
 #[test]

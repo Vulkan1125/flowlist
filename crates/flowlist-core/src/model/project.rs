@@ -458,6 +458,10 @@ pub struct Project {
     /// projects stay active and keep the tick badge instead.
     #[serde(default = "default_complete_with_last_action")]
     pub complete_with_last_action: bool,
+    /// Hidden from the active library and listed in Archive. `None` keeps the
+    /// historical behaviour for old libraries: closed projects are archived.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived: Option<bool>,
     /// Decorative icon shown in the sidebar and dashboards: a named glyph or
     /// one emoji.
     #[serde(default)]
@@ -518,6 +522,7 @@ impl Project {
             sequential: false,
             kind: ProjectKind::Parallel,
             complete_with_last_action: true,
+            archived: Some(false),
             icon: IconSpec::default(),
             alerts: Vec::new(),
             removed_notifications: BTreeSet::new(),
@@ -531,6 +536,12 @@ impl Project {
 
     /// The kind to show and apply, including projects written before `kind`
     /// existed with only the `sequential` boolean set.
+    /// Whether this project is out of the active library. Older libraries did
+    /// not carry the flag, so closed projects stay archived by default.
+    pub fn is_archived(&self) -> bool {
+        self.archived.unwrap_or_else(|| self.status.is_closed())
+    }
+
     pub fn effective_kind(&self) -> ProjectKind {
         if self.sequential && self.kind == ProjectKind::Parallel {
             ProjectKind::Sequential

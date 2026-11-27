@@ -303,6 +303,10 @@ integrations are tracked separately and are not part of this phase.
 - [x] **On Hold lockout** — an On Hold project shows a pause marker, dims its
       tasks and subtasks, disables their checkboxes and rejects completion
       until the project becomes active.
+- [x] **Project archive** — a separate archive flag with an inspector icon and
+      right-click actions. Folder menus archive every project inside them.
+      Settings → Workflow controls automatic archiving of Done and Dropped
+      projects; when off they stay visible with a tick or ×.
 - [x] **Currency project icons** — dollar, rupee, euro, pound, yen, won, ruble,
       bitcoin, franc and lira, shared with the phone picker.
 - [x] **Mac completion clears the inspector** — completing a task clears the

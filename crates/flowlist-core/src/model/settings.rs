@@ -79,6 +79,9 @@ pub struct Settings {
     /// saved views. The figure is retired; this makes the cleanup permanent.
     #[serde(default)]
     pub cleared_running_icon: bool,
+    /// Move a project to Archive when it is marked Done or Dropped.
+    #[serde(default = "default_true")]
+    pub auto_archive_closed_projects: bool,
 }
 
 /// Sidebar presentation, kept in the library so every client agrees on what
@@ -240,6 +243,7 @@ impl Default for Settings {
             default_custom_notification_time: default_custom_notification_time(),
             seeded_running_view: false,
             cleared_running_icon: false,
+            auto_archive_closed_projects: true,
         }
     }
 }

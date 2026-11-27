@@ -129,6 +129,7 @@ pub fn project_value(db: &Db, id: &ProjectId) -> Value {
         "kind": project.effective_kind().label(),
         "kind_key": project.effective_kind().slug(),
         "complete_with_last_action": project.complete_with_last_action,
+        "archived": project.is_archived(),
         "icon": &project.icon,
         "attachments": project.attachments,
         "completed_tasks": completed,

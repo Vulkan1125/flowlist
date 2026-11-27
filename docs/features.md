@@ -369,6 +369,10 @@ working domain and GUI. This page tracks what is implemented and verified.
       Update project prompt in the Dates section.
 - [x] On Hold projects show a pause marker, dim every task and subtask, and
       reject completion until the project is active again.
+- [x] Projects carry an archive flag with an inspector icon and context-menu
+      action; folders can archive all their projects. Settings → Workflow
+      controls whether Done/Dropped archive automatically, otherwise they stay
+      visible with a tick or ×.
 - [x] Empty saved perspectives leave the rail slot blank instead of showing a
       tick, and the first-use focus eye explains how to start a focus while
       restoring the last one afterwards.

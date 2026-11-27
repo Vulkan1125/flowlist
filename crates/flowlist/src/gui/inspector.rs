@@ -3819,6 +3819,7 @@ impl FlowlistApp {
         let next_review = project.next_review.format("%b %-d, %Y").to_string();
         let review_days = project.review_interval_days;
         let complete_with_last_action = project.complete_with_last_action;
+        let archived = project.is_archived();
         let single_actions = project.effective_kind() == ProjectKind::SingleActions;
         let has_dates = defer.is_some() || planned.is_some() || due.is_some();
         let has_attachments = !attachments.is_empty();
@@ -3915,37 +3916,79 @@ impl FlowlistApp {
                     ),
             )
             .child(
-                div().flex().flex_wrap().items_center().gap_1().children(
-                    [
-                        ProjectStatus::Active,
-                        ProjectStatus::OnHold,
-                        ProjectStatus::Done,
-                        ProjectStatus::Dropped,
-                    ]
-                    .into_iter()
-                    .map(|candidate| {
-                        let set_id = project_id.clone();
-                        let color = match candidate {
-                            ProjectStatus::Active => theme.success,
-                            ProjectStatus::OnHold => theme.warning,
-                            ProjectStatus::Done => theme.accent,
-                            ProjectStatus::Dropped => theme.text_faint,
-                        };
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div().flex().flex_wrap().items_center().gap_1().children(
+                            [
+                                ProjectStatus::Active,
+                                ProjectStatus::OnHold,
+                                ProjectStatus::Done,
+                                ProjectStatus::Dropped,
+                            ]
+                            .into_iter()
+                            .map(|candidate| {
+                                let set_id = project_id.clone();
+                                let color = match candidate {
+                                    ProjectStatus::Active => theme.success,
+                                    ProjectStatus::OnHold => theme.warning,
+                                    ProjectStatus::Done => theme.accent,
+                                    ProjectStatus::Dropped => theme.text_faint,
+                                };
+                                div()
+                                    .id(super::sid(format!(
+                                        "project-status:{}",
+                                        candidate.label()
+                                    )))
+                                    .cursor_pointer()
+                                    .opacity(if candidate == status { 1.0 } else { 0.55 })
+                                    .hover(|style| style.opacity(1.0))
+                                    .child(widgets::chip(theme, candidate.label(), color))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.execute(Command::SetProjectStatus {
+                                            id: set_id.clone(),
+                                            status: candidate,
+                                        });
+                                        cx.notify();
+                                    }))
+                            }),
+                        ),
+                    )
+                    .child(div().flex_1())
+                    .child({
+                        let archive_id = project_id.clone();
                         div()
-                            .id(super::sid(format!("project-status:{}", candidate.label())))
+                            .id("project-archive")
                             .cursor_pointer()
-                            .opacity(if candidate == status { 1.0 } else { 0.55 })
-                            .hover(|style| style.opacity(1.0))
-                            .child(widgets::chip(theme, candidate.label(), color))
+                            .flow_tip(
+                                self,
+                                cx,
+                                theme,
+                                if archived {
+                                    "Unarchive project"
+                                } else {
+                                    "Archive project"
+                                },
+                            )
+                            .child(icons::icon(
+                                Icon::Archive,
+                                15.0,
+                                if archived {
+                                    theme.accent
+                                } else {
+                                    theme.text_faint
+                                },
+                            ))
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.execute(Command::SetProjectStatus {
-                                    id: set_id.clone(),
-                                    status: candidate,
+                                this.execute(Command::ArchiveProjects {
+                                    ids: vec![archive_id.clone()],
+                                    archived: !archived,
                                 });
                                 cx.notify();
                             }))
                     }),
-                ),
             )
             .child(
                 div()

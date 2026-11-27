@@ -163,7 +163,7 @@ pub fn forecast(db: &Db, at: DateTime<Utc>, due_only: bool) -> Forecast {
     }
 
     for project in db.projects.values() {
-        if !project.status.is_open() {
+        if project.is_archived() || !project.status.is_open() {
             continue;
         }
         for (date, kind) in [

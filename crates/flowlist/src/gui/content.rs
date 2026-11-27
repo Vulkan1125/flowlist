@@ -2264,7 +2264,7 @@ impl FlowlistApp {
                             div()
                                 .text_xs()
                                 .text_color(theme.text_faint)
-                                .child("No remaining actions. Add a task or mark the project done."),
+                                .child("All caught up — no active tasks."),
                         )
                         .child(
                             div()
@@ -2430,8 +2430,8 @@ impl FlowlistApp {
         if self.archive_sections().is_empty() {
             return self
                 .render_empty(
-                    "No finished projects",
-                    "Done and dropped projects appear here.",
+                    "No archived projects",
+                    "Archived projects appear here.",
                 )
                 .into_any_element();
         }
@@ -2561,9 +2561,27 @@ impl FlowlistApp {
                     .child(
                         div()
                             .flex_shrink_0()
+                            .flex()
+                            .items_center()
+                            .gap_1()
                             .text_xs()
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .text_color(status_color)
+                            .child(match status {
+                                ProjectStatus::Done => icons::icon(
+                                    Icon::Check,
+                                    11.0,
+                                    theme.success,
+                                )
+                                .into_any_element(),
+                                ProjectStatus::Dropped => icons::icon(
+                                    Icon::Close,
+                                    11.0,
+                                    theme.text_faint,
+                                )
+                                .into_any_element(),
+                                _ => div().into_any_element(),
+                            })
                             .child(status.label()),
                     )
                     .child(
@@ -3180,7 +3198,17 @@ impl FlowlistApp {
                         .map(|priority| super::theme::priority_color(theme, priority)),
                 ));
             if on_hold {
-                check.opacity(0.6).cursor(CursorStyle::Arrow)
+                check
+                    .opacity(0.6)
+                    .cursor_pointer()
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.toast = Some(
+                            "Project on hold. Set it active before completing tasks."
+                                .to_string(),
+                        );
+                        cx.notify();
+                    }))
             } else {
                 check.on_click(cx.listener(move |this, _, _, cx| {
                     cx.stop_propagation();

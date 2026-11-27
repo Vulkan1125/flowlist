@@ -266,6 +266,8 @@ pub enum Modal {
         keep_completed_subtasks: bool,
         /// Count only due items in Forecast badges.
         forecast_due_counts: bool,
+        /// Move done/dropped projects to Archive automatically.
+        auto_archive: bool,
         /// Tag whose undated actions enter Forecast.
         forecast_tag: TextBuffer,
         /// Show flagged undated actions in Forecast.
@@ -720,6 +722,7 @@ impl Modal {
             reminder_wallpaper_note: None,
             keep_completed_subtasks: app.keep_completed_subtasks,
             forecast_due_counts: app.store.db().settings.forecast_due_counts,
+            auto_archive: app.store.db().settings.auto_archive_closed_projects,
             forecast_tag: TextBuffer::new(
                 app.store
                     .db()
@@ -9156,6 +9159,42 @@ impl FlowlistApp {
                 ..
             })
         );
+        let auto_archive = matches!(
+            &self.modal,
+            Some(Modal::Settings {
+                auto_archive: true,
+                ..
+            })
+        );
+        let archive_card = self.settings_card(
+            "Archive",
+            Some("Move closed projects out of the active library."),
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(
+                    div()
+                        .flex_1()
+                        .text_sm()
+                        .child("Auto archive done and dropped projects"),
+                )
+                .child(
+                    div()
+                        .on_children_prepainted(
+                            self.theme_probe("auto-archive-toggle".to_string()),
+                        )
+                        .id("auto-archive-toggle")
+                        .child(widgets::switch(theme, auto_archive))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(Modal::Settings { auto_archive, .. }) = &mut this.modal {
+                                *auto_archive = !*auto_archive;
+                            }
+                            cx.notify();
+                        })),
+                ),
+        );
         let focus_card = self.settings_card(
             "Focus",
             Some("The eye stays available. A new focus shows briefly when the banner is off."),
@@ -9191,6 +9230,7 @@ impl FlowlistApp {
             .child(toolbar_card)
             .child(subtasks_card)
             .child(forecast_card)
+            .child(archive_card)
             .child(focus_card)
             .child(
                 self.settings_card(

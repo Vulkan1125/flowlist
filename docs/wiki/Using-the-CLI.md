@@ -316,7 +316,9 @@ marks the project done with its last open task; `manual` keeps it active.
 
 **`flowlist project status <ID> <STATUS>`**
 
-`active`, `on-hold`, `done`, `dropped`.
+`active`, `on-hold`, `done`, `dropped`. Done and Dropped archive automatically
+when Settings → Workflow → Archive is on; otherwise they stay in the library
+with a tick or ×.
 
 **`flowlist project review <ID> [--on <DATE>]`**
 

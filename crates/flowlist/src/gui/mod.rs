@@ -5899,6 +5899,7 @@ impl FlowlistApp {
                 wallpaper_opacity,
                 keep_completed_subtasks,
                 forecast_due_counts,
+                auto_archive,
                 forecast_tag,
                 forecast_flagged,
                 default_defer_notification,
@@ -5976,6 +5977,7 @@ impl FlowlistApp {
                     nearby_radius_km: Some(radius),
                     trash_retention_days: Some(trash),
                     forecast_due_counts: Some(*forecast_due_counts),
+                    auto_archive_closed_projects: Some(*auto_archive),
                     forecast_tag: Some(forecast_tag),
                     forecast_flagged: Some(*forecast_flagged),
                     default_defer_notification: Some(*default_defer_notification),
@@ -7977,7 +7979,7 @@ impl FlowlistApp {
                 .projects
                 .values()
                 .filter(|project| {
-                    project.status.is_open() && self.focus_allows_project(&project.id)
+                    !project.is_archived() && self.focus_allows_project(&project.id)
                 })
                 .count(),
             BuiltinPerspective::Forecast => {
@@ -8105,11 +8107,17 @@ impl FlowlistApp {
                 .map(|project| {
                     let (_, total) = db.project_progress(&project.id);
                     let open = db.project_open_count(&project.id);
-                    let badge =
-                        match sidebar::project_badge(open, total, project.effective_kind()) {
-                            sidebar::ProjectBadge::Count(count) => count.to_string(),
-                            sidebar::ProjectBadge::Stalled => "stalled".to_string(),
-                        };
+                    let badge = match sidebar::project_badge(
+                        open,
+                        total,
+                        project.effective_kind(),
+                        project.status,
+                    ) {
+                        sidebar::ProjectBadge::Count(count) => count.to_string(),
+                        sidebar::ProjectBadge::Stalled => "stalled".to_string(),
+                        sidebar::ProjectBadge::Done => "done".to_string(),
+                        sidebar::ProjectBadge::Dropped => "dropped".to_string(),
+                    };
                     (project.name.clone(), badge)
                 })
                 .collect::<std::collections::BTreeMap<_, _>>()

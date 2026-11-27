@@ -283,6 +283,7 @@ pub struct SettingsPatch {
     pub default_due_notification: Option<bool>,
     #[serde(deserialize_with = "deserialize_double_option")]
     pub default_custom_notification_time: Option<Option<chrono::NaiveTime>>,
+    pub auto_archive_closed_projects: Option<bool>,
     pub sidebar: Option<crate::model::SidebarOptions>,
 }
 
@@ -444,6 +445,11 @@ pub enum Command {
     SetProjectStatus {
         id: ProjectId,
         status: ProjectStatus,
+    },
+    /// Hide or restore projects in Archive without changing their status.
+    ArchiveProjects {
+        ids: Vec<ProjectId>,
+        archived: bool,
     },
     CompleteReview {
         id: ProjectId,
@@ -625,6 +631,11 @@ impl Command {
                 Some(name) => format!("Set project “{name}” to {}", status.label()),
                 None => format!("Set project status to {}", status.label()),
             },
+            Command::ArchiveProjects { ids, archived } => format!(
+                "{} {}",
+                if *archived { "Archive" } else { "Unarchive" },
+                item_count(ids.len(), "project", "projects")
+            ),
             Command::CompleteReview { id, .. } => match project_name(id) {
                 Some(name) => format!("Review project “{name}”"),
                 None => "Review project".to_string(),
@@ -657,6 +668,11 @@ impl Command {
                     status.label()
                 )
             }
+            Command::ArchiveProjects { ids, archived } => format!(
+                "{} {}",
+                if *archived { "Archive" } else { "Unarchive" },
+                item_count(ids.len(), "project", "projects")
+            ),
             Command::DeleteContainers { projects, folders } => {
                 format!(
                     "Delete {}",
@@ -1111,10 +1127,12 @@ impl Command {
                         if total == 0 || done != total {
                             continue;
                         }
+                        let auto_archive = db.settings.auto_archive_closed_projects;
                         if let Some(project) = db.projects.get_mut(&project_id) {
                             project.status = ProjectStatus::Done;
                             project.completed_at = Some(at);
                             project.dropped_at = None;
+                            project.archived = Some(auto_archive);
                             project.modified_at = at;
                         }
                         outcome.affected.push(project_id.to_string());
@@ -1696,9 +1714,11 @@ impl Command {
             }
             Command::SetProjectStatus { id, status } => {
                 let previous = db.project(&id)?.status;
-                if previous == status {
+                let currently_archived = db.project(&id)?.is_archived();
+                if previous == status && !(status.is_open() && currently_archived) {
                     return Ok(outcome);
                 }
+                let auto_archive = db.settings.auto_archive_closed_projects;
                 {
                     let project = db.project_mut(&id)?;
                     project.status = status;
@@ -1707,14 +1727,17 @@ impl Command {
                         ProjectStatus::Done => {
                             project.completed_at = Some(at);
                             project.dropped_at = None;
+                            project.archived = Some(auto_archive);
                         }
                         ProjectStatus::Dropped => {
                             project.dropped_at = Some(at);
                             project.completed_at = None;
+                            project.archived = Some(auto_archive);
                         }
                         ProjectStatus::Active | ProjectStatus::OnHold => {
                             project.completed_at = None;
                             project.dropped_at = None;
+                            project.archived = Some(false);
                         }
                     }
                 }
@@ -1916,6 +1939,29 @@ impl Command {
                     "{} marked {}",
                     item_count(ids.len(), "project", "projects"),
                     status.label().to_lowercase()
+                ));
+            }
+            Command::ArchiveProjects { ids, archived } => {
+                let mut changed = 0usize;
+                for id in ids {
+                    let Some(project) = db.projects.get_mut(&id) else {
+                        continue;
+                    };
+                    if project.is_archived() == archived {
+                        continue;
+                    }
+                    project.archived = Some(archived);
+                    project.modified_at = at;
+                    changed += 1;
+                    outcome.affected.push(id.to_string());
+                }
+                if changed > 0 {
+                    db.touch();
+                }
+                outcome.message = Some(format!(
+                    "{} {}",
+                    if archived { "Archived" } else { "Unarchived" },
+                    item_count(changed, "project", "projects")
                 ));
             }
             Command::DeleteContainers { projects, folders } => {
@@ -2235,6 +2281,9 @@ impl Command {
                 }
                 if let Some(value) = patch.default_custom_notification_time {
                     settings.default_custom_notification_time = value;
+                }
+                if let Some(value) = patch.auto_archive_closed_projects {
+                    settings.auto_archive_closed_projects = value;
                 }
                 if let Some(sidebar) = patch.sidebar {
                     settings.sidebar = sidebar;

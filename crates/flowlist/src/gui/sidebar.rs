@@ -52,6 +52,8 @@ pub(super) enum ProjectBadge {
     Count(usize),
     /// Tasks exist but none are open, and the project is still active.
     Stalled,
+    Done,
+    Dropped,
 }
 
 /// A project with no tasks shows `0`; an empty single-action bucket behaves the
@@ -61,11 +63,19 @@ pub(super) fn project_badge(
     open: usize,
     total: usize,
     kind: flowlist_core::model::ProjectKind,
+    status: ProjectStatus,
 ) -> ProjectBadge {
-    if total > 0 && open == 0 && kind != flowlist_core::model::ProjectKind::SingleActions {
-        ProjectBadge::Stalled
-    } else {
-        ProjectBadge::Count(open)
+    match status {
+        ProjectStatus::Done => ProjectBadge::Done,
+        ProjectStatus::Dropped => ProjectBadge::Dropped,
+        ProjectStatus::Active | ProjectStatus::OnHold => {
+            if total > 0 && open == 0 && kind != flowlist_core::model::ProjectKind::SingleActions
+            {
+                ProjectBadge::Stalled
+            } else {
+                ProjectBadge::Count(open)
+            }
+        }
     }
 }
 
@@ -301,7 +311,7 @@ impl FlowlistApp {
                     if db
                         .projects
                         .get(&id)
-                        .is_some_and(|project| project.status.is_open())
+                        .is_some_and(|project| !project.is_archived())
                     {
                         out.push(target);
                     }
@@ -829,6 +839,22 @@ impl FlowlistApp {
                     .get(&id)
                     .map(|folder| folder.name.clone())
                     .unwrap_or_else(|| "folder".to_string());
+                let archive_projects: Vec<ProjectId> = db
+                    .projects
+                    .values()
+                    .filter(|project| {
+                        !project.is_archived() && db.project_is_in_folder(&project.id, &id, true)
+                    })
+                    .map(|project| project.id.clone())
+                    .collect();
+                let unarchive_projects: Vec<ProjectId> = db
+                    .projects
+                    .values()
+                    .filter(|project| {
+                        project.is_archived() && db.project_is_in_folder(&project.id, &id, true)
+                    })
+                    .map(|project| project.id.clone())
+                    .collect();
                 items.push(self.sidebar_menu_item(
                     "menu-open-view".to_string(),
                     format!("Open “{name}”"),
@@ -918,6 +944,41 @@ impl FlowlistApp {
                     },
                 ));
                 items.push(self.sidebar_menu_divider());
+                if !archive_projects.is_empty() {
+                    let ids = archive_projects.clone();
+                    items.push(self.sidebar_menu_item(
+                        "menu-archive-folder-projects".to_string(),
+                        "Archive projects",
+                        false,
+                        false,
+                        cx,
+                        move |this, cx| {
+                            this.execute(flowlist_core::command::Command::ArchiveProjects {
+                                ids: ids.clone(),
+                                archived: true,
+                            });
+                            cx.notify();
+                        },
+                    ));
+                }
+                if !unarchive_projects.is_empty() {
+                    let ids = unarchive_projects.clone();
+                    items.push(self.sidebar_menu_item(
+                        "menu-unarchive-folder-projects".to_string(),
+                        "Unarchive projects",
+                        false,
+                        false,
+                        cx,
+                        move |this, cx| {
+                            this.execute(flowlist_core::command::Command::ArchiveProjects {
+                                ids: ids.clone(),
+                                archived: false,
+                            });
+                            cx.notify();
+                        },
+                    ));
+                }
+                items.push(self.sidebar_menu_divider());
                 items.push(self.sidebar_menu_item(
                     "menu-delete-folder".to_string(),
                     "Delete folder",
@@ -941,6 +1002,10 @@ impl FlowlistApp {
                     .map(|project| project.name.clone())
                     .unwrap_or_else(|| "project".to_string());
                 let status = db.projects.get(&id).map(|project| project.status);
+                let archived = db
+                    .projects
+                    .get(&id)
+                    .is_some_and(|project| project.is_archived());
                 items.push(self.sidebar_menu_item(
                     "menu-open-project".to_string(),
                     format!("Open “{name}”"),
@@ -1017,6 +1082,28 @@ impl FlowlistApp {
                             this.execute(flowlist_core::command::Command::SetProjectStatus {
                                 id: status_id.clone(),
                                 status: option,
+                            });
+                            cx.notify();
+                        },
+                    ));
+                }
+                items.push(self.sidebar_menu_divider());
+                {
+                    let archive_id = id.clone();
+                    items.push(self.sidebar_menu_item(
+                        "menu-archive-project".to_string(),
+                        if archived {
+                            "Unarchive project"
+                        } else {
+                            "Archive project"
+                        },
+                        false,
+                        false,
+                        cx,
+                        move |this, cx| {
+                            this.execute(flowlist_core::command::Command::ArchiveProjects {
+                                ids: vec![archive_id.clone()],
+                                archived: !archived,
                             });
                             cx.notify();
                         },
@@ -1272,7 +1359,7 @@ impl FlowlistApp {
                 ContainerId::Project(id) => {
                     db.projects
                         .get(id)
-                        .is_some_and(|project| project.status.is_open())
+                        .is_some_and(|project| !project.is_archived())
                         && !sidebar.is_hidden(&format!("project:{id}"))
                 }
             })
@@ -1782,7 +1869,8 @@ impl FlowlistApp {
                         .projects
                         .values()
                         .filter(|project| {
-                            project.status.is_open()
+                            !project.is_archived()
+                                && project.status.is_open()
                                 && db.project_is_in_folder(&project.id, &id, true)
                                 && !db.project_is_ticked(&project.id)
                                 && self.focus_allows_project(&project.id)
@@ -1983,9 +2071,7 @@ impl FlowlistApp {
                     let Some(project) = db.projects.get(&id) else {
                         continue;
                     };
-                    if !project.status.is_open()
-                        || sidebar.is_hidden(&format!("project:{id}"))
-                    {
+                    if project.is_archived() || sidebar.is_hidden(&format!("project:{id}")) {
                         continue;
                     }
                     let focused = self.focus_allows_project(&id);
@@ -1995,8 +2081,16 @@ impl FlowlistApp {
                         (0, 0)
                     };
                     let open = if focused { db.project_open_count(&id) } else { 0 };
-                    let badge = project_badge(open, total, project.effective_kind());
+                    let badge =
+                        project_badge(open, total, project.effective_kind(), project.status);
                     let show_count = !sidebar.is_count_hidden(&format!("project:{id}"));
+                    let show_badge = project.status != ProjectStatus::OnHold
+                        && (matches!(
+                            badge,
+                            ProjectBadge::Stalled
+                                | ProjectBadge::Done
+                                | ProjectBadge::Dropped
+                        ) || (show_count && open > 0));
                     let view_id = id.clone();
                     let target_id = id.clone();
                     let drop_id = id.clone();
@@ -2084,34 +2178,55 @@ impl FlowlistApp {
                                     .bg(self.theme.accent),
                             )
                         })
-                        .when(
-                            show_count
-                                && (open > 0 || badge == ProjectBadge::Stalled),
-                            |this| {
-                                this.child({
-                                    let tip = match badge {
-                                        ProjectBadge::Stalled => format!(
-                                            "No remaining actions · {done} of {total} done"
-                                        ),
-                                        ProjectBadge::Count(_) => {
-                                            format!("{open} open · {done} of {total} done")
+                        .when(show_badge, |this| {
+                            this.child({
+                                let tip = match badge {
+                                    ProjectBadge::Stalled => {
+                                        format!("All caught up · {done} of {total} done")
+                                    }
+                                    ProjectBadge::Done => "Done".to_string(),
+                                    ProjectBadge::Dropped => "Dropped".to_string(),
+                                    ProjectBadge::Count(_) => {
+                                        format!("{open} open · {done} of {total} done")
+                                    }
+                                };
+                                div()
+                                    .id(super::sid(format!("project-count:{id}")))
+                                    .flow_tip(self, cx, self.theme, tip)
+                                    .child(match badge {
+                                        ProjectBadge::Stalled => {
+                                            widgets::stalled_badge(self.theme).into_any_element()
                                         }
-                                    };
-                                    div()
-                                        .id(super::sid(format!("project-count:{id}")))
-                                        .flow_tip(self, cx, self.theme, tip)
-                                        .child(match badge {
-                                            ProjectBadge::Stalled => widgets::stalled_badge(
-                                                self.theme,
-                                            )
+                                        ProjectBadge::Done => div()
+                                            .min_w(px(18.))
+                                            .px_1()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .child(icons::icon(
+                                                Icon::Check,
+                                                11.0,
+                                                self.theme.success,
+                                            ))
                                             .into_any_element(),
-                                            ProjectBadge::Count(open) => {
-                                                widgets::count(self.theme, open).into_any_element()
-                                            }
-                                        })
-                                })
-                            },
-                        )
+                                        ProjectBadge::Dropped => div()
+                                            .min_w(px(18.))
+                                            .px_1()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .child(icons::icon(
+                                                Icon::Close,
+                                                11.0,
+                                                self.theme.text_faint,
+                                            ))
+                                            .into_any_element(),
+                                        ProjectBadge::Count(open) => {
+                                            widgets::count(self.theme, open).into_any_element()
+                                        }
+                                    })
+                            })
+                        })
                         .on_drag(
                             DragProject::project(drag_id.clone(), project.name.clone()),
                             move |payload, position, window, cx| {
@@ -2429,7 +2544,7 @@ pub(super) fn priority_color(theme: super::theme::Theme, priority: Priority) -> 
 #[cfg(test)]
 mod tests {
     use super::{ProjectBadge, anchors_rail, project_badge};
-    use flowlist_core::model::ProjectKind;
+    use flowlist_core::model::{ProjectKind, ProjectStatus};
     use flowlist_core::model::BuiltinPerspective;
 
     #[test]
@@ -2444,7 +2559,7 @@ mod tests {
     #[test]
     fn a_new_project_keeps_its_zero() {
         assert_eq!(
-            project_badge(0, 0, ProjectKind::Parallel),
+            project_badge(0, 0, ProjectKind::Parallel, ProjectStatus::Active),
             ProjectBadge::Count(0)
         );
     }
@@ -2452,15 +2567,15 @@ mod tests {
     #[test]
     fn finished_work_becomes_a_tick() {
         assert_eq!(
-            project_badge(0, 1, ProjectKind::Parallel),
+            project_badge(0, 1, ProjectKind::Parallel, ProjectStatus::Active),
             ProjectBadge::Stalled
         );
         assert_eq!(
-            project_badge(0, 12, ProjectKind::Sequential),
+            project_badge(0, 12, ProjectKind::Sequential, ProjectStatus::Active),
             ProjectBadge::Stalled
         );
         assert_eq!(
-            project_badge(0, 12, ProjectKind::SingleActions),
+            project_badge(0, 12, ProjectKind::SingleActions, ProjectStatus::Active),
             ProjectBadge::Count(0)
         );
     }
@@ -2468,11 +2583,11 @@ mod tests {
     #[test]
     fn any_open_task_keeps_the_count() {
         assert_eq!(
-            project_badge(1, 2, ProjectKind::Parallel),
+            project_badge(1, 2, ProjectKind::Parallel, ProjectStatus::Active),
             ProjectBadge::Count(1)
         );
         assert_eq!(
-            project_badge(2, 3, ProjectKind::Parallel),
+            project_badge(2, 3, ProjectKind::Parallel, ProjectStatus::Active),
             ProjectBadge::Count(2)
         );
     }

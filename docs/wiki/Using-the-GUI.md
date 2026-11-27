@@ -238,6 +238,13 @@ folders and can carry their own tags, dates, attachments and icon.
 - A project **On Hold** shows a pause marker in the rail. Its tasks and
   subtasks are dimmed and cannot be completed until the project is set back to
   Active.
+- The project inspector’s status row has an **Archive** icon at its right.
+  The project row’s right-click menu has the same action; a folder’s menu
+  archives every project inside it. Done projects show a tick and Dropped ones
+  an × when they stay in the library.
+- **Settings → Workflow → Archive** controls whether Done and Dropped projects
+  move to Archive automatically. It is on by default; turn it off to keep them
+  visible in the active library.
 - Drag a project onto a folder, onto the LIBRARY heading or onto empty space to
   move it back to the root.
 
@@ -450,7 +457,8 @@ eight sections on the left (`⌘1`…`⌘8` jump between them):
   **Use separate backgrounds for light and dark modes** reveals a second
   picker; otherwise one photo covers both.
 - **Sidebar** — a collapsible matrix of every rail item with **Hide** and **Hide count** boxes, indented under their heading. Every heading starts collapsed and opening one closes the rest. A ticked box hides the row and strikes its name through; hiding a row also greys out its count box, since a count on a hidden row makes no sense. Inbox, Today and Trash always stay and have no Hide box at all. Saved perspectives show their open count only when it is non-zero; empty ones leave the slot blank. **Hide empty custom views** drops a saved view from the rail while its filter matches nothing and brings it back as soon as a task does.
-- **Workflow** — Vim mode, macOS due reminders, and the review/changed/completed windows.
+- **Workflow** — Vim mode, auto archive, the Focus banner, and the
+  review/changed/completed windows.
 - **Nearby** — the radius used by the Nearby view.
 - **Trash** — how many days deleted tasks stay restorable.
 - **Mobile** — the phone server, pairing code, addresses and paired devices.

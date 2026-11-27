@@ -844,7 +844,9 @@ impl Db {
                     if self
                         .projects
                         .get(id)
-                        .is_some_and(|project| project.status.is_open())
+                        .is_some_and(|project| {
+                            !project.is_archived() && project.status.is_open()
+                        })
                         && !self.project_is_ticked(id)
                     {
                         count += 1;

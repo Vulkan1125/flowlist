@@ -142,7 +142,7 @@ pub fn run_projects(
             let Some(project) = db.projects.get(id) else {
                 return false;
             };
-            if !show_completed && project.status.is_closed() {
+            if project.is_archived() || (!show_completed && project.status.is_closed()) {
                 return false;
             }
             perspective::matches_project(db, project, filter, at)
@@ -259,7 +259,7 @@ pub fn archived_projects(db: &Db) -> Vec<ProjectId> {
         .filter(|id| {
             db.projects
                 .get(id)
-                .is_some_and(|project| project.status.is_closed())
+                .is_some_and(|project| project.is_archived())
         })
         .collect()
 }
@@ -291,7 +291,7 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 let Some(project) = db.projects.get(&id) else {
                     continue;
                 };
-                if !project.status.is_open() {
+                if project.is_archived() {
                     continue;
                 }
                 let rows = db
@@ -732,7 +732,7 @@ pub fn projects_on_date(
     let mut ids: Vec<ProjectId> = db
         .projects
         .values()
-        .filter(|project| project.status.is_open())
+        .filter(|project| !project.is_archived() && project.status.is_open())
         .filter(|project| {
             project.due.is_some_and(|stamp| stamp.local_date() == date)
                 || (!due_only
@@ -759,7 +759,7 @@ pub fn forecast_past_projects(
     let mut ids: Vec<ProjectId> = db
         .projects
         .values()
-        .filter(|project| project.status.is_open())
+        .filter(|project| !project.is_archived() && project.status.is_open())
         .filter(|project| {
             project.due.is_some_and(|stamp| stamp.local_date() < today)
                 || (!due_only
@@ -784,7 +784,7 @@ pub fn forecast_future_projects(
     let mut ids: Vec<ProjectId> = db
         .projects
         .values()
-        .filter(|project| project.status.is_open())
+        .filter(|project| !project.is_archived() && project.status.is_open())
         .filter(|project| {
             project.due.is_some_and(|stamp| stamp.local_date() > after)
                 || (!due_only
@@ -1047,7 +1047,9 @@ pub fn review_projects(db: &Db, at: DateTime<Utc>) -> Vec<ProjectId> {
     let mut projects: Vec<ProjectId> = db
         .projects
         .values()
-        .filter(|project| project.status.is_open() && project.next_review <= today)
+        .filter(|project| {
+            !project.is_archived() && project.status.is_open() && project.next_review <= today
+        })
         .map(|project| project.id.clone())
         .collect();
     projects.sort_by_key(|id| db.projects[id].next_review);

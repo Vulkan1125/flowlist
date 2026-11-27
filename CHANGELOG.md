@@ -22,6 +22,17 @@
   `project add/edit --completion auto|manual`, the MCP project tools and the
   project JSON carry the same field.
 
+### Archive
+
+- **Separate archive action.** Projects have an archive flag beside their
+  status and in the right-click menu. A folder's menu archives every project
+  inside it in one undo step.
+- **Auto archive setting.** Settings → Workflow → Archive moves Done and
+  Dropped projects out of the active library by default. Turn it off and they
+  stay visible with a tick for Done and an × for Dropped.
+- **On Hold rail marker.** On Hold projects show a pause mark instead of a
+  count; their tasks and subtasks stay dimmed and cannot be completed.
+
 ### Stalled projects
 
 - **Dashed circle, not tick.** An active project with tasks but none left open
@@ -31,6 +42,7 @@
 - **Completed section.** When a stalled project hides completed work, a
   **Completed (n)** row reveals it. Completed roots then sit under their own
   collapsible **Completed** heading instead of interleaving with open work.
+  The notice reads **“All caught up — no active tasks.”**
 - **On Hold locks work.** Projects on hold show a pause marker in the rail;
   their tasks and subtasks are dimmed, their checkboxes are disabled, and the
   command layer rejects completion until the project is active again.
