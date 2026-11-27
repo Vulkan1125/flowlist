@@ -2041,10 +2041,8 @@ impl FlowlistApp {
         let hidden_completed = !self.show_completed
             && project_progress.is_some_and(|(done, total)| total > 0 && done == total);
         let project_stalled = if let View::Project(id) = &self.view {
-            self.store.db().projects.get(id).is_some_and(|project| {
-                project.status.is_open()
-                    && project.effective_kind() != ProjectKind::SingleActions
-            }) && project_progress.is_some_and(|(done, total)| total > 0 && done == total)
+            self.store.db().projects.get(id).is_some_and(|project| project.status.is_open())
+                && project_progress.is_some_and(|(done, total)| total > 0 && done == total)
         } else {
             false
         };
@@ -2129,7 +2127,7 @@ impl FlowlistApp {
             && !has_group_events
             && !show_headers
             && !hidden_completed;
-        if groups.is_empty() || entirely_empty {
+        if (groups.is_empty() || entirely_empty) && !project_stalled {
             if !self.search.is_empty() {
                 let (title, detail) = if self.search_library {
                     (
