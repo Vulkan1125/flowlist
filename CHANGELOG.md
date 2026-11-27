@@ -110,8 +110,10 @@
   keep working locally when the server is offline.
 - **Over any app.** With **Display over other apps** allowed, the reminder now
   draws above whichever app is in front, such as a video, instead of only
-  opening over Flowlist or the lock screen. The alarm notification stays as the
-  fallback, and Settings → Notifications offers the permission row.
+  opening over Flowlist or the lock screen. The theme background now reaches
+  under the status and navigation bars, and the bar icons follow the reminder's
+  light or dark type. The alarm notification stays as the fallback, and
+  Settings → Notifications offers the permission row.
 - **Pause media.** Audio and video pause while the reminder is on screen and
   resume when it closes. Settings → Notifications → **Pause media** turns this
   off for phones that should keep playing.

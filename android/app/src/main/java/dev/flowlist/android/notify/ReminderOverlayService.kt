@@ -7,9 +7,12 @@ import android.graphics.PixelFormat
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -198,19 +201,50 @@ class ReminderOverlayService :
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // Sit under the status and navigation bars so the theme
+                // background reaches the edges, like the activity version.
+                setFitInsetsTypes(0)
+            }
         }
         runCatching { manager.addView(view, params) }.onFailure {
             stopSelf()
             return
         }
+        applySystemBarAppearance(view, lightContent)
         windowManager = manager
         overlay = view
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+    }
+
+    /// Match the status and navigation bar icons to the reminder's type, so
+    /// they stay legible now that the window paints underneath them.
+    private fun applySystemBarAppearance(view: View, lightContent: Boolean) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            view.windowInsetsController?.let { controller ->
+                val mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                    WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                controller.setSystemBarsAppearance(if (lightContent) 0 else mask, mask)
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            view.systemUiVisibility = if (lightContent) {
+                0
+            } else {
+                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
+                    View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+            }
+        }
     }
 
     private fun pollRemoteDismissal() {
