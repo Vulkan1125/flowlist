@@ -64,6 +64,10 @@
 - **Empty project pane.** An empty project says **Nothing here** with
   “Add the first task above”; a stalled project shows the usual centered
   icon with **All caught up — no active tasks** and “Add a new task above.”
+- **Task rows.** Shade and separator share a small front inset and the
+  separator runs to the right edge without stopping at the padding. This
+  applies wherever grouped headings list tasks, including Forecast and
+  Attachments.
 - **Project headers.** Projects headers drop the progress bar and **Open**
   link and use the bare project name everywhere. Only the chevron toggles
   tasks; clicking the heading shows the project in the inspector, and
