@@ -257,6 +257,7 @@ fun themeColors(settings: ThemeSettings, dark: Boolean): FlowColors {
 fun FlowlistTheme(
     settings: ThemeSettings,
     background: AppBackground = AppBackground.None,
+    backgroundScrim: Color? = null,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -280,7 +281,7 @@ fun FlowlistTheme(
     // needs a heavier veil than a low-contrast gradient so task text never
     // competes with the image. Every card, sheet and menu keeps the opaque
     // theme surface regardless.
-    val ambientScrim = baseColors.background.copy(
+    val ambientScrim = backgroundScrim ?: baseColors.background.copy(
         alpha = if (background is AppBackground.Custom) 0.45f else 0.62f,
     )
     val surfaceColors = baseColors

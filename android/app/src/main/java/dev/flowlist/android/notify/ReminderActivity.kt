@@ -55,8 +55,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -81,6 +79,7 @@ import dev.flowlist.android.MainActivity
 import dev.flowlist.android.data.PreferencesStore
 import dev.flowlist.android.data.ThemeStore
 import dev.flowlist.android.ui.AppearanceMode
+import dev.flowlist.android.ui.AppBackground
 import dev.flowlist.android.ui.FlowlistTheme
 import dev.flowlist.android.ui.reminderBackgroundFor
 import kotlinx.coroutines.delay
@@ -135,11 +134,19 @@ class ReminderActivity : ComponentActivity() {
         // theme family so the white type stays legible at any hour.
         val reminderTheme = theme.copy(mode = AppearanceMode.Dark)
         val preferences = PreferencesStore(this).load()
+        val reminderBackground = preferences.reminderBackgroundFor(reminderTheme, true)
 
         setContent {
             FlowlistTheme(
                 reminderTheme,
-                background = preferences.reminderBackgroundFor(reminderTheme, true),
+                background = reminderBackground,
+                // Theme presets stay untouched; a photo still gets a veil so
+                // the white reminder type remains readable.
+                backgroundScrim = if (reminderBackground is AppBackground.Custom) {
+                    Color.Black.copy(alpha = 0.45f)
+                } else {
+                    Color.Transparent
+                },
             ) {
                 ReminderScreen(
                     title = title,
@@ -203,7 +210,6 @@ private fun ReminderScreen(
         dueInstant.format(DateTimeFormatter.ofPattern("HH:mm"))
     }
     Box(modifier = Modifier.fillMaxSize()) {
-        ReminderBackdrop()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -233,27 +239,6 @@ private fun ReminderScreen(
             )
         }
     }
-}
-
-@Composable
-private fun ReminderBackdrop() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .drawBehind {
-                // Keep the selected theme or ambient preset visible; the
-                // neutral scrim only buys contrast for the white type.
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color(0x40000000),
-                            Color(0x1A000000),
-                            Color(0x80000000),
-                        ),
-                    ),
-                )
-            },
-    )
 }
 
 @Composable
@@ -344,7 +329,7 @@ private fun ReminderControls(
         SlideToComplete(
             onComplete = onComplete,
             modifier = Modifier
-                .widthIn(max = 300.dp)
+                .widthIn(max = 280.dp)
                 .fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(22.dp))
@@ -372,7 +357,7 @@ private fun SlideToComplete(
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
-    val thumbSize = 56.dp
+    val thumbSize = 48.dp
     val thumbSizePx = with(density) { thumbSize.toPx() }
     val insetPx = with(density) { 4.dp.toPx() }
     val thumb = remember { Animatable(0f) }
@@ -384,7 +369,7 @@ private fun SlideToComplete(
 
     Box(
         modifier = modifier
-            .height(64.dp)
+            .height(56.dp)
             .clip(RoundedCornerShape(percent = 50))
             .background(Color.White.copy(alpha = 0.13f))
             .border(1.dp, reminderGreen.copy(alpha = 0.45f), RoundedCornerShape(percent = 50))
@@ -467,7 +452,7 @@ private fun SlideToComplete(
             Text(
                 text = if (completed) "Completed" else "Slide to complete",
                 color = reminderInk.copy(alpha = labelAlpha * 0.95f),
-                fontSize = 16.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.align(Alignment.Center),
             )
@@ -483,7 +468,7 @@ private fun SlideToComplete(
                     imageVector = Icons.Rounded.Check,
                     contentDescription = null,
                     tint = reminderGreen,
-                    modifier = Modifier.size(26.dp),
+                    modifier = Modifier.size(22.dp),
                 )
             }
         }
