@@ -249,6 +249,8 @@ folders and can carry their own tags, dates, attachments and icon.
 - In a folder view, each project heading uses just the project name and its
   tasks indent underneath it. Clicking the heading toggles its tasks and shows
   that project in the inspector without leaving the folder.
+- In Projects, a project heading has no progress bar or **Open** link.
+  Cmd-click the heading to open the project; a normal click toggles its tasks.
 - Drag a project onto a folder, onto the LIBRARY heading or onto empty space to
   move it back to the root.
 

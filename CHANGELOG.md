@@ -62,8 +62,11 @@
   indents its tasks under the heading and keeps the redundant per-row project
   label off. Clicking the heading also shows that project in the inspector.
 - **Empty project pane.** An empty project says **Nothing here** with
-  “Add the first task above”; a stalled project says **All caught up — no
-  active tasks** with “Add a new task above.”
+  “Add the first task above”; a stalled project shows the usual centered
+  icon with **All caught up — no active tasks** and “Add a new task above.”
+- **Project headers.** Projects headers drop the progress bar and **Open**
+  link. Cmd-click a project heading to open it; a normal click still toggles
+  its tasks.
 
 ### Currency icons
 

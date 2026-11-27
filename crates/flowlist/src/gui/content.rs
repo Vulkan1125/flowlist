@@ -14,7 +14,7 @@ use flowlist_core::command::{Command, ProjectPatch};
 use flowlist_core::db::Db;
 use flowlist_core::ids::{ProjectId, TaskId};
 use flowlist_core::model::{
-    BuiltinPerspective, GroupBy, Priority, ProjectKind, ProjectStatus, RepeatRule, SortBy,
+    BuiltinPerspective, GroupBy, Priority, ProjectStatus, RepeatRule, SortBy,
 };
 use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
@@ -2040,65 +2040,6 @@ impl FlowlistApp {
         };
         let hidden_completed = !self.show_completed
             && project_progress.is_some_and(|(done, total)| total > 0 && done == total);
-        let project_stalled = if let View::Project(id) = &self.view {
-            self.store.db().projects.get(id).is_some_and(|project| project.status.is_open())
-                && project_progress.is_some_and(|(done, total)| total > 0 && done == total)
-        } else {
-            false
-        };
-        if project_stalled {
-            if let View::Project(project_id) = self.view.clone() {
-                let mark_id = project_id.clone();
-                list = list.child(
-                    div()
-                        .mx_4()
-                        .mt_2()
-                        .p_2()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(theme.border_soft)
-                        .bg(theme.field)
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_0p5()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(theme.text_faint)
-                                        .child("All caught up — no active tasks."),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(theme.text_faint)
-                                        .child("Add a new task above"),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .id("project-stalled-done")
-                                .text_xs()
-                                .text_color(theme.accent)
-                                .cursor_pointer()
-                                .hover(|style| style.text_color(theme.text))
-                                .child("Mark done")
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.execute(Command::SetProjectStatus {
-                                        id: mark_id.clone(),
-                                        status: ProjectStatus::Done,
-                                    });
-                                    cx.notify();
-                                })),
-                        ),
-                );
-            }
-        }
         let show_calendar = matches!(self.view, View::Builtin(BuiltinPerspective::Forecast))
             && self.calendar_events_enabled;
         let has_group_events = show_calendar
@@ -2127,7 +2068,7 @@ impl FlowlistApp {
             && !has_group_events
             && !show_headers
             && !hidden_completed;
-        if (groups.is_empty() || entirely_empty) && !project_stalled {
+        if groups.is_empty() || entirely_empty {
             if !self.search.is_empty() {
                 let (title, detail) = if self.search_library {
                     (
@@ -2143,15 +2084,37 @@ impl FlowlistApp {
                 return self.render_empty(title, detail).into_any_element();
             }
             if let View::Project(id) = &self.view {
-                let detail = self
-                    .store
-                    .db()
+                let db = self.store.db();
+                let (done, total) = db.project_progress(id);
+                let stalled = total > 0 && done == total;
+                let detail = if stalled {
+                    "Add a new task above"
+                } else if db
                     .projects
                     .get(id)
-                    .filter(|project| project.status == ProjectStatus::OnHold)
-                    .map(|_| "This project is on hold.")
-                    .unwrap_or("Add the first task above");
-                return self.render_empty("Nothing here", detail).into_any_element();
+                    .is_some_and(|project| project.status == ProjectStatus::OnHold)
+                {
+                    "This project is on hold."
+                } else {
+                    "Add the first task above"
+                };
+                let title = if stalled {
+                    "All caught up — no active tasks."
+                } else {
+                    "Nothing here"
+                };
+                let empty = self.render_empty(title, detail).into_any_element();
+                if stalled && !self.show_completed {
+                    return div()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_h_0()
+                        .child(empty)
+                        .child(self.render_completed_footer(done, cx))
+                        .into_any_element();
+                }
+                return empty;
             }
             let (title, detail) = match &self.view {
                 View::Builtin(BuiltinPerspective::Inbox) => ("Inbox zero", "Nothing captured."),
@@ -2312,30 +2275,7 @@ impl FlowlistApp {
         }
         if hidden_completed {
             let done = project_progress.map(|(done, _)| done).unwrap_or(0);
-            list = list.child(
-                div()
-                    .id("project-show-completed")
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .mx_4()
-                    .mt_1()
-                    .pt_2()
-                    .pb_2()
-                    .border_t_1()
-                    .border_color(theme.border_soft)
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .child(icons::icon(Icon::ChevronRight, 12.0, theme.text_faint))
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(theme.text_dim)
-                            .child(format!("Completed ({done})")),
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_show_completed(cx))),
-            );
+            list = list.child(self.render_completed_footer(done, cx));
         }
         if end_gap {
             list = list.child(self.render_root_drop_zone(None, cx));
@@ -2782,6 +2722,33 @@ impl FlowlistApp {
             .into_any_element()
     }
 
+    fn render_completed_footer(&self, done: usize, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        div()
+            .id("project-show-completed")
+            .flex()
+            .items_center()
+            .gap_2()
+            .mx_4()
+            .mt_1()
+            .pt_2()
+            .pb_2()
+            .border_t_1()
+            .border_color(theme.border_soft)
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.hover))
+            .child(icons::icon(Icon::ChevronRight, 12.0, theme.text_faint))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(theme.text_dim)
+                    .child(format!("Completed ({done})")),
+            )
+            .on_click(cx.listener(|this, _, _, cx| this.toggle_show_completed(cx)))
+            .into_any_element()
+    }
+
     fn render_group_header(
         &self,
         group: &Group,
@@ -2852,7 +2819,13 @@ impl FlowlistApp {
                     theme,
                     group.rows.len() + group.projects.len() + event_count,
                 ))
-                .on_click(cx.listener(move |this, _, _, cx| {
+                .on_click(cx.listener(move |this, event: &gpui::ClickEvent, _, cx| {
+                    if event.modifiers().platform
+                        && let Some(project) = header_project.clone()
+                    {
+                        this.open_view(View::Project(project), cx);
+                        return;
+                    }
                     this.toggle_group_collapsed(open_key.clone(), cx);
                     if matches!(this.view, View::Folder(_))
                         && let Some(project) = header_project.clone()
@@ -2868,12 +2841,6 @@ impl FlowlistApp {
         if let Some(project) = project {
             let db = self.store.db();
             if let Some(entity) = db.projects.get(&project) {
-                let (done, total) = db.project_progress(&project);
-                row = row.child(
-                    div()
-                        .w(px(70.))
-                        .child(widgets::progress(theme, done, total)),
-                );
                 if entity.status != ProjectStatus::Active {
                     row = row.child(widgets::chip(
                         theme,
@@ -2892,21 +2859,6 @@ impl FlowlistApp {
                         theme.text_dim,
                     ));
                 }
-                let project_open = project.clone();
-                row = row.child(
-                    div()
-                        .id("group-open-project")
-                        .px_2()
-                        .text_xs()
-                        .text_color(theme.accent)
-                        .cursor_pointer()
-                        .hover(|style| style.text_color(theme.text))
-                        .child("Open")
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            cx.stop_propagation();
-                            this.open_view(View::Project(project_open.clone()), cx);
-                        })),
-                );
             }
         }
         row
