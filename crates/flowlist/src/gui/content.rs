@@ -14,7 +14,7 @@ use flowlist_core::command::{Command, ProjectPatch};
 use flowlist_core::db::Db;
 use flowlist_core::ids::{ProjectId, TaskId};
 use flowlist_core::model::{
-    BuiltinPerspective, GroupBy, Priority, ProjectStatus, RepeatRule, SortBy,
+    BuiltinPerspective, GroupBy, Priority, ProjectKind, ProjectStatus, RepeatRule, SortBy,
 };
 use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
@@ -2033,6 +2033,62 @@ impl FlowlistApp {
     fn render_groups(&self, groups: &[Group], cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
         let mut list = div().flex().flex_col().w_full().py_1();
+        let project_progress = if let View::Project(id) = &self.view {
+            Some(self.store.db().project_progress(id))
+        } else {
+            None
+        };
+        let hidden_completed = !self.show_completed
+            && project_progress.is_some_and(|(done, total)| total > 0 && done == total);
+        let project_stalled = if let View::Project(id) = &self.view {
+            self.store.db().projects.get(id).is_some_and(|project| {
+                project.status.is_open()
+                    && project.effective_kind() != ProjectKind::SingleActions
+            }) && project_progress.is_some_and(|(done, total)| total > 0 && done == total)
+        } else {
+            false
+        };
+        if project_stalled {
+            if let View::Project(project_id) = self.view.clone() {
+                let mark_id = project_id.clone();
+                list = list.child(
+                    div()
+                        .mx_4()
+                        .mt_2()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.border_soft)
+                        .bg(theme.field)
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("All caught up — no active tasks."),
+                        )
+                        .child(
+                            div()
+                                .id("project-stalled-done")
+                                .text_xs()
+                                .text_color(theme.accent)
+                                .cursor_pointer()
+                                .hover(|style| style.text_color(theme.text))
+                                .child("Mark done")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.execute(Command::SetProjectStatus {
+                                        id: mark_id.clone(),
+                                        status: ProjectStatus::Done,
+                                    });
+                                    cx.notify();
+                                })),
+                        ),
+                );
+            }
+        }
         let show_calendar = matches!(self.view, View::Builtin(BuiltinPerspective::Forecast))
             && self.calendar_events_enabled;
         let has_group_events = show_calendar
@@ -2045,13 +2101,6 @@ impl FlowlistApp {
                 self.view,
                 View::Builtin(BuiltinPerspective::Projects) | View::Folder(_) | View::Custom(_)
             );
-        let project_progress = if let View::Project(id) = &self.view {
-            Some(self.store.db().project_progress(id))
-        } else {
-            None
-        };
-        let hidden_completed = !self.show_completed
-            && project_progress.is_some_and(|(done, total)| total > 0 && done == total);
         // Gaps before root rows accept a dragged subtask in any list: the
         // task lands in the same project (or Inbox) as the row below the gap.
         // The end gap only makes sense in a project or Inbox, where "the end"
@@ -2255,45 +2304,6 @@ impl FlowlistApp {
         }
         if hidden_completed {
             let done = project_progress.map(|(done, _)| done).unwrap_or(0);
-            if let View::Project(project_id) = self.view.clone() {
-                let mark_id = project_id.clone();
-                list = list.child(
-                    div()
-                        .mx_4()
-                        .mt_2()
-                        .p_2()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(theme.border_soft)
-                        .bg(theme.field)
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(theme.text_faint)
-                                .child("All caught up — no active tasks."),
-                        )
-                        .child(
-                            div()
-                                .id("project-stalled-done")
-                                .text_xs()
-                                .text_color(theme.accent)
-                                .cursor_pointer()
-                                .hover(|style| style.text_color(theme.text))
-                                .child("Mark done")
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.execute(Command::SetProjectStatus {
-                                        id: mark_id.clone(),
-                                        status: ProjectStatus::Done,
-                                    });
-                                    cx.notify();
-                                })),
-                        ),
-                );
-            }
             list = list.child(
                 div()
                     .id("project-show-completed")
@@ -3185,6 +3195,11 @@ impl FlowlistApp {
                 )
                 .into_any_element()
         });
+        let hold_message = if completed {
+            "Project on hold. Set it active to edit the task."
+        } else {
+            "Project on hold. Set it active before completing tasks."
+        };
         let checkbox = {
             let check = div()
                 .id(super::sid(format!("check:{}", checkbox_id)))
@@ -3213,10 +3228,7 @@ impl FlowlistApp {
                     .cursor_pointer()
                     .on_click(cx.listener(|this, _, _, cx| {
                         cx.stop_propagation();
-                        this.toast = Some(
-                            "Project on hold. Set it active before completing tasks."
-                                .to_string(),
-                        );
+                        this.toast = Some(hold_message.to_string());
                         cx.notify();
                     }))
             } else {

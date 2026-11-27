@@ -782,18 +782,6 @@ pub fn count(theme: Theme, value: usize) -> impl IntoElement {
         .child(value.to_string())
 }
 
-/// A project with tasks but nothing left open, still waiting for a manual
-/// decision. A pause mark rather than a tick: the project is not done.
-pub fn stalled_badge(theme: Theme) -> impl IntoElement {
-    div()
-        .min_w(px(18.))
-        .px_1()
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(icons::icon(Icon::CircleDashed, 12.0, theme.text_faint))
-}
-
 /// A compact filter/metric button: same height as the search field so sort,
 /// group and toggles line up with it.
 pub fn toggle_chip(theme: Theme, label: impl Into<String>, active: bool) -> impl IntoElement {

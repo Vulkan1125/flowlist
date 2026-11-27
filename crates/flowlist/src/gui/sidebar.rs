@@ -2084,13 +2084,9 @@ impl FlowlistApp {
                     let badge =
                         project_badge(open, total, project.effective_kind(), project.status);
                     let show_count = !sidebar.is_count_hidden(&format!("project:{id}"));
-                    let show_badge = project.status != ProjectStatus::OnHold
-                        && (matches!(
-                            badge,
-                            ProjectBadge::Stalled
-                                | ProjectBadge::Done
-                                | ProjectBadge::Dropped
-                        ) || (show_count && open > 0));
+                    let show_badge = project.status == ProjectStatus::OnHold
+                        || matches!(badge, ProjectBadge::Done | ProjectBadge::Dropped)
+                        || (show_count && open > 0);
                     let view_id = id.clone();
                     let target_id = id.clone();
                     let drop_id = id.clone();
@@ -2153,23 +2149,6 @@ impl FlowlistApp {
                             ),
                         ))
                         .child(self.row_name(project.name.clone()))
-                        .when(project.status == ProjectStatus::OnHold, |this| {
-                            this.text_color(self.theme.text_dim).child(
-                                div()
-                                    .id(super::sid(format!("project-hold:{id}")))
-                                    .flow_tip(
-                                        self,
-                                        cx,
-                                        self.theme,
-                                        "On hold · tasks cannot be completed",
-                                    )
-                                    .child(icons::icon(
-                                        Icon::Pause,
-                                        11.0,
-                                        self.theme.warning,
-                                    )),
-                            )
-                        })
                         .when(focus_selected, |this| {
                             this.child(
                                 div()
@@ -2180,23 +2159,46 @@ impl FlowlistApp {
                         })
                         .when(show_badge, |this| {
                             this.child({
-                                let tip = match badge {
-                                    ProjectBadge::Stalled => {
-                                        format!("All caught up · {done} of {total} done")
-                                    }
-                                    ProjectBadge::Done => "Done".to_string(),
-                                    ProjectBadge::Dropped => "Dropped".to_string(),
-                                    ProjectBadge::Count(_) => {
-                                        format!("{open} open · {done} of {total} done")
+                                let tip = if project.status == ProjectStatus::OnHold {
+                                    "On hold · tasks cannot be completed".to_string()
+                                } else {
+                                    match badge {
+                                        ProjectBadge::Stalled => {
+                                            format!("All caught up · {done} of {total} done")
+                                        }
+                                        ProjectBadge::Done => "Done".to_string(),
+                                        ProjectBadge::Dropped => "Dropped".to_string(),
+                                        ProjectBadge::Count(_) => {
+                                            format!("{open} open · {done} of {total} done")
+                                        }
                                     }
                                 };
+                                let badge_id = if project.status == ProjectStatus::OnHold {
+                                    format!("project-hold:{id}")
+                                } else {
+                                    format!("project-count:{id}")
+                                };
                                 div()
-                                    .id(super::sid(format!("project-count:{id}")))
+                                    .id(super::sid(badge_id))
                                     .flow_tip(self, cx, self.theme, tip)
-                                    .child(match badge {
-                                        ProjectBadge::Stalled => {
-                                            widgets::stalled_badge(self.theme).into_any_element()
-                                        }
+                                    .child(if project.status == ProjectStatus::OnHold {
+                                        div()
+                                            .min_w(px(18.))
+                                            .px_1()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .child(icons::icon(
+                                                Icon::Pause,
+                                                11.0,
+                                                self.theme.warning,
+                                            ))
+                                            .into_any_element()
+                                    } else {
+                                        match badge {
+                                        ProjectBadge::Stalled => div()
+                                            .min_w(px(18.))
+                                            .into_any_element(),
                                         ProjectBadge::Done => div()
                                             .min_w(px(18.))
                                             .px_1()
@@ -2223,6 +2225,7 @@ impl FlowlistApp {
                                             .into_any_element(),
                                         ProjectBadge::Count(open) => {
                                             widgets::count(self.theme, open).into_any_element()
+                                        }
                                         }
                                     })
                             })

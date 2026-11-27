@@ -3013,6 +3013,12 @@ impl FlowlistApp {
     }
 
     fn toggle_complete(&mut self, id: TaskId, cx: &mut Context<Self>) {
+        let was_completed = self
+            .store
+            .db()
+            .tasks
+            .get(&id)
+            .is_some_and(|task| task.completed);
         let on_hold = {
             let db = self.store.db();
             db.effective_project(&id)
@@ -3020,16 +3026,18 @@ impl FlowlistApp {
                 .is_some_and(|project| project.status == ProjectStatus::OnHold)
         };
         if on_hold {
-            self.toast = Some("Project on hold. Set it active before completing tasks.".to_string());
+            self.toast = Some(
+                if was_completed {
+                    "Project on hold. Set it active to edit the task."
+                } else {
+                    "Project on hold. Set it active before completing tasks."
+                }
+                .to_string(),
+            );
             cx.notify();
             return;
         }
-        let completed = !self
-            .store
-            .db()
-            .tasks
-            .get(&id)
-            .is_some_and(|task| task.completed);
+        let completed = !was_completed;
         self.execute(Command::CompleteTasks {
             ids: vec![id],
             completed,

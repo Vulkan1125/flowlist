@@ -962,20 +962,26 @@ impl Command {
                 });
             }
             Command::CompleteTasks { ids, completed } => {
-                if completed {
-                    for id in &ids {
-                        if db.tasks.get(id).is_some_and(|task| task.completed) {
-                            continue;
-                        }
-                        if let Some(project_id) = db.effective_project(id)
-                            && let Some(project) = db.projects.get(&project_id)
-                            && project.status == ProjectStatus::OnHold
-                        {
-                            return Err(Error::invalid(format!(
-                                "Project “{}” is on hold. Set it active before completing tasks.",
-                                project.name
-                            )));
-                        }
+                for id in &ids {
+                    let Some(task) = db.tasks.get(id) else {
+                        continue;
+                    };
+                    if task.completed == completed {
+                        continue;
+                    }
+                    if let Some(project_id) = db.effective_project(id)
+                        && let Some(project) = db.projects.get(&project_id)
+                        && project.status == ProjectStatus::OnHold
+                    {
+                        let message = if completed {
+                            "Set it active before completing tasks."
+                        } else {
+                            "Set it active to edit the task."
+                        };
+                        return Err(Error::invalid(format!(
+                            "Project “{}” is on hold. {message}",
+                            project.name
+                        )));
                     }
                 }
                 let mut changed = 0usize;
@@ -1159,6 +1165,9 @@ impl Command {
                         .unwrap_or_default();
                     if !name.is_empty() {
                         message.push_str(&format!(" · project “{name}” done"));
+                        if db.settings.auto_archive_closed_projects {
+                            message.push_str(" and archived");
+                        }
                     }
                 }
                 outcome.message = Some(message);
@@ -1760,10 +1769,21 @@ impl Command {
                     .get(&id)
                     .map(|project| project.name.clone())
                     .unwrap_or_default();
-                outcome.message = Some(if name.is_empty() {
-                    format!("Project marked {}", status.label().to_lowercase())
+                let archived_note = if status.is_closed() && auto_archive {
+                    " and archived"
                 } else {
-                    format!("Project “{name}” marked {}", status.label().to_lowercase())
+                    ""
+                };
+                outcome.message = Some(if name.is_empty() {
+                    format!(
+                        "Project marked {}{archived_note}",
+                        status.label().to_lowercase()
+                    )
+                } else {
+                    format!(
+                        "Project “{name}” marked {}{archived_note}",
+                        status.label().to_lowercase()
+                    )
                 });
             }
             Command::CompleteReview { id, reviewed_on } => {

@@ -159,8 +159,9 @@ working domain and GUI. This page tracks what is implemented and verified.
       an ellipsis, and the inspector wraps the full project name instead of
       truncating it. Library project rows carry the same boxed count as
       perspectives, aligned with the folder icon and the name. Once a project
-      has work but nothing open, that count becomes a dashed stalled mark
-      with no chip behind it; a new project keeps its 0 until it has a task.
+      has work but nothing open, that count disappears; opening the project
+      says “All caught up — no active tasks.” A new project keeps its 0 until
+      it has a task.
 - [x] Sidebar tags sort by live work, busiest first, then name ignoring case
       with the id as a stable tie-break. Nested tags follow the same rule inside
       their parent, and completed tasks do not lift a tag up the list.
@@ -363,10 +364,10 @@ working domain and GUI. This page tracks what is implemented and verified.
       tick badge. Single-action lists stay manual.
 - [x] Focus-aware rail counts for Inbox, priorities, tags, folders, projects
       and saved views, with out-of-focus tags dimmed.
-- [x] Stalled project dashed badge, a Completed (n) shortcut and a separate
-      Completed heading when finished roots are shown. A stalled project also
-      explains the state and offers Mark done; projects with no dates show an
-      Update project prompt in the Dates section.
+- [x] Stalled projects have no rail badge; the project pane says “All caught
+      up — no active tasks,” offers Mark done, and shows a Completed (n)
+      shortcut with completed roots under their own heading. Projects with no
+      dates show an Update project prompt in the Dates section.
 - [x] On Hold projects show a pause marker, dim every task and subtask, and
       reject completion until the project is active again.
 - [x] Projects carry an archive flag with an inspector icon and context-menu

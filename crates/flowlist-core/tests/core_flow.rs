@@ -1551,6 +1551,21 @@ fn tasks_in_an_on_hold_project_cannot_be_completed() {
         })
         .unwrap();
     assert!(store.db().tasks[&task_id].completed);
+
+    store
+        .execute(Command::SetProjectStatus {
+            id: project,
+            status: ProjectStatus::OnHold,
+        })
+        .unwrap();
+    let error = store
+        .execute(Command::CompleteTasks {
+            ids: vec![task_id.clone()],
+            completed: false,
+        })
+        .unwrap_err();
+    assert!(error.to_string().contains("edit the task"));
+    assert!(store.db().tasks[&task_id].completed);
 }
 
 #[test]
