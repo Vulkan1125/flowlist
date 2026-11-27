@@ -2151,7 +2151,12 @@ impl FlowlistApp {
             };
             return self.render_empty(title, detail).into_any_element();
         }
+        let mut first_group = true;
         for group in groups {
+            if !first_group {
+                list = list.child(div().h(px(12.)));
+            }
+            first_group = false;
             let open = self.is_open(&group.key, super::group_default_open(&group.key));
             let completed_group = group.key.starts_with("project-completed:");
             if show_headers || completed_group {
@@ -2793,10 +2798,6 @@ impl FlowlistApp {
                 .border_color(theme.border_soft)
                 .cursor_pointer()
                 .hover(|style| style.bg(theme.hover))
-                .when(
-                    matches!(self.view, View::Folder(_)) && project.is_some(),
-                    |this| this.mt_3(),
-                )
                 .child({
                     let chevron_key = open_key.clone();
                     div()
@@ -3264,7 +3265,22 @@ impl FlowlistApp {
             .min_h(px(32.))
             .w_full()
             .pl(px(18.0
-                + if matches!(self.view, View::Folder(_)) { 36.0 } else { 0.0 }
+                + if matches!(
+                    self.view,
+                    View::Builtin(
+                        BuiltinPerspective::Projects
+                            | BuiltinPerspective::Today
+                            | BuiltinPerspective::Forecast
+                            | BuiltinPerspective::Flagged
+                            | BuiltinPerspective::Tags
+                            | BuiltinPerspective::Attachments
+                    ) | View::Folder(_)
+                        | View::Custom(_)
+                ) {
+                    36.0
+                } else {
+                    0.0
+                }
                 + row.depth as f32 * 18.0))
             .py_1()
             .text_sm()
