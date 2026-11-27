@@ -70,8 +70,18 @@ impl FlowlistApp {
                         this.focus = FocusArea::Content;
                         this.checklist_cursor = None;
                         this.vim.reset();
-                        cx.notify();
                     }
+                    // In a project, the empty pane belongs to the project.
+                    // Task rows stop propagation, so this only runs when the
+                    // click missed every row.
+                    if matches!(this.view, View::Project(_)) && !this.selected.is_empty() {
+                        this.selected.clear();
+                        this.anchor = None;
+                        this.editing = None;
+                        this.field_error = None;
+                        this.save_session();
+                    }
+                    cx.notify();
                 }),
             )
             .child(self.render_content_header(&groups, window, cx))
@@ -2421,8 +2431,8 @@ impl FlowlistApp {
         }
     }
 
-    /// The Archive lists finished and dropped projects rather than tasks,
-    /// grouped by the folder they lived in. Each row opens the project, and
+    /// The Archive lists archived projects rather than tasks, grouped by the
+    /// folder they lived in. Each row opens the project, and
     /// its Reopen button sets the project back to Active through the normal
     /// command, so the change is undoable.
     fn render_archive(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -3267,7 +3277,10 @@ impl FlowlistApp {
             .when(on_hold, |this| this.opacity(0.55))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, _, window, _| window.focus(&this.focus_handle)),
+                cx.listener(|this, _, window, cx| {
+                    cx.stop_propagation();
+                    window.focus(&this.focus_handle);
+                }),
             )
             .on_click(cx.listener(move |this, event: &gpui::ClickEvent, _, cx| {
                 let mods = event.modifiers();

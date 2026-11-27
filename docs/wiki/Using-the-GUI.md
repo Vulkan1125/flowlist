@@ -289,7 +289,7 @@ The rail is the map of the library:
 | **Flagged** | everything marked `!` |
 | **Completed** | recently finished tasks |
 | **Changed** | recently edited tasks |
-| **Archive** | finished and dropped projects |
+| **Archive** | archived projects |
 | **Trash** | deleted tasks, restorable until the retention window ends |
 | **Attachments** | open tasks with files or links |
 | **Nearby** | tags with a location, ranked by distance |

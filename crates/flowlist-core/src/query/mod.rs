@@ -246,9 +246,9 @@ pub fn custom(db: &Db, perspective: &Perspective, at: DateTime<Utc>) -> Vec<Grou
     )
 }
 
-/// Finished and dropped projects, in library order. The GUI's Archive lists
-/// these as projects, grouped by folder; the CLI and MCP still answer in
-/// tasks, one group per archived project.
+/// Archived projects, in library order. The GUI's Archive lists these as
+/// projects, grouped by folder; the CLI and MCP still answer in tasks, one
+/// group per archived project.
 pub fn archived_projects(db: &Db) -> Vec<ProjectId> {
     db.flatten_containers()
         .into_iter()
