@@ -109,7 +109,10 @@ PY
 
 focus_app() {
 	read_window
-	"$helpers/flowctl" mouse "$((${wx%.*} + ${ww%.*} / 2))" "$((${wy%.*} + 200))"
+	# Click the title bar, not the content. After creating a project the app
+	# opens its dashboard, and a content-centre click can land on the review
+	# control and open a sheet.
+	"$helpers/flowctl" mouse "$((${wx%.*} + 80))" "$((${wy%.*} + 18))"
 	sleep 0.3
 }
 
