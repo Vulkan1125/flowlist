@@ -226,6 +226,46 @@ integrations are tracked separately and are not part of this phase.
       on a plain checkbox and pop-up editor and switches to the rule tree on
       Comprehensive; the Android editor only offers the full form. Add both
       tabs and remember the last one used per view.
+- [ ] **Planned dates** — the phone edits due and defer only. Add the Mac's
+      third date to the task editor, the task row and date validation.
+- [ ] **Full repeat editor** — the phone only picks a day/week/month/year unit.
+      Add the interval, fixed versus after-completion mode, due-again versus
+      defer-another, and the end date or count.
+- [ ] **Per-item notifications** — the Mac's task and project notification
+      rules (defer, planned, latest start, due; relative and absolute) are
+      missing on the phone, which only has the global due summary and
+      full-screen reminders.
+- [ ] **Project details** — the phone's project sheet is just a task list and
+      its editor has no dates, tags or attachments. Add due/defer/planned
+      dates with inheritance, project tags, project attachments, and the
+      dashboard's progress, status, review and type summary.
+- [ ] **Convert task to project** — add the Mac's one-step, undoable convert.
+- [ ] **Batch edit fields** — phone select mode only completes, trashes or
+      purges. Add the Mac's project, tags, defer/planned/due, priority, flag
+      and estimate edits as one undo step.
+- [ ] **Drag into projects, tags and sibling positions** — phone drag only
+      nests or moves a task to the project root. Match the Mac's drops onto
+      projects, tags, parents and between siblings in manual order.
+- [ ] **Built-in view filters** — add the Mac's Availability, First Available
+      and priority filters; the phone's built-in views only offer sorting.
+- [ ] **Grouping for built-in views** — the phone groups only inside saved
+      views. Add per-view grouping by project, folder, tag, due, defer and the
+      other Mac groupings, with per-view memory.
+- [ ] **Forecast depth** — add the Mac's due-only mode, project rows on their
+      dates, tag and flagged undated sections, and dragging month-grid chips
+      to reschedule.
+- [ ] **Saved-view options** — the phone preserves a view's pin, glyph,
+      description and position but cannot edit them. Add pinning, the glyph
+      picker, descriptions and the hide-empty option.
+- [ ] **Drawer visibility** — the phone can reorder the drawer and pick four
+      bottom-bar slots but cannot hide rows or counts. Add the Mac's Sidebar
+      matrix controls.
+- [ ] **Task row icons** — phone rows show due/planned text and a flag but no
+      defer clock or repeat glyph. Match the Mac's drawn row metadata.
+- [ ] **Separate light and dark backgrounds** — the Mac keeps a light and a
+      dark wallpaper; the phone has one custom background.
+- [ ] **Import and export** — add JSON/TaskPaper import and TaskPaper export
+      to the phone, matching the Mac's import sheet and export shortcut.
 - [?] **Play Store path** — `SYSTEM_ALERT_WINDOW` and a `specialUse` foreground
       service need a justification if the phone app is ever listed on Play.
       Sideloaded builds are unaffected.
