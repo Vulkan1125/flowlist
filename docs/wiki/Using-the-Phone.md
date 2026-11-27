@@ -253,8 +253,8 @@ The bottom bar holds four perspectives and **Settings** on the far right.
 Settings → Appearance → **Bottom bar** assigns each of the four slots; picking
 a perspective that already lives in another slot swaps the two. Every row in
 the drawer shows its task count when the count is non-zero. Tags and Nearby
-count tasks rather than tags, and zero counts stay hidden. A saved perspective
-with nothing matching shows a bare tick instead.
+count tasks rather than tags, and zero counts stay hidden; an empty saved
+perspective leaves the slot blank.
 
 Review, Completed, Archive, Trash, Tags, Priorities, Changed and Attachments
 open as full pages, not modal sheets. Back returns to the previous perspective.

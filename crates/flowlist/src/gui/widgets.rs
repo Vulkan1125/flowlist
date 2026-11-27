@@ -782,18 +782,6 @@ pub fn count(theme: Theme, value: usize) -> impl IntoElement {
         .child(value.to_string())
 }
 
-/// A bare tick in the count slot for a saved view that currently matches
-/// nothing, so the sidebar keeps its alignment without painting a chip.
-pub fn done_badge(theme: Theme) -> impl IntoElement {
-    div()
-        .min_w(px(18.))
-        .px_1()
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(icons::icon(Icon::Check, 11.0, theme.text_faint))
-}
-
 /// A project with tasks but nothing left open, still waiting for a manual
 /// decision. A pause mark rather than a tick: the project is not done.
 pub fn stalled_badge(theme: Theme) -> impl IntoElement {

@@ -8755,7 +8755,7 @@ impl FlowlistApp {
         } else if can_restore {
             "Restore previous focus"
         } else {
-            "Focus a project or folder first"
+            "Focus a project or folder first — then this eye restores it"
         };
         let anchor = self.focus_eye_anchor.clone();
         div()
@@ -8772,6 +8772,12 @@ impl FlowlistApp {
             .on_click(cx.listener(move |this, _, _, cx| {
                 if enabled {
                     this.toggle_focus_eye(cx);
+                } else {
+                    this.toast = Some(
+                        "Focus a project or folder first — right-click it or use “focus on” in Quick Open."
+                            .to_string(),
+                    );
+                    cx.notify();
                 }
             }))
             .child(

@@ -159,9 +159,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       an ellipsis, and the inspector wraps the full project name instead of
       truncating it. Library project rows carry the same boxed count as
       perspectives, aligned with the folder icon and the name. Once a project
-      has work but nothing open, that count becomes a bare tick with no chip
-      behind it; a new
-      project keeps its 0 until it has a task.
+      has work but nothing open, that count becomes a paused stalled mark
+      with no chip behind it; a new project keeps its 0 until it has a task.
 - [x] Sidebar tags sort by live work, busiest first, then name ignoring case
       with the id as a stable tie-break. Nested tags follow the same rule inside
       their parent, and completed tasks do not lift a tag up the list.
@@ -365,7 +364,12 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Focus-aware rail counts for Inbox, priorities, tags, folders, projects
       and saved views, with out-of-focus tags dimmed.
 - [x] Stalled project pause badge, a Completed (n) shortcut and a separate
-      Completed heading when finished roots are shown.
+      Completed heading when finished roots are shown. A stalled project also
+      explains the state and offers Mark done; projects with no dates show an
+      Update project prompt in the Dates section.
+- [x] Empty saved perspectives leave the rail slot blank instead of showing a
+      tick, and the first-use focus eye explains how to start a focus while
+      restoring the last one afterwards.
 - [x] Perspective editor polish: Simple-only text and estimate fields sit
       below the Simple/Comprehensive tabs; the None-conflict warning appears
       only on Comprehensive and only for a real sibling overlap; the review

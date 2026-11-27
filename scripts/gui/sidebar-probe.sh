@@ -343,12 +343,12 @@ wait_map sidebar_counts "builtin:inbox"
 wait_count "builtin:inbox" 3
 echo "9. A hidden row and a hidden count can both be turned back on"
 
-# Saved perspectives report their count, while an empty one shows a bare tick
-# with no count box behind it.
+# Saved perspectives report their count only when they have one; an empty one
+# leaves the slot blank.
 wait_map sidebar_counts "custom:${filled}"
 wait_count "custom:${filled}" 1
 wait_no_map sidebar_counts "custom:${empty}"
-echo "10. Empty saved perspectives keep a bare tick; filled ones show a count"
+echo "10. Empty saved perspectives stay blank; filled ones show a count"
 
 # The three anchors have no Hide box at all and stay reachable.
 "$helpers/flowctl" key 43 cmd

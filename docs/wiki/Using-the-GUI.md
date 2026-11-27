@@ -446,7 +446,7 @@ eight sections on the left (`⌘1`…`⌘8` jump between them):
   notes stay out of the card.
   **Use separate backgrounds for light and dark modes** reveals a second
   picker; otherwise one photo covers both.
-- **Sidebar** — a collapsible matrix of every rail item with **Hide** and **Hide count** boxes, indented under their heading. Every heading starts collapsed and opening one closes the rest. A ticked box hides the row and strikes its name through; hiding a row also greys out its count box, since a count on a hidden row makes no sense. Inbox, Today and Trash always stay and have no Hide box at all. Saved perspectives show their open count, or a bare tick when nothing matches. **Hide empty custom views** drops a saved view from the rail while its filter matches nothing and brings it back as soon as a task does.
+- **Sidebar** — a collapsible matrix of every rail item with **Hide** and **Hide count** boxes, indented under their heading. Every heading starts collapsed and opening one closes the rest. A ticked box hides the row and strikes its name through; hiding a row also greys out its count box, since a count on a hidden row makes no sense. Inbox, Today and Trash always stay and have no Hide box at all. Saved perspectives show their open count only when it is non-zero; empty ones leave the slot blank. **Hide empty custom views** drops a saved view from the rail while its filter matches nothing and brings it back as soon as a task does.
 - **Workflow** — Vim mode, macOS due reminders, and the review/changed/completed windows.
 - **Nearby** — the radius used by the Nearby view.
 - **Trash** — how many days deleted tasks stay restorable.

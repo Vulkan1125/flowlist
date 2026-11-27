@@ -31,6 +31,17 @@
   **Completed (n)** row reveals it. Completed roots then sit under their own
   collapsible **Completed** heading instead of interleaving with open work.
 
+### Small polish
+
+- **No dates prompt.** A project with no due, planned or defer date shows a
+  short prompt and an **Update project** link in the inspector’s Dates section.
+- **Stalled notice.** A stalled project explains that there are no remaining
+  actions and offers **Mark done** beside the Completed row.
+- **Focus help.** The dimmed focus eye explains how to start focus when clicked
+  and continues to restore the last focused projects and folders.
+- **Blank saved views.** Empty saved perspectives no longer show a tick; their
+  count appears only when non-zero.
+
 ### Currency icons
 
 - **Nine currencies.** The project icon picker adds euro, pound, yen, won,

@@ -2232,6 +2232,45 @@ impl FlowlistApp {
         }
         if hidden_completed {
             let done = project_progress.map(|(done, _)| done).unwrap_or(0);
+            if let View::Project(project_id) = self.view.clone() {
+                let mark_id = project_id.clone();
+                list = list.child(
+                    div()
+                        .mx_4()
+                        .mt_2()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.border_soft)
+                        .bg(theme.field)
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("No remaining actions. Add a task or mark the project done."),
+                        )
+                        .child(
+                            div()
+                                .id("project-stalled-done")
+                                .text_xs()
+                                .text_color(theme.accent)
+                                .cursor_pointer()
+                                .hover(|style| style.text_color(theme.text))
+                                .child("Mark done")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.execute(Command::SetProjectStatus {
+                                        id: mark_id.clone(),
+                                        status: ProjectStatus::Done,
+                                    });
+                                    cx.notify();
+                                })),
+                        ),
+                );
+            }
             list = list.child(
                 div()
                     .id("project-show-completed")

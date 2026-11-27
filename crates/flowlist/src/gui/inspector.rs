@@ -4007,20 +4007,51 @@ impl FlowlistApp {
                     }),
             )
             .into_any_element();
-        let dates_content = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .when_some(defer, |this, defer| {
-                this.child(self.inspector_readonly("Defer", &defer))
-            })
-            .when_some(planned, |this, planned| {
-                this.child(self.inspector_readonly("Planned", &planned))
-            })
-            .when_some(due, |this, due| {
-                this.child(self.inspector_readonly("Due", &due))
-            })
-            .into_any_element();
+        let dates_content = if has_dates {
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .when_some(defer, |this, defer| {
+                    this.child(self.inspector_readonly("Defer", &defer))
+                })
+                .when_some(planned, |this, planned| {
+                    this.child(self.inspector_readonly("Planned", &planned))
+                })
+                .when_some(due, |this, due| {
+                    this.child(self.inspector_readonly("Due", &due))
+                })
+                .into_any_element()
+        } else {
+            let edit_id = project_id.clone();
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.text_faint)
+                        .child("No dates set. Update the project to add a due, planned or defer date."),
+                )
+                .child(
+                    div()
+                        .id("project-edit-dates")
+                        .text_xs()
+                        .text_color(theme.accent)
+                        .cursor_pointer()
+                        .hover(|style| style.text_color(theme.text))
+                        .child("Update project")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(modal) =
+                                super::modals::Modal::edit_project(this, &edit_id)
+                            {
+                                this.open_modal(modal, cx);
+                            }
+                        })),
+                )
+                .into_any_element()
+        };
         let tags_content = self.inspector_tags_readonly(&tags).into_any_element();
         let attachments_content = self
             .inspector_attachments(
@@ -4036,7 +4067,7 @@ impl FlowlistApp {
             .gap_3()
             .p_3()
             .child(self.inspector_section("project:overview", "Project", true, meta_content, cx))
-            .child(self.inspector_section("project:dates", "Dates", has_dates, dates_content, cx))
+            .child(self.inspector_section("project:dates", "Dates", true, dates_content, cx))
             .child(self.inspector_section("project:review", "Review", true, review_content, cx))
             .child(self.inspector_section(
                 "project:notifications",

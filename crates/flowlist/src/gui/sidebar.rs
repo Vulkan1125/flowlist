@@ -1719,7 +1719,6 @@ impl FlowlistApp {
                     widgets::count(theme, count),
                 ))
             })
-            .when(show_count && count == 0, |this| this.child(widgets::done_badge(theme)))
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {

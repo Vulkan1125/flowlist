@@ -315,9 +315,9 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Counts on every Android drawer row** — built-in perspectives and saved
       views show their task count when it is non-zero; zero counts stay hidden.
       Tags and Nearby count tasks, not the tags themselves, and an empty saved
-      view falls back to a bare tick.
+      view leaves the slot blank.
 - [x] **Mac saved perspective badges** — the rail shows a saved view's open
-      count, or a background-free tick when nothing matches.
+      count only when it is non-zero; empty views leave the slot blank.
 - [x] **Mac sidebar matrix** — Settings → Sidebar is a collapsible table of
       every perspective, priority, folder, project, saved view and tag, with
       side-by-side Hide and Hide count boxes and item names indented under each
