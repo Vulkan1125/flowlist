@@ -3240,6 +3240,15 @@ impl FlowlistApp {
             .items_center()
             .justify_end()
             .gap_2()
+            .bg(if root_after {
+                theme.accent_soft
+            } else if selected {
+                theme.selection
+            } else {
+                theme.clear
+            })
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.hover))
             .border_b_1()
             .border_color(theme.border_soft)
             .child(first_line)
@@ -3257,16 +3266,8 @@ impl FlowlistApp {
                 + row.depth as f32 * 18.0))
             .pr_4()
             .py_1()
-            .bg(if root_after {
-                theme.accent_soft
-            } else if selected {
-                theme.selection
-            } else {
-                theme.bg
-            })
             .text_sm()
             .cursor_pointer()
-            .hover(|style| style.bg(theme.hover))
             .when(on_hold, |this| this.opacity(0.55))
             .on_mouse_down(
                 MouseButton::Left,

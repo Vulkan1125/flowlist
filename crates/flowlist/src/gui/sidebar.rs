@@ -410,24 +410,9 @@ impl FlowlistApp {
         cx.notify();
     }
 
-    /// Open a folder row. The first click opens the folder view and makes sure
-    /// its tree is unfolded; clicking the same, already-open folder folds the
-    /// tree again rather than re-opening the view it is already on.
-    pub(super) fn toggle_folder_row(&mut self, id: FolderId, cx: &mut Context<Self>) {
-        self.sidebar_selection.clear();
-        let key = format!("folder:{id}");
-        if self.view == View::Folder(id.clone()) {
-            self.toggle_expanded(key, true, cx);
-            self.sidebar_cursor = Some(SidebarTarget::Folder(id));
-            self.focus = FocusArea::Sidebar;
-            self.save_session();
-            cx.notify();
-            return;
-        }
+    /// Open a folder row. Its chevron alone expands or folds the tree.
+    pub(super) fn open_folder_row(&mut self, id: FolderId, cx: &mut Context<Self>) {
         self.sidebar_activate(SidebarTarget::Folder(id), cx);
-        if !self.is_open(&key, false) {
-            self.toggle_expanded(key, false, cx);
-        }
     }
 
     pub(super) fn sidebar_expand(&mut self, expand: bool, cx: &mut Context<Self>) -> bool {
@@ -2013,7 +1998,7 @@ impl FlowlistApp {
                                 );
                             } else {
                                 this.clear_sidebar_selection(cx);
-                                this.toggle_folder_row(view_id.clone(), cx);
+                                this.open_folder_row(view_id.clone(), cx);
                             }
                         }));
                     if active {

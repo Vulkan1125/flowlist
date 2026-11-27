@@ -7528,7 +7528,7 @@ impl FlowlistApp {
             return;
         };
         match target {
-            sidebar::SidebarTarget::Folder(id) => self.toggle_folder_row(id, cx),
+            sidebar::SidebarTarget::Folder(id) => self.open_folder_row(id, cx),
             target => self.sidebar_activate(target, cx),
         }
     }
