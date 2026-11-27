@@ -1443,6 +1443,52 @@ fn project_completes_with_last_action_unless_manual_or_single_actions() {
 }
 
 #[test]
+fn tasks_in_an_on_hold_project_cannot_be_completed() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let project = add_project_in(&mut store, "Paused", None);
+    let mut task = NewTask::new("Waiting");
+    task.project = Some(project.clone());
+    let task_id = store
+        .execute(Command::CreateTask(task))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("created task");
+    let task_id = store.db().resolve_task(&task_id).unwrap();
+
+    store
+        .execute(Command::SetProjectStatus {
+            id: project.clone(),
+            status: ProjectStatus::OnHold,
+        })
+        .unwrap();
+    let error = store
+        .execute(Command::CompleteTasks {
+            ids: vec![task_id.clone()],
+            completed: true,
+        })
+        .unwrap_err();
+    assert!(error.to_string().contains("on hold"));
+    assert!(!store.db().tasks[&task_id].completed);
+
+    store
+        .execute(Command::SetProjectStatus {
+            id: project.clone(),
+            status: ProjectStatus::Active,
+        })
+        .unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![task_id.clone()],
+            completed: true,
+        })
+        .unwrap();
+    assert!(store.db().tasks[&task_id].completed);
+}
+
+#[test]
 fn project_kinds_round_trip_and_legacy_sequential_still_blocks() {
     use flowlist_core::model::{ProjectKind, ProjectStatus};
 

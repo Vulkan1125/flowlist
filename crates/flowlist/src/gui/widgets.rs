@@ -791,7 +791,7 @@ pub fn stalled_badge(theme: Theme) -> impl IntoElement {
         .flex()
         .items_center()
         .justify_center()
-        .child(icons::icon(Icon::Pause, 11.0, theme.warning))
+        .child(icons::icon(Icon::CircleDashed, 12.0, theme.text_faint))
 }
 
 /// A compact filter/metric button: same height as the search field so sort,

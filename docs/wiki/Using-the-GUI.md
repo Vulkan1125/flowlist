@@ -231,10 +231,13 @@ folders and can carry their own tags, dates, attachments and icon.
   opens a small sheet for the exact next date and cadence.
 - The inspector also has **Complete with last action**. On, the project is
   marked Done when its last open task is completed. Off, it stays active.
-  When it has tasks but none left open, the sidebar shows a paused **stalled**
+  When it has tasks but none left open, the sidebar shows a dashed **stalled**
   mark, not a tick; a tick is reserved for a project whose status is Done.
   A **Completed (n)** row opens the finished tasks under their own
   **Completed** heading. Single-action lists always stay manual.
+- A project **On Hold** shows a pause marker in the rail. Its tasks and
+  subtasks are dimmed and cannot be completed until the project is set back to
+  Active.
 - Drag a project onto a folder, onto the LIBRARY heading or onto empty space to
   move it back to the root.
 

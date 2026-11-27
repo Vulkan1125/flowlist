@@ -298,8 +298,11 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Focus-aware rail counts** — Inbox, priority, tag, folder, project and
       saved-view counts respect the active focus, and empty tags dim.
 - [x] **Stalled projects and completed work** — an active project with no open
-      tasks shows a paused mark instead of a tick; completed roots can be
+      tasks shows a dashed mark instead of a tick; completed roots can be
       revealed with a Completed (n) row under their own heading.
+- [x] **On Hold lockout** — an On Hold project shows a pause marker, dims its
+      tasks and subtasks, disables their checkboxes and rejects completion
+      until the project becomes active.
 - [x] **Currency project icons** — dollar, rupee, euro, pound, yen, won, ruble,
       bitcoin, franc and lira, shared with the phone picker.
 - [x] **Mac completion clears the inspector** — completing a task clears the

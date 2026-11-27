@@ -24,12 +24,16 @@
 
 ### Stalled projects
 
-- **Pause, not tick.** An active project with tasks but none left open now
-  shows a stalled pause mark. A tick is reserved for a project whose status is
-  actually Done. Single-action lists keep their open count.
+- **Dashed circle, not tick.** An active project with tasks but none left open
+  now shows a dashed stalled mark. A pause icon marks On Hold instead. A tick
+  is reserved for a project whose status is actually Done. Single-action lists
+  keep their open count.
 - **Completed section.** When a stalled project hides completed work, a
   **Completed (n)** row reveals it. Completed roots then sit under their own
   collapsible **Completed** heading instead of interleaving with open work.
+- **On Hold locks work.** Projects on hold show a pause marker in the rail;
+  their tasks and subtasks are dimmed, their checkboxes are disabled, and the
+  command layer rejects completion until the project is active again.
 
 ### Small polish
 

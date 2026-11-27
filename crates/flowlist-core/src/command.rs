@@ -946,6 +946,22 @@ impl Command {
                 });
             }
             Command::CompleteTasks { ids, completed } => {
+                if completed {
+                    for id in &ids {
+                        if db.tasks.get(id).is_some_and(|task| task.completed) {
+                            continue;
+                        }
+                        if let Some(project_id) = db.effective_project(id)
+                            && let Some(project) = db.projects.get(&project_id)
+                            && project.status == ProjectStatus::OnHold
+                        {
+                            return Err(Error::invalid(format!(
+                                "Project “{}” is on hold. Set it active before completing tasks.",
+                                project.name
+                            )));
+                        }
+                    }
+                }
                 let mut changed = 0usize;
                 let mut first_title: Option<String> = None;
                 let mut completed_projects: BTreeSet<ProjectId> = BTreeSet::new();

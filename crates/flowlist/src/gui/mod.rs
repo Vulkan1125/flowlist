@@ -59,7 +59,7 @@ use flowlist_core::command::{
 use flowlist_core::db::{ContainerPosition, DateConflict, Db, OrderKey, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    BuiltinPerspective, GroupBy, Priority, ProjectKind, SortBy, TagStatus, TaskAlert,
+    BuiltinPerspective, GroupBy, Priority, ProjectKind, ProjectStatus, SortBy, TagStatus, TaskAlert,
 };
 use flowlist_core::parse::{parse_duration, parse_quick, parse_stamp};
 use flowlist_core::paths::DataPaths;
@@ -3013,6 +3013,17 @@ impl FlowlistApp {
     }
 
     fn toggle_complete(&mut self, id: TaskId, cx: &mut Context<Self>) {
+        let on_hold = {
+            let db = self.store.db();
+            db.effective_project(&id)
+                .and_then(|project| db.projects.get(&project))
+                .is_some_and(|project| project.status == ProjectStatus::OnHold)
+        };
+        if on_hold {
+            self.toast = Some("Project on hold. Set it active before completing tasks.".to_string());
+            cx.notify();
+            return;
+        }
         let completed = !self
             .store
             .db()

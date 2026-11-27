@@ -2073,6 +2073,19 @@ impl FlowlistApp {
                 };
                 return self.render_empty(title, detail).into_any_element();
             }
+            if let View::Project(id) = &self.view {
+                let detail = self
+                    .store
+                    .db()
+                    .projects
+                    .get(id)
+                    .filter(|project| project.status == ProjectStatus::OnHold)
+                    .map(|_| "This project is on hold.")
+                    .unwrap_or("Add the first task above.");
+                return self
+                    .render_empty("No actions yet", detail)
+                    .into_any_element();
+            }
             let (title, detail) = match &self.view {
                 View::Builtin(BuiltinPerspective::Inbox) => ("Inbox zero", "Nothing captured."),
                 View::Builtin(BuiltinPerspective::Today) => (
@@ -2901,6 +2914,10 @@ impl FlowlistApp {
             .collect();
         let project = row_project_label(db, &self.view, task.project.as_ref());
         let availability = row.availability.clone();
+        let on_hold = db
+            .effective_project(&id)
+            .and_then(|project| db.projects.get(&project))
+            .is_some_and(|project| project.status == ProjectStatus::OnHold);
         let title_id = id.clone();
         let checkbox_id = id.clone();
         let flag_id = id.clone();
@@ -3140,6 +3157,37 @@ impl FlowlistApp {
                 )
                 .into_any_element()
         });
+        let checkbox = {
+            let check = div()
+                .id(super::sid(format!("check:{}", checkbox_id)))
+                .flow_tip(
+                    self,
+                    cx,
+                    theme,
+                    if on_hold {
+                        "Project on hold — set it active first"
+                    } else if completed {
+                        "Reopen task (x)"
+                    } else {
+                        "Complete task (x)"
+                    },
+                )
+                .child(widgets::checkbox(
+                    theme,
+                    completed,
+                    theme.accent,
+                    task.priority
+                        .map(|priority| super::theme::priority_color(theme, priority)),
+                ));
+            if on_hold {
+                check.opacity(0.6).cursor(CursorStyle::Arrow)
+            } else {
+                check.on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.toggle_complete(checkbox_id.clone(), cx);
+                }))
+            }
+        };
         let first_line = div()
             .flex()
             .items_center()
@@ -3148,31 +3196,7 @@ impl FlowlistApp {
             .flex_shrink()
             .min_w_0()
             .overflow_hidden()
-            .child(
-                div()
-                    .id(super::sid(format!("check:{}", checkbox_id)))
-                    .flow_tip(
-                        self,
-                        cx,
-                        theme,
-                        if completed {
-                            "Reopen task (x)"
-                        } else {
-                            "Complete task (x)"
-                        },
-                    )
-                    .child(widgets::checkbox(
-                        theme,
-                        completed,
-                        theme.accent,
-                        task.priority
-                            .map(|priority| super::theme::priority_color(theme, priority)),
-                    ))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.toggle_complete(checkbox_id.clone(), cx);
-                    })),
-            )
+            .child(checkbox)
             .child(title_line)
             // The chevron belongs to the title, so it comes first; the flag
             // follows it before the row's spare space.
@@ -3212,6 +3236,7 @@ impl FlowlistApp {
             .text_sm()
             .cursor_pointer()
             .hover(|style| style.bg(theme.hover))
+            .when(on_hold, |this| this.opacity(0.55))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, window, _| window.focus(&this.focus_handle)),

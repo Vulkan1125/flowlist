@@ -2059,6 +2059,23 @@ impl FlowlistApp {
                             ),
                         ))
                         .child(self.row_name(project.name.clone()))
+                        .when(project.status == ProjectStatus::OnHold, |this| {
+                            this.text_color(self.theme.text_dim).child(
+                                div()
+                                    .id(super::sid(format!("project-hold:{id}")))
+                                    .flow_tip(
+                                        self,
+                                        cx,
+                                        self.theme,
+                                        "On hold · tasks cannot be completed",
+                                    )
+                                    .child(icons::icon(
+                                        Icon::Pause,
+                                        11.0,
+                                        self.theme.warning,
+                                    )),
+                            )
+                        })
                         .when(focus_selected, |this| {
                             this.child(
                                 div()
