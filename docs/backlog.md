@@ -213,6 +213,10 @@ integrations are tracked separately and are not part of this phase.
       permission) under the month grid, matching the Mac's EventKit events.
 - [ ] **Project rows in saved views** — render matching projects as their own
       rows with nested actions, as the Mac does, instead of listing tasks only.
+- [ ] **Saved-view Simple and Comprehensive tabs** — the Mac opens a new view
+      on a plain checkbox and pop-up editor and switches to the rule tree on
+      Comprehensive; the Android editor only offers the full form. Add both
+      tabs and remember the last one used per view.
 - [?] **Play Store path** — `SYSTEM_ALERT_WINDOW` and a `specialUse` foreground
       service need a justification if the phone app is ever listed on Play.
       Sideloaded builds are unaffected.
