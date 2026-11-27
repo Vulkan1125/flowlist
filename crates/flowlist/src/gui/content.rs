@@ -2793,12 +2793,19 @@ impl FlowlistApp {
                 .border_color(theme.border_soft)
                 .cursor_pointer()
                 .hover(|style| style.bg(theme.hover))
-                .child(
+                .when(
+                    matches!(self.view, View::Folder(_)) && project.is_some(),
+                    |this| this.mt_3(),
+                )
+                .child({
+                    let chevron_key = open_key.clone();
                     div()
+                        .id(super::sid(format!("group-toggle:{}", group.key)))
                         .w(px(12.))
                         .flex()
                         .items_center()
                         .text_color(theme.text_faint)
+                        .cursor_pointer()
                         .child(icons::icon(
                             if open {
                                 Icon::ChevronDown
@@ -2807,8 +2814,12 @@ impl FlowlistApp {
                             },
                             12.0,
                             theme.text_faint,
-                        )),
-                )
+                        ))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.toggle_group_collapsed(chevron_key.clone(), cx);
+                        }))
+                })
                 .child(
                     div()
                         .font_weight(gpui::FontWeight::SEMIBOLD)
@@ -2820,22 +2831,19 @@ impl FlowlistApp {
                     group.rows.len() + group.projects.len() + event_count,
                 ))
                 .on_click(cx.listener(move |this, event: &gpui::ClickEvent, _, cx| {
-                    if event.modifiers().platform
-                        && let Some(project) = header_project.clone()
-                    {
+                    let Some(project) = header_project.clone() else {
+                        this.toggle_group_collapsed(open_key.clone(), cx);
+                        return;
+                    };
+                    if event.modifiers().platform {
                         this.open_view(View::Project(project), cx);
                         return;
                     }
-                    this.toggle_group_collapsed(open_key.clone(), cx);
-                    if matches!(this.view, View::Folder(_))
-                        && let Some(project) = header_project.clone()
-                    {
-                        this.inspector_project = Some(project);
-                        this.selected.clear();
-                        this.anchor = None;
-                        this.show_inspector = true;
-                        this.save_session();
-                    }
+                    this.inspector_project = Some(project);
+                    this.selected.clear();
+                    this.anchor = None;
+                    this.show_inspector = true;
+                    this.save_session();
                     cx.notify();
                 }));
         if let Some(project) = project {
@@ -3232,6 +3240,8 @@ impl FlowlistApp {
             .items_center()
             .justify_end()
             .gap_2()
+            .border_b_1()
+            .border_color(theme.border_soft)
             .child(first_line)
             .child(meta_line);
         let base = div()
@@ -3247,8 +3257,6 @@ impl FlowlistApp {
                 + row.depth as f32 * 18.0))
             .pr_4()
             .py_1()
-            .border_b_1()
-            .border_color(theme.border_soft)
             .bg(if root_after {
                 theme.accent_soft
             } else if selected {

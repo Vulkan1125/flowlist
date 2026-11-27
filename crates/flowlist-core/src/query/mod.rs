@@ -186,7 +186,11 @@ pub fn run_projects(
             groups.push(Group {
                 projects: Vec::new(),
                 key: format!("project:{id}"),
-                title: db.project_path(id),
+                title: db
+                    .projects
+                    .get(id)
+                    .map(|project| project.name.clone())
+                    .unwrap_or_else(|| db.project_path(id)),
                 position: index as i64,
                 rows,
             });
@@ -302,7 +306,11 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 groups.push(Group {
                     projects: Vec::new(),
                     key: format!("project:{id}"),
-                    title: db.project_path(&id),
+                    title: db
+                        .projects
+                        .get(&id)
+                        .map(|project| project.name.clone())
+                        .unwrap_or_else(|| db.project_path(&id)),
                     position: index as i64,
                     rows,
                 });
@@ -378,7 +386,11 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 groups.push(Group {
                     projects: Vec::new(),
                     key: format!("archive:{id}"),
-                    title: db.project_path(&id),
+                    title: db
+                        .projects
+                        .get(&id)
+                        .map(|project| project.name.clone())
+                        .unwrap_or_else(|| db.project_path(&id)),
                     position: index as i64,
                     rows,
                 });
@@ -1171,7 +1183,14 @@ impl<'a> GroupContext<'a> {
                         .get(&ContainerId::Project(id.clone()))
                         .copied()
                         .unwrap_or(i64::MAX);
-                    (format!("project:{id}"), db.project_path(&id), position)
+                    (
+                        format!("project:{id}"),
+                        db.projects
+                            .get(&id)
+                            .map(|project| project.name.clone())
+                            .unwrap_or_else(|| db.project_path(&id)),
+                        position,
+                    )
                 }
                 None => ("inbox".to_string(), "No project".to_string(), -1),
             },
