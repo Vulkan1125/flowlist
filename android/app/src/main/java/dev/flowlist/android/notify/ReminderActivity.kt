@@ -7,40 +7,93 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import dev.flowlist.android.FlowlistApplication
 import dev.flowlist.android.MainActivity
 import dev.flowlist.android.data.PreferencesStore
 import dev.flowlist.android.data.ThemeStore
 import dev.flowlist.android.ui.FlowlistTheme
-import dev.flowlist.android.ui.flow
 import dev.flowlist.android.ui.isDark
 import dev.flowlist.android.ui.reminderBackgroundFor
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.time.temporal.TemporalAdjusters
+import java.util.Locale
+import kotlin.math.roundToInt
 
 /** The alarm-style task reminder. Shown over the lock screen by a full-screen intent. */
 class ReminderActivity : ComponentActivity() {
@@ -66,6 +119,12 @@ class ReminderActivity : ComponentActivity() {
             )
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // The reminder always paints a dark scrim, so keep the system bars
+        // light even when the app itself is set to a light theme.
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
 
         val taskId = intent.getStringExtra("task_id") ?: run {
             finish()
@@ -88,7 +147,8 @@ class ReminderActivity : ComponentActivity() {
                     title = title,
                     project = project,
                     dueAt = dueAt,
-                    snoozeMinutes = preferences.snoozeMinutes,
+                    initialSnoozeMinutes = preferences.snoozeMinutes,
+                    weekStartsMonday = preferences.weekStartsMonday,
                     onComplete = {
                         lifecycleScope.launch {
                             runCatching {
@@ -98,13 +158,13 @@ class ReminderActivity : ComponentActivity() {
                             finish()
                         }
                     },
-                    onSnooze = {
+                    onSnooze = { minutes ->
                         TaskReminders.snooze(
                             this,
                             taskId,
                             title,
                             project,
-                            preferences.snoozeMinutes,
+                            minutes,
                         )
                         finish()
                     },
@@ -125,92 +185,465 @@ class ReminderActivity : ComponentActivity() {
     }
 }
 
+private val reminderGreen = Color(0xFF18C66B)
+private val reminderInk = Color.White
+
 @Composable
 private fun ReminderScreen(
     title: String,
     project: String?,
     dueAt: Long,
-    snoozeMinutes: Int,
+    initialSnoozeMinutes: Int,
+    weekStartsMonday: Boolean,
     onComplete: () -> Unit,
-    onSnooze: () -> Unit,
+    onSnooze: (Int) -> Unit,
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val colors = flow
-    val whenText = runCatching {
-        java.time.Instant.ofEpochMilli(dueAt)
-            .atZone(java.time.ZoneId.systemDefault())
-            .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
-    }.getOrDefault("now")
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
+    val dueInstant = remember(dueAt) {
+        Instant.ofEpochMilli(dueAt).atZone(ZoneId.systemDefault())
+    }
+    val whenText = remember(dueInstant) {
+        dueInstant.format(DateTimeFormatter.ofPattern("HH:mm"))
+    }
+    val today = remember { LocalDate.now() }
+    val dueDate = remember(dueInstant) { dueInstant.toLocalDate() }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        ReminderBackdrop()
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 560.dp)
-                .clip(RoundedCornerShape(28.dp))
-                .background(colors.background)
-                .border(1.dp, colors.hairline, RoundedCornerShape(28.dp))
-                .padding(horizontal = 28.dp, vertical = 32.dp),
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = "REMINDER · $whenText",
-                style = MaterialTheme.typography.labelLarge,
-                color = colors.accent,
-                fontWeight = FontWeight.SemiBold,
+            Spacer(modifier = Modifier.height(24.dp))
+            WeekStrip(
+                today = today,
+                dueDate = dueDate,
+                weekStartsMonday = weekStartsMonday,
             )
-            Spacer(modifier = Modifier.height(18.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.displaySmall,
-                color = colors.ink,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
+            Spacer(modifier = Modifier.weight(1.2f))
+            ReminderHero(
+                title = title,
+                project = project,
+                whenText = whenText,
             )
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = project?.takeIf { it.isNotBlank() } ?: "Inbox",
-                style = MaterialTheme.typography.titleMedium,
-                color = colors.faint,
+            Spacer(modifier = Modifier.weight(0.8f))
+            ReminderControls(
+                initialSnoozeMinutes = initialSnoozeMinutes,
+                onComplete = onComplete,
+                onSnooze = onSnooze,
+                onOpen = onOpen,
+                onDismiss = onDismiss,
             )
-            Spacer(modifier = Modifier.height(38.dp))
-            Button(
-                onClick = onComplete,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(58.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.accent,
-                    contentColor = colors.onAccent,
-                ),
-            ) {
-                Text("Complete", style = MaterialTheme.typography.titleMedium)
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(
-                onClick = onSnooze,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-            ) {
+        }
+    }
+}
+
+@Composable
+private fun ReminderBackdrop() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .drawBehind {
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color(0xF20A1A11),
+                            Color(0xE60E3320),
+                            Color(0xFA04100A),
+                        ),
+                    ),
+                )
+                drawRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0x663BD07E), Color.Transparent),
+                        center = Offset(size.width * 0.86f, size.height * 0.22f),
+                        radius = size.width * 0.85f,
+                    ),
+                )
+                drawRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0x44D6C85A), Color.Transparent),
+                        center = Offset(size.width * 0.08f, size.height * 0.78f),
+                        radius = size.width * 0.8f,
+                    ),
+                )
+            },
+    )
+}
+
+@Composable
+private fun WeekStrip(
+    today: LocalDate,
+    dueDate: LocalDate,
+    weekStartsMonday: Boolean,
+) {
+    val start = remember(today, weekStartsMonday) {
+        val firstDay = if (weekStartsMonday) DayOfWeek.MONDAY else DayOfWeek.SUNDAY
+        today.with(TemporalAdjusters.previousOrSame(firstDay))
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (index in 0..6) {
+            val date = start.plusDays(index.toLong())
+            val isToday = date == today
+            val isDue = date == dueDate
+            val letter = date.dayOfWeek
+                .getDisplayName(TextStyle.NARROW, Locale.getDefault())
+                .take(1)
+            val circle = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .then(
+                    if (isToday) {
+                        Modifier.background(Color.White.copy(alpha = 0.22f))
+                    } else {
+                        Modifier
+                    },
+                )
+                .then(
+                    if (isDue && !isToday) {
+                        Modifier.border(1.5.dp, Color.White.copy(alpha = 0.82f), CircleShape)
+                    } else {
+                        Modifier
+                    },
+                )
+            Box(modifier = circle, contentAlignment = Alignment.Center) {
                 Text(
-                if (snoozeMinutes == 60) "Snooze 1 hour" else "Snooze $snoozeMinutes minutes",
-                color = colors.ink,
-            )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            TextButton(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
-                Text("Open Flowlist", color = colors.accent)
-            }
-            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                Text("Dismiss", color = colors.faint)
+                    text = letter,
+                    color = if (isToday || isDue) {
+                        reminderInk
+                    } else {
+                        reminderInk.copy(alpha = 0.55f)
+                    },
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }
+}
+
+@Composable
+private fun ReminderHero(
+    title: String,
+    project: String?,
+    whenText: String,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.NotificationsActive,
+            contentDescription = null,
+            tint = reminderInk.copy(alpha = 0.9f),
+            modifier = Modifier.size(32.dp),
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        Text(
+            text = title,
+            color = reminderInk,
+            fontSize = 38.sp,
+            lineHeight = 42.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = whenText,
+            color = reminderInk.copy(alpha = 0.82f),
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = project?.takeIf { it.isNotBlank() } ?: "Inbox",
+            color = reminderInk.copy(alpha = 0.58f),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun ReminderControls(
+    initialSnoozeMinutes: Int,
+    onComplete: () -> Unit,
+    onSnooze: (Int) -> Unit,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .widthIn(max = 440.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        PillButton(
+            label = "Dismiss",
+            onClick = onDismiss,
+            modifier = Modifier
+                .widthIn(max = 260.dp)
+                .fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+        SlideToComplete(
+            onComplete = onComplete,
+            modifier = Modifier
+                .widthIn(max = 260.dp)
+                .fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(22.dp))
+        SnoozeRow(
+            initialMinutes = initialSnoozeMinutes,
+            onSnooze = onSnooze,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        TextButton(
+            onClick = onOpen,
+            colors = ButtonDefaults.textButtonColors(
+                contentColor = reminderInk.copy(alpha = 0.68f),
+            ),
+        ) {
+            Text("Open Flowlist", fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+@Composable
+private fun PillButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .height(56.dp)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(Color.White.copy(alpha = 0.17f))
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = reminderInk,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun SlideToComplete(
+    onComplete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val thumbSize = 56.dp
+    val thumbSizePx = with(density) { thumbSize.toPx() }
+    val insetPx = with(density) { 4.dp.toPx() }
+    val thumb = remember { Animatable(0f) }
+    var trackWidth by remember { mutableFloatStateOf(0f) }
+    var completed by remember { mutableStateOf(false) }
+    val maxOffset = (trackWidth - thumbSizePx - insetPx * 2f).coerceAtLeast(0f)
+    val progress = if (maxOffset > 0f) (thumb.value / maxOffset).coerceIn(0f, 1f) else 0f
+    val labelAlpha = (1f - progress * 1.55f).coerceIn(0f, 1f)
+
+    Box(
+        modifier = modifier
+            .height(64.dp)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(Color.White.copy(alpha = 0.13f))
+            .border(1.dp, reminderGreen.copy(alpha = 0.45f), RoundedCornerShape(percent = 50))
+            .onSizeChanged { trackWidth = it.width.toFloat() }
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = "Slide to complete"
+                onClick(label = "Complete") {
+                    if (!completed) {
+                        completed = true
+                        onComplete()
+                    }
+                    true
+                }
+            }
+            .pointerInput(maxOffset) {
+                detectHorizontalDragGestures(
+                    onDragStart = {
+                        if (!completed) {
+                            scope.launch { thumb.stop() }
+                        }
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        if (!completed) {
+                            change.consume()
+                            scope.launch {
+                                thumb.snapTo((thumb.value + dragAmount).coerceIn(0f, maxOffset))
+                            }
+                        }
+                    },
+                    onDragEnd = {
+                        if (!completed) {
+                            if (maxOffset > 0f && thumb.value >= maxOffset * 0.82f) {
+                                completed = true
+                                scope.launch {
+                                    thumb.animateTo(maxOffset, tween(120))
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    delay(120)
+                                    onComplete()
+                                }
+                            } else {
+                                scope.launch {
+                                    thumb.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                            stiffness = Spring.StiffnessMedium,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    onDragCancel = {
+                        if (!completed) {
+                            scope.launch { thumb.animateTo(0f, tween(160)) }
+                        }
+                    },
+                )
+            },
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(
+                        with(density) {
+                            (thumb.value + thumbSizePx)
+                                .coerceAtLeast(thumbSizePx)
+                                .toDp()
+                        },
+                    )
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(reminderGreen),
+            )
+            Text(
+                text = if (completed) "Completed" else "Slide to complete",
+                color = reminderInk.copy(alpha = labelAlpha * 0.95f),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            Box(
+                modifier = Modifier
+                    .offset { IntOffset(thumb.value.roundToInt(), 0) }
+                    .size(thumbSize)
+                    .clip(CircleShape)
+                    .background(reminderInk),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = reminderGreen,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SnoozeRow(
+    initialMinutes: Int,
+    onSnooze: (Int) -> Unit,
+) {
+    var minutes by remember(initialMinutes) {
+        mutableIntStateOf(initialMinutes.coerceIn(5, 180))
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RoundControl(
+            icon = Icons.Rounded.Remove,
+            description = "Less snooze time",
+            onClick = { minutes = (minutes - 5).coerceAtLeast(5) },
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(percent = 50))
+                .background(Color.White.copy(alpha = 0.14f))
+                .clickable(role = Role.Button) { onSnooze(minutes) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = snoozeLabel(minutes),
+                color = reminderInk,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        RoundControl(
+            icon = Icons.Rounded.Add,
+            description = "More snooze time",
+            onClick = { minutes = (minutes + 5).coerceAtMost(180) },
+        )
+    }
+}
+
+@Composable
+private fun RoundControl(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(52.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.14f))
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = reminderInk.copy(alpha = 0.9f),
+            modifier = Modifier.size(24.dp),
+        )
+    }
+}
+
+private fun snoozeLabel(minutes: Int): String = when {
+    minutes == 60 -> "Snooze 1 hour"
+    minutes > 60 && minutes % 60 == 0 -> "Snooze ${minutes / 60} hours"
+    minutes > 60 -> "Snooze ${minutes / 60} hr ${minutes % 60} min"
+    else -> "Snooze $minutes mins"
 }

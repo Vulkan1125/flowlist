@@ -947,7 +947,7 @@ private fun matchesCondition(db: Db?, task: TaskView, condition: JsonObject): Bo
             "completed" -> task.completed
             "available" -> !task.completed && task.blockedByTag == null
             "blocked" -> !task.completed && task.blockedByTag != null
-            "deferred" -> task.defer?.local()?.isAfter(java.time.LocalDateTime.now()) == true
+            "deferred" -> task.defer?.local()?.isAfter(java.time.ZonedDateTime.now()) == true
             else -> true
         }
         "due" -> windowMatches(due, condition.text("window"), today)
@@ -983,7 +983,7 @@ private fun matchesCondition(db: Db?, task: TaskView, condition: JsonObject): Bo
         }
         "availability" -> when (condition.text("value")) {
             "first_available", "available" -> !task.completed && task.blockedByTag == null &&
-                (task.defer?.local()?.isAfter(java.time.LocalDateTime.now()) != true)
+                (task.defer?.local()?.isAfter(java.time.ZonedDateTime.now()) != true)
             "remaining" -> !task.completed && projectStatus(db, task) != "dropped"
             "completed" -> task.completed
             "dropped" -> projectStatus(db, task) == "dropped"
@@ -1068,7 +1068,7 @@ private fun matchesCondition(db: Db?, task: TaskView, condition: JsonObject): Bo
                 }
                 "active_with_future_defer" -> {
                     val project = effectiveProjectId(db, task)?.let { db?.projects?.get(it) }
-                    status == "active" && project?.defer?.local()?.isAfter(java.time.LocalDateTime.now()) == true
+                    status == "active" && project?.defer?.local()?.isAfter(java.time.ZonedDateTime.now()) == true
                 }
                 else -> true
             }

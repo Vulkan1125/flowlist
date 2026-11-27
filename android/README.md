@@ -44,5 +44,7 @@ sdk.dir=/opt/homebrew/share/android-commandlinetools
   custom accent tones and six launcher icons.
 - Full task editing (title, notes, dates, project, priority, flag, estimate,
   tags), a home-screen widget and due reminders.
+- A full-screen reminder with a week strip, slide-to-complete, dismiss and an
+  adjustable snooze row.
 
 Everything in this folder can be deleted without touching the Mac app.

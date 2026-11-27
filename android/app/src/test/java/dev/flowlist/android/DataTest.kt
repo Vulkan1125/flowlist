@@ -48,8 +48,8 @@ class DataTest {
 
     @Test
     fun project_icon_picker_matches_the_mac_set() {
-        assertEquals(54, projectIconChoices.size)
-        assertEquals(54, projectIconChoices.map { it.first }.toSet().size)
+        assertEquals(63, projectIconChoices.size)
+        assertEquals(63, projectIconChoices.map { it.first }.toSet().size)
         assertTrue(projectIconChoices.any { it.first == "basketball" })
         assertTrue(projectIconChoices.any { it.first == "stethoscope" })
         assertTrue(projectIconChoices.any { it.first == "telescope" })
