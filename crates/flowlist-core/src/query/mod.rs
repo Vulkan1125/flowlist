@@ -119,7 +119,7 @@ pub fn run_projects(
         let Some(task) = db.tasks.get(&id) else {
             continue;
         };
-        if task.is_trashed() {
+        if task.is_trashed() || db.task_project_is_archived(&id) {
             continue;
         }
         if !show_completed && task.completed {
@@ -334,7 +334,10 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 let ids: Vec<TaskId> = db
                     .tasks_tagged(&row.tag, true)
                     .into_iter()
-                    .filter(|id| db.tasks.get(id).is_some_and(|task| !task.completed))
+                    .filter(|id| {
+                        db.tasks.get(id).is_some_and(|task| !task.completed)
+                            && !db.task_project_is_archived(id)
+                    })
                     .collect();
                 if ids.is_empty() {
                     continue;
@@ -423,7 +426,12 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
             let mut ids: Vec<TaskId> = db
                 .tasks
                 .values()
-                .filter(|task| !task.completed && !task.is_trashed() && task.modified_at >= cutoff)
+                .filter(|task| {
+                    !task.completed
+                        && !task.is_trashed()
+                        && !db.task_project_is_archived(&task.id)
+                        && task.modified_at >= cutoff
+                })
                 .map(|task| task.id.clone())
                 .collect();
             ids.sort_by_key(|id| std::cmp::Reverse(db.tasks[id].modified_at));
@@ -440,7 +448,10 @@ pub fn view(db: &Db, which: BuiltinPerspective, at: DateTime<Utc>) -> Vec<Group>
                 .into_iter()
                 .filter(|id| {
                     db.tasks.get(id).is_some_and(|task| {
-                        !task.completed && !task.is_trashed() && !task.attachments.is_empty()
+                        !task.completed
+                            && !task.is_trashed()
+                            && !db.task_project_is_archived(id)
+                            && !task.attachments.is_empty()
                     })
                 })
                 .collect();
@@ -484,11 +495,8 @@ pub fn today(db: &Db, include_past: bool, at: DateTime<Utc>) -> Vec<Group> {
         if task.completed || task.is_trashed() {
             continue;
         }
-        if let Some(project_id) = &task.project {
-            match db.projects.get(project_id).map(|project| project.status) {
-                Some(ProjectStatus::Active) | None => {}
-                _ => continue,
-            }
+        if !db.task_project_is_open(&id) {
+            continue;
         }
         // Planned today counts even when a later due date exists; the retains
         // below drop anything already shown in another bucket. A plan that has
@@ -576,7 +584,10 @@ pub fn priority(db: &Db, priority: crate::model::Priority, at: DateTime<Utc>) ->
         .into_iter()
         .filter(|id| {
             db.tasks.get(id).is_some_and(|task| {
-                !task.completed && !task.is_trashed() && task.priority == Some(priority)
+                !task.completed
+                    && !task.is_trashed()
+                    && !db.task_project_is_archived(id)
+                    && task.priority == Some(priority)
             })
         })
         .collect();
@@ -604,14 +615,8 @@ pub fn tasks_on_date(
             let Some(task) = db.tasks.get(id) else {
                 return false;
             };
-            if task.completed || task.is_trashed() {
+            if task.completed || task.is_trashed() || !db.task_project_is_open(id) {
                 return false;
-            }
-            if let Some(project_id) = &task.project {
-                match db.projects.get(project_id).map(|project| project.status) {
-                    Some(ProjectStatus::Active) | None => {}
-                    _ => return false,
-                }
             }
             db.effective_due(id).is_some_and(|stamp| stamp.local_date() == date)
                 || (!due_only
@@ -662,14 +667,11 @@ pub fn forecast_past(
         .tasks
         .values()
         .filter(|task| {
-            if task.completed || task.is_trashed() {
+            if task.completed
+                || task.is_trashed()
+                || !db.task_project_is_open(&task.id)
+            {
                 return false;
-            }
-            if let Some(project_id) = &task.project {
-                match db.projects.get(project_id).map(|project| project.status) {
-                    Some(ProjectStatus::Active) | None => {}
-                    _ => return false,
-                }
             }
             db.effective_due(&task.id).is_some_and(|stamp| stamp.local_date() < today)
                 || (!due_only
@@ -1083,14 +1085,8 @@ pub fn nearby(db: &Db, at: DateTime<Utc>) -> Vec<NearbyHit> {
     let radius = db.settings.nearby_radius_km.max(0.1);
     let mut hits: Vec<NearbyHit> = Vec::new();
     for task in db.tasks.values() {
-        if task.completed || task.is_trashed() {
+        if task.completed || task.is_trashed() || !db.task_project_is_open(&task.id) {
             continue;
-        }
-        if let Some(project_id) = &task.project {
-            match db.projects.get(project_id).map(|project| project.status) {
-                Some(ProjectStatus::Active) | None => {}
-                _ => continue,
-            }
         }
         let mut best: Option<NearbyHit> = None;
         for tag_id in &task.tags {

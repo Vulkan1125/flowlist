@@ -135,14 +135,14 @@ badge=$("$bin" --data-dir "$lib" list --attachments --json | python3 -c 'import 
 expect "attachments view" "$badge" "['Read the brief']"
 
 echo "2. Folder rows drag like project rows"
-click_box sidebar_rows "folder:$work"
+click_box sidebar_toggles "folder:$work"
 wait_box sidebar_rows "folder:$client"
 drag_boxes sidebar_rows "folder:$client" "folder:$personal"
 expect "Client nests under Personal" "$(folder_paths)" "Personal | Personal / Client | Personal / Client / Inner | Work"
 
 wait_box sidebar_rows "folder:$personal"
 # Expand Personal so the invalid target (its own child) is reachable.
-click_box sidebar_rows "folder:$personal"
+click_box sidebar_toggles "folder:$personal"
 wait_box sidebar_rows "folder:$client"
 drag_boxes sidebar_rows "folder:$personal" "folder:$client"
 expect "no folder lands inside its own subtree" "$(folder_paths)" "Personal | Personal / Client | Personal / Client / Inner | Work"
@@ -162,6 +162,7 @@ expect "one undo restores the nested folder" "$(folder_paths)" "Personal | Perso
 
 echo "3. Deleting a folder takes its tree with it, as one undoable step"
 # Personal now holds Client, Inner and Site after the drags above.
+click_box sidebar_toggles "folder:$personal"
 click_box sidebar_rows "folder:$personal"
 "$helpers/flowctl" key 51 cmd; sleep 0.6
 expect "delete sheet" "$(value modal)" "Delete folder"

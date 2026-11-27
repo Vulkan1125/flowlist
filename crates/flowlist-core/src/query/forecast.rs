@@ -5,7 +5,6 @@ use std::collections::BTreeMap;
 
 use crate::db::Db;
 use crate::ids::{ProjectId, TaskId};
-use crate::model::ProjectStatus;
 use crate::time::{local_date, weekday_short};
 
 #[derive(Clone, Debug, Default)]
@@ -83,14 +82,8 @@ pub fn forecast(db: &Db, at: DateTime<Utc>, due_only: bool) -> Forecast {
     let mut result = Forecast::default();
 
     for task in db.tasks.values() {
-        if task.completed || task.is_trashed() {
+        if task.completed || task.is_trashed() || !db.task_project_is_open(&task.id) {
             continue;
-        }
-        if let Some(project_id) = &task.project {
-            match db.projects.get(project_id).map(|project| project.status) {
-                Some(ProjectStatus::Active) | None => {}
-                _ => continue,
-            }
         }
 
         if let Some(due) = db.effective_due(&task.id) {
@@ -192,11 +185,7 @@ pub fn forecast(db: &Db, at: DateTime<Utc>, due_only: bool) -> Forecast {
         if task.completed || task.is_trashed() {
             continue;
         }
-        if db
-            .effective_project(&task.id)
-            .and_then(|project| db.projects.get(&project))
-            .is_some_and(|project| project.status != ProjectStatus::Active)
-        {
+        if !db.task_project_is_open(&task.id) {
             continue;
         }
         if db.effective_due(&task.id).is_some()

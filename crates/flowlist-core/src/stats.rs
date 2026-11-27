@@ -52,6 +52,9 @@ pub fn compute(db: &Db, at: DateTime<Utc>) -> Stats {
             }
             continue;
         }
+        if db.task_project_is_archived(&task.id) {
+            continue;
+        }
         stats.open_tasks += 1;
         if task.project.is_none()
             && task.parent.is_none()
@@ -80,6 +83,9 @@ pub fn compute(db: &Db, at: DateTime<Utc>) -> Stats {
     }
 
     for project in db.projects.values() {
+        if project.is_archived() {
+            continue;
+        }
         match project.status {
             ProjectStatus::Active => {
                 stats.active_projects += 1;

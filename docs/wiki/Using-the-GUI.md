@@ -241,8 +241,10 @@ folders and can carry their own tags, dates, attachments and icon.
   Active.
 - The project inspector’s status row has an **Archive** icon at its right.
   The project row’s right-click menu has the same action; a folder’s menu
-  archives every project inside it. Done projects show a tick and Dropped ones
-  an × when they stay in the library.
+  archives every project inside it. Archiving takes the project and its
+  actions out of every active list, count and reminder; the Archive keeps
+  them. Done projects show a tick and Dropped ones an × when they stay in the
+  library.
 - **Settings → Workflow → Archive** controls whether Done and Dropped projects
   move to Archive automatically. It is on by default; turn it off to keep them
   visible in the active library.

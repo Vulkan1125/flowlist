@@ -97,8 +97,10 @@ text, which lets a probe check the New Project review default and the result of
 `Tab` between fields. `toast` carries the live toast message, or null once the
 timer or a click clears it.
 `collapsed` lists the tree keys (`folder:<id>`, `tag:<id>`) the user has
-folded, so a probe can assert a folder row's open/close click without relying
-on pixels.
+folded, so a probe can assert a folder chevron's open/close click without
+relying on pixels. `sidebar_toggles` maps the folder chevrons to their boxes,
+which keeps a probe from guessing at a row offset now that a folder name only
+opens its view.
 `sidebar_sections` maps each collapsible heading (`priorities`, `library`,
 `saved`, `tags`) to its box, so a probe can fold a section by name.
 `sidebar_visible` lists the row keys the rail targets on this frame, after
@@ -113,7 +115,7 @@ click the section first; the toggles do not paint in another section.
 sheet's unsaved copy, so a probe can click a toggle and check it before Save.
 `settings-window-controls` is the Appearance section's window-buttons toggle.
 `sidebar_counts` maps each count badge actually painted (`builtin:<slug>`,
-`priority:<slug>`, `folder:<id>`, `tag:<id>`) to its box, and
+`priority:<slug>`, `folder:<id>`, `tag:<id>`, `custom:<id>`) to its box, and
 `sidebar_count_values` reports the number inside each badge. Today's badge is
 always present, which makes the quiet count defaults assertable, while the
 folder value proves a badge counts live projects rather than every project
@@ -136,7 +138,7 @@ lists the task rows
 actually painted on the last frame, in order, with `id`, `title`, `depth` and
 `has_children`; hidden descendants are absent, so a probe can assert what a
 disclosure reveals. `task_disclosures` maps each parent id to its chevron box
-for clicking it. `archive_projects` lists the finished and dropped projects in
+for clicking it. `archive_projects` lists the archived projects in
 library order with `id`, `name` and `status` (`done` or `dropped`);
 `archive_groups` is the Archive's painted sections in order, each with its
 `key` (`archive:root` or `archive:folder:<id>`), `title` (`Library` or the

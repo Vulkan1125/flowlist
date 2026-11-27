@@ -1722,21 +1722,14 @@ impl FlowlistApp {
             .perspectives
             .get(&row.id)
             .map(|perspective| {
+                // A saved view's badge is its open-action count. Project
+                // headers can appear beside those actions, but counting them
+                // too would make one task read as two.
                 query::custom(self.store.db(), perspective, now())
                     .iter()
-                    .map(|group| {
-                        group
-                            .rows
-                            .iter()
-                            .filter(|row| self.focus_allows_task(&row.id))
-                            .count()
-                            + group
-                                .projects
-                                .iter()
-                                .filter(|project| self.focus_allows_project(project))
-                                .count()
-                    })
-                    .sum()
+                    .flat_map(|group| group.rows.iter())
+                    .filter(|row| self.focus_allows_task(&row.id))
+                    .count()
             })
             .unwrap_or(0);
         let count_key = format!("custom:{}", row.id);
@@ -1914,40 +1907,59 @@ impl FlowlistApp {
                             },
                         ))
                         .when(cursor, |this| this.bg(self.theme.hover))
-                        .child(
+                        .child({
+                            let toggle_boxes = self.sidebar_toggle_boxes.clone();
+                            let toggle_box_key = format!("folder:{id}");
                             div()
-                                .id(super::sid(format!("folder-toggle:{id}")))
-                                .w(px(14.))
-                                .h(px(20.))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .text_color(self.theme.text_faint)
-                                .cursor_pointer()
-                                .flow_tip(
-                                    self,
-                                    cx,
-                                    self.theme,
-                                    if open {
-                                        "Collapse folder"
-                                    } else {
-                                        "Expand folder"
-                                    },
+                                .on_children_prepainted(move |bounds, _, _| {
+                                    if let Some(bounds) = bounds.first() {
+                                        toggle_boxes.borrow_mut().insert(
+                                            toggle_box_key.clone(),
+                                            [
+                                                f32::from(bounds.origin.x),
+                                                f32::from(bounds.origin.y),
+                                                f32::from(bounds.size.width),
+                                                f32::from(bounds.size.height),
+                                            ],
+                                        );
+                                    }
+                                })
+                                .h_full()
+                                .child(
+                                    div()
+                                        .id(super::sid(format!("folder-toggle:{id}")))
+                                        .w(px(14.))
+                                        .h_full()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .text_color(self.theme.text_faint)
+                                        .cursor_pointer()
+                                        .flow_tip(
+                                            self,
+                                            cx,
+                                            self.theme,
+                                            if open {
+                                                "Collapse folder"
+                                            } else {
+                                                "Expand folder"
+                                            },
+                                        )
+                                        .child(icons::icon(
+                                            if open {
+                                                Icon::ChevronDown
+                                            } else {
+                                                Icon::ChevronRight
+                                            },
+                                            10.0,
+                                            self.theme.text_faint,
+                                        ))
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            cx.stop_propagation();
+                                            this.toggle_expanded(toggle_key.clone(), false, cx);
+                                        })),
                                 )
-                                .child(icons::icon(
-                                    if open {
-                                        Icon::ChevronDown
-                                    } else {
-                                        Icon::ChevronRight
-                                    },
-                                    10.0,
-                                    self.theme.text_faint,
-                                ))
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    this.toggle_expanded(toggle_key.clone(), false, cx);
-                                })),
-                        )
+                        })
                         .child(
                             self.measured(
                                 format!("folder:{id}"),
@@ -2391,6 +2403,10 @@ impl FlowlistApp {
                     div()
                         .id(super::sid(format!("tag-toggle:{tag}")))
                         .w(px(12.))
+                        .h_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
                         .text_color(self.theme.text_faint)
                         .flow_tip(
                             self,

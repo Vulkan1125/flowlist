@@ -141,7 +141,7 @@ integrations are tracked separately and are not part of this phase.
       undo step. Strict dates make the batch atomic.
 - [x] **Focus mode** — scope every perspective to one or more projects/folders.
       Cmd-click selects rows for general multi-actions and focus; a banner names
-      the focus, the eye clears/restores it, and Inbox/Trash stay global.
+      the focus, the eye clears/restores it, and Inbox/Trash stay in the rail.
 - [x] **Forecast tag and flagged contents** — a designated tag pulls undated
       actions into Forecast, flagged undated actions can be shown, and on-hold
       project deadlines already appear. Absolute custom notifications remain

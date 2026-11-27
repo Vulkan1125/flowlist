@@ -63,7 +63,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Review
 - [x] Tags
 - [x] Completed
-- [x] Archive (finished and dropped projects in folder sections, with Reopen
+- [x] Archive (archived projects in folder sections, with Reopen
       and a guarded Delete that Undo can restore)
 - [x] Changed (recently edited and still open, configurable window)
 - [x] Attachments (open tasks with file paths)
@@ -100,7 +100,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] `--priority` on add/edit/list, `--kind`/`--icon` on projects and
       `--attach`/`--clear-attachments` on tasks and projects
 - [x] `--changed` and `--attachments` on `list`
-- [x] `--archive` on `list` for finished and dropped projects
+- [x] `--archive` on `list` for archived projects
 - [x] `checklist list|add|set|move|remove`
 - [x] `tag add|remove|set`, `tags`
 - [x] `project add|list|status|review|edit`
@@ -168,10 +168,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Sidebar folders indent what they contain: subfolders and projects step
       right once per nesting level, and an empty folder shows “Empty” aligned
       with the names. Root-level projects keep their usual position. Folders
-      launch folded, so a fresh window is quiet; clicking a folder row opens
-      it and unfolds its tree, clicking the same open folder again folds the
-      tree without leaving the folder view, and a third click unfolds it. The
-      chevron keeps toggling just the tree.
+      launch folded, so a fresh window is quiet; clicking a folder name opens
+      its view, while its chevron alone unfolds or folds the tree.
 - [x] A folder's badge counts the projects under it that still want work: an
       open project whose tasks are all ticked, or a closed project, no longer
       inflates the number. Nested folders roll their live projects into their
@@ -216,8 +214,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       and a scrolling result list that stays inside the panel
 - [x] Header titles under the icon buttons, with a Workflow
       setting to hide them. Search keeps only its placeholder.
-- [x] Focus-aware sidebar counts for task perspectives and project dashboards;
-      Inbox stays global
+- [x] Focus-aware sidebar counts for task perspectives, Inbox, folders,
+      projects and saved views
 - [x] Focus mode: scope every perspective, search, Forecast calendar and
       project dashboard to one or more projects/folders. Cmd-click selects
       sidebar rows; right-click a selected row to focus, change project status
@@ -373,7 +371,8 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Projects carry an archive flag with an inspector icon and context-menu
       action; folders can archive all their projects. Settings → Workflow
       controls whether Done/Dropped archive automatically, otherwise they stay
-      visible with a tick or ×.
+      visible with a tick or ×. Archived projects and their actions leave the
+      active perspectives, counts and reminders, while the Archive keeps them.
 - [x] Empty saved perspectives leave the rail slot blank instead of showing a
       tick, and the first-use focus eye explains how to start a focus while
       restoring the last one afterwards.

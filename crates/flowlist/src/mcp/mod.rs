@@ -811,7 +811,10 @@ impl Server {
                 ContainerId::Project(id) => db
                     .projects
                     .get(&id)
-                    .filter(|project| include_closed || project.status.is_open())
+                    .filter(|project| {
+                        (include_closed || !project.is_archived())
+                            && (include_closed || project.status.is_open())
+                    })
                     .map(|_| id),
                 ContainerId::Folder(_) => None,
             })
@@ -1603,7 +1606,7 @@ fn tool_definitions() -> Vec<Value> {
             "list_projects",
             "List projects in library order.",
             schema(
-                json!({"include_closed": b("Include done and dropped projects")}),
+                json!({"include_closed": b("Include done, dropped and archived projects")}),
                 &[],
             ),
         ),

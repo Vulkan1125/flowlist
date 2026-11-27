@@ -41,6 +41,9 @@ PY
     if [ "$WX" -ge 0 ] && [ "$WX" -lt 1500 ] && [ "$WY" -ge 0 ] && [ "$WY" -lt 500 ]; then break; fi
     sleep 0.3
   done
+  # Synthetic keys only reach a window that owns the keyboard.
+  "$helpers/flowctl" mouse $((WX + 80)) $((WY + 18)) || true
+  sleep 0.4
   echo "window=$window"
 }
 value() {
@@ -274,9 +277,13 @@ b = json.load(open(sys.argv[1]))["view_boxes"]["rule-option:1:Status--Due-Soon"]
 print(int(b[0] + b[2] / 2), int(b[1] + b[3] / 2))
 PY
 )
-"$helpers/flowctl" scroll $((WX + ${point% *})) $((WY + ${point#* })) 2
-sleep 0.3
+# One wheel tick lands "Has date in range" inside the ruled menu viewport;
+# two ticks scroll it past the top and the recorded box goes stale.
+"$helpers/flowctl" scroll $((WX + ${point% *})) $((WY + ${point#* })) 1
+sleep 0.6
+wait_map view_boxes "rule-option:1:Has-date-in-range"
 click_map view_boxes "rule-option:1:Has-date-in-range"
+wait_row "Due Date is"
 date_id=$(python3 - "$state" <<'PY'
 import json, sys
 rows = (json.load(open(sys.argv[1])).get("view_form") or {}).get("rows") or []

@@ -24,7 +24,7 @@ busy_tag=$("$bin" --data-dir "$lib" tag add 'Busy' --json | python3 -c 'import j
 "$bin" --data-dir "$lib" add 'Busy one' --tag 'Busy' >/dev/null
 "$bin" --data-dir "$lib" add 'Busy two' --tag 'Busy' >/dev/null
 # A project whose work is all ticked should not inflate the folder badge.
-ticked=$("$bin" --data-dir "$lib" project add 'Ticked off' --folder 'Work' --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+ticked=$("$bin" --data-dir "$lib" project add 'Ticked off' --folder 'Work' --completion manual --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 ticked_task=$("$bin" --data-dir "$lib" add 'Finished work' --project 'Ticked off' --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 "$bin" --data-dir "$lib" done "$ticked_task" >/dev/null
 "$bin" --data-dir "$lib" add 'Inbox note' >/dev/null
@@ -273,19 +273,21 @@ wait_above sidebar_rows "tag:${busy_tag}" "tag:${tag}"
 wait_count "folder:${folder}" 1
 echo "1. Folders launch folded, counts stay quiet, tags sort by usage and ticked projects stay out of the folder badge"
 
-# Clicking the folder opens its view and unfolds the tree in one gesture.
+# Clicking the name opens the view; the chevron owns unfolding.
 click_map sidebar_rows "folder:${folder}"
 wait_value view "folder:${folder}"
+wait_lacks expanded "folder:${folder}"
+click_map sidebar_toggles "folder:${folder}"
 wait_has expanded "folder:${folder}"
 wait_has sidebar_visible "project:${project}"
 wait_has sidebar_visible "project:${ticked}"
 wait_count "folder:${folder}" 1
 echo "2. Opening a folder shows the projects inside it, including the ticked one"
 
-# A second click folds the tree again.
-click_map sidebar_rows "folder:${folder}"
+# The chevron folds the tree again.
+click_map sidebar_toggles "folder:${folder}"
 wait_lacks sidebar_visible "project:${project}"
-echo "3. A second click folds the folder back up"
+echo "3. The chevron folds the folder back up"
 
 # Section headings fold their rows without hiding the section itself.
 click_map sidebar_sections "tags"

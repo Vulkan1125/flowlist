@@ -79,7 +79,7 @@ Choose a view or filter:
 | `--changed` | tasks edited within the Changed window |
 | `--attachments` | open tasks that have attachments (files or links) |
 | `--fullscreen` | tasks with an effective full-screen reminder |
-| `--archive` | tasks in finished and dropped projects |
+| `--archive` | tasks in archived projects |
 | `--available` | only available tasks |
 | `--priority high\|medium\|low` | only tasks with that priority |
 | `-t/--tag <PATH>` | tasks with a tag |

@@ -61,7 +61,7 @@ The sidebar's fixed perspectives are the backbone:
 | Review | projects due for review |
 | Tags | tasks grouped by tag |
 | Completed | completed tasks |
-| Archive | finished and dropped projects, grouped by folder |
+| Archive | archived projects, grouped by folder |
 | Changed | recently edited tasks that are still open |
 | Attachments | open tasks with file paths |
 | Nearby | tasks whose tagged location is inside the radius |
@@ -163,9 +163,8 @@ inside itself or its own subtree. Drops are undoable.
 
 ## Sidebar
 
-Folders launch **folded**, so a fresh window is quiet. Clicking a folder opens
-its view and unfolds its tree; clicking the same open folder again folds the
-tree without leaving the view. The chevron toggles just the tree. Nested
+Folders launch **folded**, so a fresh window is quiet. Clicking a folder name
+opens its view, while its chevron alone unfolds or folds the tree. Nested
 folders and projects indent one step per level and each row shows only its own
 name, so indentation carries the path instead of repeating `Parent / Child`.
 An empty folder says “Empty” aligned with the names.
@@ -239,7 +238,7 @@ the project banner and in the inspector is a button: it opens a **Review
 interval** sheet for the project on screen, so the cadence can change without
 recreating anything. The sheet takes 1–365 days and accepts an undo.
 
-The Archive lists finished and dropped projects grouped by folder. A row opens
+The Archive lists archived projects grouped by folder. A row opens
 the project, Reopen brings it back without leaving the Archive, and Delete asks
 in the usual confirmation sheet. Undo restores the project and its folder
 group.

@@ -203,7 +203,7 @@ the full rule tree, project rules, date ranges and comments.
 ### Archive, Trash and history
 
 - Completed and Changed views.
-- Archive for finished and dropped projects.
+- Archive for archived projects, including finished and dropped ones.
 - Trash with restore, permanent delete, retention and empty-trash.
 - Undo and redo across every surface.
 - JSON and TaskPaper import/export.

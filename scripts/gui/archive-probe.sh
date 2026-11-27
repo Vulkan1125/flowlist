@@ -262,7 +262,7 @@ done
 launch
 wait_value view archive
 wait_archive_ids
-wait_value empty_note "No finished projects"
+wait_value empty_note "No archived projects"
 echo "8. Reopening the last project shows the calm empty state"
 
 echo "ALL ARCHIVE CHECKS PASSED"

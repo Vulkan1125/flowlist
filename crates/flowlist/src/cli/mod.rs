@@ -2143,7 +2143,10 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
                     ContainerId::Project(id) => db
                         .projects
                         .get(&id)
-                        .filter(|project| closed || project.status.is_open())
+                        .filter(|project| {
+                            (closed || !project.is_archived())
+                                && (closed || project.status.is_open())
+                        })
                         .map(|_| id),
                     ContainerId::Folder(_) => None,
                 })

@@ -349,14 +349,7 @@ fn reminders(db: &Db, reference: chrono::DateTime<chrono::Utc>) -> Vec<Reminder>
     let settings = &db.settings;
     let mut pending = Vec::new();
     for task in db.tasks.values() {
-        if task.completed || task.is_trashed() {
-            continue;
-        }
-        if db
-            .effective_project(&task.id)
-            .and_then(|project| db.projects.get(&project))
-            .is_some_and(|project| project.status.is_closed())
-        {
+        if task.completed || task.is_trashed() || !db.task_project_is_open(&task.id) {
             continue;
         }
         let location = db
@@ -382,7 +375,7 @@ fn reminders(db: &Db, reference: chrono::DateTime<chrono::Utc>) -> Vec<Reminder>
         );
     }
     for project in db.projects.values() {
-        if project.status.is_closed() {
+        if project.status.is_closed() || project.is_archived() {
             continue;
         }
         let location = db.project_path(&project.id);
@@ -860,6 +853,14 @@ mod tests {
         let mut in_project = task("In closed project", due);
         in_project.project = Some(project_id);
         db.tasks.insert(in_project.id.clone(), in_project);
+
+        let mut archived = Project::new("Archived");
+        archived.archived = Some(true);
+        archived.due = Some(due);
+        let archived_id = db.add_project(archived);
+        let mut in_archived = task("In archived project", due);
+        in_archived.project = Some(archived_id);
+        db.tasks.insert(in_archived.id.clone(), in_archived);
 
         assert!(reminders(&db, reference).is_empty());
     }

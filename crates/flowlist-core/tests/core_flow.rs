@@ -1508,6 +1508,90 @@ fn auto_archive_controls_whether_closed_projects_leave_the_library() {
 }
 
 #[test]
+fn archived_projects_leave_active_counters() {
+    use flowlist_core::stats;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let project = add_project_in(&mut store, "Shelved", None);
+    store
+        .execute(Command::ArchiveProjects {
+            ids: vec![project.clone()],
+            archived: true,
+        })
+        .unwrap();
+
+    let counts = stats::compute(store.db(), Utc::now());
+    assert_eq!(counts.active_projects, 0);
+    assert_eq!(counts.projects_due_review, 0);
+    assert!(store.db().projects[&project].is_archived());
+}
+
+#[test]
+fn archived_project_actions_leave_active_views() {
+    use flowlist_core::query;
+    use flowlist_core::stats;
+
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+    let project = add_project_in(&mut store, "Shelved", None);
+    let tag = add_tag_in(&mut store, "shelved-tag", None);
+    let mut task = NewTask::new("Shelved work");
+    task.project = Some(project.clone());
+    task.tags.push(tag);
+    task.flagged = true;
+    task.due = Some(Stamp::date_only(local_date(Utc::now())));
+    let id = store
+        .execute(Command::CreateTask(task))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("created task");
+    let id = store.db().resolve_task(&id).unwrap();
+
+    store
+        .execute(Command::ArchiveProjects {
+            ids: vec![project],
+            archived: true,
+        })
+        .unwrap();
+
+    let at = Utc::now();
+    for which in [
+        BuiltinPerspective::Today,
+        BuiltinPerspective::Forecast,
+        BuiltinPerspective::Flagged,
+        BuiltinPerspective::Tags,
+        BuiltinPerspective::Changed,
+    ] {
+        let groups = query::view(store.db(), which, at);
+        assert!(
+            groups
+                .iter()
+                .flat_map(|group| group.rows.iter())
+                .all(|row| row.id != id),
+            "{which:?} still shows an archived project's action"
+        );
+    }
+    let groups = query::run(
+        store.db(),
+        &FilterNode::All(Vec::new()),
+        SortBy::Manual,
+        GroupBy::None,
+        false,
+        at,
+    );
+    assert!(
+        groups
+            .iter()
+            .flat_map(|group| group.rows.iter())
+            .all(|row| row.id != id)
+    );
+    assert_eq!(stats::compute(store.db(), at).open_tasks, 0);
+}
+
+#[test]
 fn tasks_in_an_on_hold_project_cannot_be_completed() {
     let (_dir, paths) = setup();
     let mut store = Store::open(paths).unwrap();

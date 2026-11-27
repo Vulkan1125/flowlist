@@ -2895,7 +2895,7 @@ impl FlowlistApp {
                 .left_0()
                 .top_0()
                 .bottom_0()
-                .w(px(36.))
+                .w(px(40.))
                 .cursor_pointer()
                 .on_click(cx.listener(move |this, _, _, cx| {
                     cx.stop_propagation();
@@ -3180,6 +3180,7 @@ impl FlowlistApp {
                         .id(super::sid(format!("disclosure:{}", disclosure_id)))
                         .flex()
                         .items_center()
+                        .h_full()
                         .gap_1()
                         // The gap before the flag is part of the toggle target,
                         // so a small chevron is not a pixel hunt.

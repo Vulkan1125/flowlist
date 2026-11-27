@@ -568,6 +568,9 @@ pub struct FlowlistApp {
     /// Sidebar row boxes keyed by target, so a GUI probe can drag a project
     /// onto a folder without guessing at coordinates.
     sidebar_row_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Folder disclosure hit areas, so probes can click the chevron rather
+    /// than guessing at a row offset.
+    sidebar_toggle_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// Painted boxes for the start of each sidebar row's name (its icon), plus
     /// `empty:<parent>` for the "no projects" note, so a probe can check that
     /// nested rows are indented under their folder.
@@ -1133,6 +1136,7 @@ impl FlowlistApp {
             forecast_toggle_anchor: Rc::new(Cell::new(None)),
             forecast_grip_anchor: Rc::new(Cell::new(None)),
             sidebar_row_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            sidebar_toggle_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             sidebar_name_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             history_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             settings_toggle_boxes: Rc::new(RefCell::new(BTreeMap::new())),
@@ -1575,11 +1579,7 @@ impl FlowlistApp {
                 if snoozed_until.is_none() && at - due_at > grace {
                     continue;
                 }
-                if db
-                    .effective_project(&task.id)
-                    .and_then(|project| db.projects.get(&project))
-                    .is_some_and(|project| project.status.is_closed())
-                {
+                if !db.task_project_is_open(&task.id) {
                     continue;
                 }
                 if !db.wants_fullscreen_reminder(&task.id) {
@@ -1872,6 +1872,7 @@ impl FlowlistApp {
             .into_iter()
             .filter(|id| {
                 db.tasks.get(id).is_some_and(|task| !task.completed)
+                    && !db.task_project_is_archived(id)
                     && self.focus_allows_task(id)
             })
             .count()
@@ -2164,7 +2165,13 @@ impl FlowlistApp {
                     ContainerId::Project(project) => Some(project),
                     ContainerId::Folder(_) => None,
                 })
-                .filter(|project| project_in_folder(db, project, id))
+                .filter(|project| {
+                    project_in_folder(db, project, id)
+                        && db
+                            .projects
+                            .get(project)
+                            .is_none_or(|project| !project.is_archived())
+                })
                 .flat_map(|project| self.project_groups(&project))
                 .collect::<Vec<_>>(),
             View::Tag(id) => {
@@ -2175,6 +2182,7 @@ impl FlowlistApp {
                         db.tasks
                             .get(task_id)
                             .is_some_and(|task| self.show_completed || !task.completed)
+                            && !db.task_project_is_archived(task_id)
                     })
                     .collect();
                 let rows = query::rows_for(db, &ids, at);
@@ -2450,6 +2458,13 @@ impl FlowlistApp {
                     });
                 }
                 ContainerId::Project(id) => {
+                    if db
+                        .projects
+                        .get(&id)
+                        .is_none_or(|project| project.is_archived())
+                    {
+                        continue;
+                    }
                     let path = db.project_path(&id);
                     entries.push(QuickOpenEntry {
                         label: path.clone(),
@@ -3854,7 +3869,7 @@ impl FlowlistApp {
                 ContainerId::Project(id) => db
                     .projects
                     .get(&id)
-                    .filter(|project| project.status.is_open())
+                    .filter(|project| project.status.is_open() && !project.is_archived())
                     .map(|_| db.project_path(&id)),
                 ContainerId::Folder(_) => None,
             })
@@ -8013,6 +8028,7 @@ impl FlowlistApp {
                         .filter(|task| {
                             !task.completed
                                 && !task.is_trashed()
+                                && db.task_project_is_open(&task.id)
                                 && self.focus_allows_task(&task.id)
                                 && task.due.is_some_and(|stamp| stamp.local_date() <= today)
                         })
@@ -8032,6 +8048,7 @@ impl FlowlistApp {
                 .filter(|task| {
                     !task.completed
                         && !task.is_trashed()
+                        && !db.task_project_is_archived(&task.id)
                         && task.flagged
                         && self.focus_allows_task(&task.id)
                 })
@@ -8043,7 +8060,11 @@ impl FlowlistApp {
             BuiltinPerspective::Tags => {
                 let mut tags = BTreeSet::new();
                 for task in db.tasks.values() {
-                    if task.completed || task.is_trashed() || !self.focus_allows_task(&task.id) {
+                    if task.completed
+                        || task.is_trashed()
+                        || db.task_project_is_archived(&task.id)
+                        || !self.focus_allows_task(&task.id)
+                    {
                         continue;
                     }
                     tags.extend(task.tags.iter().cloned());
@@ -8081,6 +8102,7 @@ impl FlowlistApp {
                     .filter(|task| {
                         !task.completed
                             && !task.is_trashed()
+                            && !db.task_project_is_archived(&task.id)
                             && task.modified_at >= cutoff
                             && self.focus_allows_task(&task.id)
                     })
@@ -8092,6 +8114,7 @@ impl FlowlistApp {
                 .filter(|task| {
                     !task.completed
                         && !task.is_trashed()
+                        && !db.task_project_is_archived(&task.id)
                         && !task.attachments.is_empty()
                         && self.focus_allows_task(&task.id)
                 })
@@ -8102,6 +8125,7 @@ impl FlowlistApp {
                 .filter(|task| {
                     !task.completed
                         && !task.is_trashed()
+                        && !db.task_project_is_archived(&task.id)
                         && db.wants_fullscreen_reminder(&task.id)
                         && db.reminder_stamp(&task.id).is_some()
                         && self.focus_allows_task(&task.id)
@@ -8624,6 +8648,7 @@ impl FlowlistApp {
             _ => None,
         });
         state["sidebar_rows"] = serde_json::json!(self.sidebar_row_boxes.borrow().clone());
+        state["sidebar_toggles"] = serde_json::json!(self.sidebar_toggle_boxes.borrow().clone());
         state["sidebar_menu_boxes"] = serde_json::json!(self.sidebar_menu_boxes.borrow().clone());
         state["sidebar_drag_target"] = serde_json::json!(self.sidebar_drag_target);
         state["content_drop_target"] = serde_json::json!(self.content_drop_target);
@@ -9150,7 +9175,9 @@ impl FlowlistApp {
         let open = db
             .tasks
             .values()
-            .filter(|task| !task.completed && !task.is_trashed())
+            .filter(|task| {
+                !task.completed && !task.is_trashed() && db.task_project_is_open(&task.id)
+            })
             .count();
         let available = db
             .tasks
@@ -9158,6 +9185,7 @@ impl FlowlistApp {
             .filter(|task| {
                 !task.completed
                     && !task.is_trashed()
+                    && db.task_project_is_open(&task.id)
                     && query::availability::availability(db, &task.id, at).is_available()
             })
             .count();

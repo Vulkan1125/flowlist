@@ -29,7 +29,11 @@
   inside it in one undo step.
 - **Auto archive setting.** Settings → Workflow → Archive moves Done and
   Dropped projects out of the active library by default. Turn it off and they
-  stay visible with a tick for Done and an × for Dropped.
+  stay visible with a tick for Done and an × for Dropped. Archived projects
+  and their actions stay out of Quick Open, project autocomplete, the active
+  project list, Today, Forecast, Flagged, Tags, Changed, Attachments, Nearby,
+  the status bar, the rail counts and the reminder scheduler. The Archive
+  still lists them.
 - **On Hold rail marker.** On Hold projects show a pause mark instead of a
   count; their tasks and subtasks stay dimmed and cannot be completed.
 
@@ -64,14 +68,19 @@
 - **Empty project pane.** An empty project says **Nothing here** with
   “Add the first task above”; a stalled project shows the usual centered
   icon with **All caught up — no active tasks** and “Add a new task above.”
-- **Heading hit area.** The chevron target on a heading now covers the left
-  padding and full row height, so clicks near it register. Sidebar folder
-  chevrons use their whole 14×20 slot.
+- **Heading hit area.** The chevron target on a heading now covers the whole
+  left gutter and row height, so clicks near it register. Sidebar folder and
+  tag chevrons use their whole row-height slot, and subtask arrows stretch to
+  the row height too.
+- **Folder rows.** A folder's chevron alone unfolds its tree; clicking the
+  folder name opens its view without changing the tree.
+- **Saved view counts.** A saved view's badge counts its open actions once,
+  ignoring the project headers that can sit beside them.
 - **Task rows.** Shade and separator share a small front inset and the
   separator runs to the right edge without stopping at the padding. Grouped
-  views such as Forecast, Attachments, Today and Tags indent tasks only when a
-  heading is actually shown, and leave a gap before the next heading. Group
-  None and unheaded lists stay flush left.
+  views such as Forecast, Today, Tags and grouped saved views indent tasks only
+  when a heading is actually shown, and leave a gap before the next heading.
+  Group None and unheaded lists such as Attachments stay flush left.
 - **Project headers.** Projects headers drop the progress bar and **Open**
   link and use the bare project name everywhere. Only the chevron toggles
   tasks; clicking the heading shows the project in the inspector, and

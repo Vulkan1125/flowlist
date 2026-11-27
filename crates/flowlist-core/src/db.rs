@@ -474,6 +474,28 @@ impl Db {
             .and_then(|task| task.project.clone())
     }
 
+    /// True when the task's project is archived. An archived project leaves
+    /// the active library, so its actions must leave the active perspectives
+    /// with it even though the tasks stay in the database for the Archive.
+    pub fn task_project_is_archived(&self, task_id: &TaskId) -> bool {
+        self.effective_project(task_id)
+            .and_then(|project| self.projects.get(&project))
+            .is_some_and(|project| project.is_archived())
+    }
+
+    /// True when the task has no project or its project is open and unarchived.
+    /// Closed projects keep their history, but their actions do not belong in
+    /// Today or Forecast.
+    pub fn task_project_is_open(&self, task_id: &TaskId) -> bool {
+        match self.effective_project(task_id) {
+            Some(project) => self
+                .projects
+                .get(&project)
+                .is_none_or(|project| project.status.is_open() && !project.is_archived()),
+            None => true,
+        }
+    }
+
     /// The planned date a task actually shows: its own, otherwise the nearest
     /// parent action's, otherwise its project's. Planned dates never affect
     /// availability.
@@ -1167,7 +1189,10 @@ impl Db {
         self.tasks
             .values()
             .filter(|task| {
-                !task.completed && !task.is_trashed() && task.tags.iter().any(|t| ids.contains(t))
+                !task.completed
+                    && !task.is_trashed()
+                    && !self.task_project_is_archived(&task.id)
+                    && task.tags.iter().any(|t| ids.contains(t))
             })
             .count()
     }
