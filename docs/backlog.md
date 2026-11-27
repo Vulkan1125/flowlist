@@ -180,6 +180,43 @@ integrations are tracked separately and are not part of this phase.
       database, a clean-up policy for completed rows, and warnings before
       deleting containers that hide completed children.
 
+### Phase 6 — Android parity and reminder polish
+
+- [ ] **Reminder staleness on an idle phone** — the phone only joins the shared
+      dismissal list while its own reminder is open, so a Mac complete or snooze
+      can leave an already-handled alarm to fire later. Check the list when the
+      alarm fires, or add a lightweight background sync.
+- [ ] **Overlay permission onboarding** — turning on Full-screen reminders
+      should offer **Display over other apps** in place. Without it an unlocked
+      phone falls back to the heads-up banner.
+- [ ] **Reminder notification actions** — put Dismiss and Snooze on the alarm
+      card so the shade can handle a reminder without opening it.
+- [ ] **Simultaneous reminders** — queue alarms instead of replacing the open
+      overlay with the newest one, or add the Mac's Full-screen list.
+- [ ] **Per-reminder media pause** — the Pause media switch is global; allow a
+      single reminder to keep playing.
+- [ ] **Android docs refresh** — `android/README.md` still describes the old
+      week-strip reminder and calls the default theme Todoist; update it for the
+      overlay, media pause, snooze and cross-device sync.
+- [ ] **Project completion mode** — expose complete-with-last-action in the
+      Android project editor. The shared command layer already applies it, but
+      the phone cannot change it.
+- [ ] **Project archive controls** — add the archive flag to the Android project
+      editor and the Mac's Settings → Workflow → Archive choice; the Archive
+      perspective exists but archiving is only a row action today.
+- [ ] **Stalled and On Hold projects** — dim and reject completion for On Hold
+      projects, mark stalled projects in the drawer, and reveal a project's
+      completed roots behind a Completed (n) row.
+- [ ] **Focus mode** — scope the phone's perspectives and search to chosen
+      projects and folders, with the same clear-focus banner as the Mac.
+- [ ] **Calendar events in Forecast** — read the phone's own calendars (with
+      permission) under the month grid, matching the Mac's EventKit events.
+- [ ] **Project rows in saved views** — render matching projects as their own
+      rows with nested actions, as the Mac does, instead of listing tasks only.
+- [?] **Play Store path** — `SYSTEM_ALERT_WINDOW` and a `specialUse` foreground
+      service need a justification if the phone app is ever listed on Play.
+      Sideloaded builds are unaffected.
+
 ## Interaction polish
 
 - [x] **Toast self-dismissal** — verified in a running window: a toast retires
