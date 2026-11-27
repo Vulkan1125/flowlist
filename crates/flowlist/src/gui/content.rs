@@ -2776,8 +2776,10 @@ impl FlowlistApp {
         let group_boxes = self.content_group_boxes.clone();
         let group_key = group.key.clone();
         let header_project = project.clone();
+        let overlay_key = open_key.clone();
         let mut row =
             div()
+                .relative()
                 .on_children_prepainted(move |bounds, _, _| {
                     if let Some(bounds) = bounds.first() {
                         group_boxes.borrow_mut().insert(
@@ -2804,26 +2806,38 @@ impl FlowlistApp {
                 .hover(|style| style.bg(theme.hover))
                 .child({
                     let chevron_key = open_key.clone();
+                    // The wrapper leaves the row as the heading target; only
+                    // the small inner square folds the section.
                     div()
-                        .id(super::sid(format!("group-toggle:{}", group.key)))
-                        .w(px(12.))
+                        .w(px(16.))
+                        .h(px(20.))
                         .flex()
                         .items_center()
-                        .text_color(theme.text_faint)
-                        .cursor_pointer()
-                        .child(icons::icon(
-                            if open {
-                                Icon::ChevronDown
-                            } else {
-                                Icon::ChevronRight
-                            },
-                            12.0,
-                            theme.text_faint,
-                        ))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            cx.stop_propagation();
-                            this.toggle_group_collapsed(chevron_key.clone(), cx);
-                        }))
+                        .justify_center()
+                        .child(
+                            div()
+                                .id(super::sid(format!("group-toggle:{}", group.key)))
+                                .w(px(10.))
+                                .h(px(10.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .text_color(theme.text_faint)
+                                .cursor_pointer()
+                                .child(icons::icon(
+                                    if open {
+                                        Icon::ChevronDown
+                                    } else {
+                                        Icon::ChevronRight
+                                    },
+                                    10.0,
+                                    theme.text_faint,
+                                ))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.toggle_group_collapsed(chevron_key.clone(), cx);
+                                })),
+                        )
                 })
                 .child(
                     div()
@@ -2874,6 +2888,20 @@ impl FlowlistApp {
                 }
             }
         }
+        row = row.child(
+            div()
+                .id(super::sid(format!("group-hit:{}", group.key)))
+                .absolute()
+                .left_0()
+                .top_0()
+                .bottom_0()
+                .w(px(36.))
+                .cursor_pointer()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.toggle_group_collapsed(overlay_key.clone(), cx);
+                })),
+        );
         row
     }
 

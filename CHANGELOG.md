@@ -64,6 +64,9 @@
 - **Empty project pane.** An empty project says **Nothing here** with
   “Add the first task above”; a stalled project shows the usual centered
   icon with **All caught up — no active tasks** and “Add a new task above.”
+- **Heading hit area.** The chevron target on a heading now covers the left
+  padding and full row height, so clicks near it register. Sidebar folder
+  chevrons use their whole 14×20 slot.
 - **Task rows.** Shade and separator share a small front inset and the
   separator runs to the right edge without stopping at the padding. Grouped
   views such as Forecast, Attachments, Today and Tags indent tasks only when a

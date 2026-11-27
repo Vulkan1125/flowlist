@@ -1918,7 +1918,12 @@ impl FlowlistApp {
                             div()
                                 .id(super::sid(format!("folder-toggle:{id}")))
                                 .w(px(14.))
+                                .h(px(20.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
                                 .text_color(self.theme.text_faint)
+                                .cursor_pointer()
                                 .flow_tip(
                                     self,
                                     cx,
@@ -1935,7 +1940,7 @@ impl FlowlistApp {
                                     } else {
                                         Icon::ChevronRight
                                     },
-                                    12.0,
+                                    10.0,
                                     self.theme.text_faint,
                                 ))
                                 .on_click(cx.listener(move |this, _, _, cx| {
