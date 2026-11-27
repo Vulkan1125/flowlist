@@ -286,6 +286,17 @@ on into that directory from its own window, so no Screen Recording permission
 is needed. This works under OmniWM and other tiling managers because the capture
 is the app's own surface, not the display.
 
+## Focus demo
+
+`scripts/focus-demo.sh` opens a throwaway library with a folder, two projects
+and a few tasks. Use it to try Focus and the header eye without touching the
+real library. Pass a path to keep the same demo library across launches:
+
+```sh
+scripts/focus-demo.sh
+scripts/focus-demo.sh /tmp/flowlist-focus-demo
+```
+
 ## Probes
 
 Focused probes use the test-state boxes above and run against a temporary
