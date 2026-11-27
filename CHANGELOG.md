@@ -94,9 +94,11 @@
 ### Android full-screen reminder
 
 - **Immersive reminder layout.** The phone's full-screen reminder fills the
-  screen with the dark side of the selected theme or reminder preset, a bell,
-  the task title, time and project, then a compact top-right **Dismiss** and
-  the actions. The system bars stay light over the scrim.
+  screen with the selected theme or reminder preset, following the app's light
+  or dark mode: light mode uses the pale preset and dark type, while dark mode
+  uses the deep preset with white type. A bell, the task title, time and
+  project sit above a compact top-right **Dismiss** and the actions. The system
+  bar icons follow the same contrast.
 - **Slide to complete.** The completion button is an iOS-style track: drag the
   white check to the end to finish, with a haptic tick.
 - **Adjustable snooze.** Minus and plus decrease or increase the snooze in

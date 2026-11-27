@@ -1,6 +1,7 @@
 package dev.flowlist.android.notify
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -45,6 +46,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -52,9 +54,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -81,6 +85,7 @@ import dev.flowlist.android.data.ThemeStore
 import dev.flowlist.android.ui.AppearanceMode
 import dev.flowlist.android.ui.AppBackground
 import dev.flowlist.android.ui.FlowlistTheme
+import dev.flowlist.android.ui.flow
 import dev.flowlist.android.ui.reminderBackgroundFor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -113,12 +118,6 @@ class ReminderActivity : ComponentActivity() {
             )
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        // The reminder always paints a dark scrim, so keep the system bars
-        // light even when the app itself is set to a light theme.
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = false
-            isAppearanceLightNavigationBars = false
-        }
 
         val taskId = intent.getStringExtra("task_id") ?: run {
             finish()
@@ -130,18 +129,29 @@ class ReminderActivity : ComponentActivity() {
         TaskReminders.markFired(this, taskId)
         getSystemService(android.app.NotificationManager::class.java)?.cancel(taskId.hashCode())
         val theme = ThemeStore(this).load()
-        // A reminder is an alarm screen: use the dark side of the selected
-        // theme family so the white type stays legible at any hour.
-        val reminderTheme = theme.copy(mode = AppearanceMode.Dark)
+        val systemDark = (resources.configuration.uiMode and
+            Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val darkMode = when (theme.mode) {
+            AppearanceMode.Dark -> true
+            AppearanceMode.Light -> false
+            AppearanceMode.System -> systemDark
+        }
         val preferences = PreferencesStore(this).load()
-        val reminderBackground = preferences.reminderBackgroundFor(reminderTheme, true)
+        val reminderBackground = preferences.reminderBackgroundFor(theme, darkMode)
+        // Ambient presets carry their own light/dark variants. A photo is
+        // always veiled, so white type stays readable there.
+        val lightContent = darkMode || reminderBackground is AppBackground.Custom
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !lightContent
+            isAppearanceLightNavigationBars = !lightContent
+        }
 
         setContent {
             FlowlistTheme(
-                reminderTheme,
+                theme,
                 background = reminderBackground,
                 // Theme presets stay untouched; a photo still gets a veil so
-                // the white reminder type remains readable.
+                // the reminder type remains readable.
                 backgroundScrim = if (reminderBackground is AppBackground.Custom) {
                     Color.Black.copy(alpha = 0.45f)
                 } else {
@@ -153,6 +163,7 @@ class ReminderActivity : ComponentActivity() {
                     project = project,
                     dueAt = dueAt,
                     initialSnoozeMinutes = preferences.snoozeMinutes,
+                    lightContent = lightContent,
                     onComplete = {
                         lifecycleScope.launch {
                             runCatching {
@@ -190,7 +201,8 @@ class ReminderActivity : ComponentActivity() {
 }
 
 private val reminderGreen = Color(0xFF18C66B)
-private val reminderInk = Color.White
+private val LocalReminderInk = staticCompositionLocalOf { Color.White }
+private val reminderInk: Color @Composable get() = LocalReminderInk.current
 
 @Composable
 private fun ReminderScreen(
@@ -198,6 +210,7 @@ private fun ReminderScreen(
     project: String?,
     dueAt: Long,
     initialSnoozeMinutes: Int,
+    lightContent: Boolean,
     onComplete: () -> Unit,
     onSnooze: (Int) -> Unit,
     onOpen: () -> Unit,
@@ -209,6 +222,8 @@ private fun ReminderScreen(
     val whenText = remember(dueInstant) {
         dueInstant.format(DateTimeFormatter.ofPattern("HH:mm"))
     }
+    val ink = if (lightContent) Color.White else flow.ink
+    CompositionLocalProvider(LocalReminderInk provides ink) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -238,6 +253,7 @@ private fun ReminderScreen(
                 onOpen = onOpen,
             )
         }
+    }
     }
 }
 
@@ -371,7 +387,7 @@ private fun SlideToComplete(
         modifier = modifier
             .height(56.dp)
             .clip(RoundedCornerShape(percent = 50))
-            .background(Color.White.copy(alpha = 0.13f))
+            .background(reminderInk.copy(alpha = 0.10f))
             .border(1.dp, reminderGreen.copy(alpha = 0.45f), RoundedCornerShape(percent = 50))
             .onSizeChanged { trackWidth = it.width.toFloat() }
             .semantics(mergeDescendants = true) {
@@ -460,8 +476,9 @@ private fun SlideToComplete(
                 modifier = Modifier
                     .offset { IntOffset(thumb.value.roundToInt(), 0) }
                     .size(thumbSize)
+                    .shadow(2.dp, CircleShape)
                     .clip(CircleShape)
-                    .background(reminderInk),
+                    .background(Color.White),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -500,7 +517,7 @@ private fun SnoozeRow(
                 .weight(1f)
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(percent = 50))
-                .background(Color.White.copy(alpha = 0.14f))
+                .background(reminderInk.copy(alpha = 0.10f))
                 .clickable(role = Role.Button) { onSnooze(minutes) },
             contentAlignment = Alignment.Center,
         ) {
@@ -530,7 +547,7 @@ private fun RoundControl(
         modifier = Modifier
             .size(52.dp)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.14f))
+            .background(reminderInk.copy(alpha = 0.10f))
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
