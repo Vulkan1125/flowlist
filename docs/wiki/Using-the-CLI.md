@@ -295,7 +295,7 @@ List tags with their paths and usage.
 | `--folder <FOLDER>` | Folder path. |
 | `--note <NOTE>` | Notes. |
 | `--due`, `--defer`, `--planned` | Project dates. |
-| `--review-days <DAYS>` | Review interval. |
+| `--review-days <DAYS>` | Review interval. Moves next review unless `--next-review` is given. |
 | `--sequential` | Sequential project. |
 | `--kind <KIND>` | `parallel`, `sequential`, `single_actions`. |
 | `--icon <ICON>` | Named icon or one emoji. |
@@ -309,6 +309,8 @@ Options: `--name`, `--note`, `--folder`, `--due`, `--defer`, `--planned`,
 `--review-days`, `--next-review`, `--sequential`, `--kind`, `--icon`,
 `--attach`, `--clear-attachments`, `--alerts`, `--remove-notification`,
 `--restore-notification`, `--custom-notification`, `--clear-custom-notifications`.
+`--review-days` moves the next review to the last reviewed date plus the new
+interval; `--next-review` sets an explicit date and wins.
 
 **`flowlist project status <ID> <STATUS>`**
 

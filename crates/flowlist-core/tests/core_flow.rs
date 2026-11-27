@@ -1320,6 +1320,24 @@ fn each_project_keeps_its_own_review_cadence() {
         .unwrap();
     assert_eq!(store.db().projects[&weekly].review_interval_days, 14);
     assert_eq!(store.db().projects[&monthly].review_interval_days, 30);
+    assert_eq!(
+        store.db().projects[&weekly].next_review,
+        today + chrono::Duration::days(14)
+    );
+
+    // An explicit next-review date wins over the cadence calculation.
+    let chosen = today + chrono::Duration::days(3);
+    store
+        .execute(Command::UpdateProject {
+            id: weekly.clone(),
+            patch: ProjectPatch {
+                review_interval_days: Some(30),
+                next_review: Some(chosen),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert_eq!(store.db().projects[&weekly].next_review, chosen);
 }
 
 #[test]

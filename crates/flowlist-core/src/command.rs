@@ -1559,6 +1559,18 @@ impl Command {
                     ensure_dates_in_order(project.due, project.defer)?;
                     if let Some(interval) = patch.review_interval_days {
                         project.review_interval_days = interval.max(1);
+                        // Changing the cadence moves the next review with it
+                        // unless the caller also supplied an explicit date.
+                        if patch.next_review.is_none() {
+                            let base = project
+                                .last_reviewed
+                                .unwrap_or_else(|| local_date(at));
+                            project.next_review = base
+                                .checked_add_signed(chrono::Duration::days(
+                                    project.review_interval_days as i64,
+                                ))
+                                .unwrap_or(base);
+                        }
                     }
                     if let Some(review) = patch.next_review {
                         project.next_review = review;

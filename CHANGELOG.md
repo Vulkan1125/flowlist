@@ -13,6 +13,13 @@
   projects by** and **Sort projects by**. `perspective add` accepts
   `--project-group` and `--project-sort`.
 
+### Review cadence
+
+- **Next review follows the interval.** Changing **Review every** from the
+  inspector now moves the next review to the last reviewed date plus the new
+  interval (or today plus the interval when it has never been reviewed). An
+  explicit next-review date still wins.
+
 ### Perspective editor polish
 
 - **Simple fields under the tabs.** Contains text and the estimate range now sit
