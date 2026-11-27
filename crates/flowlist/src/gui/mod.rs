@@ -2239,27 +2239,46 @@ impl FlowlistApp {
     fn project_groups(&self, id: &ProjectId) -> Vec<Group> {
         let db = self.store.db();
         let at = now();
-        let rows: Vec<TaskRow> = db
-            .project_outline_with(id, self.show_completed, self.keep_completed_subtasks)
-            .into_iter()
-            .map(|row| {
-                let mut task_row = query::row_for(db, &row.task, at);
-                task_row.depth = row.depth;
-                task_row
-            })
-            .collect();
         let title = db
             .projects
             .get(id)
             .map(|project| project.name.clone())
             .unwrap_or_else(|| "Project".to_string());
-        vec![Group {
+        let mut open_rows = Vec::new();
+        let mut completed_rows = Vec::new();
+        let mut root_completed = false;
+        for row in db.project_outline_with(id, self.show_completed, self.keep_completed_subtasks) {
+            if row.depth == 0 {
+                root_completed = db
+                    .tasks
+                    .get(&row.task)
+                    .is_some_and(|task| task.completed);
+            }
+            let mut task_row = query::row_for(db, &row.task, at);
+            task_row.depth = row.depth;
+            if self.show_completed && root_completed {
+                completed_rows.push(task_row);
+            } else {
+                open_rows.push(task_row);
+            }
+        }
+        let mut groups = vec![Group {
             projects: Vec::new(),
             key: format!("project:{id}"),
             title,
             position: 0,
-            rows,
-        }]
+            rows: open_rows,
+        }];
+        if self.show_completed && !completed_rows.is_empty() {
+            groups.push(Group {
+                projects: Vec::new(),
+                key: format!("project-completed:{id}"),
+                title: "Completed".to_string(),
+                position: 1,
+                rows: completed_rows,
+            });
+        }
+        groups
     }
 
     fn filter_groups(&self, groups: Vec<Group>) -> Vec<Group> {
@@ -8075,10 +8094,11 @@ impl FlowlistApp {
                 .map(|project| {
                     let (_, total) = db.project_progress(&project.id);
                     let open = db.project_open_count(&project.id);
-                    let badge = match sidebar::project_badge(open, total) {
-                        sidebar::ProjectBadge::Count(count) => count.to_string(),
-                        sidebar::ProjectBadge::Done => "tick".to_string(),
-                    };
+                    let badge =
+                        match sidebar::project_badge(open, total, project.effective_kind()) {
+                            sidebar::ProjectBadge::Count(count) => count.to_string(),
+                            sidebar::ProjectBadge::Stalled => "stalled".to_string(),
+                        };
                     (project.name.clone(), badge)
                 })
                 .collect::<std::collections::BTreeMap<_, _>>()

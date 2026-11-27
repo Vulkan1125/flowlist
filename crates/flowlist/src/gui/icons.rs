@@ -43,6 +43,7 @@ pub enum Icon {
     Info,
     Plus,
     Minus,
+    Pause,
     ArrowUp,
     ArrowDown,
     ArrowLeft,
@@ -88,6 +89,14 @@ pub enum Icon {
     Dog,
     DollarSign,
     Rupee,
+    Euro,
+    Pound,
+    Yen,
+    Won,
+    Ruble,
+    Bitcoin,
+    Franc,
+    Lira,
     Mail,
     Smile,
     Gift,
@@ -112,7 +121,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    pub const ALL: [Icon; 98] = [
+    pub const ALL: [Icon; 107] = [
         Icon::Inbox,
         Icon::Projects,
         Icon::Forecast,
@@ -145,6 +154,7 @@ impl Icon {
         Icon::Info,
         Icon::Plus,
         Icon::Minus,
+        Icon::Pause,
         Icon::ArrowUp,
         Icon::ArrowDown,
         Icon::ArrowLeft,
@@ -190,6 +200,14 @@ impl Icon {
         Icon::Dog,
         Icon::DollarSign,
         Icon::Rupee,
+        Icon::Euro,
+        Icon::Pound,
+        Icon::Yen,
+        Icon::Won,
+        Icon::Ruble,
+        Icon::Bitcoin,
+        Icon::Franc,
+        Icon::Lira,
         Icon::Mail,
         Icon::Smile,
         Icon::Gift,
@@ -247,6 +265,7 @@ impl Icon {
             Icon::Info => "icons/info.svg",
             Icon::Plus => "icons/plus.svg",
             Icon::Minus => "icons/minus.svg",
+            Icon::Pause => "icons/pause.svg",
             Icon::ArrowUp => "icons/arrow-up.svg",
             Icon::ArrowDown => "icons/arrow-down.svg",
             Icon::ArrowLeft => "icons/arrow-left.svg",
@@ -292,6 +311,14 @@ impl Icon {
             Icon::Dog => "icons/dog.svg",
             Icon::DollarSign => "icons/money.svg",
             Icon::Rupee => "icons/rupee.svg",
+            Icon::Euro => "icons/euro.svg",
+            Icon::Pound => "icons/pound.svg",
+            Icon::Yen => "icons/yen.svg",
+            Icon::Won => "icons/won.svg",
+            Icon::Ruble => "icons/ruble.svg",
+            Icon::Bitcoin => "icons/bitcoin.svg",
+            Icon::Franc => "icons/franc.svg",
+            Icon::Lira => "icons/lira.svg",
             Icon::Mail => "icons/mail.svg",
             Icon::Smile => "icons/smile.svg",
             Icon::Gift => "icons/gift.svg",
@@ -398,6 +425,9 @@ impl Icon {
             }
             Icon::Plus => r#"<path d="M5 12h14"/><path d="M12 5v14"/>"#,
             Icon::Minus => r#"<path d="M5 12h14"/>"#,
+            Icon::Pause => {
+                r#"<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>"#
+            }
             Icon::ArrowUp => r#"<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>"#,
             Icon::ArrowDown => r#"<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>"#,
             Icon::ArrowLeft => r#"<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>"#,
@@ -521,6 +551,30 @@ impl Icon {
             Icon::Rupee => {
                 r#"<path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/>"#
             }
+            Icon::Euro => {
+                r#"<path d="M4 10h12"/><path d="M4 14h9"/><path d="M19 6a7.7 7.7 0 0 0-5.2-2A7.9 7.9 0 0 0 6 12c0 4.4 3.5 8 7.8 8 2 0 3.8-.7 5.2-2"/>"#
+            }
+            Icon::Pound => {
+                r#"<path d="M18 7c0-5.333-8-5.333-8 0"/><path d="M10 7v14"/><path d="M6 21h12"/><path d="M6 13h10"/>"#
+            }
+            Icon::Yen => {
+                r#"<path d="M12 9.5V21m0-11.5L6 3m6 6.5L18 3"/><path d="M6 15h12"/><path d="M6 11h12"/>"#
+            }
+            Icon::Won => {
+                r#"<path d="m5 5 3 14 4-9 4 9 3-14"/><path d="M4 10h16"/><path d="M4 14h16"/>"#
+            }
+            Icon::Ruble => {
+                r#"<path d="M6 11h8a4 4 0 0 0 0-8H9v18"/><path d="M6 15h8"/>"#
+            }
+            Icon::Bitcoin => {
+                r#"<path d="M11.767 19.089c4.924.868 6.14-6.025 1.216-6.894m-1.216 6.894L5.86 18.047m5.908 1.042-.347 1.97m1.563-8.864c4.924.869 6.14-6.025 1.215-6.893m-1.215 6.893-3.94-.694m5.155-6.2L8.29 4.26m5.908 1.042.348-1.97M7.48 20.364l3.126-17.727"/>"#
+            }
+            Icon::Franc => {
+                r#"<path d="M10 21V3h8"/><path d="M6 16h9"/><path d="M10 9.5h7"/>"#
+            }
+            Icon::Lira => {
+                r#"<path d="M15 4 5 9"/><path d="m15 8.5-10 5"/><path d="M18 12a9 9 0 0 1-9 9V3"/>"#
+            }
             Icon::Mail => {
                 r#"<rect width="20" height="16" x="2" y="4" rx="2" /> <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />"#
             }
@@ -629,7 +683,7 @@ mod tests {
 
     #[test]
     fn icon_set_is_complete_and_unique() {
-        assert_eq!(Icon::ALL.len(), 98);
+        assert_eq!(Icon::ALL.len(), 107);
         let mut paths: Vec<&str> = Icon::ALL.iter().map(|icon| icon.path()).collect();
         paths.sort_unstable();
         paths.dedup();

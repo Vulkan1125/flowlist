@@ -18,9 +18,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Project types: parallel, sequential and single actions
 - [x] Optional High / Medium / Low task priorities
 - [x] Task and project attachments stored as referenced file paths
-- [x] Fixed 54-icon project set covering work, home, people, health, travel,
-      food, study, sport, nature, media and tools; new projects start with the
-      project icon
+- [x] Fixed 63-icon project set covering work, home, people, health, travel,
+      food, study, sport, nature, media, tools and nine currencies (dollar,
+      rupee, euro, pound, yen, won, ruble, bitcoin, franc and lira); new
+      projects start with the project icon
 - [x] Restorable Trash with configurable auto-delete
 - [x] Repeat rules: fixed/after-completion, due-again/defer-another, end date,
       end count, completion counter
@@ -363,6 +364,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       tick badge. Single-action lists stay manual.
 - [x] Focus-aware rail counts for Inbox, priorities, tags, folders, projects
       and saved views, with out-of-focus tags dimmed.
+- [x] Stalled project pause badge, a Completed (n) shortcut and a separate
+      Completed heading when finished roots are shown.
 - [x] Perspective editor polish: Simple-only text and estimate fields sit
       below the Simple/Comprehensive tabs; the None-conflict warning appears
       only on Comprehensive and only for a real sibling overlap; the review

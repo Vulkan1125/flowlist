@@ -1315,6 +1315,16 @@ impl FlowlistApp {
                 .sum::<usize>()
         };
         let has_project_rows = groups.iter().any(|group| !group.projects.is_empty());
+        let hidden_completed = if let View::Project(id) = &self.view {
+            if self.show_completed {
+                None
+            } else {
+                let (done, total) = self.store.db().project_progress(id);
+                (total > 0 && done == total).then_some(done)
+            }
+        } else {
+            None
+        };
         let shows_completed =
             matches!(self.view, View::Project(_) | View::Folder(_) | View::Tag(_));
         let is_trash = matches!(self.view, View::Builtin(BuiltinPerspective::Trash));
@@ -1688,6 +1698,7 @@ impl FlowlistApp {
                         count,
                         forecast_day,
                         has_project_rows,
+                        hidden_completed,
                     )),
             )
     }
@@ -2018,12 +2029,19 @@ impl FlowlistApp {
             && groups
                 .iter()
                 .any(|group| !self.forecast_events_for_group(&group.key).is_empty());
-        let show_headers = groups.len() > 1
+        let show_headers = (groups.len() > 1 && !matches!(self.view, View::Project(_)))
             || has_group_events
             || matches!(
                 self.view,
                 View::Builtin(BuiltinPerspective::Projects) | View::Folder(_) | View::Custom(_)
             );
+        let project_progress = if let View::Project(id) = &self.view {
+            Some(self.store.db().project_progress(id))
+        } else {
+            None
+        };
+        let hidden_completed = !self.show_completed
+            && project_progress.is_some_and(|(done, total)| total > 0 && done == total);
         // Gaps before root rows accept a dragged subtask in any list: the
         // task lands in the same project (or Inbox) as the row below the gap.
         // The end gap only makes sense in a project or Inbox, where "the end"
@@ -2038,7 +2056,8 @@ impl FlowlistApp {
             && groups[0].rows.is_empty()
             && groups[0].projects.is_empty()
             && !has_group_events
-            && !show_headers;
+            && !show_headers
+            && !hidden_completed;
         if groups.is_empty() || entirely_empty {
             if !self.search.is_empty() {
                 let (title, detail) = if self.search_library {
@@ -2091,7 +2110,8 @@ impl FlowlistApp {
         }
         for group in groups {
             let open = self.is_open(&group.key, super::group_default_open(&group.key));
-            if show_headers {
+            let completed_group = group.key.starts_with("project-completed:");
+            if show_headers || completed_group {
                 list = list.child(self.render_group_header(group, open, cx));
             }
             if open {
@@ -2192,7 +2212,12 @@ impl FlowlistApp {
                         }
                         list = list.child(self.render_task_row(&row, cx));
                     }
-                    if group.rows.is_empty() && group.projects.is_empty() && events.is_empty() {
+                    if group.rows.is_empty()
+                        && group.projects.is_empty()
+                        && events.is_empty()
+                        && !(matches!(self.view, View::Project(_))
+                            && (groups.len() > 1 || hidden_completed))
+                    {
                         list = list.child(
                             div()
                                 .px_4()
@@ -2204,6 +2229,33 @@ impl FlowlistApp {
                     }
                 }
             }
+        }
+        if hidden_completed {
+            let done = project_progress.map(|(done, _)| done).unwrap_or(0);
+            list = list.child(
+                div()
+                    .id("project-show-completed")
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .mx_4()
+                    .mt_1()
+                    .pt_2()
+                    .pb_2()
+                    .border_t_1()
+                    .border_color(theme.border_soft)
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(icons::icon(Icon::ChevronRight, 12.0, theme.text_faint))
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(theme.text_dim)
+                            .child(format!("Completed ({done})")),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_show_completed(cx))),
+            );
         }
         if end_gap {
             list = list.child(self.render_root_drop_zone(None, cx));
@@ -3597,6 +3649,7 @@ fn view_count_label(
     count: usize,
     forecast_day: Option<NaiveDate>,
     has_project_rows: bool,
+    hidden_completed: Option<usize>,
 ) -> String {
     if is_archive {
         if count == 0 {
@@ -3614,6 +3667,8 @@ fn view_count_label(
                 date.format("%-d %b")
             )
         }
+    } else if let Some(done) = hidden_completed {
+        format!("{done} completed")
     } else if has_project_rows {
         if count == 0 {
             "No items".to_string()
@@ -3802,20 +3857,21 @@ mod tests {
     fn view_count_label_names_a_picked_forecast_day() {
         let day = NaiveDate::from_ymd_opt(2026, 11, 23).unwrap();
         assert_eq!(
-            view_count_label(false, 1, Some(day), false),
+            view_count_label(false, 1, Some(day), false, None),
             "1 task for 23 Nov"
         );
         assert_eq!(
-            view_count_label(false, 3, Some(day), false),
+            view_count_label(false, 3, Some(day), false, None),
             "3 tasks for 23 Nov"
         );
         assert_eq!(
-            view_count_label(false, 0, Some(day), false),
+            view_count_label(false, 0, Some(day), false, None),
             "No tasks for 23 Nov"
         );
-        assert_eq!(view_count_label(false, 3, None, false), "3 tasks");
-        assert_eq!(view_count_label(false, 0, None, false), "No tasks");
-        assert_eq!(view_count_label(false, 5, None, true), "5 items");
-        assert_eq!(view_count_label(true, 2, Some(day), false), "2 projects");
+        assert_eq!(view_count_label(false, 3, None, false, None), "3 tasks");
+        assert_eq!(view_count_label(false, 0, None, false, None), "No tasks");
+        assert_eq!(view_count_label(false, 5, None, true, None), "5 items");
+        assert_eq!(view_count_label(false, 0, None, false, Some(2)), "2 completed");
+        assert_eq!(view_count_label(true, 2, Some(day), false, None), "2 projects");
     }
 }

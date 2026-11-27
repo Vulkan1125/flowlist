@@ -22,6 +22,21 @@
   `project add/edit --completion auto|manual`, the MCP project tools and the
   project JSON carry the same field.
 
+### Stalled projects
+
+- **Pause, not tick.** An active project with tasks but none left open now
+  shows a stalled pause mark. A tick is reserved for a project whose status is
+  actually Done. Single-action lists keep their open count.
+- **Completed section.** When a stalled project hides completed work, a
+  **Completed (n)** row reveals it. Completed roots then sit under their own
+  collapsible **Completed** heading instead of interleaving with open work.
+
+### Currency icons
+
+- **Nine currencies.** The project icon picker adds euro, pound, yen, won,
+  ruble, bitcoin, franc and lira beside the existing dollar and rupee, with
+  matching phone icons.
+
 ### Focus counts
 
 - **Counts follow the focus.** Inbox, priority, tag, folder, project and saved

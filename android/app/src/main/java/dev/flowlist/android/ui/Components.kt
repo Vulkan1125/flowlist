@@ -735,7 +735,16 @@ val projectIconChoices = listOf(
     "analytics" to "Analytics",
     "document" to "Document",
     "dog" to "Dog",
-    "money" to "Money",
+    "money" to "Dollar",
+    "rupee" to "Rupee",
+    "euro" to "Euro",
+    "pound" to "Pound",
+    "yen" to "Yen",
+    "won" to "Won",
+    "ruble" to "Ruble",
+    "bitcoin" to "Bitcoin",
+    "franc" to "Franc",
+    "lira" to "Lira",
     "mail" to "Mail",
     "smile" to "Smile",
     "flag" to "Flag",
@@ -791,6 +800,15 @@ fun projectIcon(slug: String): ImageVector = when (slug) {
     "document" -> Icons.Outlined.Description
     "dog" -> Icons.Outlined.Pets
     "money" -> Icons.Outlined.AttachMoney
+    "rupee" -> Icons.Outlined.CurrencyRupee
+    "euro" -> Icons.Outlined.Euro
+    "pound" -> Icons.Outlined.CurrencyPound
+    "yen" -> Icons.Outlined.CurrencyYen
+    "won" -> Icons.Outlined.Payments
+    "ruble" -> Icons.Outlined.CurrencyRuble
+    "bitcoin" -> Icons.Outlined.CurrencyBitcoin
+    "franc" -> Icons.Outlined.CurrencyFranc
+    "lira" -> Icons.Outlined.CurrencyLira
     "mail" -> Icons.Outlined.MailOutline
     "smile" -> Icons.Outlined.Mood
     "flag" -> Icons.Outlined.Flag

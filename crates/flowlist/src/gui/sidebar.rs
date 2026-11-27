@@ -50,14 +50,20 @@ impl SidebarTarget {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ProjectBadge {
     Count(usize),
-    Done,
+    /// Tasks exist but none are open, and the project is still active.
+    Stalled,
 }
 
-/// Completed work only turns the badge into a tick once there is at least one
-/// task. That keeps a new project showing `0` instead of looking finished.
-pub(super) fn project_badge(open: usize, total: usize) -> ProjectBadge {
-    if total > 0 && open == 0 {
-        ProjectBadge::Done
+/// A project with no tasks shows `0`; an empty single-action bucket behaves the
+/// same way. A parallel or sequential project with tasks but none left open is
+/// stalled until the user marks it done or adds another action.
+pub(super) fn project_badge(
+    open: usize,
+    total: usize,
+    kind: flowlist_core::model::ProjectKind,
+) -> ProjectBadge {
+    if total > 0 && open == 0 && kind != flowlist_core::model::ProjectKind::SingleActions {
+        ProjectBadge::Stalled
     } else {
         ProjectBadge::Count(open)
     }
@@ -1990,6 +1996,7 @@ impl FlowlistApp {
                         (0, 0)
                     };
                     let open = if focused { db.project_open_count(&id) } else { 0 };
+                    let badge = project_badge(open, total, project.effective_kind());
                     let show_count = !sidebar.is_count_hidden(&format!("project:{id}"));
                     let view_id = id.clone();
                     let target_id = id.clone();
@@ -2063,12 +2070,13 @@ impl FlowlistApp {
                         })
                         .when(
                             show_count
-                                && (open > 0
-                                    || project_badge(open, total) == ProjectBadge::Done),
+                                && (open > 0 || badge == ProjectBadge::Stalled),
                             |this| {
                                 this.child({
-                                    let tip = match project_badge(open, total) {
-                                        ProjectBadge::Done => format!("All {total} done"),
+                                    let tip = match badge {
+                                        ProjectBadge::Stalled => format!(
+                                            "No remaining actions · {done} of {total} done"
+                                        ),
                                         ProjectBadge::Count(_) => {
                                             format!("{open} open · {done} of {total} done")
                                         }
@@ -2076,10 +2084,11 @@ impl FlowlistApp {
                                     div()
                                         .id(super::sid(format!("project-count:{id}")))
                                         .flow_tip(self, cx, self.theme, tip)
-                                        .child(match project_badge(open, total) {
-                                            ProjectBadge::Done => {
-                                                widgets::done_badge(self.theme).into_any_element()
-                                            }
+                                        .child(match badge {
+                                            ProjectBadge::Stalled => widgets::stalled_badge(
+                                                self.theme,
+                                            )
+                                            .into_any_element(),
                                             ProjectBadge::Count(open) => {
                                                 widgets::count(self.theme, open).into_any_element()
                                             }
@@ -2404,6 +2413,7 @@ pub(super) fn priority_color(theme: super::theme::Theme, priority: Priority) -> 
 #[cfg(test)]
 mod tests {
     use super::{ProjectBadge, anchors_rail, project_badge};
+    use flowlist_core::model::ProjectKind;
     use flowlist_core::model::BuiltinPerspective;
 
     #[test]
@@ -2417,18 +2427,37 @@ mod tests {
 
     #[test]
     fn a_new_project_keeps_its_zero() {
-        assert_eq!(project_badge(0, 0), ProjectBadge::Count(0));
+        assert_eq!(
+            project_badge(0, 0, ProjectKind::Parallel),
+            ProjectBadge::Count(0)
+        );
     }
 
     #[test]
     fn finished_work_becomes_a_tick() {
-        assert_eq!(project_badge(0, 1), ProjectBadge::Done);
-        assert_eq!(project_badge(0, 12), ProjectBadge::Done);
+        assert_eq!(
+            project_badge(0, 1, ProjectKind::Parallel),
+            ProjectBadge::Stalled
+        );
+        assert_eq!(
+            project_badge(0, 12, ProjectKind::Sequential),
+            ProjectBadge::Stalled
+        );
+        assert_eq!(
+            project_badge(0, 12, ProjectKind::SingleActions),
+            ProjectBadge::Count(0)
+        );
     }
 
     #[test]
     fn any_open_task_keeps_the_count() {
-        assert_eq!(project_badge(1, 2), ProjectBadge::Count(1));
-        assert_eq!(project_badge(3, 3), ProjectBadge::Count(3));
+        assert_eq!(
+            project_badge(1, 2, ProjectKind::Parallel),
+            ProjectBadge::Count(1)
+        );
+        assert_eq!(
+            project_badge(2, 3, ProjectKind::Parallel),
+            ProjectBadge::Count(2)
+        );
     }
 }

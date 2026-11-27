@@ -782,9 +782,8 @@ pub fn count(theme: Theme, value: usize) -> impl IntoElement {
         .child(value.to_string())
 }
 
-/// The counterpart of `count` for a project with nothing left open: a bare
-/// tick in the count's slot, so the sidebar keeps its alignment without
-/// painting a chip behind it.
+/// A bare tick in the count slot for a saved view that currently matches
+/// nothing, so the sidebar keeps its alignment without painting a chip.
 pub fn done_badge(theme: Theme) -> impl IntoElement {
     div()
         .min_w(px(18.))
@@ -793,6 +792,18 @@ pub fn done_badge(theme: Theme) -> impl IntoElement {
         .items_center()
         .justify_center()
         .child(icons::icon(Icon::Check, 11.0, theme.text_faint))
+}
+
+/// A project with tasks but nothing left open, still waiting for a manual
+/// decision. A pause mark rather than a tick: the project is not done.
+pub fn stalled_badge(theme: Theme) -> impl IntoElement {
+    div()
+        .min_w(px(18.))
+        .px_1()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(icons::icon(Icon::Pause, 11.0, theme.warning))
 }
 
 /// A compact filter/metric button: same height as the search field so sort,
@@ -1002,6 +1013,14 @@ pub fn icon_for_project(icon: ProjectIcon, size: f32, color: gpui::Hsla) -> impl
         ProjectIcon::Dog => Icon::Dog,
         ProjectIcon::Money => Icon::DollarSign,
         ProjectIcon::Rupee => Icon::Rupee,
+        ProjectIcon::Euro => Icon::Euro,
+        ProjectIcon::Pound => Icon::Pound,
+        ProjectIcon::Yen => Icon::Yen,
+        ProjectIcon::Won => Icon::Won,
+        ProjectIcon::Ruble => Icon::Ruble,
+        ProjectIcon::Bitcoin => Icon::Bitcoin,
+        ProjectIcon::Franc => Icon::Franc,
+        ProjectIcon::Lira => Icon::Lira,
         ProjectIcon::Mail => Icon::Mail,
         ProjectIcon::Smile => Icon::Smile,
         ProjectIcon::Flag => Icon::Flagged,
