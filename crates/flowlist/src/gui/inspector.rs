@@ -4086,7 +4086,13 @@ impl FlowlistApp {
                             .border_color(theme.border)
                             .cursor_pointer()
                             .hover(|style| style.bg(theme.hover))
-                            .child("−")
+                            .child(
+                                div()
+                                    .w(px(8.))
+                                    .h(px(1.5))
+                                    .rounded_full()
+                                    .bg(theme.text_dim),
+                            )
                             .on_click(cx.listener({
                                 let id = id.clone();
                                 move |this, _, _, cx| {
@@ -4114,7 +4120,32 @@ impl FlowlistApp {
                             .border_color(theme.border)
                             .cursor_pointer()
                             .hover(|style| style.bg(theme.hover))
-                            .child("+")
+                            .child(
+                                div()
+                                    .relative()
+                                    .w(px(9.))
+                                    .h(px(9.))
+                                    .child(
+                                        div()
+                                            .absolute()
+                                            .left(px(0.))
+                                            .right(px(0.))
+                                            .top(px(3.75))
+                                            .h(px(1.5))
+                                            .rounded_full()
+                                            .bg(theme.text_dim),
+                                    )
+                                    .child(
+                                        div()
+                                            .absolute()
+                                            .top(px(0.))
+                                            .bottom(px(0.))
+                                            .left(px(3.75))
+                                            .w(px(1.5))
+                                            .rounded_full()
+                                            .bg(theme.text_dim),
+                                    ),
+                            )
                             .on_click(cx.listener({
                                 let id = id.clone();
                                 move |this, _, _, cx| {

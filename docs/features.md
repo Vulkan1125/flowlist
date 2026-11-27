@@ -358,6 +358,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Rich custom-perspective editor laid out like settings: labelled filter
       and layout rows that each open a menu of every value, a live match count,
       an explicit Clear filters, and unknown CLI conditions kept and counted
+- [x] Perspective editor polish: Simple-only text and estimate fields sit
+      below the Simple/Comprehensive tabs; the None-conflict warning appears
+      only on Comprehensive and only for a real sibling overlap; the review
+      interval stepper glyphs are centred shapes.
 - [x] Project-organized saved views: matching projects group by folder,
       project, due, defer, planned or review date, added or changed date, with
       their matching actions nested under each project. Project sorting covers

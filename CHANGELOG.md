@@ -13,6 +13,16 @@
   projects by** and **Sort projects by**. `perspective add` accepts
   `--project-group` and `--project-sort`.
 
+### Perspective editor polish
+
+- **Simple fields under the tabs.** Contains text and the estimate range now sit
+  inside the Simple tab instead of above the Simple/Comprehensive switch.
+- **Narrower None warning.** The “No matches” hint appears only on
+  Comprehensive, and only when an All/Any group contains a rule that also
+  appears inside one of its None children.
+- **Centred review steppers.** The review-interval minus and plus controls use
+  drawn shapes, so they sit in the middle of their buttons.
+
 ### Calmer copy
 
 - **Terser interface text.** View subtitles, empty states, settings

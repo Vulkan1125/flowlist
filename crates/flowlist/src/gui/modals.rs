@@ -1761,30 +1761,6 @@ impl FlowlistApp {
                 if is_perspective {
                     body = body.child(self.render_modal_field(0, cx));
                     body = body.child(self.render_modal_field(1, cx));
-                    if matches!(
-                        &self.modal,
-                        Some(Modal::Perspective { form }) if form.tab == PerspectiveTab::Simple
-                    ) {
-                        body = body.child(self.render_modal_field(2, cx));
-                        body = body.child(
-                            div()
-                                .flex()
-                                .items_start()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .child(self.render_modal_field(3, cx)),
-                                )
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .child(self.render_modal_field(4, cx)),
-                                ),
-                        );
-                    }
                 } else if is_new_project {
                     for index in 0..6 {
                         body = body.child(self.render_modal_field(index, cx));
@@ -3599,15 +3575,21 @@ impl FlowlistApp {
             ))
             .child(widgets::divider(theme))
             .child(summary)
-            .when(matches == 0 && form.has_filters(), |this| {
-                this.child(
-                    div()
-                        .text_xs()
-                        .whitespace_normal()
-                        .text_color(theme.warning)
-                        .child("No matches. Check for a rule and its None counterpart."),
-                )
-            })
+            .when(
+                form.tab == PerspectiveTab::Comprehensive
+                    && matches == 0
+                    && form.has_filters()
+                    && form.filter().has_none_conflict(),
+                |this| {
+                    this.child(
+                        div()
+                            .text_xs()
+                            .whitespace_normal()
+                            .text_color(theme.warning)
+                            .child("No matches. Check for a rule and its None counterpart."),
+                    )
+                },
+            )
     }
 
     fn render_simple_perspective_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -3986,6 +3968,25 @@ impl FlowlistApp {
             .flex()
             .flex_col()
             .gap_2()
+            .child(self.render_modal_field(2, cx))
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(self.render_modal_field(3, cx)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(self.render_modal_field(4, cx)),
+                    ),
+            )
             .child(heading("FILTERS"))
             .child(toggles)
             .child(priority_toggles)

@@ -806,6 +806,39 @@ mod tests {
     }
 
     #[test]
+    fn none_conflict_detects_a_rule_cancelled_by_its_none_sibling() {
+        let flagged = Condition::Flagged { value: true };
+        let filter = FilterNode::all(vec![
+            FilterNode::condition(flagged.clone()),
+            FilterNode::none(vec![FilterNode::condition(flagged.clone())]),
+        ]);
+        assert!(filter.has_none_conflict());
+
+        let filter = FilterNode::any(vec![
+            FilterNode::condition(flagged.clone()),
+            FilterNode::none(vec![FilterNode::condition(flagged)]),
+        ]);
+        assert!(filter.has_none_conflict());
+    }
+
+    #[test]
+    fn none_conflict_ignores_unrelated_rules_and_disabled_rules() {
+        let filter = FilterNode::all(vec![
+            FilterNode::condition(Condition::Flagged { value: true }),
+            FilterNode::none(vec![FilterNode::condition(Condition::InInbox)]),
+        ]);
+        assert!(!filter.has_none_conflict());
+
+        let filter = FilterNode::all(vec![
+            FilterNode::condition(Condition::Flagged { value: true }),
+            FilterNode::none(vec![FilterNode::disabled(FilterNode::condition(
+                Condition::Flagged { value: true },
+            ))]),
+        ]);
+        assert!(!filter.has_none_conflict());
+    }
+
+    #[test]
     fn comments_and_disabled_rules_do_not_affect_an_any_group() {
         let (db, task) = db_with_task(Task::new("one"));
         let filter = FilterNode::any(vec![

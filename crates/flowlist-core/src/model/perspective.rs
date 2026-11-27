@@ -773,6 +773,66 @@ impl FilterNode {
             FilterNode::Comment(_) => false,
         }
     }
+
+    /// Whether an All/Any group contains a condition that also appears inside
+    /// one of its None children. That pair always cancels itself out.
+    pub fn has_none_conflict(&self) -> bool {
+        match self {
+            FilterNode::All(nodes) | FilterNode::Any(nodes) => {
+                let mut positive = Vec::new();
+                for node in nodes {
+                    if !matches!(node, FilterNode::None(_)) && !node.is_ignorable() {
+                        node.collect_positive_conditions(&mut positive);
+                    }
+                }
+                for node in nodes {
+                    if let FilterNode::None(inner) = node {
+                        let mut negative = Vec::new();
+                        for child in inner {
+                            child.collect_conditions(&mut negative);
+                        }
+                        if negative.iter().any(|condition| positive.contains(condition)) {
+                            return true;
+                        }
+                    }
+                }
+                nodes.iter().any(FilterNode::has_none_conflict)
+            }
+            FilterNode::None(nodes) => nodes.iter().any(FilterNode::has_none_conflict),
+            FilterNode::Not(node) => node.has_none_conflict(),
+            FilterNode::Condition(_)
+            | FilterNode::Comment(_)
+            | FilterNode::Disabled(_) => false,
+        }
+    }
+
+    /// Conditions that still contribute positively to the parent group. A None
+    /// subtree is skipped because it negates everything inside it.
+    fn collect_positive_conditions<'a>(&'a self, out: &mut Vec<&'a Condition>) {
+        match self {
+            FilterNode::All(nodes) | FilterNode::Any(nodes) => {
+                for node in nodes {
+                    node.collect_positive_conditions(out);
+                }
+            }
+            FilterNode::None(_) | FilterNode::Not(_) | FilterNode::Disabled(_) => {}
+            FilterNode::Condition(condition) => out.push(condition),
+            FilterNode::Comment(_) => {}
+        }
+    }
+
+    fn collect_conditions<'a>(&'a self, out: &mut Vec<&'a Condition>) {
+        match self {
+            FilterNode::All(nodes) | FilterNode::Any(nodes) | FilterNode::None(nodes) => {
+                for node in nodes {
+                    node.collect_conditions(out);
+                }
+            }
+            FilterNode::Not(_) | FilterNode::Disabled(_) => {}
+            FilterNode::Condition(condition) => out.push(condition),
+            FilterNode::Comment(_) => {}
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
