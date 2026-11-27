@@ -108,6 +108,9 @@
   Mac or the phone clears the matching reminder on the other device through a
   short-lived list on the mobile server. Both devices keep working locally when
   the server is offline.
+- **Unlocked launch.** The alarm now opens the reminder activity directly as
+  well as posting the full-screen notification, so an unlocked phone gets the
+  full-screen reminder instead of only a heads-up banner.
 - **Settings child pages.** Opening Appearance, Tasks, Library, Notifications,
   Connection or About now makes that name the main heading and hides the bottom
   bar until Back returns to the Settings home.

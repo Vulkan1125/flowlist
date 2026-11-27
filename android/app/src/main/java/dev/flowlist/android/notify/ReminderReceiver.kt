@@ -30,6 +30,11 @@ class ReminderReceiver : BroadcastReceiver() {
             putExtra("project", project)
             putExtra("due_at", dueAt)
         }
+        // Full-screen intents only take over automatically while the phone is
+        // locked. Open the alarm directly too, so an unlocked phone gets the
+        // same screen the Mac shows; the notification stays as the fallback
+        // when the system refuses a background activity start.
+        runCatching { context.startActivity(reminder) }
         val fullScreen = PendingIntent.getActivity(
             context,
             taskId.hashCode(),
