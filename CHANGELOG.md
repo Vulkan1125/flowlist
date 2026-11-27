@@ -104,6 +104,10 @@
 - **Adjustable snooze.** Minus and plus decrease or increase the snooze in
   five-minute steps; the centre pill snoozes for the chosen length. Open
   Flowlist stays available below.
+- **Cross-device dismiss.** Dismissing a full-screen reminder on either the
+  Mac or the phone clears the matching reminder on the other device through a
+  short-lived list on the mobile server. Both devices keep working locally when
+  the server is offline.
 - **Settings child pages.** Opening Appearance, Tasks, Library, Notifications,
   Connection or About now makes that name the main heading and hides the bottom
   bar until Back returns to the Settings home.

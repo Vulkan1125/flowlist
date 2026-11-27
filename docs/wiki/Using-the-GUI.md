@@ -493,7 +493,8 @@ in the inspector, type `fsr:1h30m` in quick capture, or tick **Full-screen
 reminder** while creating a project or folder. A marked task, and every task inside a marked
 project or folder, opens a screen-sized reminder when it comes due while
 Flowlist is running. Complete, Snooze, Open task and Dismiss are on that
-screen; Dismiss and Esc leave the task alone. **S** cycles the snooze length,
+screen; Dismiss and Esc leave the task alone and also clear the matching
+reminder on the paired phone while the mobile server is running. **S** cycles the snooze length,
 **Enter** snoozes with it and **⌘Enter** completes the task. When several
 reminders share a time, **View all** (or **V**) opens a temporary Full-screen
 list

@@ -301,6 +301,23 @@ class Repository(context: Context) {
         }
     }
 
+    /// Tell the Mac that this reminder was dismissed so its window can close.
+    suspend fun dismissReminder(taskId: String) {
+        val base = session.baseUrl ?: return
+        val token = session.token ?: return
+        runCatching { api.dismissReminder(base, token, taskId) }
+    }
+
+    /// Reminder ids dismissed by the Mac (or this phone) in the last few
+    /// minutes. Used by the full-screen reminder to stand down.
+    suspend fun dismissedReminders(): Set<String> {
+        val base = session.baseUrl ?: return emptySet()
+        val token = session.token ?: return emptySet()
+        return runCatching {
+            api.reminderDismissals(base, token).dismissals.map { it.taskId }.toSet()
+        }.getOrDefault(emptySet())
+    }
+
     suspend fun complete(taskId: String, completed: Boolean) {
         val snapshot = _state.value.snapshot ?: return
         val task = snapshot.db.tasks[taskId] ?: return

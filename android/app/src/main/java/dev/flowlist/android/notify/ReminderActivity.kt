@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.Animatable
@@ -87,7 +88,10 @@ import dev.flowlist.android.ui.AppBackground
 import dev.flowlist.android.ui.FlowlistTheme
 import dev.flowlist.android.ui.flow
 import dev.flowlist.android.ui.reminderBackgroundFor
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -137,6 +141,7 @@ class ReminderActivity : ComponentActivity() {
             AppearanceMode.System -> systemDark
         }
         val preferences = PreferencesStore(this).load()
+        val repository = (application as FlowlistApplication).repository
         val reminderBackground = preferences.reminderBackgroundFor(theme, darkMode)
         // Ambient presets carry their own light/dark variants. A photo is
         // always veiled, so white type stays readable there.
@@ -166,10 +171,7 @@ class ReminderActivity : ComponentActivity() {
                     lightContent = lightContent,
                     onComplete = {
                         lifecycleScope.launch {
-                            runCatching {
-                                (application as FlowlistApplication).repository
-                                    .complete(taskId, true)
-                            }
+                            runCatching { repository.complete(taskId, true) }
                             finish()
                         }
                     },
@@ -193,9 +195,34 @@ class ReminderActivity : ComponentActivity() {
                         )
                         finish()
                     },
-                    onDismiss = { finish() },
+                    onDismiss = {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            repository.dismissReminder(taskId)
+                        }
+                        finish()
+                    },
                 )
             }
+        }
+
+        // While the alarm is on screen, watch for the Mac dismissing the same
+        // reminder so this window can stand down too.
+        lifecycleScope.launch {
+            while (isActive) {
+                delay(1500)
+                val dismissed = runCatching { repository.dismissedReminders() }
+                    .getOrDefault(emptySet())
+                if (taskId in dismissed) {
+                    finish()
+                    break
+                }
+            }
+        }
+        onBackPressedDispatcher.addCallback(this) {
+            CoroutineScope(Dispatchers.IO).launch {
+                repository.dismissReminder(taskId)
+            }
+            finish()
         }
     }
 }

@@ -6,6 +6,7 @@
 //! Completing goes through the ordinary command layer, which keeps Undo
 //! working in the main window.
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -185,7 +186,35 @@ impl Reminder {
     }
 
     fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(task) = self.current().cloned()
+            && let Some(app) = self.app.upgrade()
+        {
+            let _ = app.update(cx, |app, _| app.dismiss_reminder_task(&task.id));
+        }
         self.advance(window, cx, true);
+    }
+
+    /// Remove reminders dismissed on the other device. If the current card is
+    /// gone, show the next one, and close the window when none remain.
+    fn dismiss_ids(
+        &mut self,
+        ids: &BTreeSet<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let before = self.tasks.len();
+        self.tasks.retain(|task| !ids.contains(&task.id.to_string()));
+        if self.tasks.len() == before {
+            return;
+        }
+        if self.tasks.is_empty() {
+            self.close(window, cx, true);
+            return;
+        }
+        if self.index >= self.tasks.len() {
+            self.index = self.tasks.len() - 1;
+        }
+        cx.notify();
     }
 
     fn on_key_down(
@@ -397,6 +426,20 @@ impl Render for Reminder {
                             ))),
                     ),
             )
+    }
+}
+
+/// Close any open reminder cards whose task ids appear in the other device's
+/// dismissal list. Safe to call when no reminder is open.
+pub fn dismiss_tasks(ids: &[String], cx: &mut App) {
+    if ids.is_empty() {
+        return;
+    }
+    let set: BTreeSet<String> = ids.iter().cloned().collect();
+    for any in cx.windows() {
+        if let Some(handle) = any.downcast::<Reminder>() {
+            let _ = handle.update(cx, |view, window, cx| view.dismiss_ids(&set, window, cx));
+        }
     }
 }
 

@@ -2,6 +2,7 @@ package dev.flowlist.android.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -125,6 +126,32 @@ class Api(
         json.decodeFromString<OpsResponse>(text)
     }
 
+    suspend fun dismissReminder(base: String, token: String, taskId: String) =
+        withContext(Dispatchers.IO) {
+            val body = buildJsonObject { put("task_id", taskId) }.toString()
+            execute(
+                Request.Builder()
+                    .url("${base.trimEnd('/')}/api/v1/reminders/dismiss")
+                    .header("Authorization", "Bearer $token")
+                    .post(body.toRequestBody(mediaType))
+                    .build(),
+            )
+        }
+
+    suspend fun reminderDismissals(
+        base: String,
+        token: String,
+    ): ReminderDismissalsResponse = withContext(Dispatchers.IO) {
+        val text = execute(
+            Request.Builder()
+                .url("${base.trimEnd('/')}/api/v1/reminders/dismissed?after=0")
+                .header("Authorization", "Bearer $token")
+                .get()
+                .build(),
+        )
+        json.decodeFromString<ReminderDismissalsResponse>(text)
+    }
+
     private fun execute(request: Request): String {
         client.newCall(request).execute().use { response ->
             val text = response.body?.string().orEmpty()
@@ -171,6 +198,19 @@ class Api(
             }
         }
 }
+
+@Serializable
+data class ReminderDismissalDto(
+    @SerialName("task_id") val taskId: String = "",
+    val seq: Long = 0,
+    val at: Long = 0,
+)
+
+@Serializable
+data class ReminderDismissalsResponse(
+    val seq: Long = 0,
+    val dismissals: List<ReminderDismissalDto> = emptyList(),
+)
 
 fun normalizeBase(input: String): String? {
     var value = input.trim()

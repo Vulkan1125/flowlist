@@ -787,6 +787,8 @@ pub struct FlowlistApp {
     reminder_snoozed: BTreeMap<TaskId, chrono::DateTime<chrono::Utc>>,
     /// Whether a full-screen reminder window is open.
     reminder_open: bool,
+    /// Last time this device checked for a dismissal from the other device.
+    reminder_polled_at: Option<Instant>,
     /// The backdrop of the last test reminder, for the GUI probe.
     last_reminder_backdrop: Option<String>,
     /// Abstract backdrop for full-screen reminders.
@@ -1085,6 +1087,7 @@ impl FlowlistApp {
                     this.tick_calendar(cx);
                     this.sync_notifications(cx);
                     this.check_fullscreen_reminders(cx);
+                    this.poll_remote_reminder_dismissals(cx);
                 });
                 if alive.is_err() {
                     break;
@@ -1225,6 +1228,7 @@ impl FlowlistApp {
             reminder_seen: BTreeSet::new(),
             reminder_snoozed: BTreeMap::new(),
             reminder_open: false,
+            reminder_polled_at: None,
             last_reminder_backdrop: None,
             reminder_background,
             reminder_match_theme,
@@ -1632,6 +1636,47 @@ impl FlowlistApp {
         }
     }
 
+    /// Tell the other device that this reminder was dismissed. The local
+    /// window closes immediately; the server keeps the id briefly so the
+    /// Android alarm can stand down too.
+    pub(super) fn dismiss_reminder_task(&self, id: &TaskId) {
+        let root = self.store.paths().root.clone();
+        let task_id = id.to_string();
+        std::thread::spawn(move || {
+            crate::serve::post_reminder_dismissal(&root, &task_id);
+        });
+    }
+
+    /// While a reminder is open, watch the shared dismissal list so a tap on
+    /// the phone clears the Mac window too.
+    fn poll_remote_reminder_dismissals(&mut self, cx: &mut Context<Self>) {
+        if !self.reminder_open {
+            return;
+        }
+        let now = Instant::now();
+        if self
+            .reminder_polled_at
+            .is_some_and(|last| now.duration_since(last) < Duration::from_secs(2))
+        {
+            return;
+        }
+        self.reminder_polled_at = Some(now);
+        let dismissed = crate::serve::reminder_dismissals(&self.store.paths().root);
+        if dismissed.is_empty() {
+            return;
+        }
+        // Closing the reminder from inside this entity update would re-enter
+        // the app when the window calls reminder_closed. Let the tick finish,
+        // then close on the plain App so the two updates cannot overlap.
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(0))
+                .await;
+            let _ = cx.update(|cx| reminder::dismiss_tasks(&dismissed, cx));
+        })
+        .detach();
+    }
+
     /// Complete a task from the full-screen reminder. It is an ordinary
     /// command, so the main window's Undo still reverses it.
     pub(super) fn complete_reminder_task(&mut self, id: &TaskId, cx: &mut Context<Self>) {
@@ -1670,6 +1715,7 @@ impl FlowlistApp {
     /// The reminder window went away, so a later due task can open it again.
     pub(super) fn reminder_closed(&mut self) {
         self.reminder_open = false;
+        self.reminder_polled_at = None;
     }
 
     /// Open the list of tasks that have an effective full-screen reminder.

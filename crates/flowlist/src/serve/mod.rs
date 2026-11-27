@@ -9,7 +9,7 @@
 
 pub mod agent;
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -122,6 +122,58 @@ pub fn running(root: &Path) -> Option<ServeInfo> {
     Some(info)
 }
 
+/// Tell the local server that a full-screen reminder was dismissed. The other
+/// device polls the same list and closes its matching window. Best effort: a
+/// Mac without the server running simply dismisses locally.
+pub fn post_reminder_dismissal(root: &Path, task_id: &str) {
+    let Some(info) = running(root) else {
+        return;
+    };
+    let body = json!({ "task_id": task_id }).to_string();
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_millis(500))
+        .build();
+    let _ = agent
+        .post(&format!(
+            "http://127.0.0.1:{}/api/v1/reminders/dismiss",
+            info.port
+        ))
+        .set("Content-Type", "application/json")
+        .send_string(&body);
+}
+
+/// Task ids dismissed recently by either device. The list is short-lived and
+/// only used while a full-screen reminder is on screen.
+pub fn reminder_dismissals(root: &Path) -> Vec<String> {
+    let Some(info) = running(root) else {
+        return Vec::new();
+    };
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_millis(400))
+        .build();
+    let Ok(response) = agent
+        .get(&format!(
+            "http://127.0.0.1:{}/api/v1/reminders/dismissed?after=0",
+            info.port
+        ))
+        .call()
+    else {
+        return Vec::new();
+    };
+    let Ok(text) = response.into_string() else {
+        return Vec::new();
+    };
+    let Ok(value) = serde_json::from_str::<Value>(&text) else {
+        return Vec::new();
+    };
+    value["dismissals"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry["task_id"].as_str().map(str::to_string))
+        .collect()
+}
+
 /// The addresses a phone can use. Tailscale appears as a `utun` interface, so
 /// it is included without any special handling.
 pub fn addresses() -> Vec<String> {
@@ -168,6 +220,15 @@ struct Shared {
     port: u16,
     started_at: String,
     pairing: Mutex<Pairing>,
+    /// Full-screen reminder dismissals are transient UI state, not library
+    /// data. They live for a short window so the other device can catch up.
+    reminders: Mutex<ReminderDismissals>,
+}
+
+#[derive(Default)]
+struct ReminderDismissals {
+    seq: u64,
+    entries: BTreeMap<String, (u64, u64)>,
 }
 
 struct Pairing {
@@ -232,6 +293,7 @@ pub fn start(paths: &DataPaths, options: Options) -> Result<Running> {
         port: addr.port(),
         started_at: started_at.clone(),
         pairing,
+        reminders: Mutex::new(ReminderDismissals::default()),
     });
 
     let info = ServeInfo {
@@ -309,6 +371,36 @@ impl Shared {
 
     /// The pairing code is also shown in Settings, which reads `serve.json`
     /// rather than talking to this process. Write it whenever it changes.
+    fn dismiss_reminder(&self, task_id: &str) -> u64 {
+        const TTL_MS: u64 = 15 * 60 * 1000;
+        let now = now_ms();
+        let mut reminders = self.reminders.lock().expect("reminder lock");
+        reminders.seq = reminders.seq.saturating_add(1);
+        let seq = reminders.seq;
+        reminders.entries.insert(task_id.to_string(), (seq, now));
+        reminders
+            .entries
+            .retain(|_, (_, at)| now.saturating_sub(*at) <= TTL_MS);
+        seq
+    }
+
+    fn dismissed_reminders(&self, after: u64) -> (u64, Vec<(String, u64, u64)>) {
+        const TTL_MS: u64 = 15 * 60 * 1000;
+        let now = now_ms();
+        let mut reminders = self.reminders.lock().expect("reminder lock");
+        reminders
+            .entries
+            .retain(|_, (_, at)| now.saturating_sub(*at) <= TTL_MS);
+        let mut entries: Vec<(String, u64, u64)> = reminders
+            .entries
+            .iter()
+            .filter(|(_, (seq, _))| *seq > after)
+            .map(|(task_id, (seq, at))| (task_id.clone(), *seq, *at))
+            .collect();
+        entries.sort_by_key(|(_, seq, _)| *seq);
+        (reminders.seq, entries)
+    }
+
     fn persist_pairing(&self, code: &str, expires: Instant) {
         let remaining = expires.saturating_duration_since(Instant::now());
         let info = ServeInfo {
@@ -611,6 +703,22 @@ fn route(request: &Request, peer: SocketAddr, shared: &Shared) -> Response {
                 return response;
             }
             history(shared, false)
+        }
+        ("POST", "/api/v1/reminders/dismiss") => {
+            if let Err(response) = authorize_or_loopback(request, peer, shared) {
+                return response;
+            }
+            dismiss_reminder(request, shared)
+        }
+        ("GET", "/api/v1/reminders/dismissed") => {
+            if let Err(response) = authorize_or_loopback(request, peer, shared) {
+                return response;
+            }
+            let after = request
+                .query("after")
+                .and_then(|value| value.parse::<u64>().ok())
+                .unwrap_or(0);
+            dismissed_reminders(shared, after)
         }
         ("GET", "/api/v1/events") => {
             if let Err(response) = authorize(request, shared) {
@@ -1015,6 +1123,52 @@ fn ops(request: &Request, shared: &Shared) -> Response {
     )
 }
 
+#[derive(Deserialize)]
+struct ReminderDismissRequest {
+    task_id: String,
+}
+
+fn dismiss_reminder(request: &Request, shared: &Shared) -> Response {
+    let Ok(body) = request.json::<ReminderDismissRequest>() else {
+        return Response::error(400, "task_id is required");
+    };
+    if body.task_id.trim().is_empty() {
+        return Response::error(400, "task_id is required");
+    }
+    let seq = shared.dismiss_reminder(&body.task_id);
+    Response::json(
+        200,
+        json!({ "task_id": body.task_id, "seq": seq, "at": now_ms() }),
+    )
+}
+
+fn dismissed_reminders(shared: &Shared, after: u64) -> Response {
+    let (seq, entries) = shared.dismissed_reminders(after);
+    let dismissals: Vec<Value> = entries
+        .into_iter()
+        .map(|(task_id, seq, at)| json!({ "task_id": task_id, "seq": seq, "at": at }))
+        .collect();
+    Response::json(200, json!({ "seq": seq, "dismissals": dismissals }))
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn authorize_or_loopback(
+    request: &Request,
+    peer: SocketAddr,
+    shared: &Shared,
+) -> Result<(), Response> {
+    if peer.ip().is_loopback() {
+        return Ok(());
+    }
+    authorize(request, shared).map(|_| ())
+}
+
 fn events(shared: &Shared, since: u64) -> Response {
     let deadline = Instant::now() + Duration::from_secs(25);
     loop {
@@ -1284,6 +1438,65 @@ mod tests {
             Some(&token),
         );
         assert_eq!(status, 401, "an unpaired token must stop working");
+    }
+
+    #[test]
+    fn reminder_dismissals_are_shared_with_the_other_client() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = DataPaths::new(dir.path());
+        let running = start(
+            &paths,
+            Options {
+                port: 0,
+                bind: "127.0.0.1".to_string(),
+            },
+        )
+        .unwrap();
+        let base = format!("http://{}", running.addr());
+
+        let (status, body) = http(
+            "POST",
+            &format!("{base}/api/v1/reminders/dismiss"),
+            Some(r#"{"task_id":"task-one"}"#),
+            None,
+        );
+        assert_eq!(status, 200, "{body}");
+        let seq = serde_json::from_str::<Value>(&body).unwrap()["seq"]
+            .as_u64()
+            .unwrap();
+
+        let (status, body) = http(
+            "GET",
+            &format!("{base}/api/v1/reminders/dismissed"),
+            None,
+            None,
+        );
+        assert_eq!(status, 200, "{body}");
+        let value: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(value["dismissals"][0]["task_id"], "task-one");
+
+        let (_, body) = http(
+            "GET",
+            &format!("{base}/api/v1/reminders/dismissed?after={seq}"),
+            None,
+            None,
+        );
+        assert_eq!(
+            serde_json::from_str::<Value>(&body).unwrap()["dismissals"]
+                .as_array()
+                .unwrap()
+                .len(),
+            0
+        );
+
+        // The Mac GUI uses these two helpers over loopback rather than going
+        // through the Android token.
+        post_reminder_dismissal(&paths.root, "mac-side");
+        assert!(
+            reminder_dismissals(&paths.root)
+                .iter()
+                .any(|id| id == "mac-side")
+        );
     }
 
     #[test]
