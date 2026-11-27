@@ -58,8 +58,12 @@
   and continues to restore the last focused projects and folders.
 - **Blank saved views.** Empty saved perspectives no longer show a tick; their
   count appears only when non-zero.
-- **Folder headings.** A folder view labels each project with its own name and
-  clicking the heading also shows that project in the inspector.
+- **Folder headings.** A folder view labels each project with its own name,
+  indents its tasks under the heading and keeps the redundant per-row project
+  label off. Clicking the heading also shows that project in the inspector.
+- **Empty project pane.** An empty project says **Nothing here** with
+  “Add the first task above”; a stalled project says **All caught up — no
+  active tasks** with “Add a new task above.”
 
 ### Currency icons
 

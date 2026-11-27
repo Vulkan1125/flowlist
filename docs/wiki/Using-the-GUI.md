@@ -246,9 +246,9 @@ folders and can carry their own tags, dates, attachments and icon.
 - **Settings → Workflow → Archive** controls whether Done and Dropped projects
   move to Archive automatically. It is on by default; turn it off to keep them
   visible in the active library.
-- In a folder view, each project heading uses just the project name. Clicking
-  it toggles its tasks and shows that project in the inspector without leaving
-  the folder.
+- In a folder view, each project heading uses just the project name and its
+  tasks indent underneath it. Clicking the heading toggles its tasks and shows
+  that project in the inspector without leaving the folder.
 - Drag a project onto a folder, onto the LIBRARY heading or onto empty space to
   move it back to the root.
 

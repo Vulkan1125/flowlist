@@ -2066,9 +2066,21 @@ impl FlowlistApp {
                         .gap_2()
                         .child(
                             div()
-                                .text_xs()
-                                .text_color(theme.text_faint)
-                                .child("All caught up — no active tasks."),
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.text_faint)
+                                        .child("All caught up — no active tasks."),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.text_faint)
+                                        .child("Add a new task above"),
+                                ),
                         )
                         .child(
                             div()
@@ -2140,10 +2152,8 @@ impl FlowlistApp {
                     .get(id)
                     .filter(|project| project.status == ProjectStatus::OnHold)
                     .map(|_| "This project is on hold.")
-                    .unwrap_or("Add the first task above.");
-                return self
-                    .render_empty("All caught up — no active tasks.", detail)
-                    .into_any_element();
+                    .unwrap_or("Add the first task above");
+                return self.render_empty("Nothing here", detail).into_any_element();
             }
             let (title, detail) = match &self.view {
                 View::Builtin(BuiltinPerspective::Inbox) => ("Inbox zero", "Nothing captured."),
@@ -3282,7 +3292,9 @@ impl FlowlistApp {
             .gap_2()
             .min_h(px(32.))
             .w_full()
-            .pl(px(18.0 + row.depth as f32 * 18.0))
+            .pl(px(18.0
+                + if matches!(self.view, View::Folder(_)) { 36.0 } else { 0.0 }
+                + row.depth as f32 * 18.0))
             .pr_4()
             .py_1()
             .border_b_1()
@@ -3889,12 +3901,9 @@ fn repeat_label(db: &flowlist_core::db::Db, id: &TaskId) -> Option<String> {
 fn row_project_label(db: &Db, view: &View, project: Option<&ProjectId>) -> Option<String> {
     let project = project?;
     match view {
-        View::Builtin(BuiltinPerspective::Projects) | View::Project(_) => None,
-        View::Folder(folder) => {
-            let path = db.project_path(project);
-            let prefix = format!("{} / ", db.folder_path(folder));
-            Some(path.strip_prefix(&prefix).unwrap_or(&path).to_string())
-        }
+        View::Builtin(BuiltinPerspective::Projects)
+        | View::Project(_)
+        | View::Folder(_) => None,
         _ => Some(db.project_path(project)),
     }
 }
@@ -3904,13 +3913,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn folder_rows_drop_the_folder_prefix() {
+    fn folder_rows_leave_the_project_to_their_heading() {
         let mut db = Db::new();
         let project = db.ensure_project_path("Personal/Shopping").unwrap();
         let folder = db.ensure_folder_path("Personal").unwrap();
         assert_eq!(
-            row_project_label(&db, &View::Folder(folder), Some(&project)).as_deref(),
-            Some("Shopping")
+            row_project_label(&db, &View::Folder(folder), Some(&project)),
+            None
         );
         assert_eq!(
             row_project_label(
