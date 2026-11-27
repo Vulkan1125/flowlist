@@ -751,6 +751,9 @@ pub struct FlowlistApp {
     expanded: BTreeSet<String>,
     collapsed_groups: BTreeSet<String>,
     show_inspector: bool,
+    /// A project picked from a folder header, shown in the inspector without
+    /// leaving the folder view.
+    inspector_project: Option<ProjectId>,
     show_completed: bool,
     /// Finished subtasks stay under their parent, struck through, even when
     /// the active view hides completed work.
@@ -1200,6 +1203,7 @@ impl FlowlistApp {
             expanded: BTreeSet::new(),
             collapsed_groups: BTreeSet::new(),
             show_inspector,
+            inspector_project: None,
             show_completed,
             keep_completed_subtasks,
             hide_empty_views,
@@ -1810,6 +1814,13 @@ impl FlowlistApp {
     fn prune_selection(&mut self) {
         let db = self.store.db();
         self.selected.retain(|id| db.tasks.contains_key(id));
+        if self
+            .inspector_project
+            .as_ref()
+            .is_some_and(|id| !db.projects.contains_key(id))
+        {
+            self.inspector_project = None;
+        }
         if let Some(anchor) = &self.anchor {
             if !db.tasks.contains_key(anchor) {
                 self.anchor = self.selected.first().cloned();
@@ -2798,6 +2809,7 @@ impl FlowlistApp {
         self.restore_view_options();
         self.selected.clear();
         self.anchor = None;
+        self.inspector_project = None;
         self.search.clear();
         self.editing = None;
         self.field_error = None;
@@ -2871,6 +2883,7 @@ impl FlowlistApp {
         self.date_error = None;
         self.selected = vec![id.clone()];
         self.anchor = Some(id);
+        self.inspector_project = None;
     }
 
     fn toggle_selection(&mut self, id: TaskId) {
@@ -2880,6 +2893,7 @@ impl FlowlistApp {
             self.selected.push(id.clone());
             self.anchor = Some(id);
         }
+        self.inspector_project = None;
     }
 
     fn select_range_to(&mut self, id: TaskId) {

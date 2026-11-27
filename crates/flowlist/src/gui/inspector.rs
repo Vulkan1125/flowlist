@@ -569,6 +569,9 @@ impl FlowlistApp {
                     .into_any_element(),
                 InspectorTab::Subtasks => self.render_task_subtasks(&id, cx),
             }
+        } else if let Some(id) = self.inspector_project.clone() {
+            self.render_project_inspector(&id, window, cx)
+                .into_any_element()
         } else if let View::Project(id) = self.view.clone() {
             self.render_project_inspector(&id, window, cx)
                 .into_any_element()

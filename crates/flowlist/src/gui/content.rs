@@ -2142,7 +2142,7 @@ impl FlowlistApp {
                     .map(|_| "This project is on hold.")
                     .unwrap_or("Add the first task above.");
                 return self
-                    .render_empty("No actions yet", detail)
+                    .render_empty("All caught up — no active tasks.", detail)
                     .into_any_element();
             }
             let (title, detail) = match &self.view {
@@ -2791,6 +2791,7 @@ impl FlowlistApp {
         };
         let group_boxes = self.content_group_boxes.clone();
         let group_key = group.key.clone();
+        let header_project = project.clone();
         let mut row =
             div()
                 .on_children_prepainted(move |bounds, _, _| {
@@ -2844,7 +2845,17 @@ impl FlowlistApp {
                     group.rows.len() + group.projects.len() + event_count,
                 ))
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.toggle_group_collapsed(open_key.clone(), cx)
+                    this.toggle_group_collapsed(open_key.clone(), cx);
+                    if matches!(this.view, View::Folder(_))
+                        && let Some(project) = header_project.clone()
+                    {
+                        this.inspector_project = Some(project);
+                        this.selected.clear();
+                        this.anchor = None;
+                        this.show_inspector = true;
+                        this.save_session();
+                    }
+                    cx.notify();
                 }));
         if let Some(project) = project {
             let db = self.store.db();

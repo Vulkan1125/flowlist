@@ -58,6 +58,8 @@
   and continues to restore the last focused projects and folders.
 - **Blank saved views.** Empty saved perspectives no longer show a tick; their
   count appears only when non-zero.
+- **Folder headings.** A folder view labels each project with its own name and
+  clicking the heading also shows that project in the inspector.
 
 ### Currency icons
 
