@@ -3280,6 +3280,17 @@ impl FlowlistApp {
                 cx.listener(|this, _, window, cx| {
                     cx.stop_propagation();
                     window.focus(&this.focus_handle);
+                    if this.focus != FocusArea::Content {
+                        if this.focus == FocusArea::Field {
+                            this.editing = None;
+                            this.field_error = None;
+                            this.draft_task = None;
+                        }
+                        this.focus = FocusArea::Content;
+                        this.checklist_cursor = None;
+                        this.vim.reset();
+                        cx.notify();
+                    }
                 }),
             )
             .on_click(cx.listener(move |this, event: &gpui::ClickEvent, _, cx| {
