@@ -292,6 +292,11 @@ integrations are tracked separately and are not part of this phase.
       due windows can each be OR-ed as multi-select sets.
 - [x] **Priority section headings** — sorting by priority groups Android task
       lists under High/Medium/Low/No priority headings.
+- [x] **Project completion mode** — a project can complete with its last open
+      task or stay active for a manual Done; single-action lists stay manual.
+      The inspector, CLI, MCP and project JSON carry the setting.
+- [x] **Focus-aware rail counts** — Inbox, priority, tag, folder, project and
+      saved-view counts respect the active focus, and empty tags dim.
 - [x] **Mac completion clears the inspector** — completing a task clears the
       selection and closes the field editor.
 - [x] **Mac multi-select perspective filters** — projects, tags, due and defer

@@ -422,6 +422,10 @@ pub struct Project {
     pub sequential: bool,
     #[serde(default)]
     pub kind: ProjectKind,
+    /// Mark the project done when its last open task is completed. Manual
+    /// projects stay active and keep the tick badge instead.
+    #[serde(default = "default_complete_with_last_action")]
+    pub complete_with_last_action: bool,
     /// Decorative icon shown in the sidebar and dashboards: a named glyph or
     /// one emoji.
     #[serde(default)]
@@ -451,6 +455,10 @@ fn default_review_days() -> u32 {
     7
 }
 
+fn default_complete_with_last_action() -> bool {
+    true
+}
+
 fn today() -> NaiveDate {
     local_date(now())
 }
@@ -477,6 +485,7 @@ impl Project {
             last_reviewed: None,
             sequential: false,
             kind: ProjectKind::Parallel,
+            complete_with_last_action: true,
             icon: IconSpec::default(),
             alerts: Vec::new(),
             removed_notifications: BTreeSet::new(),

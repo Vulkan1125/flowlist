@@ -42,6 +42,7 @@ pub enum Icon {
     PanelRight,
     Info,
     Plus,
+    Minus,
     ArrowUp,
     ArrowDown,
     ArrowLeft,
@@ -111,7 +112,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    pub const ALL: [Icon; 97] = [
+    pub const ALL: [Icon; 98] = [
         Icon::Inbox,
         Icon::Projects,
         Icon::Forecast,
@@ -143,6 +144,7 @@ impl Icon {
         Icon::PanelRight,
         Icon::Info,
         Icon::Plus,
+        Icon::Minus,
         Icon::ArrowUp,
         Icon::ArrowDown,
         Icon::ArrowLeft,
@@ -244,6 +246,7 @@ impl Icon {
             Icon::PanelRight => "icons/panel-right.svg",
             Icon::Info => "icons/info.svg",
             Icon::Plus => "icons/plus.svg",
+            Icon::Minus => "icons/minus.svg",
             Icon::ArrowUp => "icons/arrow-up.svg",
             Icon::ArrowDown => "icons/arrow-down.svg",
             Icon::ArrowLeft => "icons/arrow-left.svg",
@@ -394,6 +397,7 @@ impl Icon {
                 r#"<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>"#
             }
             Icon::Plus => r#"<path d="M5 12h14"/><path d="M12 5v14"/>"#,
+            Icon::Minus => r#"<path d="M5 12h14"/>"#,
             Icon::ArrowUp => r#"<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>"#,
             Icon::ArrowDown => r#"<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>"#,
             Icon::ArrowLeft => r#"<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>"#,
@@ -625,7 +629,7 @@ mod tests {
 
     #[test]
     fn icon_set_is_complete_and_unique() {
-        assert_eq!(Icon::ALL.len(), 97);
+        assert_eq!(Icon::ALL.len(), 98);
         let mut paths: Vec<&str> = Icon::ALL.iter().map(|icon| icon.path()).collect();
         paths.sort_unstable();
         paths.dedup();

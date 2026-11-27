@@ -358,6 +358,11 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Rich custom-perspective editor laid out like settings: labelled filter
       and layout rows that each open a menu of every value, a live match count,
       an explicit Clear filters, and unknown CLI conditions kept and counted
+- [x] Per-project completion mode: an inspector switch decides whether the
+      last completed action marks the project Done or leaves it active with the
+      tick badge. Single-action lists stay manual.
+- [x] Focus-aware rail counts for Inbox, priorities, tags, folders, projects
+      and saved views, with out-of-focus tags dimmed.
 - [x] Perspective editor polish: Simple-only text and estimate fields sit
       below the Simple/Comprehensive tabs; the None-conflict warning appears
       only on Comprehensive and only for a real sibling overlap; the review

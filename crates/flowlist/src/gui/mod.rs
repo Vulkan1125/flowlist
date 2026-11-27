@@ -1854,6 +1854,18 @@ impl FlowlistApp {
                 .any(|target| target.allows_task(self.store.db(), task))
     }
 
+    /// Open tasks carrying this tag (or a descendant) inside the focus.
+    fn focus_tag_usage(&self, tag: &TagId) -> usize {
+        let db = self.store.db();
+        db.tasks_tagged(tag, true)
+            .into_iter()
+            .filter(|id| {
+                db.tasks.get(id).is_some_and(|task| !task.completed)
+                    && self.focus_allows_task(id)
+            })
+            .count()
+    }
+
     fn focus_groups(&self, groups: Vec<Group>) -> Vec<Group> {
         if self.focus_targets.is_empty() {
             return groups;
@@ -7921,7 +7933,11 @@ impl FlowlistApp {
         let db = self.store.db();
         let at = now();
         match perspective {
-            BuiltinPerspective::Inbox => db.inbox_unscheduled_outline(false).len(),
+            BuiltinPerspective::Inbox => db
+                .inbox_unscheduled_outline(false)
+                .into_iter()
+                .filter(|row| self.focus_allows_task(&row.task))
+                .count(),
             BuiltinPerspective::Today => query::today(db, true, at)
                 .into_iter()
                 .flat_map(|group| group.rows)

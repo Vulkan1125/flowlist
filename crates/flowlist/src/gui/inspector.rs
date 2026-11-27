@@ -7,11 +7,11 @@ use gpui::{
 };
 use std::collections::BTreeSet;
 
-use flowlist_core::command::{Command, TaskPatch};
+use flowlist_core::command::{Command, ProjectPatch, TaskPatch};
 use flowlist_core::ids::{ChecklistId, TaskId};
 use flowlist_core::model::{
-    AlertEvent, DefaultNotification, IconSpec, Priority, ProjectStatus, RepeatMode, RepeatRule,
-    RepeatSchedule,
+    AlertEvent, DefaultNotification, IconSpec, Priority, ProjectKind, ProjectStatus, RepeatMode,
+    RepeatRule, RepeatSchedule,
 };
 use flowlist_core::parse::{parse_duration, parse_stamp};
 use flowlist_core::time::{IntervalUnit, Stamp, format_duration, human_date, local_date, now};
@@ -3818,6 +3818,8 @@ impl FlowlistApp {
         let planned = project.planned.map(|stamp| human_date(&stamp, now()));
         let next_review = project.next_review.format("%b %-d, %Y").to_string();
         let review_days = project.review_interval_days;
+        let complete_with_last_action = project.complete_with_last_action;
+        let single_actions = project.effective_kind() == ProjectKind::SingleActions;
         let has_dates = defer.is_some() || planned.is_some() || due.is_some();
         let has_attachments = !attachments.is_empty();
         let notifications_target = NotificationTarget::Project(id.clone());
@@ -3944,6 +3946,65 @@ impl FlowlistApp {
                             }))
                     }),
                 ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(theme.text_dim)
+                                    .child("Complete with last action"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.text_faint)
+                                    .child(if single_actions {
+                                        "Single-action lists stay open."
+                                    } else {
+                                        "Mark done when the last task is completed."
+                                    }),
+                            ),
+                    )
+                    .when(!single_actions, |this| {
+                        let toggle_id = project_id.clone();
+                        this.child(
+                            div()
+                                .on_children_prepainted(
+                                    self.theme_probe("project-complete-with-last-action".to_string()),
+                                )
+                                .id("project-complete-with-last-action")
+                                .child(widgets::switch(theme, complete_with_last_action))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.execute(Command::UpdateProject {
+                                        id: toggle_id.clone(),
+                                        patch: ProjectPatch {
+                                            complete_with_last_action: Some(
+                                                !complete_with_last_action,
+                                            ),
+                                            ..Default::default()
+                                        },
+                                    });
+                                    cx.notify();
+                                })),
+                        )
+                    })
+                    .when(single_actions, |this| {
+                        this.child(
+                            div()
+                                .opacity(0.38)
+                                .child(widgets::switch(theme, false)),
+                        )
+                    }),
             )
             .into_any_element();
         let dates_content = div()
@@ -4086,13 +4147,7 @@ impl FlowlistApp {
                             .border_color(theme.border)
                             .cursor_pointer()
                             .hover(|style| style.bg(theme.hover))
-                            .child(
-                                div()
-                                    .w(px(8.))
-                                    .h(px(1.5))
-                                    .rounded_full()
-                                    .bg(theme.text_dim),
-                            )
+                            .child(icons::icon(Icon::Minus, 10.0, theme.text_dim))
                             .on_click(cx.listener({
                                 let id = id.clone();
                                 move |this, _, _, cx| {
@@ -4120,32 +4175,7 @@ impl FlowlistApp {
                             .border_color(theme.border)
                             .cursor_pointer()
                             .hover(|style| style.bg(theme.hover))
-                            .child(
-                                div()
-                                    .relative()
-                                    .w(px(9.))
-                                    .h(px(9.))
-                                    .child(
-                                        div()
-                                            .absolute()
-                                            .left(px(0.))
-                                            .right(px(0.))
-                                            .top(px(3.75))
-                                            .h(px(1.5))
-                                            .rounded_full()
-                                            .bg(theme.text_dim),
-                                    )
-                                    .child(
-                                        div()
-                                            .absolute()
-                                            .top(px(0.))
-                                            .bottom(px(0.))
-                                            .left(px(3.75))
-                                            .w(px(1.5))
-                                            .rounded_full()
-                                            .bg(theme.text_dim),
-                                    ),
-                            )
+                            .child(icons::icon(Icon::Plus, 10.0, theme.text_dim))
                             .on_click(cx.listener({
                                 let id = id.clone();
                                 move |this, _, _, cx| {

@@ -1580,7 +1580,12 @@ impl FlowlistApp {
             .db()
             .tasks
             .values()
-            .filter(|task| !task.completed && !task.is_trashed() && task.priority == Some(priority))
+            .filter(|task| {
+                !task.completed
+                    && !task.is_trashed()
+                    && task.priority == Some(priority)
+                    && self.focus_allows_task(&task.id)
+            })
             .count();
         let key = SidebarTarget::Priority(priority).key();
         let show_count = !self.store.db().settings.sidebar.is_count_hidden(&key);
@@ -1641,7 +1646,18 @@ impl FlowlistApp {
             .map(|perspective| {
                 query::custom(self.store.db(), perspective, now())
                     .iter()
-                    .map(|group| group.rows.len() + group.projects.len())
+                    .map(|group| {
+                        group
+                            .rows
+                            .iter()
+                            .filter(|row| self.focus_allows_task(&row.id))
+                            .count()
+                            + group
+                                .projects
+                                .iter()
+                                .filter(|project| self.focus_allows_project(project))
+                                .count()
+                    })
                     .sum()
             })
             .unwrap_or(0);
@@ -1757,7 +1773,16 @@ impl FlowlistApp {
                         .get(&id)
                         .map(|folder| folder.name.clone())
                         .unwrap_or_default();
-                    let count = db.folder_active_project_count(&id);
+                    let count = db
+                        .projects
+                        .values()
+                        .filter(|project| {
+                            project.status.is_open()
+                                && db.project_is_in_folder(&project.id, &id, true)
+                                && !db.project_is_ticked(&project.id)
+                                && self.focus_allows_project(&project.id)
+                        })
+                        .count();
                     let show_count = !sidebar.is_count_hidden(&key);
                     let view_id = id.clone();
                     let target_id = id.clone();
@@ -1958,8 +1983,13 @@ impl FlowlistApp {
                     {
                         continue;
                     }
-                    let (done, total) = db.project_progress(&id);
-                    let open = db.project_open_count(&id);
+                    let focused = self.focus_allows_project(&id);
+                    let (done, total) = if focused {
+                        db.project_progress(&id)
+                    } else {
+                        (0, 0)
+                    };
+                    let open = if focused { db.project_open_count(&id) } else { 0 };
                     let show_count = !sidebar.is_count_hidden(&format!("project:{id}"));
                     let view_id = id.clone();
                     let target_id = id.clone();
@@ -2189,7 +2219,7 @@ impl FlowlistApp {
             }
             let open = self.is_open(&key, true);
             let children = !db.tag_children(&tag).is_empty();
-            let usage = db.tag_usage_count(&tag, true);
+            let usage = self.focus_tag_usage(&tag);
             let show_count = !sidebar.is_count_hidden(&key);
             let name = entity.name.clone();
             let located = entity.location.is_some();
@@ -2305,6 +2335,9 @@ impl FlowlistApp {
                 }));
             if active {
                 row = row.bg(self.theme.selection);
+            }
+            if !self.focus_targets.is_empty() && usage == 0 {
+                row = row.opacity(0.38);
             }
             rows.push(self.row_box(key, row).into_any_element());
             if open && children {

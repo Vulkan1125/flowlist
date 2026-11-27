@@ -229,6 +229,9 @@ folders and can carry their own tags, dates, attachments and icon.
 - The inspector’s **Review** section shows **Next Review**, an inline
   **Review Every** stepper and the derived **Last Reviewed** date. **Change**
   opens a small sheet for the exact next date and cadence.
+- The inspector also has **Complete with last action**. On, the project is
+  marked Done when its last open task is completed. Off, it stays active and
+  shows the tick badge. Single-action lists always stay manual.
 - Drag a project onto a folder, onto the LIBRARY heading or onto empty space to
   move it back to the root.
 
@@ -243,9 +246,11 @@ the focus, and a full-width banner below the title bar names it. Click the
 banner's ✕ to clear it. The eye beside the back/forward arrows glows while
 focused; click it to end focus, then click it again to restore the previous
 selection. Settings → Workflow can hide the banner; the eye remains, and a
-restored focus shows the banner briefly before it dismisses itself. Inbox and
-Trash stay global, and opening a project or folder outside every focused branch
-leaves focus.
+restored focus shows the banner briefly before it dismisses itself. Rail counts
+follow the focus: tags, folders, projects, priorities, Inbox and saved views
+count only what is inside it, and tags with nothing in focus dim. Inbox and
+Trash stay in the rail, though an Inbox task is outside every focused branch.
+Opening a project or folder outside every focused branch leaves focus.
 
 ## Views
 

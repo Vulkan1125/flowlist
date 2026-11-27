@@ -120,7 +120,7 @@ Checklist steps are not tasks and never appear as tasks in a list.
 | --- | --- |
 | `list_projects` | Projects in library order. |
 | `create_project` | Create a project, optionally inside a folder path. |
-| `update_project` | Name, notes, folder, dates, review interval, kind, icon, attachments and notifications. |
+| `update_project` | Name, notes, folder, dates, review interval, kind, completion mode, icon, attachments and notifications. |
 | `set_project_status` | `active`, `on-hold`, `done` or `dropped`. |
 | `delete_project` | Delete a project; its tasks move to Trash. |
 

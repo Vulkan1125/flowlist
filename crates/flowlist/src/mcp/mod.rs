@@ -845,6 +845,8 @@ impl Server {
             .unwrap_or(ProjectKind::Parallel);
         project.sequential = bool_arg(args, "sequential").unwrap_or(false)
             || project.kind == ProjectKind::Sequential;
+        project.complete_with_last_action =
+            bool_arg(args, "complete_with_last_action").unwrap_or(true);
         if let Some(icon) = string_arg(args, "icon") {
             project.icon = parse_project_icon(&icon)?;
         }
@@ -886,6 +888,9 @@ impl Server {
             patch.kind = Some(parse_project_kind(&kind)?);
         } else if let Some(sequential) = bool_arg(args, "sequential") {
             patch.sequential = Some(sequential);
+        }
+        if let Some(complete) = bool_arg(args, "complete_with_last_action") {
+            patch.complete_with_last_action = Some(complete);
         }
         if let Some(icon) = string_arg(args, "icon") {
             patch.icon = Some(parse_project_icon(&icon)?);
@@ -1615,6 +1620,7 @@ fn tool_definitions() -> Vec<Value> {
                     "review_interval_days": n("Review interval in days"),
                     "kind": s("parallel | sequential | single_actions"),
                     "sequential": b("Work through top-level tasks in order"),
+                    "complete_with_last_action": b("Mark the project done when its last task is completed"),
                     "icon": s("project | folder | star | briefcase | home | heart | book | code | rocket | coffee, or one emoji"),
                     "attachments": arr("Local file paths or http(s) links to reference"),
                 }),
@@ -1636,6 +1642,7 @@ fn tool_definitions() -> Vec<Value> {
                     "next_review": s("Next review date"),
                     "kind": s("parallel | sequential | single_actions"),
                     "sequential": b("Sequential tasks"),
+                    "complete_with_last_action": b("Mark the project done when its last task is completed"),
                     "icon": s("project | folder | star | briefcase | home | heart | book | code | rocket | coffee, or one emoji"),
                     "attachments": arr("Replace the project's attachment paths and links"),
                     "clear_attachments": b("Remove every attachment"),

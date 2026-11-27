@@ -183,6 +183,7 @@ pub struct NewProject {
     pub next_review: Option<NaiveDate>,
     pub sequential: bool,
     pub kind: ProjectKind,
+    pub complete_with_last_action: bool,
     pub icon: IconSpec,
     pub attachments: Vec<String>,
     /// Opt the project's tasks into full-screen reminders.
@@ -205,6 +206,7 @@ impl NewProject {
             next_review: None,
             sequential: false,
             kind: ProjectKind::Parallel,
+            complete_with_last_action: true,
             icon: IconSpec::default(),
             attachments: Vec::new(),
             fullscreen_reminder: false,
@@ -232,6 +234,7 @@ pub struct ProjectPatch {
     pub next_review: Option<NaiveDate>,
     pub sequential: Option<bool>,
     pub kind: Option<ProjectKind>,
+    pub complete_with_last_action: Option<bool>,
     pub icon: Option<IconSpec>,
     #[serde(default)]
     pub alerts: Option<Vec<TaskAlert>>,
@@ -945,6 +948,7 @@ impl Command {
             Command::CompleteTasks { ids, completed } => {
                 let mut changed = 0usize;
                 let mut first_title: Option<String> = None;
+                let mut completed_projects: BTreeSet<ProjectId> = BTreeSet::new();
                 for id in ids {
                     let Some(task) = db.tasks.get(&id) else {
                         continue;
@@ -1007,6 +1011,9 @@ impl Command {
                         first_title = Some(title.clone());
                     }
                     if completed {
+                        if let Some(project) = &project {
+                            completed_projects.insert(project.clone());
+                        }
                         if let Some(rule) = repeat {
                             if let Some(next) = rule.next_occurrence(due, defer, at) {
                                 let mut spawned = Task::new(increment_repeat_title(&title));
@@ -1072,9 +1079,35 @@ impl Command {
                     }
                     outcome.affected.push(id.to_string());
                 }
+                let mut auto_done: Vec<ProjectId> = Vec::new();
+                if completed {
+                    for project_id in completed_projects {
+                        let Some(project) = db.projects.get(&project_id) else {
+                            continue;
+                        };
+                        if !project.status.is_open()
+                            || !project.complete_with_last_action
+                            || project.effective_kind() == ProjectKind::SingleActions
+                        {
+                            continue;
+                        }
+                        let (done, total) = db.project_progress(&project_id);
+                        if total == 0 || done != total {
+                            continue;
+                        }
+                        if let Some(project) = db.projects.get_mut(&project_id) {
+                            project.status = ProjectStatus::Done;
+                            project.completed_at = Some(at);
+                            project.dropped_at = None;
+                            project.modified_at = at;
+                        }
+                        outcome.affected.push(project_id.to_string());
+                        auto_done.push(project_id);
+                    }
+                }
                 db.touch();
                 let verb = if completed { "Completed" } else { "Reopened" };
-                outcome.message = Some(if changed == 1 {
+                let mut message = if changed == 1 {
                     format!(
                         "{verb} task “{}”",
                         first_title.unwrap_or_else(|| "task".to_string())
@@ -1083,7 +1116,18 @@ impl Command {
                     format!("{verb} {}", task_count(changed))
                 } else {
                     "Nothing to change".to_string()
-                });
+                };
+                if let Some(project_id) = auto_done.first() {
+                    let name = db
+                        .projects
+                        .get(project_id)
+                        .map(|project| project.name.clone())
+                        .unwrap_or_default();
+                    if !name.is_empty() {
+                        message.push_str(&format!(" · project “{name}” done"));
+                    }
+                }
+                outcome.message = Some(message);
             }
             Command::DeleteTasks { ids } => {
                 let trashed = trash_tasks(db, &ids, at);
@@ -1480,6 +1524,7 @@ impl Command {
                     .review_interval_days
                     .unwrap_or(db.settings.default_review_days)
                     .max(1);
+                project.complete_with_last_action = new_project.complete_with_last_action;
                 project.next_review = new_project.next_review.unwrap_or_else(|| {
                     local_date(at) + chrono::Duration::days(project.review_interval_days as i64)
                 });
@@ -1557,6 +1602,9 @@ impl Command {
                         project.planned = planned;
                     }
                     ensure_dates_in_order(project.due, project.defer)?;
+                    if let Some(complete) = patch.complete_with_last_action {
+                        project.complete_with_last_action = complete;
+                    }
                     if let Some(interval) = patch.review_interval_days {
                         project.review_interval_days = interval.max(1);
                         // Changing the cadence moves the next review with it

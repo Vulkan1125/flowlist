@@ -13,6 +13,27 @@
   projects by** and **Sort projects by**. `perspective add` accepts
   `--project-group` and `--project-sort`.
 
+### Project completion
+
+- **Complete with last action.** Projects now carry a per-project completion
+  mode. With it on, completing the last open task marks the project Done. With
+  it off, the project stays active and shows the existing tick badge.
+  Single-action lists always stay manual. The inspector exposes the switch;
+  `project add/edit --completion auto|manual`, the MCP project tools and the
+  project JSON carry the same field.
+
+### Focus counts
+
+- **Counts follow the focus.** Inbox, priority, tag, folder, project and saved
+  view counts now count only tasks and projects inside the current focus. Tags
+  with nothing in focus dim, so the rail no longer shows a full count over an
+  empty list.
+
+### Review stepper
+
+- **Consistent stepper icons.** The review minus and plus controls use the
+  shared icon set, so both sit cleanly inside their buttons.
+
 ### Review cadence
 
 - **Next review follows the interval.** Changing **Review every** from the

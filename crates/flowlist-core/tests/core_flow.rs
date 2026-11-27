@@ -8,8 +8,8 @@ use flowlist_core::command::{
 use flowlist_core::db::{ContainerPosition, Position};
 use flowlist_core::ids::{FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    Condition, FilterNode, GroupBy, IconSpec, Priority, ProjectStatus, RepeatMode, RepeatRule,
-    SortBy,
+    Condition, FilterNode, GroupBy, IconSpec, Priority, ProjectKind, ProjectStatus, RepeatMode,
+    RepeatRule, SortBy,
     TagStatus, Task,
 };
 use flowlist_core::paths::DataPaths;
@@ -1338,6 +1338,108 @@ fn each_project_keeps_its_own_review_cadence() {
         })
         .unwrap();
     assert_eq!(store.db().projects[&weekly].next_review, chosen);
+}
+
+#[test]
+fn project_completes_with_last_action_unless_manual_or_single_actions() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let project = add_project_in(&mut store, "Automatic", None);
+    let mut first = NewTask::new("First");
+    first.project = Some(project.clone());
+    let first_id = store
+        .execute(Command::CreateTask(first))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("created task");
+    let first_id = store.db().resolve_task(&first_id).unwrap();
+    let mut second = NewTask::new("Second");
+    second.project = Some(project.clone());
+    let second_id = store
+        .execute(Command::CreateTask(second))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("created task");
+    let second_id = store.db().resolve_task(&second_id).unwrap();
+
+    assert!(store.db().projects[&project].complete_with_last_action);
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![first_id],
+            completed: true,
+        })
+        .unwrap();
+    assert_eq!(store.db().projects[&project].status, ProjectStatus::Active);
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![second_id],
+            completed: true,
+        })
+        .unwrap();
+    assert_eq!(store.db().projects[&project].status, ProjectStatus::Done);
+    assert!(store.db().projects[&project].completed_at.is_some());
+
+    let mut manual_project = NewProject::new("Manual");
+    manual_project.complete_with_last_action = false;
+    let manual = store
+        .execute(Command::CreateProject(manual_project))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("created project");
+    let manual = store.db().resolve_project(&manual).unwrap();
+    let mut task = NewTask::new("Only");
+    task.project = Some(manual.clone());
+    let task_id = store
+        .execute(Command::CreateTask(task))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("created task");
+    let task_id = store.db().resolve_task(&task_id).unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![task_id],
+            completed: true,
+        })
+        .unwrap();
+    assert_eq!(store.db().projects[&manual].status, ProjectStatus::Active);
+    assert!(store.db().project_is_ticked(&manual));
+
+    let mut single = NewProject::new("Single actions");
+    single.kind = ProjectKind::SingleActions;
+    let single_id = store
+        .execute(Command::CreateProject(single))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("created project");
+    let single = store.db().resolve_project(&single_id).unwrap();
+    let mut task = NewTask::new("One-off");
+    task.project = Some(single.clone());
+    let task_id = store
+        .execute(Command::CreateTask(task))
+        .unwrap()
+        .created
+        .first()
+        .cloned()
+        .expect("created task");
+    let task_id = store.db().resolve_task(&task_id).unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![task_id],
+            completed: true,
+        })
+        .unwrap();
+    assert_eq!(store.db().projects[&single].status, ProjectStatus::Active);
 }
 
 #[test]

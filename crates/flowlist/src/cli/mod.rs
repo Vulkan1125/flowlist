@@ -569,6 +569,9 @@ pub struct ProjectAddArgs {
     /// A named icon (project, star, rocket, …) or one emoji such as 🏃
     #[arg(long)]
     pub icon: Option<String>,
+    /// auto | manual. Auto marks the project done with its last task.
+    #[arg(long)]
+    pub completion: Option<String>,
     /// Attach a file path or http(s) link; repeat for several attachments.
     #[arg(long = "attach")]
     pub attachments: Vec<String>,
@@ -595,6 +598,9 @@ pub struct ProjectEditArgs {
     pub review_days: Option<u32>,
     #[arg(long)]
     pub next_review: Option<String>,
+    /// auto | manual. Auto marks the project done with its last task.
+    #[arg(long)]
+    pub completion: Option<String>,
     #[arg(long)]
     pub sequential: bool,
     /// parallel | sequential | single_actions.
@@ -2098,6 +2104,9 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
                 .transpose()?
                 .unwrap_or(ProjectKind::Parallel);
             new_project.sequential = args.sequential || new_project.kind == ProjectKind::Sequential;
+            if let Some(completion) = &args.completion {
+                new_project.complete_with_last_action = parse_completion(completion)?;
+            }
             if let Some(icon) = &args.icon {
                 new_project.icon = parse_project_icon(icon)?;
             }
@@ -2231,6 +2240,9 @@ fn cmd_project(cli: &Cli, args: ProjectArgs, paint: &Paint) -> Result<()> {
             }
             if let Some(next) = &args.next_review {
                 patch.next_review = Some(flowlist_core::parse::parse_date(next, reference)?);
+            }
+            if let Some(completion) = &args.completion {
+                patch.complete_with_last_action = Some(parse_completion(completion)?);
             }
             if args.sequential {
                 patch.sequential = Some(true);
@@ -2968,6 +2980,14 @@ fn parse_priority(value: &str) -> Result<Priority> {
                 .find(|priority| priority.label().eq_ignore_ascii_case(value.trim()))
         })
         .ok_or_else(|| anyhow!("priority must be low, medium or high"))
+}
+
+fn parse_completion(value: &str) -> Result<bool> {
+    match value.to_lowercase().as_str() {
+        "auto" | "last" | "last-action" => Ok(true),
+        "manual" | "off" => Ok(false),
+        _ => bail!("completion must be auto or manual"),
+    }
 }
 
 fn parse_project_kind(value: &str) -> Result<ProjectKind> {

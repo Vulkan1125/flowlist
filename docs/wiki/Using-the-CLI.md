@@ -298,6 +298,7 @@ List tags with their paths and usage.
 | `--review-days <DAYS>` | Review interval. Moves next review unless `--next-review` is given. |
 | `--sequential` | Sequential project. |
 | `--kind <KIND>` | `parallel`, `sequential`, `single_actions`. |
+| `--completion <MODE>` | `auto` marks the project done with its last task; `manual` leaves it active. |
 | `--icon <ICON>` | Named icon or one emoji. |
 | `--attach <ATTACHMENTS>` | File or link. Repeatable. |
 
@@ -306,11 +307,12 @@ List tags with their paths and usage.
 **`flowlist project edit <ID>`**
 
 Options: `--name`, `--note`, `--folder`, `--due`, `--defer`, `--planned`,
-`--review-days`, `--next-review`, `--sequential`, `--kind`, `--icon`,
+`--review-days`, `--next-review`, `--completion`, `--sequential`, `--kind`, `--icon`,
 `--attach`, `--clear-attachments`, `--alerts`, `--remove-notification`,
 `--restore-notification`, `--custom-notification`, `--clear-custom-notifications`.
 `--review-days` moves the next review to the last reviewed date plus the new
-interval; `--next-review` sets an explicit date and wins.
+interval; `--next-review` sets an explicit date and wins. `--completion auto`
+marks the project done with its last open task; `manual` keeps it active.
 
 **`flowlist project status <ID> <STATUS>`**
 
