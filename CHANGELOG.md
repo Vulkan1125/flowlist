@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Organized project perspectives
+
+- **Project rows with nested actions.** A saved view that matches projects can
+  group those projects by folder, project, due, defer, planned or review date,
+  added or changed date, and sort them by name, dates or library order. Each
+  matched project keeps its own header and shows its matching actions
+  underneath instead of leaving them in a separate task block.
+- **Editor and CLI controls.** The shared Presentation section adds **Group
+  projects by** and **Sort projects by**. `perspective add` accepts
+  `--project-group` and `--project-sort`.
+
 ### Calmer copy
 
 - **Terser interface text.** View subtitles, empty states, settings

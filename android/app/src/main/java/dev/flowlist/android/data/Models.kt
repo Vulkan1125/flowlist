@@ -152,6 +152,8 @@ data class PerspectiveDto(
     val filter: JsonElement? = null,
     @SerialName("group_by") val groupBy: String = "none",
     val sort: String = "manual",
+    @SerialName("project_group_by") val projectGroupBy: String = "none",
+    @SerialName("project_sort") val projectSort: String = "manual",
     @SerialName("show_completed") val showCompleted: Boolean = false,
     val position: Int = 0,
     val pinned: Boolean = false,

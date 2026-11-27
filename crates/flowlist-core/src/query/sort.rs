@@ -4,6 +4,7 @@
 use std::cmp::Ordering;
 
 use crate::db::Db;
+use crate::ids::ProjectId;
 use crate::model::{Priority, SortBy};
 use crate::query::TaskRow;
 
@@ -139,6 +140,73 @@ pub fn sort_rows(db: &Db, rows: &mut [TaskRow], sort: SortBy) {
                 .map(|project| project.next_review);
             option_cmp(left, right)
         }),
+    }
+}
+
+/// Order project rows. Task-only sort keys fall back to library order.
+pub fn sort_projects(db: &Db, projects: &mut [ProjectId], sort: SortBy) {
+    match sort {
+        SortBy::Manual => {}
+        SortBy::Name => projects.sort_by_cached_key(|id| {
+            db.projects
+                .get(id)
+                .map(|project| project.name.to_lowercase())
+                .unwrap_or_default()
+        }),
+        SortBy::Due => projects.sort_by(|a, b| {
+            let left = db.projects.get(a).and_then(|project| project.due).map(|s| s.at);
+            let right = db.projects.get(b).and_then(|project| project.due).map(|s| s.at);
+            option_cmp(left, right)
+        }),
+        SortBy::Defer => projects.sort_by(|a, b| {
+            let left = db.projects.get(a).and_then(|project| project.defer).map(|s| s.at);
+            let right = db.projects.get(b).and_then(|project| project.defer).map(|s| s.at);
+            option_cmp(left, right)
+        }),
+        SortBy::Planned => projects.sort_by(|a, b| {
+            let left = db
+                .projects
+                .get(a)
+                .and_then(|project| project.planned)
+                .map(|s| s.at);
+            let right = db
+                .projects
+                .get(b)
+                .and_then(|project| project.planned)
+                .map(|s| s.at);
+            option_cmp(left, right)
+        }),
+        SortBy::Created => projects.sort_by(|a, b| {
+            let left = db.projects.get(a).map(|project| project.created_at);
+            let right = db.projects.get(b).map(|project| project.created_at);
+            option_cmp(left, right)
+        }),
+        SortBy::AddedDate => projects.sort_by(|a, b| {
+            let left = db.projects.get(a).map(|project| project.created_at);
+            let right = db.projects.get(b).map(|project| project.created_at);
+            option_cmp(right, left)
+        }),
+        SortBy::ChangedDate => projects.sort_by(|a, b| {
+            let left = db.projects.get(a).map(|project| project.modified_at);
+            let right = db.projects.get(b).map(|project| project.modified_at);
+            option_cmp(right, left)
+        }),
+        SortBy::DroppedDate => projects.sort_by(|a, b| {
+            let left = db.projects.get(a).and_then(|project| project.dropped_at);
+            let right = db.projects.get(b).and_then(|project| project.dropped_at);
+            option_cmp(right, left)
+        }),
+        SortBy::NextReview => projects.sort_by(|a, b| {
+            let left = db.projects.get(a).map(|project| project.next_review);
+            let right = db.projects.get(b).map(|project| project.next_review);
+            option_cmp(left, right)
+        }),
+        SortBy::Priority
+        | SortBy::Flagged
+        | SortBy::Estimate
+        | SortBy::CompletedAt
+        | SortBy::DueFlagged
+        | SortBy::Tag => {}
     }
 }
 

@@ -680,6 +680,12 @@ pub struct PerspectiveAddArgs {
     pub group_by: Option<String>,
     #[arg(long)]
     pub sort: Option<String>,
+    /// none | project | folder | due | defer | planned | review | added | changed
+    #[arg(long)]
+    pub project_group: Option<String>,
+    /// manual | name | due | defer | planned | review | created | added | changed
+    #[arg(long)]
+    pub project_sort: Option<String>,
     #[arg(long)]
     pub show_completed: bool,
     /// Keep this view above the saved views.
@@ -2421,6 +2427,12 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
             if let Some(sort) = args.sort {
                 perspective.sort = parse_sort(&sort)?;
             }
+            if let Some(group_by) = args.project_group {
+                perspective.project_group_by = parse_project_group(&group_by)?;
+            }
+            if let Some(sort) = args.project_sort {
+                perspective.project_sort = parse_project_sort(&sort)?;
+            }
             perspective.show_completed = args.show_completed;
             perspective.pinned = args.pinned;
             if let Some(description) = args.description {
@@ -2476,6 +2488,8 @@ fn cmd_perspective(cli: &Cli, args: PerspectiveArgs, paint: &Paint) -> Result<()
                                 "name": perspective.name,
                                 "group_by": format!("{:?}", perspective.group_by),
                                 "sort": format!("{:?}", perspective.sort),
+                                "project_group_by": format!("{:?}", perspective.project_group_by),
+                                "project_sort": format!("{:?}", perspective.project_sort),
                                 "show_completed": perspective.show_completed,
                                 "pinned": perspective.pinned,
                                 "icon": perspective.icon,
@@ -2869,6 +2883,47 @@ fn parse_sort(value: &str) -> Result<SortBy> {
         "dropped" | "dropped-date" => Ok(SortBy::DroppedDate),
         "review" | "next-review" => Ok(SortBy::NextReview),
         other => bail!("unknown sort: {other}"),
+    }
+}
+
+fn parse_project_group(value: &str) -> Result<GroupBy> {
+    let group = parse_group(value)?;
+    if matches!(
+        group,
+        GroupBy::None
+            | GroupBy::Project
+            | GroupBy::Folder
+            | GroupBy::DueDate
+            | GroupBy::DeferDate
+            | GroupBy::PlannedDate
+            | GroupBy::NextReview
+            | GroupBy::AddedDate
+            | GroupBy::ChangedDate
+    ) {
+        Ok(group)
+    } else {
+        bail!("--project-group does not support {value}")
+    }
+}
+
+fn parse_project_sort(value: &str) -> Result<SortBy> {
+    let sort = parse_sort(value)?;
+    if matches!(
+        sort,
+        SortBy::Manual
+            | SortBy::Name
+            | SortBy::Due
+            | SortBy::Defer
+            | SortBy::Planned
+            | SortBy::NextReview
+            | SortBy::Created
+            | SortBy::AddedDate
+            | SortBy::ChangedDate
+            | SortBy::DroppedDate
+    ) {
+        Ok(sort)
+    } else {
+        bail!("--project-sort does not support {value}")
     }
 }
 

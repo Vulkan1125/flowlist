@@ -340,7 +340,9 @@ Nested folders and their projects are removed; tasks move to Trash.
 | --- | --- |
 | `--filter <JSON>` | Filter tree as JSON. |
 | `--group-by <GROUP>` | Grouping value. |
-| `--sort <SORT>` | Sort value. |
+| `--sort <SORT>` | Sort value for actions. |
+| `--project-group <GROUP>` | Group matching projects by `project`, `folder`, `due`, `defer`, `planned`, `review`, `added` or `changed`. |
+| `--project-sort <SORT>` | Sort matching projects by `name`, `due`, `defer`, `planned`, `review`, `created`, `added`, `changed` or `manual`. |
 | `--show-completed` | Include completed tasks. |
 | `--pinned` | Keep above the saved section. |
 | `--icon <ICON>` | Named icon or one emoji. |

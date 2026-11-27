@@ -766,7 +766,8 @@ pub fn window_from_keyword(value: &str, today: NaiveDate) -> Option<DueWindow> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Project, ProjectKind, Tag, Task};
+    use crate::ids::{FolderId, ProjectId, TaskId};
+    use crate::model::{Folder, ItemKindFilter, Project, ProjectKind, Tag, Task};
     use crate::time::Stamp;
 
     fn db_with_task(task: Task) -> (Db, Task) {
@@ -942,6 +943,79 @@ mod tests {
         assert_eq!(groups[0].key, "projects");
         assert_eq!(groups[0].projects, vec![project_id]);
         assert!(groups[0].rows.is_empty());
+    }
+
+    fn project_with_task(db: &mut Db, name: &str, folder: &FolderId, title: &str) -> (ProjectId, TaskId) {
+        let project_id = db.add_project(Project::new(name));
+        db.projects.get_mut(&project_id).unwrap().folder = Some(folder.clone());
+        let mut task = Task::new(title);
+        task.project = Some(project_id.clone());
+        let task_id = db.add_task_to_inbox(task);
+        db.inbox_order.retain(|id| id != &task_id);
+        db.tasks.get_mut(&task_id).unwrap().project = Some(project_id.clone());
+        db.projects
+            .get_mut(&project_id)
+            .unwrap()
+            .task_order
+            .push(task_id.clone());
+        (project_id, task_id)
+    }
+
+    #[test]
+    fn project_grouping_nests_matching_actions_under_their_project() {
+        let mut db = Db::new();
+        let work = db.add_folder(Folder::new("Work"));
+        let home = db.add_folder(Folder::new("Home"));
+        let (alpha, alpha_task) = project_with_task(&mut db, "Alpha", &work, "Write the brief");
+        let (beta, beta_task) = project_with_task(&mut db, "Beta", &home, "Buy paint");
+        let filter = FilterNode::all(Vec::new());
+        let at = Utc::now();
+
+        let groups = crate::query::run_projects(
+            &db,
+            &filter,
+            crate::model::SortBy::Manual,
+            crate::model::GroupBy::None,
+            crate::model::GroupBy::Folder,
+            crate::model::SortBy::Manual,
+            false,
+            at,
+        );
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].title, "Work");
+        assert_eq!(groups[0].projects, vec![alpha.clone()]);
+        assert_eq!(
+            groups[0].rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>(),
+            vec![alpha_task]
+        );
+        assert_eq!(groups[1].title, "Home");
+        assert_eq!(groups[1].projects, vec![beta.clone()]);
+        assert_eq!(
+            groups[1].rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>(),
+            vec![beta_task]
+        );
+    }
+
+    #[test]
+    fn project_sort_orders_the_projects_block() {
+        let mut db = Db::new();
+        let folder = db.add_folder(Folder::new("Work"));
+        let (beta, _) = project_with_task(&mut db, "Beta", &folder, "Second");
+        let (alpha, _) = project_with_task(&mut db, "Alpha", &folder, "First");
+        let filter = FilterNode::condition(Condition::ItemKind {
+            value: ItemKindFilter::Project,
+        });
+        let groups = crate::query::run_projects(
+            &db,
+            &filter,
+            crate::model::SortBy::Manual,
+            crate::model::GroupBy::None,
+            crate::model::GroupBy::None,
+            crate::model::SortBy::Name,
+            false,
+            Utc::now(),
+        );
+        assert_eq!(groups[0].projects, vec![alpha, beta]);
     }
 
     #[test]

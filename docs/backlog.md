@@ -154,12 +154,12 @@ integrations are tracked separately and are not part of this phase.
       All / Any / None groups, the full rule catalogue, date ranges, tag and
       project status, comments, turning rules off, drag reordering, and the
       same evaluator on the Mac and the phone.
-- [ ] **Project-level custom perspectives** — the “Entire Projects”
-      organized structure, with projects grouped by folder, review date or a
-      project-level date and their matching actions nested underneath. Custom
-      perspectives already list matching projects as rows and the
-      **Is a project** rule works; what remains is the organized project
-      outline and project grouping/sorting choices.
+- [x] **Project-level custom perspectives** — matching projects can group by
+      folder, project, review date or a project-level date (due, defer,
+      planned, added, changed), with project sorting by name, dates or library
+      order. Each project keeps its header and its matching actions nest
+      underneath. The shared Presentation section and `perspective add`
+      expose the two controls.
 - [ ] **Perspective favourites and navigation** — favourites bar, reorder,
       custom icons/colours, copy-as-link and a per-perspective shortcut.
 - [ ] **Configurable row layout** — per-perspective density, columns and
@@ -613,6 +613,9 @@ product comparison, not a claim of feature parity.
 - **Forecast Tag** — a designated tag marks items for Forecast even without a
   due or defer date. This is a clean fit for our tag model; add
   a Settings field that names the tag and include it in the Forecast query.
+- **Phone project grouping** — the Mac and CLI group matching projects by
+  folder or date with nested actions. The phone preserves the new fields but
+  its editor and list still show a flat Projects block.
 - **Favorite perspectives and a perspectives bar** — the reference app lets
   users reorder and hide perspectives, and assigns keyboard shortcuts per
   perspective. Our sidebar order is fixed. Add favorites, drag reorder and a

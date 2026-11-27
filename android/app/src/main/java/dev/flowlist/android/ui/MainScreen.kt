@@ -1405,6 +1405,8 @@ fun MainScreen(
                         filter = draft.toFilter(),
                         groupBy = draft.group,
                         sort = draft.sort,
+                        projectGroupBy = editing?.projectGroupBy ?: "none",
+                        projectSort = editing?.projectSort ?: "manual",
                         showCompleted = draft.showCompleted,
                         pinned = editing?.pinned ?: false,
                         position = editing?.position ?: 0,

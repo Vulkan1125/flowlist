@@ -1314,6 +1314,7 @@ impl FlowlistApp {
                 .map(|group| group.rows.len() + group.projects.len())
                 .sum::<usize>()
         };
+        let has_project_rows = groups.iter().any(|group| !group.projects.is_empty());
         let shows_completed =
             matches!(self.view, View::Project(_) | View::Folder(_) | View::Tag(_));
         let is_trash = matches!(self.view, View::Builtin(BuiltinPerspective::Trash));
@@ -1682,7 +1683,12 @@ impl FlowlistApp {
                             )
                         },
                     )
-                    .child(view_count_label(is_archive, count, forecast_day)),
+                    .child(view_count_label(
+                        is_archive,
+                        count,
+                        forecast_day,
+                        has_project_rows,
+                    )),
             )
     }
 
@@ -2108,63 +2114,94 @@ impl FlowlistApp {
                         list = list.child(div().mx_4().mt_1().h(px(1.)).bg(theme.border_soft));
                     }
                 }
-                // Forecast puts a project's own deadline above the day's
-                // actions. Every other view has an empty list here.
-                if !group.projects.is_empty() {
-                    if group.key != "projects" {
+                if group.key.starts_with("project-nest:") {
+                    // A folder or date group: project rows with their matching
+                    // actions nested underneath, in project order.
+                    let nested_rows = self.expanded_rows(&group.rows);
+                    let project_ids: BTreeSet<ProjectId> =
+                        group.projects.iter().cloned().collect();
+                    for project in &group.projects {
+                        list = list.child(self.render_forecast_project_row(project, cx));
+                        for row in nested_rows
+                            .iter()
+                            .filter(|row| row.project.as_ref() == Some(project))
+                        {
+                            if self.row_is_hidden(&row.id) {
+                                continue;
+                            }
+                            list = list.child(self.render_task_row(row, cx));
+                        }
+                    }
+                    for row in nested_rows.iter().filter(|row| {
+                        row.project
+                            .as_ref()
+                            .is_none_or(|project| !project_ids.contains(project))
+                    }) {
+                        if self.row_is_hidden(&row.id) {
+                            continue;
+                        }
+                        list = list.child(self.render_task_row(row, cx));
+                    }
+                } else {
+                    // Forecast puts a project's own deadline above the day's
+                    // actions. Every other view has an empty list here.
+                    if !group.projects.is_empty() {
+                        if group.key != "projects" {
+                            list = list.child(
+                                div()
+                                    .px_4()
+                                    .pt_2()
+                                    .pb_1()
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(theme.text_faint)
+                                    .child("Projects"),
+                            );
+                        }
+                        for project in &group.projects {
+                            list = list.child(self.render_forecast_project_row(project, cx));
+                        }
+                        if !group.rows.is_empty() {
+                            list = list.child(
+                                div()
+                                    .mt_1()
+                                    .mx_4()
+                                    .pt_2()
+                                    .pb_1()
+                                    .border_t_1()
+                                    .border_color(theme.border_soft)
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(theme.text_faint)
+                                    .child("Tasks"),
+                            );
+                        }
+                    }
+                    // One root drop target before the first top-level row. Rows
+                    // themselves handle "after this row", so no spacer is needed
+                    // between every pair and the rows stay visually joined.
+                    let mut first_root = true;
+                    for row in self.expanded_rows(&group.rows) {
+                        if self.row_is_hidden(&row.id) {
+                            continue;
+                        }
+                        if row.depth == 0 && first_root {
+                            list =
+                                list.child(self.render_root_drop_zone(Some(row.id.clone()), cx));
+                            first_root = false;
+                        }
+                        list = list.child(self.render_task_row(&row, cx));
+                    }
+                    if group.rows.is_empty() && group.projects.is_empty() && events.is_empty() {
                         list = list.child(
                             div()
                                 .px_4()
-                                .pt_2()
-                                .pb_1()
-                                .text_xs()
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .py_2()
+                                .text_sm()
                                 .text_color(theme.text_faint)
-                                .child("Projects"),
+                                .child("No tasks yet"),
                         );
                     }
-                    for project in &group.projects {
-                        list = list.child(self.render_forecast_project_row(project, cx));
-                    }
-                    if !group.rows.is_empty() {
-                        list = list.child(
-                            div()
-                                .mt_1()
-                                .mx_4()
-                                .pt_2()
-                                .pb_1()
-                                .border_t_1()
-                                .border_color(theme.border_soft)
-                                .text_xs()
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .text_color(theme.text_faint)
-                                .child("Tasks"),
-                        );
-                    }
-                }
-                // One root drop target before the first top-level row. Rows
-                // themselves handle "after this row", so no spacer is needed
-                // between every pair and the rows stay visually joined.
-                let mut first_root = true;
-                for row in self.expanded_rows(&group.rows) {
-                    if self.row_is_hidden(&row.id) {
-                        continue;
-                    }
-                    if row.depth == 0 && first_root {
-                        list = list.child(self.render_root_drop_zone(Some(row.id.clone()), cx));
-                        first_root = false;
-                    }
-                    list = list.child(self.render_task_row(&row, cx));
-                }
-                if group.rows.is_empty() && group.projects.is_empty() && events.is_empty() {
-                    list = list.child(
-                        div()
-                            .px_4()
-                            .py_2()
-                            .text_sm()
-                            .text_color(theme.text_faint)
-                            .child("No tasks yet"),
-                    );
                 }
             }
         }
@@ -3555,7 +3592,12 @@ fn forecast_pane_width(window_width: f32, show_inspector: bool) -> f32 {
 
 /// The count under a view title. A picked Forecast day names the day, so the
 /// label reads "1 task for 23 Nov"; with no day picked it stays "3 tasks".
-fn view_count_label(is_archive: bool, count: usize, forecast_day: Option<NaiveDate>) -> String {
+fn view_count_label(
+    is_archive: bool,
+    count: usize,
+    forecast_day: Option<NaiveDate>,
+    has_project_rows: bool,
+) -> String {
     if is_archive {
         if count == 0 {
             "No projects".to_string()
@@ -3571,6 +3613,12 @@ fn view_count_label(is_archive: bool, count: usize, forecast_day: Option<NaiveDa
                 super::plural(count, "task", "tasks"),
                 date.format("%-d %b")
             )
+        }
+    } else if has_project_rows {
+        if count == 0 {
+            "No items".to_string()
+        } else {
+            super::plural(count, "item", "items")
         }
     } else if count == 0 {
         "No tasks".to_string()
@@ -3753,11 +3801,21 @@ mod tests {
     #[test]
     fn view_count_label_names_a_picked_forecast_day() {
         let day = NaiveDate::from_ymd_opt(2026, 11, 23).unwrap();
-        assert_eq!(view_count_label(false, 1, Some(day)), "1 task for 23 Nov");
-        assert_eq!(view_count_label(false, 3, Some(day)), "3 tasks for 23 Nov");
-        assert_eq!(view_count_label(false, 0, Some(day)), "No tasks for 23 Nov");
-        assert_eq!(view_count_label(false, 3, None), "3 tasks");
-        assert_eq!(view_count_label(false, 0, None), "No tasks");
-        assert_eq!(view_count_label(true, 2, Some(day)), "2 projects");
+        assert_eq!(
+            view_count_label(false, 1, Some(day), false),
+            "1 task for 23 Nov"
+        );
+        assert_eq!(
+            view_count_label(false, 3, Some(day), false),
+            "3 tasks for 23 Nov"
+        );
+        assert_eq!(
+            view_count_label(false, 0, Some(day), false),
+            "No tasks for 23 Nov"
+        );
+        assert_eq!(view_count_label(false, 3, None, false), "3 tasks");
+        assert_eq!(view_count_label(false, 0, None, false), "No tasks");
+        assert_eq!(view_count_label(false, 5, None, true), "5 items");
+        assert_eq!(view_count_label(true, 2, Some(day), false), "2 projects");
     }
 }

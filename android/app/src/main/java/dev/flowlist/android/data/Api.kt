@@ -638,6 +638,8 @@ fun savePerspectiveCommand(
     filter: kotlinx.serialization.json.JsonElement,
     groupBy: String,
     sort: String,
+    projectGroupBy: String,
+    projectSort: String,
     showCompleted: Boolean,
     pinned: Boolean,
     position: Int,
@@ -655,6 +657,8 @@ fun savePerspectiveCommand(
                     put("filter", filter)
                     put("group_by", groupBy)
                     put("sort", sort)
+                    put("project_group_by", projectGroupBy)
+                    put("project_sort", projectSort)
                     put("show_completed", showCompleted)
                     put("pinned", pinned)
                     put("position", position)

@@ -785,6 +785,13 @@ pub struct Perspective {
     pub group_by: GroupBy,
     #[serde(default)]
     pub sort: SortBy,
+    /// How project rows are grouped when a saved view matches projects.
+    /// `None` keeps the single Projects block above the action groups.
+    #[serde(default = "default_project_group")]
+    pub project_group_by: GroupBy,
+    /// Ordering for project rows. `Manual` keeps library order.
+    #[serde(default)]
+    pub project_sort: SortBy,
     #[serde(default)]
     pub show_completed: bool,
     #[serde(default)]
@@ -808,6 +815,10 @@ fn default_group() -> GroupBy {
     GroupBy::None
 }
 
+fn default_project_group() -> GroupBy {
+    GroupBy::None
+}
+
 impl Perspective {
     pub fn new(name: impl Into<String>) -> Self {
         Self {
@@ -816,6 +827,8 @@ impl Perspective {
             filter: FilterNode::All(Vec::new()),
             group_by: GroupBy::None,
             sort: SortBy::Manual,
+            project_group_by: GroupBy::None,
+            project_sort: SortBy::Manual,
             show_completed: false,
             position: 0,
             pinned: false,

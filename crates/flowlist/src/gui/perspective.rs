@@ -140,6 +140,8 @@ pub enum ViewField {
     Fullscreen,
     Group,
     Sort,
+    ProjectGroup,
+    ProjectSort,
 }
 
 impl ViewField {
@@ -154,6 +156,8 @@ impl ViewField {
             ViewField::Fullscreen => "fullscreen",
             ViewField::Group => "group",
             ViewField::Sort => "sort",
+            ViewField::ProjectGroup => "project-group",
+            ViewField::ProjectSort => "project-sort",
         }
     }
 
@@ -168,6 +172,8 @@ impl ViewField {
             ViewField::Fullscreen => "Full-screen reminders",
             ViewField::Group => "Group by",
             ViewField::Sort => "Sort by",
+            ViewField::ProjectGroup => "Group projects by",
+            ViewField::ProjectSort => "Sort projects by",
         }
     }
 
@@ -197,6 +203,8 @@ pub enum ViewChoice {
     Fullscreen(Option<bool>),
     Group(GroupBy),
     Sort(SortBy),
+    ProjectGroup(GroupBy),
+    ProjectSort(SortBy),
 }
 
 impl ViewChoice {
@@ -239,6 +247,32 @@ impl ViewChoice {
                 DeferChoice::Next7Days => "next7",
                 DeferChoice::Next30Days => "next30",
                 DeferChoice::NoDate => "none",
+            }
+            .to_string(),
+            ViewChoice::ProjectGroup(group) => match group {
+                GroupBy::None => "none",
+                GroupBy::Project => "project",
+                GroupBy::Folder => "folder",
+                GroupBy::DueDate => "due",
+                GroupBy::DeferDate => "defer",
+                GroupBy::PlannedDate => "planned",
+                GroupBy::AddedDate => "added",
+                GroupBy::ChangedDate => "changed",
+                GroupBy::NextReview => "review",
+                _ => "other",
+            }
+            .to_string(),
+            ViewChoice::ProjectSort(sort) => match sort {
+                SortBy::Manual => "manual",
+                SortBy::Due => "due",
+                SortBy::Defer => "defer",
+                SortBy::Planned => "planned",
+                SortBy::Name => "name",
+                SortBy::Created => "created",
+                SortBy::AddedDate => "added",
+                SortBy::ChangedDate => "changed",
+                SortBy::NextReview => "review",
+                _ => "other",
             }
             .to_string(),
             ViewChoice::Group(group) => match group {
@@ -834,6 +868,8 @@ pub struct PerspectiveForm {
     pub icon_query: TextBuffer,
     pub group: GroupBy,
     pub sort: SortBy,
+    pub project_group: GroupBy,
+    pub project_sort: SortBy,
     pub show_completed: bool,
     pub tab: PerspectiveTab,
     // ---------------------------------------------------------- simple tab
@@ -892,6 +928,8 @@ impl Default for PerspectiveForm {
             icon_query: TextBuffer::empty(),
             group: GroupBy::Project,
             sort: SortBy::Due,
+            project_group: GroupBy::None,
+            project_sort: SortBy::Manual,
             show_completed: false,
             tab: PerspectiveTab::Simple,
             text: TextBuffer::empty(),
@@ -955,6 +993,8 @@ impl PerspectiveForm {
             icon_query: TextBuffer::empty(),
             group: perspective.group_by,
             sort: perspective.sort,
+            project_group: perspective.project_group_by,
+            project_sort: perspective.project_sort,
             show_completed: perspective.show_completed,
             root,
             editing: None,
@@ -1035,6 +1075,8 @@ impl PerspectiveForm {
         perspective.description = self.description.text().trim().to_string();
         perspective.group_by = self.group;
         perspective.sort = self.sort;
+        perspective.project_group_by = self.project_group;
+        perspective.project_sort = self.project_sort;
         perspective.show_completed = self.show_completed;
         perspective.filter = self.filter();
         perspective
@@ -1053,6 +1095,14 @@ impl PerspectiveForm {
 
     pub fn sort_label(&self) -> &'static str {
         sort_label(self.sort)
+    }
+
+    pub fn project_group_label(&self) -> &'static str {
+        group_label(self.project_group)
+    }
+
+    pub fn project_sort_label(&self) -> &'static str {
+        sort_label(self.project_sort)
     }
 
     pub fn status_label(&self) -> &'static str {

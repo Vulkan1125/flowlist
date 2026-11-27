@@ -10,12 +10,12 @@ pub mod perspective;
 pub mod sort;
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::db::Db;
 use crate::ids::{ContainerId, FolderId, ProjectId, TagId, TaskId};
 use crate::model::{
-    BuiltinPerspective, Condition, FilterNode, GroupBy, Perspective, ProjectStatus, SortBy,
+    BuiltinPerspective, Condition, FilterNode, GroupBy, Perspective, Project, ProjectStatus, SortBy,
 };
 use crate::time::{Stamp, human_date};
 
@@ -90,6 +90,30 @@ pub fn run(
     show_completed: bool,
     at: DateTime<Utc>,
 ) -> Vec<Group> {
+    run_projects(
+        db,
+        filter,
+        sort,
+        group_by,
+        GroupBy::None,
+        SortBy::Manual,
+        show_completed,
+        at,
+    )
+}
+
+/// Filter, sort and group the library, optionally organizing matching
+/// projects into their own groups with their matching actions nested beneath.
+pub fn run_projects(
+    db: &Db,
+    filter: &FilterNode,
+    sort: SortBy,
+    group_by: GroupBy,
+    project_group_by: GroupBy,
+    project_sort: SortBy,
+    show_completed: bool,
+    at: DateTime<Utc>,
+) -> Vec<Group> {
     let mut rows: Vec<TaskRow> = Vec::new();
     for id in manual_order(db) {
         let Some(task) = db.tasks.get(&id) else {
@@ -107,7 +131,7 @@ pub fn run(
         rows.push(row_for(db, &id, at));
     }
     sort::sort_rows(db, &mut rows, sort);
-    let projects: Vec<ProjectId> = db
+    let mut projects: Vec<ProjectId> = db
         .flatten_containers()
         .into_iter()
         .filter_map(|row| match row.container {
@@ -124,28 +148,99 @@ pub fn run(
             perspective::matches_project(db, project, filter, at)
         })
         .collect();
-    let mut groups = group_rows(db, rows, group_by, at);
-    if !projects.is_empty() {
-        groups.insert(
-            0,
-            Group {
-                projects,
-                key: "projects".to_string(),
-                title: "Projects".to_string(),
-                position: i64::MIN,
-                rows: Vec::new(),
-            },
-        );
+    sort::sort_projects(db, &mut projects, project_sort);
+
+    if projects.is_empty() || project_group_by == GroupBy::None {
+        let mut groups = group_rows(db, rows, group_by, at);
+        if !projects.is_empty() {
+            groups.insert(
+                0,
+                Group {
+                    projects,
+                    key: "projects".to_string(),
+                    title: "Projects".to_string(),
+                    position: i64::MIN,
+                    rows: Vec::new(),
+                },
+            );
+        }
+        return groups;
     }
+
+    // Actions that belong to a matched project move under that project. The
+    // rest keep the view's normal action grouping.
+    let project_set: BTreeSet<ProjectId> = projects.iter().cloned().collect();
+    let (nested, rest): (Vec<TaskRow>, Vec<TaskRow>) = rows
+        .into_iter()
+        .partition(|row| row.project.as_ref().is_some_and(|project| project_set.contains(project)));
+
+    let context = ProjectGroupContext::new(db, at);
+    let mut groups: Vec<Group> = Vec::new();
+    if project_group_by == GroupBy::Project {
+        for (index, id) in projects.iter().enumerate() {
+            let rows = nested
+                .iter()
+                .filter(|row| row.project.as_ref() == Some(id))
+                .cloned()
+                .collect();
+            groups.push(Group {
+                projects: Vec::new(),
+                key: format!("project:{id}"),
+                title: db.project_path(id),
+                position: index as i64,
+                rows,
+            });
+        }
+    } else {
+        let mut buckets: Vec<(String, String, i64, Vec<ProjectId>)> = Vec::new();
+        let mut index: BTreeMap<String, usize> = BTreeMap::new();
+        for id in &projects {
+            let Some(project) = db.projects.get(id) else {
+                continue;
+            };
+            let (key, title, position) = context.project_key(project, project_group_by);
+            if let Some(existing) = index.get(&key).copied() {
+                buckets[existing].3.push(id.clone());
+            } else {
+                index.insert(key.clone(), buckets.len());
+                buckets.push((key, title, position, vec![id.clone()]));
+            }
+        }
+        buckets.sort_by(|a, b| {
+            a.2.cmp(&b.2)
+                .then_with(|| a.1.to_lowercase().cmp(&b.1.to_lowercase()))
+        });
+        for (key, title, position, ids) in buckets {
+            let rows = nested
+                .iter()
+                .filter(|row| {
+                    row.project
+                        .as_ref()
+                        .is_some_and(|project| ids.contains(project))
+                })
+                .cloned()
+                .collect();
+            groups.push(Group {
+                projects: ids,
+                key: format!("project-nest:{key}"),
+                title,
+                position,
+                rows,
+            });
+        }
+    }
+    groups.extend(group_rows(db, rest, group_by, at));
     groups
 }
 
 pub fn custom(db: &Db, perspective: &Perspective, at: DateTime<Utc>) -> Vec<Group> {
-    run(
+    run_projects(
         db,
         &perspective.filter,
         perspective.sort,
         perspective.group_by,
+        perspective.project_group_by,
+        perspective.project_sort,
         perspective.show_completed,
         at,
     )
@@ -1270,6 +1365,89 @@ impl<'a> GroupContext<'a> {
                 };
                 (format!("estimate:{position}"), title.to_string(), position)
             }
+        }
+    }
+}
+
+/// Folder order and day offsets used when matching project rows are grouped.
+struct ProjectGroupContext<'a> {
+    db: &'a Db,
+    at: DateTime<Utc>,
+    folders: BTreeMap<FolderId, i64>,
+}
+
+impl<'a> ProjectGroupContext<'a> {
+    fn new(db: &'a Db, at: DateTime<Utc>) -> Self {
+        let folders = db
+            .flatten_containers()
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, row)| match row.container {
+                ContainerId::Folder(id) => Some((id, index as i64)),
+                ContainerId::Project(_) => None,
+            })
+            .collect();
+        Self { db, at, folders }
+    }
+
+    /// The bucket key, title and ordering hint for a project row.
+    fn project_key(&self, project: &Project, group_by: GroupBy) -> (String, String, i64) {
+        let today = crate::time::local_date(self.at);
+        let date_key = |stamp: Option<Stamp>, prefix: &str, missing: &str| match stamp {
+            Some(stamp) => {
+                let date = stamp.local_date();
+                (
+                    format!("{prefix}:{}", date.format("%Y-%m-%d")),
+                    human_date(&Stamp::date_only(date), self.at),
+                    (date - today).num_days(),
+                )
+            }
+            None => (format!("{prefix}:none"), missing.to_string(), i64::MAX),
+        };
+        match group_by {
+            GroupBy::Folder => match &project.folder {
+                Some(folder) => (
+                    format!("folder:{folder}"),
+                    self.db.folder_path(folder),
+                    self.folders
+                        .get(folder)
+                        .copied()
+                        .unwrap_or(i64::MAX - 1),
+                ),
+                None => (
+                    "no-folder".to_string(),
+                    "No Folder".to_string(),
+                    i64::MAX - 1,
+                ),
+            },
+            GroupBy::NextReview => {
+                let date = project.next_review;
+                (
+                    format!("review:{}", date.format("%Y-%m-%d")),
+                    human_date(&Stamp::date_only(date), self.at),
+                    (date - today).num_days(),
+                )
+            }
+            GroupBy::DueDate => date_key(project.due, "due", "No Due Date"),
+            GroupBy::DeferDate => date_key(project.defer, "defer", "No Defer Date"),
+            GroupBy::PlannedDate => date_key(project.planned, "planned", "No Planned Date"),
+            GroupBy::AddedDate => {
+                let date = crate::time::local_date(project.created_at);
+                (
+                    format!("added:{}", date.format("%Y-%m-%d")),
+                    human_date(&Stamp::date_only(date), self.at),
+                    (today - date).num_days(),
+                )
+            }
+            GroupBy::ChangedDate => {
+                let date = crate::time::local_date(project.modified_at);
+                (
+                    format!("changed:{}", date.format("%Y-%m-%d")),
+                    human_date(&Stamp::date_only(date), self.at),
+                    (today - date).num_days(),
+                )
+            }
+            _ => ("all".to_string(), "Projects".to_string(), 0),
         }
     }
 }

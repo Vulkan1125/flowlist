@@ -324,8 +324,8 @@ titles itself **Search** and ranks the closest matches first.
   Projects, Tags, Priorities, dates, full-screen reminders, estimate and text.
   **Comprehensive** is the full rule tree. A new view starts on
   Simple; a view with nested or advanced rules opens on Comprehensive so
-  nothing is flattened silently. Both tabs share the icon, Group actions by
-  and Sort actions by controls.
+  nothing is flattened silently. Both tabs share the icon, Group actions by,
+  Sort actions by, Group projects by and Sort projects by controls.
 - **Comprehensive rules** use a quiet contents list: indented
   rule text in one soft rounded panel, with a faint **Add a new rule** at the
   bottom. Click a row to edit it. Hover a row for a small plus and a `⋯` menu;
@@ -353,7 +353,11 @@ titles itself **Search** and ranks the closest matches first.
   **Matches search terms** and the logic groups. **Due Soon** uses the
   **Due soon (days)** value in Settings → Workflow → Forecast. Rules also
   filter projects, so **Is a project**, project-status, project-tag and
-  project-date rules put matching projects above the task rows. Drag a rule
+  project-date rules put matching projects above the task rows. Set **Group
+  projects by** to folder, project, review or a project date to turn those
+  matches into an organized outline: each project keeps its header and shows
+  its matching actions underneath. **Sort projects by** orders those rows.
+  Drag a rule
   onto a group to nest it. Date fields accept the same natural phrases as the
   rest of Flowlist, not only `YYYY-MM-DD`. **First Available** shows one action
   per parallel project (all available actions in a single-actions list).
@@ -361,7 +365,7 @@ titles itself **Search** and ranks the closest matches first.
   tasks the current tree matches before Save. Pinned views sort to the top of
   SAVED; pin or unpin from the row's context menu (`perspective add --pinned`
   for the CLI). The description appears under the view title; leave it empty
-  and the view says “Saved perspective”. `perspective add --description` sets
+  and the header shows only the view name. `perspective add --description` sets
   it from the CLI. Each view can take a named icon or emoji from a searchable
   card with **Icons** and **Emoji** tabs (`perspective add --icon`, including
   `--icon 🏃`). A shipped **Running** view lists started work that is not due

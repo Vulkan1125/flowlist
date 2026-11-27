@@ -3042,6 +3042,34 @@ impl FlowlistApp {
             .into_iter()
             .map(ViewChoice::Sort)
             .collect(),
+            ViewField::ProjectGroup => [
+                GroupBy::None,
+                GroupBy::Project,
+                GroupBy::Folder,
+                GroupBy::DueDate,
+                GroupBy::DeferDate,
+                GroupBy::PlannedDate,
+                GroupBy::NextReview,
+                GroupBy::AddedDate,
+                GroupBy::ChangedDate,
+            ]
+            .into_iter()
+            .map(ViewChoice::ProjectGroup)
+            .collect(),
+            ViewField::ProjectSort => [
+                SortBy::Manual,
+                SortBy::Name,
+                SortBy::Due,
+                SortBy::Defer,
+                SortBy::Planned,
+                SortBy::NextReview,
+                SortBy::Created,
+                SortBy::AddedDate,
+                SortBy::ChangedDate,
+            ]
+            .into_iter()
+            .map(ViewChoice::ProjectSort)
+            .collect(),
         }
     }
 
@@ -3073,6 +3101,8 @@ impl FlowlistApp {
             ViewChoice::Fullscreen(Some(false)) => "No full-screen reminder".to_string(),
             ViewChoice::Group(group) => super::group_label(Some(*group)).to_string(),
             ViewChoice::Sort(sort) => super::sort_label(Some(*sort)).to_string(),
+            ViewChoice::ProjectGroup(group) => super::group_label(Some(*group)).to_string(),
+            ViewChoice::ProjectSort(sort) => super::sort_label(Some(*sort)).to_string(),
         }
     }
 
@@ -3097,6 +3127,8 @@ impl FlowlistApp {
             ViewChoice::Fullscreen(value) => form.fullscreen == *value,
             ViewChoice::Group(group) => form.group == *group,
             ViewChoice::Sort(sort) => form.sort == *sort,
+            ViewChoice::ProjectGroup(group) => form.project_group == *group,
+            ViewChoice::ProjectSort(sort) => form.project_sort == *sort,
         }
     }
 
@@ -3140,6 +3172,8 @@ impl FlowlistApp {
                 ViewChoice::Fullscreen(value) => form.fullscreen = value,
                 ViewChoice::Group(group) => form.group = group,
                 ViewChoice::Sort(sort) => form.sort = sort,
+                ViewChoice::ProjectGroup(group) => form.project_group = group,
+                ViewChoice::ProjectSort(sort) => form.project_sort = sort,
             }
         }
         if !multi {
@@ -3415,11 +3449,13 @@ impl FlowlistApp {
                 cx,
             )));
 
-        let preview = query::run(
+        let preview = query::run_projects(
             db,
             &form.filter(),
             form.sort,
             form.group,
+            form.project_group,
+            form.project_sort,
             form.show_completed,
             now(),
         );
@@ -3544,6 +3580,20 @@ impl FlowlistApp {
                 ViewField::Sort,
                 "Sort actions by:",
                 form.sort_label().to_string(),
+                false,
+                cx,
+            ))
+            .child(self.presentation_select(
+                ViewField::ProjectGroup,
+                "Group projects by:",
+                form.project_group_label().to_string(),
+                form.project_group != GroupBy::None,
+                cx,
+            ))
+            .child(self.presentation_select(
+                ViewField::ProjectSort,
+                "Sort projects by:",
+                form.project_sort_label().to_string(),
                 false,
                 cx,
             ))
