@@ -237,9 +237,9 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Full repeat editor** — both editors now share the interval, fixed
       versus after-completion, due-again versus defer-another, the weekday
       strip for day-based rules, and the end as never, a date or a count.
-      The completed count and weekdays are preserved while editing, and a line
-      under the ends controls shows the done count and the projected last date
-      for fixed schedules.
+      The completed count and weekdays are preserved while editing, and one
+      summary line folds in the done count and the projected last date for
+      fixed schedules.
 - [ ] **Per-item notifications** — the Mac's task and project notification
       rules (defer, planned, latest start, due; relative and absolute) are
       missing on the phone, which only has the global due summary and

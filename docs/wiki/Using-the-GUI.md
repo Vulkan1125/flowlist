@@ -144,9 +144,9 @@ leaving the list.
   a greyed-out “custom”. The line beneath says the result in plain words, such
   as “Every Monday and Wednesday, from the assigned dates, scheduling the next
   due date.” An **Ends** row sets **Never**, **On date** (opening the calendar
-  under the date box) or **After N** times with a −/+ stepper. The line under
-  it names the count already done and, for fixed schedules, the projected
-  last occurrence; after-completion rules say the dates follow each
+  under the date box) or **After N** times with a −/+ stepper. The same
+  summary line names the count already done and, for fixed schedules, the
+  projected last occurrence; after-completion rules say the dates follow each
   completion.
 - **Tags** is its own section above Notifications, with a bordered chip box and
   a `+` control. Clicking the box or `+` opens the add field; Enter adds the

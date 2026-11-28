@@ -15,9 +15,9 @@
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.
 - **Repeat ends on the Mac.** The Mac repeat section now has the same Ends
-  row as the phone: Never, On date or After N. Both editors show how many
-  occurrences are already done and, for fixed schedules, the projected last
-  date; after-completion rules say the dates follow each completion.
+  row as the phone: Never, On date or After N. One summary sentence now folds
+  in the done count and, for fixed schedules, the projected last date;
+  after-completion rules say the dates follow each completion.
 
 ### Android reminders
 

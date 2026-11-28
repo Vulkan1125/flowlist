@@ -186,6 +186,44 @@ impl RepeatRule {
         }
     }
 
+    /// The plain-language line for the inspector, with the ending folded in:
+    /// how many occurrences are done and, where possible, the last date.
+    pub fn summary_with_dates(&self, due: Option<Stamp>, defer: Option<Stamp>) -> String {
+        let cadence = self
+            .weekday_summary()
+            .unwrap_or_else(|| self.unit.label(self.every.max(1)));
+        let every = format!("{}{}", cadence[..1].to_uppercase(), &cadence[1..]);
+        let origin = match self.schedule {
+            RepeatSchedule::Fixed => "from the assigned dates",
+            RepeatSchedule::AfterCompletion => "from completion",
+        };
+        let next = match self.mode {
+            RepeatMode::DueAgain => "the next due date",
+            RepeatMode::DeferAnother => "the next defer date",
+        };
+        let end = match self.end {
+            RepeatEnd::Never => String::new(),
+            RepeatEnd::OnDate(date) => format!(" and ends on {}", date.format("%b %-d, %Y")),
+            RepeatEnd::AfterCount(limit) => {
+                let done = self.completed_count.min(limit);
+                let mut text = format!(
+                    " and ends after {limit} occurrence{}",
+                    if limit == 1 { "" } else { "s" }
+                );
+                if done > 0 {
+                    text.push_str(&format!(" ({done} done)"));
+                }
+                if let Some(date) = self.projected_last_date(due, defer) {
+                    text.push_str(&format!(", last on {}", date.format("%b %-d, %Y")));
+                } else if matches!(self.schedule, RepeatSchedule::AfterCompletion) {
+                    text.push_str(", dates follow completion");
+                }
+                text
+            }
+        };
+        format!("{every}, {origin}, scheduling {next}{end}.")
+    }
+
     /// One line under the ends controls: how many occurrences remain and,
     /// where possible, the date of the last one.
     pub fn ending_summary(&self, due: Option<Stamp>, defer: Option<Stamp>) -> Option<String> {
@@ -571,5 +609,22 @@ mod projected_tests {
         );
         rule.schedule = RepeatSchedule::AfterCompletion;
         assert_eq!(rule.projected_last_date(Some(due), None), None);
+    }
+}
+
+#[cfg(test)]
+mod merged_summary_tests {
+    use super::*;
+
+    #[test]
+    fn the_ending_is_part_of_one_line() {
+        let due = Stamp::date_only(NaiveDate::from_ymd_opt(2026, 1, 5).unwrap());
+        let mut rule = RepeatRule::new(RepeatMode::DueAgain, 2, IntervalUnit::Weeks);
+        rule.end = RepeatEnd::AfterCount(3);
+        rule.completed_count = 1;
+        assert_eq!(
+            rule.summary_with_dates(Some(due), None),
+            "Every 2 weeks, from the assigned dates, scheduling the next due date and ends after 3 occurrences (1 done), last on Jan 19, 2026."
+        );
     }
 }

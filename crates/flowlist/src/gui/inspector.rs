@@ -2492,23 +2492,15 @@ impl FlowlistApp {
             }
             if let Some(rule) = &rule {
                 let task = self.store.db().tasks.get(&id);
-                if let Some(line) = rule.ending_summary(
-                    task.and_then(|task| task.due),
-                    task.and_then(|task| task.defer),
-                ) {
-                    body = body.child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child(line),
-                    );
-                }
                 body = body.child(
                     div()
                         .text_xs()
                         .whitespace_normal()
                         .text_color(theme.text_faint)
-                        .child(rule.summary()),
+                        .child(rule.summary_with_dates(
+                            task.and_then(|task| task.due),
+                            task.and_then(|task| task.defer),
+                        )),
                 );
             }
         }
