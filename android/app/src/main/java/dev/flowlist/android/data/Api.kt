@@ -745,6 +745,7 @@ fun savePerspectiveCommand(
                     put("show_completed", showCompleted)
                     put("pinned", pinned)
                     put("position", position)
+                    put("description", description)
                     icon?.let { put("icon", it) }
                 },
             )

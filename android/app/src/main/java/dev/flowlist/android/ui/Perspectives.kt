@@ -5,6 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +29,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -101,6 +105,9 @@ data class PerspectiveDraft(
     val group: String = "project",
     val sort: String = "due",
     val showCompleted: Boolean = false,
+    val pinned: Boolean = false,
+    val icon: String? = null,
+    val description: String = "",
 )
 
 private fun JsonObject.text(key: String): String? =
@@ -174,6 +181,9 @@ fun draftFrom(perspective: PerspectiveDto?): PerspectiveDraft {
         group = perspective.groupBy,
         sort = perspective.sort,
         showCompleted = perspective.showCompleted,
+        pinned = perspective.pinned,
+        icon = perspective.icon,
+        description = perspective.description,
     )
 }
 
@@ -270,7 +280,7 @@ fun PerspectiveDraft.toFilter(): JsonObject = buildJsonObject {
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PerspectiveEditorSheet(
     target: PerspectiveEditorTarget,
@@ -284,6 +294,7 @@ fun PerspectiveEditorSheet(
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val initial = remember(target.perspective?.id) { draftFrom(target.perspective) }
     var name by remember(target.perspective?.id) { mutableStateOf(initial.name) }
+    var description by remember(target.perspective?.id) { mutableStateOf(initial.description) }
     var text by remember(target.perspective?.id) { mutableStateOf(initial.text) }
     var projectIds by remember(target.perspective?.id) { mutableStateOf(initial.projects) }
     var tagIds by remember(target.perspective?.id) { mutableStateOf(initial.tags) }
@@ -303,6 +314,19 @@ fun PerspectiveEditorSheet(
     var group by remember(target.perspective?.id) { mutableStateOf(initial.group) }
     var sort by remember(target.perspective?.id) { mutableStateOf(initial.sort) }
     var showCompleted by remember(target.perspective?.id) { mutableStateOf(initial.showCompleted) }
+    var pinned by remember(target.perspective?.id) { mutableStateOf(initial.pinned) }
+    var icon by remember(target.perspective?.id) { mutableStateOf(initial.icon) }
+    var iconPickerOpen by remember { mutableStateOf(false) }
+    var emojiText by remember {
+        mutableStateOf(initial.icon?.takeIf { value -> projectIconChoices.none { it.first == value } }.orEmpty())
+    }
+    val switchColors = SwitchDefaults.colors(
+        checkedThumbColor = colors.onAccent,
+        checkedTrackColor = colors.accent,
+        uncheckedThumbColor = colors.faint,
+        uncheckedTrackColor = colors.field,
+        uncheckedBorderColor = colors.hairline,
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -338,6 +362,14 @@ fun PerspectiveEditorSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                placeholder = { Text("Description (optional)", color = colors.faint) },
+                singleLine = true,
+                colors = perspectiveFieldColors(),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            )
+            OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
                 placeholder = { Text("Contains text (optional)", color = colors.faint) },
@@ -345,6 +377,149 @@ fun PerspectiveEditorSheet(
                 colors = perspectiveFieldColors(),
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Pin to top",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.ink,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = pinned,
+                    onCheckedChange = { pinned = it },
+                    colors = switchColors,
+                )
+            }
+
+            Text(
+                text = "Icon",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.faint,
+                modifier = Modifier.padding(top = 14.dp, start = 2.dp),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { iconPickerOpen = !iconPickerOpen }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PerspectiveGlyph(
+                    icon = icon,
+                    pinned = pinned,
+                    tint = colors.accent,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = when {
+                        icon == null && pinned -> "Pin"
+                        icon == null -> "Default"
+                        projectIconChoices.any { it.first == icon } ->
+                            projectIconChoices.first { it.first == icon }.second
+                        else -> "Emoji"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.ink,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = if (iconPickerOpen) {
+                        Icons.Rounded.ExpandLess
+                    } else {
+                        Icons.Rounded.ExpandMore
+                    },
+                    contentDescription = if (iconPickerOpen) "Hide icons" else "Change icon",
+                    tint = colors.faint,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            if (iconPickerOpen) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (icon == null) colors.field else colors.background)
+                            .border(
+                                1.dp,
+                                if (icon == null) colors.accent else colors.hairline,
+                                RoundedCornerShape(10.dp),
+                            )
+                            .clickable {
+                                icon = null
+                                emojiText = ""
+                                iconPickerOpen = false
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        PerspectiveGlyph(
+                            icon = null,
+                            pinned = pinned,
+                            tint = if (icon == null) colors.accent else colors.faint,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    projectIconChoices.forEach { (slug, label) ->
+                        val chosen = icon == slug
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (chosen) colors.field else colors.background)
+                                .border(
+                                    1.dp,
+                                    if (chosen) colors.accent else colors.hairline,
+                                    RoundedCornerShape(10.dp),
+                                )
+                                .clickable {
+                                    icon = slug
+                                    emojiText = ""
+                                    iconPickerOpen = false
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = projectIcon(slug),
+                                contentDescription = label,
+                                tint = if (chosen) colors.accent else colors.faint,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = emojiText,
+                        onValueChange = {
+                            emojiText = it.take(16)
+                            if (looksLikeEmoji(emojiText)) icon = emojiText.trim()
+                        },
+                        placeholder = { Text("Or paste an emoji", color = colors.faint) },
+                        singleLine = true,
+                        colors = perspectiveFieldColors(),
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (icon != null && !projectIconChoices.any { it.first == icon }) {
+                        TextButton(onClick = { icon = null; emojiText = "" }) {
+                            Text("Clear", color = colors.faint)
+                        }
+                    }
+                }
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
@@ -444,10 +619,7 @@ fun PerspectiveEditorSheet(
                     Switch(
                         checked = tagChildren,
                         onCheckedChange = { tagChildren = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = colors.onAccent,
-                            checkedTrackColor = colors.accent,
-                        ),
+                        colors = switchColors,
                     )
                 }
             }
@@ -599,10 +771,7 @@ fun PerspectiveEditorSheet(
                 Switch(
                     checked = showCompleted,
                     onCheckedChange = { showCompleted = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = colors.onAccent,
-                        checkedTrackColor = colors.accent,
-                    ),
+                    colors = switchColors,
                 )
             }
 
@@ -634,6 +803,9 @@ fun PerspectiveEditorSheet(
                                 group = group,
                                 sort = sort,
                                 showCompleted = showCompleted,
+                                pinned = pinned,
+                                icon = icon,
+                                description = description.trim(),
                             ),
                         )
                     },
@@ -648,6 +820,39 @@ fun PerspectiveEditorSheet(
             }
         }
     }
+}
+
+/** A saved view glyph: an emoji, a named icon, or the pin/default fallback. */
+@Composable
+fun PerspectiveGlyph(
+    icon: String?,
+    pinned: Boolean,
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
+    val emoji = icon != null && projectIconChoices.none { it.first == icon }
+    if (emoji) {
+        Text(
+            text = icon.orEmpty(),
+            style = MaterialTheme.typography.titleMedium,
+            color = tint,
+            modifier = modifier,
+        )
+    } else {
+        Icon(
+            imageVector = projectIcon(icon ?: if (pinned) "pin" else "project"),
+            contentDescription = null,
+            tint = tint,
+            modifier = modifier,
+        )
+    }
+}
+
+private fun looksLikeEmoji(value: String): Boolean {
+    val trimmed = value.trim()
+    return trimmed.isNotEmpty() &&
+        trimmed.length <= 16 &&
+        trimmed.none { it.code < 0x2000 && it.isLetterOrDigit() }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -855,33 +1060,48 @@ fun SavedPerspectiveView(
         }
     }
 
-    if (tasks.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (perspective.description.isNotBlank()) {
             Text(
-                text = "No tasks match this perspective.",
-                style = MaterialTheme.typography.bodyMedium,
+                text = perspective.description,
+                style = MaterialTheme.typography.bodySmall,
                 color = colors.faint,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 2.dp),
             )
         }
-        return
-    }
-
-    LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
-        sections.forEach { (label, items) ->
-            if (label != null) {
-                item(key = "section-$label") { SectionLabel(label) }
-            }
-            items(items) { task ->
-                TaskTreeItem(
-                    task = task,
-                    children = children,
-                    pending = task.id in pending,
-                    swipeActions = swipeActions,
-                    depth = 0,
-                    onToggle = onToggle,
-                    onTrash = onTrash,
-                    onClick = onClick,
+        if (tasks.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "No tasks match this perspective.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.faint,
                 )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(bottom = 100.dp),
+            ) {
+                sections.forEach { (label, items) ->
+                    if (label != null) {
+                        item(key = "section-$label") { SectionLabel(label) }
+                    }
+                    items(items) { task ->
+                        TaskTreeItem(
+                            task = task,
+                            children = children,
+                            pending = task.id in pending,
+                            swipeActions = swipeActions,
+                            depth = 0,
+                            onToggle = onToggle,
+                            onTrash = onTrash,
+                            onClick = onClick,
+                        )
+                    }
+                }
             }
         }
     }

@@ -50,6 +50,8 @@ data class AppPreferences(
     val viewSorts: Map<String, String> = emptyMap(),
     /// Drawer order, by perspective key. Empty means the built-in order.
     val perspectiveOrder: List<String> = emptyList(),
+    /// Hide saved views that match nothing right now. Pinned views stay.
+    val hideEmptyViews: Boolean = false,
 ) {
     fun sortFor(view: String): String = viewSorts[view] ?: sortBy
 
@@ -103,6 +105,7 @@ class PreferencesStore(context: Context) {
             perspectiveOrder = (prefs.getString("perspective_order", null) ?: "")
                 .split('|')
                 .filter { it.isNotBlank() },
+            hideEmptyViews = prefs.getBoolean("hide_empty_views", false),
         )
     }
 
@@ -135,6 +138,7 @@ class PreferencesStore(context: Context) {
                 value.viewSorts.entries.joinToString("|") { "${it.key}=${it.value}" },
             )
             .putString("perspective_order", value.perspectiveOrder.joinToString("|"))
+            .putBoolean("hide_empty_views", value.hideEmptyViews)
             .apply()
     }
 }

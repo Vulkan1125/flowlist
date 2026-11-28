@@ -23,6 +23,7 @@ import dev.flowlist.android.ui.draftFrom
 import dev.flowlist.android.ui.toFilter
 import dev.flowlist.android.data.displayTitle
 import dev.flowlist.android.data.normalizeBase
+import dev.flowlist.android.data.savePerspectiveCommand
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -139,6 +140,42 @@ class DataTest {
         assertTrue(back.flaggedOnly)
         assertEquals("available", back.status)
         assertEquals(false, back.tagChildren)
+    }
+
+    @Test
+    fun perspective_presentation_fields_round_trip() {
+        val dto = PerspectiveDto(
+            id = "p",
+            name = "Pinned",
+            pinned = true,
+            icon = "🏃",
+            description = "Today's focus",
+        )
+        val draft = draftFrom(dto)
+        assertTrue(draft.pinned)
+        assertEquals("🏃", draft.icon)
+        assertEquals("Today's focus", draft.description)
+    }
+
+    @Test
+    fun the_save_command_carries_the_perspective_description() {
+        val command = savePerspectiveCommand(
+            id = "p",
+            name = "Pinned",
+            filter = PerspectiveDraft(name = "Pinned").toFilter(),
+            groupBy = "none",
+            sort = "manual",
+            projectGroupBy = "none",
+            projectSort = "manual",
+            showCompleted = false,
+            pinned = true,
+            position = 3,
+            icon = "star",
+            description = "Today's focus",
+        ).toString()
+        assertTrue(command.contains("\"description\":\"Today's focus\""))
+        assertTrue(command.contains("\"pinned\":true"))
+        assertTrue(command.contains("\"icon\":\"star\""))
     }
 
     @Test

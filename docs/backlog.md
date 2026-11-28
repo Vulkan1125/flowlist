@@ -265,9 +265,10 @@ integrations are tracked separately and are not part of this phase.
 - [ ] **Forecast depth** — add the Mac's due-only mode, project rows on their
       dates, tag and flagged undated sections, and dragging month-grid chips
       to reschedule.
-- [ ] **Saved-view options** — the phone preserves a view's pin, glyph,
-      description and position but cannot edit them. Add pinning, the glyph
-      picker, descriptions and the hide-empty option.
+- [x] **Saved-view options** — the Android editor edits a view's pin, glyph
+      (named icon or emoji) and description. Pinned views sit above **Saved**,
+      use the pin glyph by default, and appear in the tablet rail. Settings →
+      Library → **Hide empty views** hides unpinned views with no matches.
 - [ ] **Drawer visibility** — the phone can reorder the drawer and pick four
       bottom-bar slots but cannot hide rows or counts. Add the Mac's Sidebar
       matrix controls.

@@ -192,6 +192,10 @@ fun SettingsScreen(
                             savingAttachments = state.savingAttachments,
                             saveAllAttachments = preferences.saveAllAttachments,
                             onSaveAllPreference = onSaveAllPreference,
+                            hideEmptyViews = preferences.hideEmptyViews,
+                            onHideEmptyViews = {
+                                onPreferencesChange(preferences.copy(hideEmptyViews = it))
+                            },
                             onRemoveAllSaved = onRemoveAllSaved,
                         )
                     }
@@ -687,6 +691,8 @@ private fun LibrarySettings(
     saveAllAttachments: Boolean,
     onSaveAllPreference: (Boolean) -> Unit,
     onRemoveAllSaved: () -> Unit,
+    hideEmptyViews: Boolean,
+    onHideEmptyViews: (Boolean) -> Unit,
 ) {
     var confirmRemove by remember { mutableStateOf(false) }
     SettingsCard("Review") {
@@ -697,6 +703,16 @@ private fun LibrarySettings(
                     onChange(settings.copy(defaultReviewDays = days))
                 }
             }
+        }
+    }
+    Spacer(modifier = Modifier.height(14.dp))
+    SettingsCard("Saved views") {
+        ToggleRow(
+            title = "Hide empty views",
+            detail = "Hide saved views that match nothing. Pinned views stay.",
+            checked = hideEmptyViews,
+        ) {
+            onHideEmptyViews(it)
         }
     }
     Spacer(modifier = Modifier.height(14.dp))

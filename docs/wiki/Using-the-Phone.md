@@ -254,9 +254,14 @@ same tasks here. Building or rearranging that tree is a Mac editor feature.
 Grouping covers project, folder, tag, due, defer, flagged and estimate;
 sorting covers manual, due, defer, name, priority, flagged, estimate, created
 and completed. Saved perspectives use the Mac's `save_perspective` command, so
-they appear there too; the row menu edits or deletes them. Each list’s sort is
+they appear there too; the row menu edits or deletes them. The editor also sets
+a one-line description, a glyph (a named icon or one emoji), and **Pin to top**.
+Pinned views sit in a **Pinned** block above **Saved**, default to a pin glyph,
+and stay visible when empty. The description shows under the view title. On a
+tablet the rail lists saved views after the built-ins. Each list’s sort is
 remembered for that view, so changing Inbox does not reorder Today, Forecast or
-the other destinations.
+the other destinations. Settings → Library → **Hide empty views** hides saved
+views that match nothing right now; pinned views are never hidden.
 
 ## Perspectives and the drawer
 

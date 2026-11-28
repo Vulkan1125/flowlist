@@ -608,8 +608,13 @@ fun MainScreen(
                         )
                     },
                     saved = snapshot?.db?.perspectives?.values
-                        ?.sortedBy { it.position }
+                        ?.sortedWith(
+                            compareByDescending<PerspectiveDto> { it.pinned }
+                                .thenBy { it.position }
+                                .thenBy { it.name.lowercase() },
+                        )
                         .orEmpty(),
+                    hideEmptyViews = preferences.hideEmptyViews,
                     state = state,
                     canUndo = state.canUndo && state.online,
                     canRedo = state.canRedo && state.online,
@@ -786,6 +791,22 @@ fun MainScreen(
                     more = moreView,
                     savedPerspective = savedPerspective,
                     perspectives = bottomPerspectives,
+                    savedPerspectives = snapshot?.db?.perspectives?.values
+                        ?.sortedWith(
+                            compareByDescending<PerspectiveDto> { it.pinned }
+                                .thenBy { it.position }
+                                .thenBy { it.name.lowercase() },
+                        )
+                        ?.filter { item ->
+                            item.pinned ||
+                                !preferences.hideEmptyViews ||
+                                countPerspectiveTasks(snapshot?.db, item) > 0
+                        }
+                        .orEmpty(),
+                    onSaved = { item ->
+                        moreView = null
+                        savedPerspective = item
+                    },
                     onPerspective = { item -> openPerspective(item) },
                     onSettings = {
                         tab = Tab.Settings
@@ -1460,10 +1481,10 @@ fun MainScreen(
                         projectGroupBy = editing?.projectGroupBy ?: "none",
                         projectSort = editing?.projectSort ?: "manual",
                         showCompleted = draft.showCompleted,
-                        pinned = editing?.pinned ?: false,
+                        pinned = draft.pinned,
                         position = editing?.position ?: 0,
-                        icon = editing?.icon,
-                        description = editing?.description ?: "",
+                        icon = draft.icon,
+                        description = draft.description,
                     )
                 }
             },
@@ -1692,11 +1713,101 @@ private fun SelectionBar(
 }
 
 @Composable
+private fun SavedPerspectiveRow(
+    item: PerspectiveDto,
+    count: Int,
+    onOpen: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val colors = flow
+    var menu by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 40.dp)
+            .clip(RoundedCornerShape(10.dp)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onOpen)
+                .padding(start = 12.dp, top = 7.dp, bottom = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PerspectiveGlyph(
+                icon = item.icon,
+                pinned = item.pinned,
+                tint = if (item.pinned) colors.accent else colors.faint,
+                modifier = Modifier.size(17.dp),
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (count > 0) {
+                Text(
+                    text = "$count",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.faint,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = colors.faint,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+        Box {
+            IconButton(onClick = { menu = true }, modifier = Modifier.size(30.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.MoreVert,
+                    contentDescription = "Perspective actions",
+                    tint = colors.faint,
+                    modifier = Modifier.size(17.dp),
+                )
+            }
+            DropdownMenu(
+                expanded = menu,
+                onDismissRequest = { menu = false },
+                containerColor = colors.raised,
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Edit perspective") },
+                    onClick = {
+                        menu = false
+                        onEdit()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete perspective", color = colors.danger) },
+                    onClick = {
+                        menu = false
+                        onDelete()
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun TabletRail(
     tab: Tab,
     more: MoreView?,
     savedPerspective: PerspectiveDto?,
     perspectives: List<Perspective>,
+    savedPerspectives: List<PerspectiveDto>,
+    onSaved: (PerspectiveDto) -> Unit,
     onPerspective: (Perspective) -> Unit,
     onSettings: () -> Unit,
 ) {
@@ -1734,6 +1845,45 @@ private fun TabletRail(
                 ),
             )
         }
+        if (savedPerspectives.isNotEmpty()) {
+            Text(
+                text = "SAVED",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.7.sp,
+                color = colors.faint,
+                modifier = Modifier.padding(start = 12.dp, top = 14.dp, bottom = 4.dp),
+            )
+            savedPerspectives.forEach { item ->
+                NavigationRailItem(
+                    selected = savedPerspective?.id == item.id,
+                    onClick = { onSaved(item) },
+                    icon = {
+                        PerspectiveGlyph(
+                            icon = item.icon,
+                            pinned = item.pinned,
+                            tint = if (savedPerspective?.id == item.id) colors.accent else colors.faint,
+                            modifier = Modifier.size(21.dp),
+                        )
+                    },
+                    label = {
+                        Text(
+                            text = item.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                        )
+                    },
+                    alwaysShowLabel = true,
+                    colors = NavigationRailItemDefaults.colors(
+                        selectedIconColor = colors.accent,
+                        selectedTextColor = colors.accent,
+                        unselectedIconColor = colors.faint,
+                        unselectedTextColor = colors.faint,
+                        indicatorColor = Color.Transparent,
+                    ),
+                )
+            }
+        }
         Spacer(modifier = Modifier.weight(1f))
         NavigationRailItem(
             selected = tab == Tab.Settings && more == null && savedPerspective == null,
@@ -1770,6 +1920,7 @@ private fun LibraryDrawer(
     order: List<Perspective>,
     onReorder: (List<String>, Int, Int) -> Unit,
     saved: List<PerspectiveDto>,
+    hideEmptyViews: Boolean,
     state: AppState,
     canUndo: Boolean,
     canRedo: Boolean,
@@ -1963,6 +2114,31 @@ private fun LibraryDrawer(
 
         Spacer(modifier = Modifier.height(8.dp))
         HorizontalDivider(color = colors.hairline, modifier = Modifier.padding(horizontal = 8.dp))
+        val pinnedViews = saved.filter { it.pinned }
+        val otherViews = saved
+            .filterNot { it.pinned }
+            .filter { !hideEmptyViews || (savedCounts[it.id] ?: 0) > 0 }
+        if (pinnedViews.isNotEmpty()) {
+            Text(
+                text = "PINNED",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.7.sp,
+                color = colors.faint,
+                modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 2.dp),
+            )
+            pinnedViews.forEach { item ->
+                SavedPerspectiveRow(
+                    item = item,
+                    count = savedCounts[item.id] ?: 0,
+                    onOpen = { onSaved(item) },
+                    onEdit = { onEditPerspective(item) },
+                    onDelete = { onDeletePerspective(item) },
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            HorizontalDivider(color = colors.hairline, modifier = Modifier.padding(horizontal = 8.dp))
+        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -2007,85 +2183,14 @@ private fun LibraryDrawer(
                 )
             }
         }
-        saved.forEach { item ->
-            var menu by remember { mutableStateOf(false) }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 40.dp)
-                    .clip(RoundedCornerShape(10.dp)),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onSaved(item) }
-                        .padding(start = 12.dp, top = 7.dp, bottom = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.BookmarkBorder,
-                        contentDescription = null,
-                        tint = colors.faint,
-                        modifier = Modifier.size(17.dp),
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = item.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.ink,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    val count = savedCounts[item.id] ?: 0
-                    if (count > 0) {
-                        Text(
-                            text = "$count",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = colors.faint,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Rounded.Check,
-                            contentDescription = null,
-                            tint = colors.faint,
-                            modifier = Modifier.size(14.dp),
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                }
-                Box {
-                    IconButton(onClick = { menu = true }, modifier = Modifier.size(30.dp)) {
-                        Icon(
-                            imageVector = Icons.Rounded.MoreVert,
-                            contentDescription = "Perspective actions",
-                            tint = colors.faint,
-                            modifier = Modifier.size(17.dp),
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = menu,
-                        onDismissRequest = { menu = false },
-                        containerColor = colors.raised,
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Edit perspective") },
-                            onClick = {
-                                menu = false
-                                onEditPerspective(item)
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Delete perspective", color = colors.danger) },
-                            onClick = {
-                                menu = false
-                                onDeletePerspective(item)
-                            },
-                        )
-                    }
-                }
-            }
+        otherViews.forEach { item ->
+            SavedPerspectiveRow(
+                item = item,
+                count = savedCounts[item.id] ?: 0,
+                onOpen = { onSaved(item) },
+                onEdit = { onEditPerspective(item) },
+                onDelete = { onDeletePerspective(item) },
+            )
         }
 
         Spacer(modifier = Modifier.weight(1f))

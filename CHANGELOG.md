@@ -21,6 +21,11 @@
   project icon grid stays collapsed until the current icon is tapped, tags wrap
   instead of running under the switches, and every editor switch is right
   aligned with the same accent colours.
+- **Saved-view options.** The Android perspective editor now edits the pin, the
+  glyph (a named icon or one emoji) and the one-line description. Pinned views
+  sit above **Saved**, use a pin glyph by default and also appear in the tablet
+  rail; the description shows under the view title. Settings → Library →
+  **Hide empty views** hides unpinned views that match nothing.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.
