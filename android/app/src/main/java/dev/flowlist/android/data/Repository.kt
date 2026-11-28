@@ -1008,6 +1008,34 @@ class Repository(context: Context) {
             if (updated.forecastFlagged != current.forecastFlagged) {
                 put("forecast_flagged", updated.forecastFlagged)
             }
+            if (updated.sidebar != current.sidebar) {
+                val sidebar = updated.sidebar
+                put(
+                    "sidebar",
+                    buildJsonObject {
+                        put("show_perspectives", sidebar.showPerspectives)
+                        put("show_priorities", sidebar.showPriorities)
+                        put("show_library", sidebar.showLibrary)
+                        put("show_saved", sidebar.showSaved)
+                        put("show_tags", sidebar.showTags)
+                        put("counts_perspectives", sidebar.countsPerspectives)
+                        put("counts_priorities", sidebar.countsPriorities)
+                        put("counts_library", sidebar.countsLibrary)
+                        put("counts_tags", sidebar.countsTags)
+                        put(
+                            "hidden",
+                            buildJsonArray { sidebar.hidden.sorted().forEach { add(JsonPrimitive(it)) } },
+                        )
+                        put(
+                            "counts_hidden",
+                            buildJsonArray {
+                                sidebar.countsHidden.sorted().forEach { add(JsonPrimitive(it)) }
+                            },
+                        )
+                        put("counts_configured", sidebar.countsConfigured)
+                    },
+                )
+            }
         }
         if (patch.isEmpty()) return
         updateSettings(updated, patch)

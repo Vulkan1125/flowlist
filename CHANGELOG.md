@@ -52,6 +52,10 @@
   A drop shelf appears during the drag with Inbox, project and tag targets and
   choosers, so a task can be filed without the Mac sidebar. Moves and tag adds
   undo from the snackbar.
+- **Drawer visibility.** Settings → **Drawer** controls the built-in rows and
+  saved views: hide a row, hide its count, or switch the Perspectives and Saved
+  sections off. Inbox, Today and Trash stay visible, and the bottom bar and
+  tablet rail follow the same hidden set.
 - **Forecast depth.** Forecast lists due, defer and planned dates, with
   **Due only** and **Planned** toggles. Project deadlines appear as project
   rows above each day, Settings → Library → **Forecast** chooses the undated

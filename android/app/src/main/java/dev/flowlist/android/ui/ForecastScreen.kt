@@ -158,10 +158,10 @@ fun ForecastScreen(
             ModePill("Month", monthMode) { onViewChange("month") }
             ModePill("Agenda", !monthMode) { onViewChange("agenda") }
             Spacer(modifier = Modifier.weight(1f))
-            ModePill("Due only", dueOnly) { onDueOnlyChange(!dueOnly) }
             if (!dueOnly) {
                 ModePill("Planned", planned) { onPlannedChange(!planned) }
             }
+            ModePill("Due only", dueOnly) { onDueOnlyChange(!dueOnly) }
         }
 
         if (!monthMode) {

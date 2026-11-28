@@ -55,7 +55,29 @@ data class SettingsDto(
     @SerialName("auto_archive_closed_projects") val autoArchiveClosedProjects: Boolean = true,
     @SerialName("forecast_tag") val forecastTag: String? = null,
     @SerialName("forecast_flagged") val forecastFlagged: Boolean = false,
+    val sidebar: SidebarDto = SidebarDto(),
 )
+
+@Serializable
+data class SidebarDto(
+    @SerialName("show_perspectives") val showPerspectives: Boolean = true,
+    @SerialName("show_priorities") val showPriorities: Boolean = true,
+    @SerialName("show_library") val showLibrary: Boolean = true,
+    @SerialName("show_saved") val showSaved: Boolean = true,
+    @SerialName("show_tags") val showTags: Boolean = true,
+    @SerialName("counts_perspectives") val countsPerspectives: Boolean = false,
+    @SerialName("counts_priorities") val countsPriorities: Boolean = false,
+    @SerialName("counts_library") val countsLibrary: Boolean = true,
+    @SerialName("counts_tags") val countsTags: Boolean = false,
+    val hidden: Set<String> = emptySet(),
+    @SerialName("counts_hidden") val countsHidden: Set<String> = emptySet(),
+    @SerialName("counts_configured") val countsConfigured: Boolean = false,
+) {
+    /// Android keeps its current counts visible until the first count toggle;
+    /// after that it follows the shared per-row set exactly.
+    fun isCountHidden(key: String): Boolean =
+        if (countsConfigured) key in countsHidden else false
+}
 
 @Serializable
 data class TaskDto(

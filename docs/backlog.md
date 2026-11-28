@@ -284,9 +284,10 @@ integrations are tracked separately and are not part of this phase.
       (named icon or emoji) and description. Pinned views sit above **Saved**,
       use the pin glyph by default, and appear in the tablet rail. Settings →
       Library → **Hide empty views** hides unpinned views with no matches.
-- [ ] **Drawer visibility** — the phone can reorder the drawer and pick four
-      bottom-bar slots but cannot hide rows or counts. Add the Mac's Sidebar
-      matrix controls.
+- [x] **Drawer visibility** — Settings → **Drawer** hides built-in rows and
+      saved views, switches the Perspectives and Saved sections off, and
+      toggles each row's count. Inbox, Today and Trash stay visible; the
+      bottom bar and tablet rail follow the same hidden set.
 - [ ] **Task row icons** — phone rows show due/planned text and a flag but no
       defer clock or repeat glyph. Match the Mac's drawn row metadata.
 - [ ] **Separate light and dark backgrounds** — the Mac keeps a light and a

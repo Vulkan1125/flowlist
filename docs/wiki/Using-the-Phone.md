@@ -317,8 +317,11 @@ Tag counts match the tag view: active tasks only, including child tags, never
 completed or trashed tasks.
 
 Settings lives in the fifth tab. Its home lists Appearance, Tasks, Library,
-Notifications, Connection and About, and each opens a short page with a back
-arrow. On a child page the child's name becomes the main heading and the bottom
+Drawer, Notifications, Connection and About, and each opens a short page with a
+back arrow. **Drawer** has an eye and count control for every built-in row and
+saved view, plus switches for the Perspectives and Saved sections. Inbox,
+Today and Trash always stay visible; hidden rows and counts also leave the
+bottom bar and tablet rail. On a child page the child's name becomes the main heading and the bottom
 bar steps away, leaving the back arrow and the page content. The header no
 longer carries a gear. **Settings → Tasks → Open on** chooses Inbox, Today,
 Forecast or Library for a normal launch.

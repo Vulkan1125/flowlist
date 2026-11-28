@@ -41,12 +41,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Numbers
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Settings as SettingsIcon
@@ -89,6 +93,8 @@ import androidx.core.content.ContextCompat
 import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.AppState
 import dev.flowlist.android.data.SettingsDto
+import dev.flowlist.android.data.PerspectiveDto
+import dev.flowlist.android.data.SidebarDto
 import dev.flowlist.android.data.TagDto
 import dev.flowlist.android.notify.DeviceLocation
 import dev.flowlist.android.notify.NearbyReminders
@@ -111,6 +117,7 @@ enum class SettingsSection(val label: String, val icon: ImageVector) {
     Appearance("Appearance", Icons.Outlined.Palette),
     Tasks("Tasks", Icons.Outlined.Tune),
     Library("Library", Icons.Rounded.Checklist),
+    Drawer("Drawer", Icons.Outlined.Menu),
     Notifications("Notifications", Icons.Rounded.Notifications),
     Connection("Connection", Icons.Rounded.PhoneAndroid),
     About("About", Icons.Outlined.Info),
@@ -203,6 +210,13 @@ fun SettingsScreen(
                             onRemoveAllSaved = onRemoveAllSaved,
                         )
                     }
+                    SettingsSection.Drawer -> DrawerSettings(
+                        sidebar = librarySettings.sidebar,
+                        saved = state.snapshot?.db?.perspectives?.values?.toList().orEmpty(),
+                        onChange = { updated ->
+                            onLibrarySettings(librarySettings.copy(sidebar = updated))
+                        },
+                    )
                     SettingsSection.Notifications -> NotificationSettings(
                         theme = theme,
                         preferences = preferences,
@@ -285,6 +299,11 @@ private fun summary(
     }
     SettingsSection.Tasks -> "Opens ${preferences.startTab.replaceFirstChar { it.uppercase() }} · week starts ${if (preferences.weekStartsMonday) "Monday" else "Sunday"}"
     SettingsSection.Library -> "Review ${library.defaultReviewDays}d · trash ${if (library.trashRetentionDays == 0) "forever" else "${library.trashRetentionDays}d"}"
+    SettingsSection.Drawer -> buildString {
+        val hidden = library.sidebar.hidden.size
+        append(if (hidden == 0) "Everything shown" else "$hidden hidden")
+        if (!library.sidebar.showSaved) append(" · saved hidden")
+    }
     SettingsSection.Notifications -> buildString {
         append(if (DueNotifications.enabled(context)) "Due on" else "Due off")
         append(" · ")
@@ -681,6 +700,134 @@ private fun GeotagSettings(
             }) {
                 Text("Android notification settings", color = colors.accent)
             }
+        }
+    }
+}
+
+@Composable
+private fun DrawerSettings(
+    sidebar: SidebarDto,
+    saved: List<PerspectiveDto>,
+    onChange: (SidebarDto) -> Unit,
+) {
+    val colors = flow
+    val anchors = setOf("builtin:inbox", "builtin:today", "builtin:trash")
+
+    fun toggleHidden(key: String) {
+        if (key in anchors) return
+        val next = if (key in sidebar.hidden) sidebar.hidden - key else sidebar.hidden + key
+        onChange(sidebar.copy(hidden = next))
+    }
+
+    fun toggleCount(key: String) {
+        val base = if (sidebar.countsConfigured) sidebar.countsHidden else emptySet()
+        val next = if (key in base) base - key else base + key
+        onChange(
+            sidebar.copy(
+                countsHidden = next,
+                countsConfigured = true,
+            ),
+        )
+    }
+
+    SettingsCard("Sections") {
+        ToggleRow(
+            title = "Perspectives",
+            detail = "Show the built-in perspectives in the drawer",
+            checked = sidebar.showPerspectives,
+        ) {
+            onChange(sidebar.copy(showPerspectives = it))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        ToggleRow(
+            title = "Saved views",
+            detail = "Show pinned and saved perspectives in the drawer",
+            checked = sidebar.showSaved,
+        ) {
+            onChange(sidebar.copy(showSaved = it))
+        }
+    }
+    Spacer(modifier = Modifier.height(14.dp))
+    SettingsCard("Rows") {
+        Text(
+            text = "Inbox, Today and Trash always stay visible.",
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.faint,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        Perspective.entries.forEach { item ->
+            val key = "builtin:${item.key}"
+            DrawerMatrixRow(
+                label = item.label,
+                visible = key !in sidebar.hidden || key in anchors,
+                countVisible = !sidebar.isCountHidden(key),
+                canHide = key !in anchors,
+                onVisible = { toggleHidden(key) },
+                onCount = { toggleCount(key) },
+            )
+        }
+    }
+    if (saved.isNotEmpty()) {
+        Spacer(modifier = Modifier.height(14.dp))
+        SettingsCard("Saved views") {
+            saved.sortedBy { it.name.lowercase() }.forEach { item ->
+                val key = "custom:${item.id}"
+                DrawerMatrixRow(
+                    label = item.name,
+                    visible = key !in sidebar.hidden,
+                    countVisible = !sidebar.isCountHidden(key),
+                    canHide = true,
+                    onVisible = { toggleHidden(key) },
+                    onCount = { toggleCount(key) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DrawerMatrixRow(
+    label: String,
+    visible: Boolean,
+    countVisible: Boolean,
+    canHide: Boolean,
+    onVisible: () -> Unit,
+    onCount: () -> Unit,
+) {
+    val colors = flow
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (visible) colors.ink else colors.faint,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(
+            onClick = onVisible,
+            enabled = canHide,
+            modifier = Modifier.size(36.dp),
+        ) {
+            Icon(
+                imageVector = if (visible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
+                contentDescription = if (visible) "Hide $label" else "Show $label",
+                tint = when {
+                    !canHide -> colors.hairline
+                    visible -> colors.accent
+                    else -> colors.faint
+                },
+                modifier = Modifier.size(19.dp),
+            )
+        }
+        IconButton(onClick = onCount, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = Icons.Rounded.Numbers,
+                contentDescription = if (countVisible) "Hide $label count" else "Show $label count",
+                tint = if (countVisible) colors.accent else colors.faint,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }

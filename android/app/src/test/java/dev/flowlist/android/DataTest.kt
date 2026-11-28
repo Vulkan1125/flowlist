@@ -30,6 +30,7 @@ import dev.flowlist.android.data.normalizeBase
 import dev.flowlist.android.data.projectTaskIds
 import dev.flowlist.android.data.taskViews
 import dev.flowlist.android.data.SettingsDto
+import dev.flowlist.android.data.SidebarDto
 import dev.flowlist.android.data.forecastProjectDays
 import dev.flowlist.android.data.forecastTaskDays
 import dev.flowlist.android.data.forecastUndated
@@ -268,6 +269,19 @@ class DataTest {
         )
         assertEquals("Work", db.tagPath("parent"))
         assertEquals("Work/Deep", db.tagPath("child"))
+    }
+
+    @Test
+    fun sidebar_counts_keep_android_defaults_until_configured() {
+        val untouched = SidebarDto()
+        assertTrue(!untouched.isCountHidden("builtin:archive"))
+        val configured = SidebarDto(
+            countsConfigured = true,
+            countsHidden = setOf("builtin:archive", "custom:p"),
+        )
+        assertTrue(configured.isCountHidden("builtin:archive"))
+        assertTrue(configured.isCountHidden("custom:p"))
+        assertTrue(!configured.isCountHidden("builtin:completed"))
     }
 
     @Test

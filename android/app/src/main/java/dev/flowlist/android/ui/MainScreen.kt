@@ -462,8 +462,12 @@ fun MainScreen(
             repository.clearError()
         }
     }
-    val bottomPerspectives = remember(preferences.bottomBar) {
-        resolveBottomBar(preferences.bottomBar)
+    val sidebarForChrome = state.snapshot?.db?.settings?.sidebar
+    val bottomPerspectives = remember(preferences.bottomBar, sidebarForChrome?.hidden) {
+        val hidden = sidebarForChrome?.hidden.orEmpty()
+        resolveBottomBar(preferences.bottomBar).filter {
+            "builtin:${it.key}" !in hidden
+        }
     }
     val drawerOrder = remember(preferences.perspectiveOrder) {
         orderedPerspectives(preferences.perspectiveOrder)
@@ -898,19 +902,30 @@ fun MainScreen(
                     tab = tab,
                     more = moreView,
                     savedPerspective = savedPerspective,
-                    perspectives = bottomPerspectives,
-                    savedPerspectives = snapshot?.db?.perspectives?.values
-                        ?.sortedWith(
-                            compareByDescending<PerspectiveDto> { it.pinned }
-                                .thenBy { it.position }
-                                .thenBy { it.name.lowercase() },
-                        )
-                        ?.filter { item ->
-                            item.pinned ||
-                                !preferences.hideEmptyViews ||
-                                countPerspectiveTasks(snapshot?.db, item) > 0
+                    perspectives = if (sidebarForChrome?.showPerspectives == false) {
+                        emptyList()
+                    } else {
+                        bottomPerspectives.filter {
+                            "builtin:${it.key}" !in sidebarForChrome?.hidden.orEmpty()
                         }
-                        .orEmpty(),
+                    },
+                    savedPerspectives = if (sidebarForChrome?.showSaved == false) {
+                        emptyList()
+                    } else {
+                        snapshot?.db?.perspectives?.values
+                            ?.sortedWith(
+                                compareByDescending<PerspectiveDto> { it.pinned }
+                                    .thenBy { it.position }
+                                    .thenBy { it.name.lowercase() },
+                            )
+                            ?.filter { item ->
+                                "custom:${item.id}" !in sidebarForChrome?.hidden.orEmpty() &&
+                                    (item.pinned ||
+                                        !preferences.hideEmptyViews ||
+                                        countPerspectiveTasks(snapshot?.db, item) > 0)
+                            }
+                            .orEmpty()
+                    },
                     onSaved = { item ->
                         moreView = null
                         project = null
@@ -2127,6 +2142,7 @@ private fun SelectionBar(
 private fun SavedPerspectiveRow(
     item: PerspectiveDto,
     count: Int,
+    showCount: Boolean = true,
     onOpen: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -2162,19 +2178,21 @@ private fun SavedPerspectiveRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            if (count > 0) {
-                Text(
-                    text = "$count",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = colors.faint,
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Rounded.Check,
-                    contentDescription = null,
-                    tint = colors.faint,
-                    modifier = Modifier.size(14.dp),
-                )
+            if (showCount) {
+                if (count > 0) {
+                    Text(
+                        text = "$count",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.faint,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = null,
+                        tint = colors.faint,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(6.dp))
         }
@@ -2356,7 +2374,21 @@ private fun LibraryDrawer(
     val savedCounts = remember(IdentityKey(db)) {
         db?.perspectives?.values?.associate { it.id to countPerspectiveTasks(db, it) }.orEmpty()
     }
-    val remaining = order.filterNot { it in bottom }
+    val sidebar = db?.settings?.sidebar ?: dev.flowlist.android.data.SidebarDto()
+    val anchors = setOf("builtin:inbox", "builtin:today", "builtin:trash")
+    val remaining = order
+        .filterNot { it in bottom }
+        .filter { item ->
+            val key = "builtin:${item.key}"
+            (key !in sidebar.hidden || key in anchors) &&
+                (sidebar.showPriorities || item != Perspective.Priorities) &&
+                (sidebar.showTags || item != Perspective.Tags)
+        }
+    val visibleSaved = if (sidebar.showSaved) {
+        saved.filter { "custom:${it.id}" !in sidebar.hidden }
+    } else {
+        emptyList()
+    }
     var draggingKey by remember { mutableStateOf<String?>(null) }
     var dragFrom by remember { mutableIntStateOf(-1) }
     var dragTo by remember { mutableIntStateOf(-1) }
@@ -2381,6 +2413,7 @@ private fun LibraryDrawer(
             .navigationBarsPadding()
             .padding(horizontal = 10.dp, vertical = 12.dp),
     ) {
+        if (sidebar.showPerspectives) {
         Text(
             text = "Perspectives",
             style = MaterialTheme.typography.titleMedium,
@@ -2425,7 +2458,11 @@ private fun LibraryDrawer(
                     icon = item.icon,
                     selected = selected,
                     dragging = dragging,
-                    count = builtinCounts[item] ?: 0,
+                    count = if (sidebar.isCountHidden("builtin:${item.key}")) {
+                        0
+                    } else {
+                        builtinCounts[item] ?: 0
+                    },
                     onClick = { onPerspective(item) },
                     modifier = Modifier
                         .onSizeChanged { size ->
@@ -2522,11 +2559,13 @@ private fun LibraryDrawer(
                 )
             }
         }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
         HorizontalDivider(color = colors.hairline, modifier = Modifier.padding(horizontal = 8.dp))
-        val pinnedViews = saved.filter { it.pinned }
-        val otherViews = saved
+        if (sidebar.showSaved) {
+        val pinnedViews = visibleSaved.filter { it.pinned }
+        val otherViews = visibleSaved
             .filterNot { it.pinned }
             .filter { !hideEmptyViews || (savedCounts[it.id] ?: 0) > 0 }
         if (pinnedViews.isNotEmpty()) {
@@ -2542,6 +2581,7 @@ private fun LibraryDrawer(
                 SavedPerspectiveRow(
                     item = item,
                     count = savedCounts[item.id] ?: 0,
+                    showCount = !sidebar.isCountHidden("custom:${item.id}"),
                     onOpen = { onSaved(item) },
                     onEdit = { onEditPerspective(item) },
                     onDelete = { onDeletePerspective(item) },
@@ -2598,10 +2638,12 @@ private fun LibraryDrawer(
             SavedPerspectiveRow(
                 item = item,
                 count = savedCounts[item.id] ?: 0,
+                showCount = !sidebar.isCountHidden("custom:${item.id}"),
                 onOpen = { onSaved(item) },
                 onEdit = { onEditPerspective(item) },
                 onDelete = { onDeletePerspective(item) },
             )
+        }
         }
 
         Spacer(modifier = Modifier.weight(1f))
