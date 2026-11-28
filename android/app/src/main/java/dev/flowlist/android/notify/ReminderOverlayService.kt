@@ -108,10 +108,21 @@ class ReminderOverlayService :
             id.hashCode(),
             buildReminderNotification(this, id, title, project, dueAt),
         )
-        showOverlay()
-        if (!polling) {
-            polling = true
-            pollRemoteDismissal()
+        // The alarm comes from the last synced snapshot. Give the shared
+        // dismissal list a moment before taking the screen: the Mac may have
+        // completed or snoozed this reminder after the phone last synced.
+        scope.launch {
+            if (reminderAlreadyHandled(repository, id)) {
+                stopSelf()
+                return@launch
+            }
+            // A newer reminder may have replaced this one while we checked.
+            if (taskId != id) return@launch
+            showOverlay()
+            if (!polling) {
+                polling = true
+                pollRemoteDismissal()
+            }
         }
         return START_NOT_STICKY
     }

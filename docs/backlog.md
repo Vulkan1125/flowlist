@@ -182,13 +182,12 @@ integrations are tracked separately and are not part of this phase.
 
 ### Phase 6 — Android parity and reminder polish
 
-- [ ] **Reminder staleness on an idle phone** — the phone only joins the shared
-      dismissal list while its own reminder is open, so a Mac complete or snooze
-      can leave an already-handled alarm to fire later. Check the list when the
-      alarm fires, or add a lightweight background sync.
-- [ ] **Overlay permission onboarding** — turning on Full-screen reminders
-      should offer **Display over other apps** in place. Without it an unlocked
-      phone falls back to the heads-up banner.
+- [x] **Reminder staleness on an idle phone** — the alarm and the reminder
+      activity now check the shared dismissal list and the cached task before
+      taking the screen, so a Mac complete or snooze can no longer leave an
+      already-handled alarm to fire.
+- [x] **Overlay permission onboarding** — turning on Full-screen reminders now
+      opens **Display over other apps** when the permission is missing.
 - [ ] **Reminder notification actions** — put Dismiss and Snooze on the alarm
       card so the shade can handle a reminder without opening it.
 - [ ] **Simultaneous reminders** — queue alarms instead of replacing the open

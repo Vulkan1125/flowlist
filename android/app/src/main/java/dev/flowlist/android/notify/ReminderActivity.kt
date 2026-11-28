@@ -137,6 +137,26 @@ class ReminderActivity : ComponentActivity() {
         val dueAt = intent.getLongExtra("due_at", System.currentTimeMillis())
         TaskReminders.markFired(this, taskId)
         getSystemService(android.app.NotificationManager::class.java)?.cancel(taskId.hashCode())
+        // The alarm is scheduled from the last synced snapshot. If the Mac
+        // already completed or snoozed this reminder, stand down before the
+        // screen is taken over.
+        val repository = (application as FlowlistApplication).repository
+        if (taskId == "test-reminder") {
+            present(taskId, title, project, dueAt)
+        } else {
+            lifecycleScope.launch {
+                if (reminderAlreadyHandled(repository, taskId)) {
+                    finish()
+                    return@launch
+                }
+                present(taskId, title, project, dueAt)
+            }
+        }
+    }
+
+    /// Builds the reminder once it is known to be current, or straight away
+    /// for the Settings preview.
+    private fun present(taskId: String, title: String, project: String?, dueAt: Long) {
         val theme = ThemeStore(this).load()
         val systemDark = (resources.configuration.uiMode and
             Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES

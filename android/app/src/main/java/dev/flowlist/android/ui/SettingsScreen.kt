@@ -826,11 +826,24 @@ private fun NotificationSettings(
             denied = true
         }
     }
+    fun offerOverlayAccess() {
+        if (!Settings.canDrawOverlays(context)) {
+            runCatching {
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${context.packageName}"),
+                    ),
+                )
+            }
+        }
+    }
     val fullPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             fullScreen = true
             onPreferencesChange(preferences.copy(fullScreenReminders = true))
             TaskReminders.setEnabled(context, true)
+            offerOverlayAccess()
         }
     }
     val needsNotificationPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -861,6 +874,7 @@ private fun NotificationSettings(
                 fullScreen = true
                 onPreferencesChange(preferences.copy(fullScreenReminders = true))
                 TaskReminders.setEnabled(context, true)
+                offerOverlayAccess()
             }
         }
         if (fullScreen) {

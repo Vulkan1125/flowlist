@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Android reminders
+
+- **No stale alarms.** The phone checks the shared dismissal list and the
+  cached task before showing a full-screen reminder, so a Mac complete or
+  snooze no longer leaves an old alarm to fire on an idle phone.
+- **Overlay permission at the switch.** Turning on Full-screen reminders opens
+  the **Display over other apps** screen when the permission is missing.
+
 ## 0.10.1 — 2026-11-27
 
 ### Organized project perspectives
