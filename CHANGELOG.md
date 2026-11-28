@@ -8,6 +8,9 @@
   beside due and defer, and the task row shows **Plan …**.
 - **Project completion mode.** The Android project editor toggles **Complete
   with last action**, and the shared command layer applies it on both devices.
+- **Archive controls.** The Android project editor toggles **Archived**, the
+  project menu archives without changing status, and Settings → Library has
+  **Archive closed projects**.
 
 ### Android reminders
 

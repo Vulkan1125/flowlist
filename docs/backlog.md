@@ -205,9 +205,10 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Project completion mode** — the Android project editor now toggles
       **Complete with last action**. The shared command layer applies it, so
       the phone and Mac agree.
-- [ ] **Project archive controls** — add the archive flag to the Android project
-      editor and the Mac's Settings → Workflow → Archive choice; the Archive
-      perspective exists but archiving is only a row action today.
+- [x] **Project archive controls** — the Android project editor has an
+      **Archived** switch, the row action now archives instead of marking the
+      project Done, and Settings → Library has the Mac's **Archive closed
+      projects** choice.
 - [ ] **Stalled and On Hold projects** — dim and reject completion for On Hold
       projects, mark stalled projects in the drawer, and reveal a project's
       completed roots behind a Completed (n) row.

@@ -52,6 +52,7 @@ data class SettingsDto(
     @SerialName("current_location") val currentLocation: GeoDto? = null,
     @SerialName("nearby_radius_km") val nearbyRadiusKm: Double = 25.0,
     @SerialName("due_soon_days") val dueSoonDays: Int = 2,
+    @SerialName("auto_archive_closed_projects") val autoArchiveClosedProjects: Boolean = true,
 )
 
 @Serializable
@@ -116,6 +117,7 @@ data class ProjectDto(
     @SerialName("next_review") val nextReview: String? = null,
     @SerialName("review_interval_days") val reviewIntervalDays: Int = 7,
     @SerialName("complete_with_last_action") val completeWithLastAction: Boolean = false,
+    val archived: Boolean = false,
     @SerialName("task_order") val taskOrder: List<String> = emptyList(),
     val sequential: Boolean = false,
     val kind: String = "parallel",
@@ -498,7 +500,7 @@ fun Db.trashedTasks(): List<TaskView> =
 
 fun Db.archivedProjects(): List<ProjectDto> =
     projects.values
-        .filter { it.status == "done" || it.status == "dropped" }
+        .filter { it.archived || it.status == "done" || it.status == "dropped" }
         .sortedBy { it.name.lowercase() }
 
 fun Db.reviewProjects(): List<ProjectDto> =

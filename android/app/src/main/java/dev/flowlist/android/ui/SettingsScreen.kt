@@ -700,6 +700,16 @@ private fun LibrarySettings(
         }
     }
     Spacer(modifier = Modifier.height(14.dp))
+    SettingsCard("Archive") {
+        ToggleRow(
+            title = "Archive closed projects",
+            detail = "Move Done and Dropped projects out of the library automatically",
+            checked = settings.autoArchiveClosedProjects,
+        ) {
+            onChange(settings.copy(autoArchiveClosedProjects = it))
+        }
+    }
+    Spacer(modifier = Modifier.height(14.dp))
     SettingsCard("History") {
         SmallLabel("Changed window")
         ChoiceRow {

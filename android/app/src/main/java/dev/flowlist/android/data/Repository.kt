@@ -807,6 +807,13 @@ class Repository(context: Context) {
         send(moveSubtaskCommand(child.id, parent.id), "Move “${child.title}” under “${parent.title}”")
     }
 
+    suspend fun setProjectArchived(project: ProjectDto, archived: Boolean) {
+        send(
+            archiveProjectsCommand(listOf(project.id), archived),
+            if (archived) "Archive “${project.name}”" else "Unarchive “${project.name}”",
+        )
+    }
+
     suspend fun updateLibrarySettings(updated: SettingsDto) {
         val current = _state.value.snapshot?.db?.settings ?: SettingsDto()
         val patch = buildJsonObject {
@@ -821,6 +828,9 @@ class Repository(context: Context) {
             }
             if (updated.trashRetentionDays != current.trashRetentionDays) {
                 put("trash_retention_days", updated.trashRetentionDays)
+            }
+            if (updated.autoArchiveClosedProjects != current.autoArchiveClosedProjects) {
+                put("auto_archive_closed_projects", updated.autoArchiveClosedProjects)
             }
         }
         if (patch.isEmpty()) return
@@ -1242,6 +1252,7 @@ class Repository(context: Context) {
         icon: String = project.icon,
         fullscreenReminder: Boolean = project.fullscreenReminder,
         completeWithLastAction: Boolean = project.completeWithLastAction,
+        archived: Boolean = project.archived,
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
@@ -1264,6 +1275,7 @@ class Repository(context: Context) {
             if (completeWithLastAction != project.completeWithLastAction) {
                 put("complete_with_last_action", completeWithLastAction)
             }
+            if (archived != project.archived) put("archived", archived)
         }
         if (patch.isNotEmpty()) {
             enqueue(

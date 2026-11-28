@@ -950,7 +950,7 @@ fun MainScreen(
                     onEditProject = { projectEditor = ProjectEditorTarget(it, it.folder) },
                     onArchiveProject = { item ->
                         scope.launch {
-                            repository.setProjectStatus(item, "done")
+                            repository.setProjectArchived(item, true)
                             toasts.show(
                                 message = "Archived “${item.name}”",
                                 duration = SnackbarDuration.Short,
@@ -1315,7 +1315,7 @@ fun MainScreen(
             folders = snapshot?.db?.folders?.values?.toList().orEmpty(),
             defaultReviewDays = snapshot?.db?.settings?.defaultReviewDays ?: 7,
             onDismiss = { projectEditor = null },
-            onSave = { name, folder, status, kind, notes, reviewDays, icon, fullscreen, completeWithLastAction ->
+            onSave = { name, folder, status, kind, notes, reviewDays, icon, fullscreen, completeWithLastAction, archived ->
                 projectEditor = null
                 scope.launch {
                     if (editing == null) {
@@ -1341,6 +1341,7 @@ fun MainScreen(
                             icon,
                             fullscreen,
                             completeWithLastAction,
+                            archived,
                         )
                     }
                 }
@@ -2685,7 +2686,7 @@ private fun BrowseList(
     val folders = db?.folders?.values.orEmpty()
     val entries = remember(snapshot) {
         val open = projects
-            .filter { it.status == "active" || it.status == "on_hold" }
+            .filter { !it.archived && (it.status == "active" || it.status == "on_hold") }
             .sortedBy { it.name.lowercase() }
         val orderedFolders = folders.sortedBy { it.name.lowercase() }
 
@@ -2750,7 +2751,7 @@ private fun BrowseList(
                         var menu by remember { mutableStateOf(false) }
                         val projectCount = projects.count {
                             it.folder == entry.folder.id &&
-                                (it.status == "active" || it.status == "on_hold")
+                                !it.archived && (it.status == "active" || it.status == "on_hold")
                         }
                         Row(
                             modifier = Modifier

@@ -456,6 +456,16 @@ fun createProjectCommand(
     )
 }
 
+fun archiveProjectsCommand(ids: List<String>, archived: Boolean): JsonObject = buildJsonObject {
+    put(
+        "archive_projects",
+        buildJsonObject {
+            put("ids", buildJsonArray { ids.forEach { add(JsonPrimitive(it)) } })
+            put("archived", archived)
+        },
+    )
+}
+
 fun updateProjectCommand(id: String, patch: JsonObject): JsonObject = buildJsonObject {
     put("update_project", buildJsonObject { put("id", id); put("patch", patch) })
 }

@@ -121,6 +121,7 @@ fun ProjectEditorSheet(
         icon: String,
         fullscreenReminder: Boolean,
         completeWithLastAction: Boolean,
+        archived: Boolean,
     ) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
@@ -144,6 +145,7 @@ fun ProjectEditorSheet(
     var completeWithLastAction by remember(project?.id) {
         mutableStateOf(project?.completeWithLastAction ?: false)
     }
+    var archived by remember(project?.id) { mutableStateOf(project?.archived ?: false) }
     val sortedFolders = remember(folders) { folders.sortedBy { it.name.lowercase() } }
     val canSave = name.isNotBlank()
 
@@ -284,6 +286,29 @@ fun ProjectEditorSheet(
                             onCheckedChange = { completeWithLastAction = it },
                         )
                     }
+                    if (project != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Archived",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colors.ink,
+                                )
+                                Text(
+                                    text = "Hide from Browse and show in Archive.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colors.faint,
+                                )
+                            }
+                            Switch(
+                                checked = archived,
+                                onCheckedChange = { archived = it },
+                            )
+                        }
+                    }
                     LibraryLabel("Full-screen reminder")
                     Text(
                         text = "Take over the screen when a task in this project is due.",
@@ -347,6 +372,7 @@ fun ProjectEditorSheet(
                             iconSlug,
                             fullscreenReminder,
                             completeWithLastAction,
+                            archived,
                         )
                     },
                     enabled = canSave,
