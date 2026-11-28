@@ -50,6 +50,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -119,6 +120,7 @@ fun ProjectEditorSheet(
         reviewDays: Int,
         icon: String,
         fullscreenReminder: Boolean,
+        completeWithLastAction: Boolean,
     ) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
@@ -138,6 +140,9 @@ fun ProjectEditorSheet(
     }
     var fullscreenReminder by remember(project?.id) {
         mutableStateOf(project?.fullscreenReminder ?: false)
+    }
+    var completeWithLastAction by remember(project?.id) {
+        mutableStateOf(project?.completeWithLastAction ?: false)
     }
     val sortedFolders = remember(folders) { folders.sortedBy { it.name.lowercase() } }
     val canSave = name.isNotBlank()
@@ -257,6 +262,28 @@ fun ProjectEditorSheet(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
+                    LibraryLabel("Completion")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Complete with last action",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.ink,
+                            )
+                            Text(
+                                text = "Mark the project done when its last task is ticked.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.faint,
+                            )
+                        }
+                        Switch(
+                            checked = completeWithLastAction,
+                            onCheckedChange = { completeWithLastAction = it },
+                        )
+                    }
                     LibraryLabel("Full-screen reminder")
                     Text(
                         text = "Take over the screen when a task in this project is due.",
@@ -319,6 +346,7 @@ fun ProjectEditorSheet(
                             reviewDays.toIntOrNull()?.coerceIn(1, 365) ?: defaultReviewDays,
                             iconSlug,
                             fullscreenReminder,
+                            completeWithLastAction,
                         )
                     },
                     enabled = canSave,

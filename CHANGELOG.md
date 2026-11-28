@@ -6,6 +6,8 @@
 
 - **Planned dates.** The Android task editor now edits the Mac's third date
   beside due and defer, and the task row shows **Plan …**.
+- **Project completion mode.** The Android project editor toggles **Complete
+  with last action**, and the shared command layer applies it on both devices.
 
 ### Android reminders
 

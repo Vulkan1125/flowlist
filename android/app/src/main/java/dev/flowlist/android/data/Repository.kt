@@ -1212,11 +1212,21 @@ class Repository(context: Context) {
         reviewDays: Int? = null,
         icon: String = "project",
         fullscreenReminder: Boolean = false,
+        completeWithLastAction: Boolean = false,
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         send(
-            createProjectCommand(trimmed, folder, kind, notes, reviewDays, icon, fullscreenReminder),
+            createProjectCommand(
+                trimmed,
+                folder,
+                kind,
+                notes,
+                reviewDays,
+                icon,
+                fullscreenReminder,
+                completeWithLastAction,
+            ),
             "New project “$trimmed”",
         )
     }
@@ -1231,6 +1241,7 @@ class Repository(context: Context) {
         reviewDays: Int = project.reviewIntervalDays,
         icon: String = project.icon,
         fullscreenReminder: Boolean = project.fullscreenReminder,
+        completeWithLastAction: Boolean = project.completeWithLastAction,
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
@@ -1249,6 +1260,9 @@ class Repository(context: Context) {
             if (icon != project.icon) put("icon", icon)
             if (fullscreenReminder != project.fullscreenReminder) {
                 put("fullscreen_reminder", fullscreenReminder)
+            }
+            if (completeWithLastAction != project.completeWithLastAction) {
+                put("complete_with_last_action", completeWithLastAction)
             }
         }
         if (patch.isNotEmpty()) {

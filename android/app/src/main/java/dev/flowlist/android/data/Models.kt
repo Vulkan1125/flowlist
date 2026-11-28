@@ -115,6 +115,7 @@ data class ProjectDto(
     @SerialName("fullscreen_reminder") val fullscreenReminder: Boolean = false,
     @SerialName("next_review") val nextReview: String? = null,
     @SerialName("review_interval_days") val reviewIntervalDays: Int = 7,
+    @SerialName("complete_with_last_action") val completeWithLastAction: Boolean = false,
     @SerialName("task_order") val taskOrder: List<String> = emptyList(),
     val sequential: Boolean = false,
     val kind: String = "parallel",

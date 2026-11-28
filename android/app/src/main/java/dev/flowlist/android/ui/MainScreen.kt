@@ -1315,7 +1315,7 @@ fun MainScreen(
             folders = snapshot?.db?.folders?.values?.toList().orEmpty(),
             defaultReviewDays = snapshot?.db?.settings?.defaultReviewDays ?: 7,
             onDismiss = { projectEditor = null },
-            onSave = { name, folder, status, kind, notes, reviewDays, icon, fullscreen ->
+            onSave = { name, folder, status, kind, notes, reviewDays, icon, fullscreen, completeWithLastAction ->
                 projectEditor = null
                 scope.launch {
                     if (editing == null) {
@@ -1327,6 +1327,7 @@ fun MainScreen(
                             reviewDays,
                             icon,
                             fullscreen,
+                            completeWithLastAction,
                         )
                     } else {
                         repository.updateProject(
@@ -1339,6 +1340,7 @@ fun MainScreen(
                             reviewDays,
                             icon,
                             fullscreen,
+                            completeWithLastAction,
                         )
                     }
                 }

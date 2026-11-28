@@ -202,9 +202,9 @@ integrations are tracked separately and are not part of this phase.
 - [ ] **Android docs refresh** — `android/README.md` still describes the old
       week-strip reminder and calls the default theme Todoist; update it for the
       overlay, media pause, snooze and cross-device sync.
-- [ ] **Project completion mode** — expose complete-with-last-action in the
-      Android project editor. The shared command layer already applies it, but
-      the phone cannot change it.
+- [x] **Project completion mode** — the Android project editor now toggles
+      **Complete with last action**. The shared command layer applies it, so
+      the phone and Mac agree.
 - [ ] **Project archive controls** — add the archive flag to the Android project
       editor and the Mac's Settings → Workflow → Archive choice; the Archive
       perspective exists but archiving is only a row action today.

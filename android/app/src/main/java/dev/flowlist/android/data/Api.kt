@@ -432,6 +432,7 @@ fun createProjectCommand(
     reviewDays: Int? = null,
     icon: String = "project",
     fullscreenReminder: Boolean = false,
+    completeWithLastAction: Boolean = false,
 ): JsonObject = buildJsonObject {
     put(
         "create_project",
@@ -444,6 +445,7 @@ fun createProjectCommand(
             put("defer", JsonNull)
             put("review_interval_days", reviewDays?.let { JsonPrimitive(it) } ?: JsonNull)
             put("next_review", JsonNull)
+            put("complete_with_last_action", completeWithLastAction)
             put("sequential", kind == "sequential")
             put("kind", kind)
             put("icon", icon)
