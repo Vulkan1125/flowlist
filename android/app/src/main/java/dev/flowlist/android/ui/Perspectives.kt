@@ -1510,7 +1510,7 @@ fun sortTasks(tasks: List<TaskView>, sort: String): List<TaskView> {
     return tasks.sortedWith(comparator)
 }
 
-private fun groupLabel(db: Db?, task: TaskView, group: String): String {
+fun groupLabel(db: Db?, task: TaskView, group: String): String {
     val due = task.due?.local()?.toLocalDate()
     val defer = task.defer?.local()?.toLocalDate()
     val today = LocalDate.now()
@@ -1567,6 +1567,23 @@ val sortOptions: List<String> = listOf(
     "manual", "due", "defer", "name", "priority", "flagged",
     "estimate", "created", "completed_at",
 )
+
+/// Groupings offered by a project page. Projects are already one container, so
+/// a project grouping would be a single block and is left out.
+val projectGroupOptions: List<Pair<String, String>> = listOf(
+    "none" to "None",
+    "due" to "Due date",
+    "defer" to "Defer date",
+    "priority" to "Priority",
+    "tag" to "Tag",
+    "flagged" to "Flagged",
+    "estimate" to "Estimate",
+    "created" to "Added",
+    "completed" to "Completed",
+)
+
+fun groupOptionLabel(group: String): String =
+    projectGroupOptions.firstOrNull { it.first == group }?.second ?: "None"
 
 data class TaskSection(val label: String?, val tasks: List<TaskView>)
 

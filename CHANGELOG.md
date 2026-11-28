@@ -26,6 +26,14 @@
   sit above **Saved**, use a pin glyph by default and also appear in the tablet
   rail; the description shows under the view title. Settings → Library →
   **Hide empty views** hides unpinned views that match nothing.
+- **Project pages.** Projects now open as full pages instead of a bottom card:
+  a back arrow, the status/review/progress banner, in-project search, sort and
+  grouping, **Completed** and **Available** filters, and capture that adds the
+  new task to the open project.
+- **Folder cells.** Tapping anywhere on a folder row folds or opens it, not
+  only its chevron.
+- **Today doodle.** The empty Today view now shows a steaming mug instead of
+  the old sun face.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.

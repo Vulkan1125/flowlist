@@ -318,6 +318,33 @@ fun Db.taskViews(
         }
         .toList()
 
+/// Every task that belongs to a project, including subtasks whose own project
+/// field is empty because their parent carries it.
+fun Db.projectTaskIds(project: String, includeCompleted: Boolean = false): Set<String> {
+    val ids = tasks.values
+        .filter {
+            it.project == project &&
+                it.trashedAt == null &&
+                (includeCompleted || !it.completed)
+        }
+        .map { it.id }
+        .toMutableSet()
+    var grew = true
+    while (grew) {
+        grew = false
+        for (task in tasks.values) {
+            if (task.id in ids) continue
+            if (!includeCompleted && task.completed) continue
+            if (task.trashedAt != null) continue
+            if (task.parent in ids) {
+                ids += task.id
+                grew = true
+            }
+        }
+    }
+    return ids
+}
+
 fun Db.inbox(): List<TaskView> {
     val byId = tasks
     val order = inboxOrder.ifEmpty {

@@ -102,61 +102,104 @@ fun TodayDoodle(modifier: Modifier = Modifier) {
     val colors = flow
     val motion = rememberInfiniteTransition(label = "today")
     val bob by motion.animateFloat(
-        -2.5f, 2.5f,
-        infiniteRepeatable(tween(2000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        -2f, 2f,
+        infiniteRepeatable(tween(2100, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "bob",
     )
-    val spin by motion.animateFloat(
-        0f, 360f,
-        infiniteRepeatable(tween(22000, easing = LinearEasing)),
-        label = "spin",
+    val steam by motion.animateFloat(
+        0f, 1f,
+        infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "steam",
     )
-    val drift by motion.animateFloat(
-        -5f, 5f,
-        infiniteRepeatable(tween(2800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "drift",
+    val sparkle by motion.animateFloat(
+        0.35f, 1f,
+        infiniteRepeatable(tween(1200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "sparkle",
     )
     Canvas(modifier.size(170.dp, 130.dp)) {
         scaleToCanvas {
             translate(0f, bob) {
-                rotate(spin, Offset(82f, 62f)) {
-                    for (index in 0 until 8) {
-                        val angle = Math.toRadians((index * 45).toDouble())
-                        val inner = 33f
-                        val outer = 41f + 2.5f * sin(angle * 3).toFloat()
-                        drawLine(
-                            color = colors.warning,
-                            start = Offset(
-                                82f + cos(angle).toFloat() * inner,
-                                62f + sin(angle).toFloat() * inner,
-                            ),
-                            end = Offset(
-                                82f + cos(angle).toFloat() * outer,
-                                62f + sin(angle).toFloat() * outer,
-                            ),
-                            strokeWidth = 3.4f,
-                            cap = StrokeCap.Round,
+                // Steam rises and fades behind the mug.
+                val steamAlpha = 0.18f + 0.42f * steam
+                for ((index, x) in listOf(72f, 85f, 98f).withIndex()) {
+                    val bend = if (index % 2 == 0) 4f else -4f
+                    val path = Path().apply {
+                        moveTo(x, 48f - steam * 3f)
+                        cubicTo(
+                            x - bend, 41f - steam * 4f,
+                            x + bend, 33f - steam * 4f,
+                            x, 24f - steam * 5f,
                         )
                     }
+                    drawPath(
+                        path = path,
+                        color = colors.faint.copy(alpha = steamAlpha),
+                        style = Stroke(width = 2.4f, cap = StrokeCap.Round),
+                    )
                 }
-                drawCircle(colors.warning, radius = 25f, center = Offset(82f, 62f))
-                drawCircle(colors.warning.copy(alpha = 0.28f), radius = 31f, center = Offset(82f, 62f))
-                drawCircle(colors.raised, radius = 4.6f, center = Offset(74f, 57f))
-                drawCircle(colors.raised, radius = 4.6f, center = Offset(90f, 57f))
+
+                drawOval(
+                    color = colors.field,
+                    topLeft = Offset(45f, 100f),
+                    size = Size(80f, 13f),
+                )
                 drawArc(
-                    color = colors.raised,
-                    startAngle = 20f,
-                    sweepAngle = 140f,
+                    color = colors.hairline,
+                    startAngle = 0f,
+                    sweepAngle = 180f,
                     useCenter = false,
-                    topLeft = Offset(73f, 62f),
-                    size = Size(18f, 13f),
-                    style = Stroke(width = 3.2f, cap = StrokeCap.Round),
+                    topLeft = Offset(45f, 99f),
+                    size = Size(80f, 14f),
+                    style = Stroke(width = 2f, cap = StrokeCap.Round),
+                )
+
+                drawArc(
+                    color = colors.hairline,
+                    startAngle = -72f,
+                    sweepAngle = 144f,
+                    useCenter = false,
+                    topLeft = Offset(108f, 63f),
+                    size = Size(27f, 27f),
+                    style = Stroke(width = 2.6f, cap = StrokeCap.Round),
+                )
+
+                val mug = Path().apply {
+                    moveTo(53f, 56f)
+                    lineTo(117f, 56f)
+                    lineTo(117f, 87f)
+                    cubicTo(117f, 95f, 111f, 100f, 103f, 100f)
+                    lineTo(67f, 100f)
+                    cubicTo(59f, 100f, 53f, 95f, 53f, 87f)
+                    close()
+                }
+                drawPath(mug, colors.raised)
+                drawPath(mug, colors.hairline, style = Stroke(width = 2f, join = StrokeJoin.Round))
+                drawOval(
+                    color = colors.warning.copy(alpha = 0.18f),
+                    topLeft = Offset(58f, 53f),
+                    size = Size(54f, 10f),
+                )
+                drawArc(
+                    color = colors.hairline,
+                    startAngle = 0f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    topLeft = Offset(53f, 48f),
+                    size = Size(64f, 15f),
+                    style = Stroke(width = 2f),
+                )
+                drawLine(
+                    colors.accent.copy(alpha = 0.4f),
+                    Offset(67f, 89f),
+                    Offset(103f, 89f),
+                    2.2f,
+                    StrokeCap.Round,
                 )
             }
-            translate(drift, 0f) {
-                drawCloud(colors, Offset(32f, 99f), alpha = 0.9f)
+            translate(0f, -2f * sparkle) {
+                sparkle(139f, 42f, 5.5f, colors.warning, sparkle)
             }
-            sparkle(139f, 45f, 6f, colors.accent, 0.8f)
+            sparkle(26f, 88f, 4.5f, colors.accent, 1.1f - sparkle)
         }
     }
 }

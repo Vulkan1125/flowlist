@@ -203,7 +203,7 @@ class Repository(context: Context) {
         }
     }
 
-    suspend fun capture(text: String): TaskDto? {
+    suspend fun capture(text: String, project: String? = null): TaskDto? {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return null
         val id = Ulid.next()
@@ -212,6 +212,7 @@ class Repository(context: Context) {
         val task = TaskDto(
             id = id,
             title = title,
+            project = project,
             createdAt = now,
             modifiedAt = now,
         )
@@ -220,12 +221,25 @@ class Repository(context: Context) {
         val updated = snapshot.copy(
             db = db.copy(
                 tasks = db.tasks + (id to task),
-                inboxOrder = db.inboxOrder + id,
+                inboxOrder = if (project == null) db.inboxOrder + id else db.inboxOrder,
             ),
         )
         _state.update { it.copy(snapshot = updated) }
         persist(updated)
         enqueue(PendingOp(id = "op_${UUID.randomUUID()}", text = trimmed, taskId = id, label = title), id)
+        if (project != null) {
+            enqueue(
+                PendingOp(
+                    id = "op_${UUID.randomUUID()}",
+                    command = updateCommand(
+                        id,
+                        buildJsonObject { put("project", JsonPrimitive(project)) },
+                    ),
+                    label = title,
+                ),
+                id,
+            )
+        }
         sync()
         return _state.value.snapshot?.db?.tasks?.get(id) ?: task
     }

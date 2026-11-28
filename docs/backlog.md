@@ -245,11 +245,16 @@ integrations are tracked separately and are not part of this phase.
       missing on the phone, which only has the global due summary and
       full-screen reminders.
 - [x] **Project dates, tags and dashboard** — the Android project editor now
-      edits due/defer/planned dates and project tags, and the project sheet
+      edits due/defer/planned dates and project tags, and the project page
       shows status, type, review, progress, dates and notes.
 - [x] **Project attachments** — the Android project editor lists project
       files and links, adds files through the upload path used by the task
       editor, adds named links, and removes either before saving.
+- [x] **Project pages** — projects open as full pages with a back arrow, a
+      status/review/progress banner, in-project search, sort and grouping,
+      **Completed** and **Available** filters, and project-aware capture.
+- [x] **Folder cells** — tapping anywhere on a folder row folds or opens it,
+      not only its chevron.
 - [ ] **Convert task to project** — add the Mac's one-step, undoable convert.
 - [ ] **Batch edit fields** — phone select mode only completes, trashes or
       purges. Add the Mac's project, tags, defer/planned/due, priority, flag

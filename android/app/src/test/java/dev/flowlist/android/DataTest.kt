@@ -23,6 +23,7 @@ import dev.flowlist.android.ui.draftFrom
 import dev.flowlist.android.ui.toFilter
 import dev.flowlist.android.data.displayTitle
 import dev.flowlist.android.data.normalizeBase
+import dev.flowlist.android.data.projectTaskIds
 import dev.flowlist.android.data.savePerspectiveCommand
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -185,6 +186,20 @@ class DataTest {
         assertEquals(Family.Paper, Family.fromSlug("paper"))
         assertEquals(Family.Tomato, Family.fromSlug(null))
         assertEquals(Family.Tomato, Family.fromSlug("unknown-family"))
+    }
+
+    @Test
+    fun project_tasks_include_nested_subtasks() {
+        val db = Db(
+            projects = mapOf("p" to ProjectDto(id = "p", name = "Project")),
+            tasks = mapOf(
+                "root" to TaskDto(id = "root", title = "Root", project = "p"),
+                "child" to TaskDto(id = "child", title = "Child", parent = "root"),
+                "done" to TaskDto(id = "done", title = "Done", project = "p", completed = true),
+            ),
+        )
+        assertEquals(setOf("root", "child"), db.projectTaskIds("p"))
+        assertEquals(setOf("root", "child", "done"), db.projectTaskIds("p", includeCompleted = true))
     }
 
     @Test

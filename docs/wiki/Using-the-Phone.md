@@ -194,14 +194,17 @@ offers the APK when a newer version exists.
 
 ## Projects, folders and tags
 
-**Browse** groups open projects under their folders; the chevron beside a
-folder folds or opens its projects. **New project** and **New folder** sit at
-the top of the list. A folder is a section header with its own menu: edit it,
+**Browse** groups open projects under their folders; tapping anywhere on a
+folder row folds or opens its projects. **New project** and **New folder** sit
+at the top of the list. A folder is a section header with its own menu: edit it,
 create a project or child folder inside, or delete the whole tree. A project's menu edits its name, folder, status, dates and tags, archives it,
-or deletes it and moves its tasks to Trash. The project sheet shows the
-status, type, review cadence, progress, dates and notes above its tasks. The
-editor also manages project files and links: add an attachment, add a named
-link, or remove either before saving.
+or deletes it and moves its tasks to Trash. A project opens as a full page
+with a back arrow and a banner for status, type, review, progress, dates and
+notes. The header search is limited to that project; sort and grouping sit
+beside it, and **Completed** and **Available** filter the rows. The plus button
+adds a task straight into the open project. The editor also manages project
+files and links: add an attachment, add a named link, or remove either before
+saving.
 
 The project editor also opens from the pencil beside a project's name. The
 icon row shows the current icon and opens the full picker only when tapped;

@@ -51,7 +51,10 @@ import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
@@ -156,6 +159,8 @@ import dev.flowlist.android.data.parentPlacement
 import dev.flowlist.android.data.projectPlacement
 import dev.flowlist.android.data.orderedChildTasks
 import dev.flowlist.android.data.isActive
+import dev.flowlist.android.data.projectTaskIds
+import dev.flowlist.android.data.sequenceBlocker
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.label
 import dev.flowlist.android.data.linkWithName
@@ -307,6 +312,7 @@ fun MainScreen(
     }
     var capture by rememberSaveable { mutableStateOf(false) }
     var captureInitial by rememberSaveable { mutableStateOf("") }
+    var captureProject by remember { mutableStateOf<String?>(null) }
     var captureAttachment by remember { mutableStateOf<String?>(null) }
     var captureAttachmentLabel by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(initialCapture) {
@@ -338,6 +344,7 @@ fun MainScreen(
     var confirm by remember { mutableStateOf<ConfirmRequest?>(null) }
     BackHandler(enabled = moreView != null) { moreView = null }
     BackHandler(enabled = savedPerspective != null) { savedPerspective = null }
+    BackHandler(enabled = project != null) { project = null }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val haptics = LocalHapticFeedback.current
     var offlineWarning by remember { mutableStateOf(false) }
@@ -476,6 +483,7 @@ fun MainScreen(
     }
     val openPerspective: (Perspective) -> Unit = { item ->
         savedPerspective = null
+        project = null
         val targetTab = item.tab
         if (targetTab != null) {
             tab = targetTab
@@ -635,6 +643,7 @@ fun MainScreen(
                     },
                     onSaved = { item ->
                         moreView = null
+                        project = null
                         savedPerspective = item
                         scope.launch { drawer.close() }
                     },
@@ -720,6 +729,7 @@ fun MainScreen(
                         settingsSection = null
                         moreView = null
                         savedPerspective = null
+                        project = null
                     },
                     icon = {
                         Icon(
@@ -751,6 +761,7 @@ fun MainScreen(
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     }
                     captureInitial = ""
+                    captureProject = project?.id
                     captureAttachment = null
                     captureAttachmentLabel = null
                     capture = true
@@ -805,6 +816,7 @@ fun MainScreen(
                         .orEmpty(),
                     onSaved = { item ->
                         moreView = null
+                        project = null
                         savedPerspective = item
                     },
                     onPerspective = { item -> openPerspective(item) },
@@ -829,6 +841,14 @@ fun MainScreen(
             ) {
             val activeMore = moreView
             val activeSaved = savedPerspective
+            val activeProject = project?.let { known ->
+                snapshot?.db?.projects?.get(known.id) ?: known
+            }
+            val projectKey = activeProject?.let { "project:${it.id}" }
+            val projectSort = projectKey?.let { preferences.sortFor(it) } ?: "manual"
+            val projectGroup = projectKey?.let { preferences.groupFor(it) } ?: "none"
+            val projectShowCompleted = projectKey?.let { preferences.showsCompleted(it) } ?: false
+            val projectAvailable = projectKey?.let { preferences.onlyAvailable(it) } ?: false
             val canSelect = activeSaved != null ||
                 activeMore == MoreView.Flagged ||
                 activeMore == MoreView.Completed ||
@@ -847,7 +867,7 @@ fun MainScreen(
                     activeMore == MoreView.Attachments
                 else -> tab == Tab.Inbox || tab == Tab.Today || tab == Tab.Forecast
             }
-            val sortKey = activeSaved?.id ?: activeMore?.name?.lowercase() ?: when (tab) {
+            val sortKey = projectKey ?: activeSaved?.id ?: activeMore?.name?.lowercase() ?: when (tab) {
                 Tab.Inbox -> "inbox"
                 Tab.Today -> "today"
                 Tab.Forecast -> "forecast"
@@ -858,19 +878,31 @@ fun MainScreen(
             val headerSort = activeSaved?.sort ?: currentSort
             if (!(tab == Tab.Settings && settingsSection != null)) {
             Header(
-                title = activeSaved?.name ?: activeMore?.label ?: tab.label,
+                title = activeProject?.name ?: activeSaved?.name ?: activeMore?.label ?: tab.label,
                 subtitle = when {
+                    activeProject != null -> activeProject.folder
+                        ?.let { snapshot?.db?.folders?.get(it)?.name }
+                        ?: "Project"
                     activeSaved != null -> "Saved perspective"
                     else -> headerSubtitle(activeMore, tab, state)
                 },
                 onMenu = { scope.launch { drawer.open() } },
                 onSearch = { search = true },
-                sort = headerSort,
-                onSort = if (sortable) {
-                    { option -> onPreferencesChange(preferences.withSort(sortKey, option)) }
-                } else {
-                    null
+                sort = if (activeProject != null) projectSort else headerSort,
+                onSort = when {
+                    activeProject != null -> { option: String ->
+                        onPreferencesChange(preferences.withSort(projectKey!!, option))
+                    }
+                    sortable -> { option: String ->
+                        onPreferencesChange(preferences.withSort(sortKey, option))
+                    }
+                    else -> null
                 },
+                group = projectGroup,
+                onGroup = projectKey?.let { key ->
+                    { option: String -> onPreferencesChange(preferences.withGroup(key, option)) }
+                },
+                onBack = activeProject?.let { { project = null } },
                 selecting = selecting,
                 onSelect = if (canSelect) {
                     {
@@ -890,7 +922,57 @@ fun MainScreen(
             if (offlineWarning) {
                 OfflineNotice(onRetry = { scope.launch { repository.sync() } })
             }
-            if (activeSaved != null) {
+            if (activeProject != null) {
+                ProjectPage(
+                    project = activeProject,
+                    db = snapshot?.db,
+                    sort = projectSort,
+                    group = projectGroup,
+                    showCompleted = projectShowCompleted,
+                    availableOnly = projectAvailable,
+                    swipeActions = preferences.swipeActions,
+                    pending = state.pending,
+                    onToggle = { task -> complete(task, !task.completed) },
+                    onClick = { detail = it },
+                    onTrash = trash,
+                    onEdit = {
+                        projectEditor = ProjectEditorTarget(activeProject, activeProject.folder)
+                    },
+                    onToggleCompleted = { enabled ->
+                        onPreferencesChange(
+                            preferences.withShowCompleted(projectKey!!, enabled),
+                        )
+                    },
+                    onToggleAvailable = { enabled ->
+                        onPreferencesChange(preferences.withAvailable(projectKey!!, enabled))
+                    },
+                    onStatus = {
+                        scope.launch {
+                            repository.setProjectStatus(
+                                activeProject,
+                                if (activeProject.status == "active") "on_hold" else "active",
+                            )
+                        }
+                    },
+                    onKind = {
+                        val next = when (activeProject.kind) {
+                            "parallel" -> "sequential"
+                            "sequential" -> "single_actions"
+                            else -> "parallel"
+                        }
+                        scope.launch {
+                            repository.updateProject(
+                                project = activeProject,
+                                name = activeProject.name,
+                                folder = activeProject.folder,
+                                status = activeProject.status,
+                                kind = next,
+                            )
+                        }
+                    },
+                    onReview = { scope.launch { repository.reviewProject(activeProject) } },
+                )
+            } else if (activeSaved != null) {
                 SavedPerspectiveView(
                     perspective = activeSaved,
                     snapshot = snapshot,
@@ -1286,55 +1368,6 @@ fun MainScreen(
         )
     }
 
-    project?.let { value ->
-        val db = snapshot?.db
-        ProjectSheet(
-            project = value,
-            tasks = db?.tasks?.values
-                ?.filter { it.project == value.id && it.isActive }
-                ?.sortedBy { it.title.lowercase() }
-                ?.map { task ->
-                    TaskView(
-                        id = task.id,
-                        title = task.title,
-                        notes = task.notes,
-                        projectName = value.name,
-                        projectId = value.id,
-                        parent = task.parent,
-                        tags = task.tags.mapNotNull { db?.tags?.get(it)?.name },
-                        due = task.due,
-                        defer = task.defer,
-                        planned = task.planned,
-                        flagged = task.flagged,
-                        fullscreenReminder = task.fullscreenReminder,
-                        reminderAt = task.reminderAt,
-                        reminderMatchDue = task.reminderMatchDue,
-                        priority = task.priority,
-                        completed = task.completed,
-                        pending = task.id in state.pending,
-                        checklistDone = task.checklist.count { it.completed },
-                        checklistTotal = task.checklist.size,
-                        estimateMin = task.estimateMin,
-                        createdAt = task.createdAt,
-                        blockedByTag = db?.tagBlocking(task)?.name,
-                    )
-                }
-                .orEmpty(),
-            db = db,
-            onDismiss = { project = null },
-            onEdit = {
-                val editing = value
-                project = null
-                projectEditor = ProjectEditorTarget(editing, editing.folder)
-            },
-            onToggle = { task -> complete(task, !task.completed) },
-            onClick = { task ->
-                project = null
-                detail = task
-            },
-        )
-    }
-
     projectEditor?.let { target ->
         val editing = target.project
         ProjectEditorSheet(
@@ -1535,6 +1568,13 @@ fun MainScreen(
         val searchDb = snapshot?.db
         val viewTasks = when {
             searchDb == null -> null
+            project != null -> {
+                val ids = searchDb.projectTaskIds(
+                    project!!.id,
+                    includeCompleted = true,
+                )
+                searchDb.taskViews(includeCompleted = true).filter { it.id in ids }
+            }
             savedPerspective != null -> null
             moreView == MoreView.Flagged -> searchDb.flaggedTasks()
             moreView == MoreView.Completed -> searchDb.completedTasks()
@@ -1553,6 +1593,7 @@ fun MainScreen(
             pending = state.pending,
             viewTaskIds = viewTasks?.map { it.id }?.toSet(),
             viewName = when {
+                project != null -> project?.name
                 savedPerspective != null -> savedPerspective?.name
                 moreView != null -> moreView?.label
                 else -> tab.label
@@ -1565,6 +1606,8 @@ fun MainScreen(
             },
             onProject = { projectItem ->
                 search = false
+                moreView = null
+                savedPerspective = null
                 project = projectItem
                 tab = Tab.Browse
             },
@@ -1628,13 +1671,17 @@ fun MainScreen(
         CaptureSheet(
             initialText = captureInitial,
             attachmentLabel = captureAttachmentLabel,
+            destination = project?.name ?: "Inbox",
             onDismiss = {
                 capture = false
+                captureProject = null
                 captureAttachment = null
                 captureAttachmentLabel = null
             },
             onAdd = { text, fullscreen ->
                 capture = false
+                val captureInto = captureProject
+                captureProject = null
                 val attachment = captureAttachment
                 captureAttachment = null
                 captureAttachmentLabel = null
@@ -1643,7 +1690,7 @@ fun MainScreen(
                 }
                 scope.launch {
                     val task = if (attachment == null) {
-                        repository.capture(text)
+                        repository.capture(text, captureInto)
                     } else {
                         repository.captureShared(text, listOf(attachment)).also { created ->
                             if (created != null) {
@@ -2401,11 +2448,16 @@ private fun Header(
     onSearch: () -> Unit,
     sort: String,
     onSort: ((String) -> Unit)?,
+    group: String = "none",
+    onGroup: ((String) -> Unit)? = null,
+    groupOptions: List<Pair<String, String>> = projectGroupOptions,
+    onBack: (() -> Unit)? = null,
     selecting: Boolean = false,
     onSelect: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var sortMenu by remember { mutableStateOf(false) }
+    var groupMenu by remember { mutableStateOf(false) }
     val colors = flow
     Column(
         modifier = modifier
@@ -2413,10 +2465,17 @@ private fun Header(
             .padding(start = 20.dp, end = 20.dp, top = 0.dp, bottom = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onMenu, modifier = Modifier.size(32.dp)) {
+            IconButton(
+                onClick = onBack ?: onMenu,
+                modifier = Modifier.size(32.dp),
+            ) {
                 Icon(
-                    imageVector = Icons.Rounded.Menu,
-                    contentDescription = "Library",
+                    imageVector = if (onBack != null) {
+                        Icons.AutoMirrored.Rounded.ArrowBack
+                    } else {
+                        Icons.Rounded.Menu
+                    },
+                    contentDescription = if (onBack != null) "Back" else "Library",
                     tint = colors.faint,
                     modifier = Modifier.size(21.dp),
                 )
@@ -2505,6 +2564,76 @@ private fun Header(
                                 onClick = {
                                     sortMenu = false
                                     onSort(option)
+                                },
+                                modifier = Modifier.background(
+                                    if (selected) colors.field else Color.Transparent,
+                                ),
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                }
+            }
+            if (onGroup != null) {
+                Spacer(modifier = Modifier.width(2.dp))
+                Box {
+                    IconButton(
+                        onClick = { groupMenu = true },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Layers,
+                            contentDescription = "Group tasks",
+                            tint = if (group == "none") colors.faint else colors.accent,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = groupMenu,
+                        onDismissRequest = { groupMenu = false },
+                        modifier = Modifier.width(232.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = colors.raised,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 12.dp,
+                        border = BorderStroke(1.dp, colors.hairline),
+                    ) {
+                        Text(
+                            text = "GROUP BY",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.faint,
+                            modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
+                        )
+                        HorizontalDivider(
+                            color = colors.hairline,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        )
+                        groupOptions.forEach { (option, label) ->
+                            val selected = option == group
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (selected) colors.accent else colors.ink,
+                                    )
+                                },
+                                leadingIcon = {
+                                    if (selected) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            tint = colors.accent,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    } else {
+                                        Spacer(modifier = Modifier.size(18.dp))
+                                    }
+                                },
+                                onClick = {
+                                    groupMenu = false
+                                    onGroup(option)
                                 },
                                 modifier = Modifier.background(
                                     if (selected) colors.field else Color.Transparent,
@@ -2893,26 +3022,29 @@ private fun BrowseList(
                             it.folder == entry.folder.id &&
                                 !it.archived && (it.status == "active" || it.status == "on_hold")
                         }
+                        val collapsed = entry.folder.id in collapsedFolders
+                        val toggleFolder = {
+                            collapsedFolders = if (collapsed) {
+                                collapsedFolders - entry.folder.id
+                            } else {
+                                collapsedFolders + entry.folder.id
+                            }
+                        }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable(onClick = toggleFolder)
                                 .padding(
                                     start = 20.dp + (entry.depth * 16).dp,
                                     end = 8.dp,
-                                    top = 14.dp,
-                                    bottom = 6.dp,
+                                    top = 10.dp,
+                                    bottom = 4.dp,
                                 ),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            val collapsed = entry.folder.id in collapsedFolders
                             IconButton(
-                                onClick = {
-                                    collapsedFolders = if (collapsed) {
-                                        collapsedFolders - entry.folder.id
-                                    } else {
-                                        collapsedFolders + entry.folder.id
-                                    }
-                                },
+                                onClick = toggleFolder,
                                 modifier = Modifier.size(28.dp),
                             ) {
                                 Icon(
@@ -3090,77 +3222,125 @@ private fun BrowseList(
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun ProjectSheet(
+private fun ProjectPage(
     project: ProjectDto,
-    tasks: List<TaskView>,
     db: Db?,
-    onDismiss: () -> Unit,
-    onEdit: () -> Unit,
+    sort: String,
+    group: String,
+    showCompleted: Boolean,
+    availableOnly: Boolean,
+    swipeActions: Boolean,
+    pending: Set<String>,
     onToggle: (TaskView) -> Unit,
     onClick: (TaskView) -> Unit,
+    onTrash: (TaskView) -> Unit,
+    onEdit: () -> Unit,
+    onToggleCompleted: (Boolean) -> Unit,
+    onToggleAvailable: (Boolean) -> Unit,
+    onStatus: () -> Unit,
+    onKind: () -> Unit,
+    onReview: () -> Unit,
 ) {
     val colors = flow
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheet,
-        containerColor = colors.background,
-        dragHandle = { SheetHandle() },
-    ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 28.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = project.name,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = colors.ink,
-                    modifier = Modifier.weight(1f).padding(start = 8.dp),
+    val total = remember(db, project.id) {
+        db?.tasks?.values?.count { it.project == project.id && it.trashedAt == null } ?: 0
+    }
+    val done = remember(db, project.id) {
+        db?.tasks?.values?.count {
+            it.project == project.id && it.completed && it.trashedAt == null
+        } ?: 0
+    }
+    val views = remember(db, project.id, showCompleted) {
+        val ids = db?.projectTaskIds(project.id, includeCompleted = showCompleted).orEmpty()
+        db?.taskViews(includeCompleted = showCompleted)
+            ?.filter { it.id in ids }
+            ?.map { it.copy(projectName = null) }
+            .orEmpty()
+    }
+    val children = remember(db, showCompleted) {
+        db?.taskViews(includeCompleted = showCompleted)
+            ?.filter { it.parent != null }
+            ?.map { it.copy(projectName = null) }
+            ?.groupBy { it.parent!! }
+            .orEmpty()
+    }
+    val roots = remember(views) { views.filter { it.parent == null } }
+    val sorted = remember(roots, sort) { sortTasks(roots, sort) }
+    val visible = remember(sorted, availableOnly, db) {
+        if (availableOnly) {
+            sorted.filter { task ->
+                task.blockedByTag == null && db?.sequenceBlocker(task.id) == null
+            }
+        } else {
+            sorted
+        }
+    }
+    val sections = remember(visible, group, sort, db) {
+        when (group) {
+            "none" -> taskSections(visible, sort)
+            "due" -> taskSections(visible, "due")
+            "defer" -> taskSections(visible, "defer")
+            "priority" -> taskSections(visible, "priority")
+            "created" -> taskSections(visible, "created")
+            "completed" -> taskSections(visible, "completed_at")
+            else -> {
+                val map = LinkedHashMap<String, MutableList<TaskView>>()
+                visible.forEach { task ->
+                    map.getOrPut(groupLabel(db, task, group)) { mutableListOf() }.add(task)
+                }
+                map.map { TaskSection(it.key, it.value.toList()) }
+            }
+        }
+    }
+    val statusLabel = project.status
+        .replace('_', ' ')
+        .replaceFirstChar { it.uppercase() }
+    val kindLabel = when (project.kind) {
+        "sequential" -> "Sequential"
+        "single_actions" -> "Single action"
+        else -> "Parallel"
+    }
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 8.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(colors.raised)
+                .border(1.dp, colors.hairline, RoundedCornerShape(16.dp))
+                .padding(14.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = projectIcon(project.icon),
+                    contentDescription = null,
+                    tint = colors.accent,
+                    modifier = Modifier.size(20.dp),
                 )
-                IconButton(onClick = onEdit) {
+                Spacer(modifier = Modifier.width(10.dp))
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ProjectChip(statusLabel, onClick = onStatus)
+                    ProjectChip(kindLabel, onClick = onKind)
+                    ProjectChip("Review in ${project.reviewIntervalDays}d", onClick = onEdit)
+                }
+                IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
                     Icon(
                         imageVector = Icons.Outlined.Edit,
                         contentDescription = "Edit project",
                         tint = colors.faint,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-            val total = db?.tasks?.values?.count { it.project == project.id } ?: tasks.size
-            val done = db?.tasks?.values?.count { it.project == project.id && it.completed } ?: 0
-            val statusLabel = project.status.replaceFirstChar { it.uppercase() }
-            val kindLabel = when (project.kind) {
-                "sequential" -> "Sequential"
-                "single_actions" -> "Single action"
-                else -> "Parallel"
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                listOf(
-                    statusLabel,
-                    kindLabel,
-                    "Review in ${project.reviewIntervalDays}d",
-                ).forEach { chip ->
-                    Text(
-                        text = chip,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.faint,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(percent = 50))
-                            .background(colors.field)
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
             if (total > 0) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     LinearProgressIndicator(
@@ -3181,19 +3361,20 @@ private fun ProjectSheet(
                     text = "Everything is done",
                     style = MaterialTheme.typography.labelMedium,
                     color = colors.faint,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
-            listOfNotNull(
+            val dates = listOfNotNull(
                 project.due?.let { "Due ${it.label()}" },
                 project.defer?.let { "Defer ${it.label()}" },
                 project.planned?.let { "Planned ${it.label()}" },
-            ).takeIf { it.isNotEmpty() }?.let { dates ->
+            )
+            if (dates.isNotEmpty()) {
                 Text(
                     text = dates.joinToString(" · "),
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.faint,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
             if (project.notes.isNotBlank()) {
@@ -3201,16 +3382,101 @@ private fun ProjectSheet(
                     text = project.notes,
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.ink,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            tasks.forEach { task ->
-                TaskRow(task = task, onToggle = { onToggle(task) }, onClick = { onClick(task) })
-                Hairline(Modifier.padding(start = 58.dp))
+            Text(
+                text = "Review now",
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.accent,
+                modifier = Modifier
+                    .padding(top = 10.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(colors.field)
+                    .clickable(onClick = onReview)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ProjectToggle("Completed", showCompleted, onToggleCompleted)
+            ProjectToggle("Available", availableOnly, onToggleAvailable)
+        }
+        if (visible.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (roots.isEmpty()) "Nothing here yet." else "No tasks match.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.faint,
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(bottom = 100.dp),
+            ) {
+                sections.forEach { (label, items) ->
+                    if (label != null) {
+                        item(key = "section-$label") { SectionLabel(label) }
+                    }
+                    items(items, key = { it.id }) { task ->
+                        TaskTreeItem(
+                            task = task,
+                            children = children,
+                            pending = task.id in pending,
+                            swipeActions = swipeActions,
+                            depth = 0,
+                            onToggle = onToggle,
+                            onTrash = onTrash,
+                            onClick = onClick,
+                        )
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun ProjectChip(label: String, onClick: () -> Unit) {
+    val colors = flow
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        color = colors.faint,
+        modifier = Modifier
+            .clip(RoundedCornerShape(percent = 50))
+            .background(colors.field)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    )
+}
+
+@Composable
+private fun ProjectToggle(
+    label: String,
+    selected: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    val colors = flow
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (selected) colors.onAccent else colors.faint,
+        modifier = Modifier
+            .clip(RoundedCornerShape(percent = 50))
+            .background(if (selected) colors.accent else colors.field)
+            .clickable { onChange(!selected) }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    )
 }
 
 @Composable

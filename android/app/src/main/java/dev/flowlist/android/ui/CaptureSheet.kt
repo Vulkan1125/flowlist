@@ -59,6 +59,7 @@ fun CaptureSheet(
     onAdd: (String, Boolean) -> Unit,
     initialText: String = "",
     attachmentLabel: String? = null,
+    destination: String = "Inbox",
 ) {
     val colors = flow
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -236,11 +237,15 @@ fun CaptureSheet(
                     .fillMaxWidth()
                     .height(50.dp),
             ) {
-                Text("Add to Inbox")
+                Text("Add to $destination")
             }
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = "It stays in the Inbox unless you add a date or project. The Mac parses every chip, so nothing is lost.",
+                text = if (destination == "Inbox") {
+                    "It stays in the Inbox unless you add a date or project. The Mac parses every chip, so nothing is lost."
+                } else {
+                    "It goes into $destination. The Mac parses every chip, so nothing is lost."
+                },
                 style = MaterialTheme.typography.labelMedium,
                 color = colors.faint,
                 textAlign = TextAlign.Center,

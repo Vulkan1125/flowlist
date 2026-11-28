@@ -48,6 +48,12 @@ data class AppPreferences(
     val sortBy: String = "manual",
     /// Per-view sort, keyed by tab or MoreView name. Each view keeps its own.
     val viewSorts: Map<String, String> = emptyMap(),
+    /// Per-view grouping, keyed like [viewSorts].
+    val viewGroups: Map<String, String> = emptyMap(),
+    /// Views that show completed tasks. A project is keyed `project:<id>`.
+    val showCompletedViews: Set<String> = emptySet(),
+    /// Views limited to tasks that are available now (not blocked).
+    val availableViews: Set<String> = emptySet(),
     /// Drawer order, by perspective key. Empty means the built-in order.
     val perspectiveOrder: List<String> = emptyList(),
     /// Hide saved views that match nothing right now. Pinned views stay.
@@ -57,23 +63,61 @@ data class AppPreferences(
 
     fun withSort(view: String, value: String): AppPreferences =
         copy(viewSorts = viewSorts + (view to value))
+
+    fun groupFor(view: String): String = viewGroups[view] ?: "none"
+
+    fun withGroup(view: String, value: String): AppPreferences =
+        copy(viewGroups = viewGroups + (view to value))
+
+    fun showsCompleted(view: String): Boolean = view in showCompletedViews
+
+    fun withShowCompleted(view: String, value: Boolean): AppPreferences =
+        copy(
+            showCompletedViews = if (value) {
+                showCompletedViews + view
+            } else {
+                showCompletedViews - view
+            },
+        )
+
+    fun onlyAvailable(view: String): Boolean = view in availableViews
+
+    fun withAvailable(view: String, value: Boolean): AppPreferences =
+        copy(
+            availableViews = if (value) {
+                availableViews + view
+            } else {
+                availableViews - view
+            },
+        )
 }
 
 class PreferencesStore(context: Context) {
     private val prefs = context.getSharedPreferences("flowlist.prefs", Context.MODE_PRIVATE)
 
     fun load(): AppPreferences {
-        val viewSorts = (prefs.getString("view_sorts", null) ?: "")
-            .split('|')
-            .mapNotNull { part ->
-                val split = part.indexOf('=')
-                if (split <= 0) {
-                    null
-                } else {
-                    part.substring(0, split) to part.substring(split + 1)
+        fun settingsMap(key: String): Map<String, String> =
+            (prefs.getString(key, null) ?: "")
+                .split('|')
+                .mapNotNull { part ->
+                    val split = part.indexOf('=')
+                    if (split <= 0) {
+                        null
+                    } else {
+                        part.substring(0, split) to part.substring(split + 1)
+                    }
                 }
-            }
-            .toMap()
+                .toMap()
+        val viewSorts = settingsMap("view_sorts")
+        val viewGroups = settingsMap("view_groups")
+        val showCompletedViews = (prefs.getString("show_completed_views", null) ?: "")
+            .split('|')
+            .filter { it.isNotBlank() }
+            .toSet()
+        val availableViews = (prefs.getString("available_views", null) ?: "")
+            .split('|')
+            .filter { it.isNotBlank() }
+            .toSet()
         return AppPreferences(
             weekStartsMonday = prefs.getBoolean("week_monday", true),
             defaultTimeMinutes = prefs.getInt("default_time", 9 * 60),
@@ -102,6 +146,9 @@ class PreferencesStore(context: Context) {
             trashSwipe = prefs.getString("trash_swipe", "restore_right") ?: "restore_right",
             sortBy = prefs.getString("sort_by", "manual") ?: "manual",
             viewSorts = viewSorts,
+            viewGroups = viewGroups,
+            showCompletedViews = showCompletedViews,
+            availableViews = availableViews,
             perspectiveOrder = (prefs.getString("perspective_order", null) ?: "")
                 .split('|')
                 .filter { it.isNotBlank() },
@@ -137,6 +184,12 @@ class PreferencesStore(context: Context) {
                 "view_sorts",
                 value.viewSorts.entries.joinToString("|") { "${it.key}=${it.value}" },
             )
+            .putString(
+                "view_groups",
+                value.viewGroups.entries.joinToString("|") { "${it.key}=${it.value}" },
+            )
+            .putString("show_completed_views", value.showCompletedViews.joinToString("|"))
+            .putString("available_views", value.availableViews.joinToString("|"))
             .putString("perspective_order", value.perspectiveOrder.joinToString("|"))
             .putBoolean("hide_empty_views", value.hideEmptyViews)
             .apply()
