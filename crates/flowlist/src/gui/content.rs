@@ -23,9 +23,91 @@ use super::drag::{DragForecastResize, DragTask, ghost, resize_ghost};
 use super::icons::{self, Icon};
 use super::widgets::TipExt;
 use super::{
-    EditField, FlowlistApp, FocusArea, View, calendar, group_label, group_slug, sort_label,
+    EditField, FlowlistApp, FocusArea, View, calendar, group_label, group_slug, session, sort_label,
     sort_slug, widgets,
 };
+
+/// The fluid metadata fields the Layout menu can hide. These are the only
+/// checks in the menu: the title, completion circle, subtask chevron and drag
+/// targets stay on every row.
+pub(super) const FLUID_FIELDS: [(&str, &str); 7] = [
+    ("project", "Project"),
+    ("dates", "Dates"),
+    ("tags", "Tags"),
+    ("estimate", "Estimate"),
+    ("checklist", "Checklist"),
+    ("attachments", "Attachments"),
+    ("flag", "Flag"),
+];
+
+/// Every column the one-line layout can show, in paint order. Project, Tags,
+/// Due and Flag are on by default; the rest are opt-in.
+pub(super) const COLUMN_FIELDS: [(&str, &str); 8] = [
+    ("project", "Project"),
+    ("tags", "Tags"),
+    ("due", "Due"),
+    ("defer", "Defer"),
+    ("planned", "Planned"),
+    ("estimate", "Estimate"),
+    ("checklist", "Checklist"),
+    ("flag", "Flag"),
+];
+
+fn layout_label(layout: session::RowLayout) -> &'static str {
+    match layout {
+        session::RowLayout::Fluid => "Fluid",
+        session::RowLayout::Columns => "Columns",
+    }
+}
+
+fn density_label(density: session::Density) -> &'static str {
+    match density {
+        session::Density::Comfortable => "Comfortable",
+        session::Density::Compact => "Compact",
+    }
+}
+
+/// How much of a column's share each field asks for. The title keeps its own
+/// minimum, and the remaining width is divided by these weights so the one
+/// line still fits when the window or inspector changes.
+fn column_weight(id: &str) -> f32 {
+    match id {
+        "project" => 1.3,
+        "tags" => 1.2,
+        "due" | "defer" | "planned" => 0.9,
+        "estimate" => 0.7,
+        "checklist" => 0.7,
+        "flag" => 0.35,
+        _ => 0.8,
+    }
+}
+
+/// Fit the visible columns into the content pane. Every column keeps a
+/// readable minimum when there is room; a very narrow pane scales the whole
+/// set down instead of pushing the title off screen.
+fn column_widths(pane_width: f32, ids: &[&str]) -> Vec<f32> {
+    if ids.is_empty() {
+        return Vec::new();
+    }
+    const ROW_PADDING: f32 = 56.0;
+    const TITLE_MIN: f32 = 190.0;
+    const COLUMN_MIN: f32 = 48.0;
+    const COLUMN_MAX: f32 = 180.0;
+    let usable = (pane_width - ROW_PADDING - TITLE_MIN).max(0.0);
+    let total: f32 = ids.iter().map(|id| column_weight(id)).sum();
+    let mut widths: Vec<f32> = ids
+        .iter()
+        .map(|id| (usable * column_weight(id) / total).clamp(COLUMN_MIN, COLUMN_MAX))
+        .collect();
+    let sum: f32 = widths.iter().sum();
+    if sum > usable && sum > 0.0 {
+        let scale = usable / sum;
+        for width in &mut widths {
+            *width *= scale;
+        }
+    }
+    widths
+}
 
 impl FlowlistApp {
     pub(super) fn render_content(
@@ -1482,6 +1564,7 @@ impl FlowlistApp {
                                                         !this.sort_menu_open && !suppress;
                                                     this.group_menu_open = false;
                                                     this.priority_menu_open = false;
+                                                    this.layout_menu_open = false;
                                                     this.sidebar_menu = None;
                                                     cx.notify();
                                                 })),
@@ -1513,6 +1596,7 @@ impl FlowlistApp {
                                                         !this.group_menu_open && !suppress;
                                                     this.sort_menu_open = false;
                                                     this.priority_menu_open = false;
+                                                    this.layout_menu_open = false;
                                                     this.sidebar_menu = None;
                                                     cx.notify();
                                                 })),
@@ -1520,6 +1604,59 @@ impl FlowlistApp {
                                         .on_children_prepainted(move |bounds, _, _| {
                                             if let Some(bounds) = bounds.first() {
                                                 anchor.set(Some(*bounds));
+                                            }
+                                        })
+                                })
+                                .child({
+                                    let anchor = self.layout_anchor.clone();
+                                    let boxes = self.layout_boxes.clone();
+                                    div()
+                                        .flex_shrink_0()
+                                        .child(
+                                            div()
+                                                .id("layout")
+                                                .flow_tip(
+                                                    self,
+                                                    cx,
+                                                    theme,
+                                                    "Choose the row layout, density and fields",
+                                                )
+                                                .child(widgets::toggle_chip(
+                                                    theme,
+                                                    format!(
+                                                        "Layout · {}",
+                                                        layout_label(self.layout)
+                                                    ),
+                                                    self.layout_menu_open,
+                                                ))
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    let suppress = std::mem::take(
+                                                        &mut this.layout_closed_on_up,
+                                                    );
+                                                    this.layout_boxes
+                                                        .borrow_mut()
+                                                        .retain(|key, _| !key.contains(':'));
+                                                    this.layout_menu_open =
+                                                        !this.layout_menu_open && !suppress;
+                                                    this.sort_menu_open = false;
+                                                    this.group_menu_open = false;
+                                                    this.priority_menu_open = false;
+                                                    this.sidebar_menu = None;
+                                                    cx.notify();
+                                                })),
+                                        )
+                                        .on_children_prepainted(move |bounds, _, _| {
+                                            if let Some(bounds) = bounds.first() {
+                                                anchor.set(Some(*bounds));
+                                                boxes.borrow_mut().insert(
+                                                    "chip".to_string(),
+                                                    [
+                                                        f32::from(bounds.origin.x),
+                                                        f32::from(bounds.origin.y),
+                                                        f32::from(bounds.size.width),
+                                                        f32::from(bounds.size.height),
+                                                    ],
+                                                );
                                             }
                                         })
                                 })
@@ -1570,6 +1707,7 @@ impl FlowlistApp {
                                                         !this.priority_menu_open && !suppress;
                                                     this.sort_menu_open = false;
                                                     this.group_menu_open = false;
+                                                    this.layout_menu_open = false;
                                                     this.sidebar_menu = None;
                                                     cx.notify();
                                                 })),
@@ -1907,6 +2045,211 @@ impl FlowlistApp {
             );
         }
         menu
+    }
+
+    /// Layout, density and the field/column checkboxes. The menu stays open
+    /// while choices change so a view can be tuned in one visit.
+    pub(super) fn render_layout_menu(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let theme = self.theme;
+        // The chip's box is measured once and stays; menu keys are cleared
+        // when the chip opens the menu so a probe cannot read a stale row.
+        let boxes = self.layout_boxes.clone();
+        let section = |label: &'static str| {
+            div()
+                .px_2()
+                .pt_2()
+                .pb_1()
+                .text_xs()
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(theme.text_faint)
+                .child(label)
+        };
+        let mut menu = div()
+            .w(px(340.))
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg();
+        menu = menu
+            .child(section("Layout"))
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .px_2()
+                    .pb_1()
+                    .children([session::RowLayout::Fluid, session::RowLayout::Columns].map(
+                        |layout| {
+                            let active = self.layout == layout;
+                            let slug = layout.slug();
+                            let key = format!("mode:{slug}");
+                            let sink = boxes.clone();
+                            div()
+                                .flex_1()
+                                .on_children_prepainted(move |bounds, _, _| {
+                                    if let Some(bounds) = bounds.first() {
+                                        sink.borrow_mut().insert(
+                                            key.clone(),
+                                            [
+                                                f32::from(bounds.origin.x),
+                                                f32::from(bounds.origin.y),
+                                                f32::from(bounds.size.width),
+                                                f32::from(bounds.size.height),
+                                            ],
+                                        );
+                                    }
+                                })
+                                .id(super::sid(format!("layout-mode:{slug}")))
+                                .child(widgets::toggle_chip(theme, layout_label(layout), active))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.choose_layout(layout, cx)
+                                }))
+                        },
+                    )),
+            )
+            .child(section("Density"))
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .px_2()
+                    .pb_2()
+                    .children([session::Density::Comfortable, session::Density::Compact].map(
+                        |density| {
+                            let active = self.density == density;
+                            let slug = density.slug();
+                            let key = format!("density:{slug}");
+                            let sink = boxes.clone();
+                            div()
+                                .flex_1()
+                                .on_children_prepainted(move |bounds, _, _| {
+                                    if let Some(bounds) = bounds.first() {
+                                        sink.borrow_mut().insert(
+                                            key.clone(),
+                                            [
+                                                f32::from(bounds.origin.x),
+                                                f32::from(bounds.origin.y),
+                                                f32::from(bounds.size.width),
+                                                f32::from(bounds.size.height),
+                                            ],
+                                        );
+                                    }
+                                })
+                                .id(super::sid(format!("layout-density:{slug}")))
+                                .child(widgets::toggle_chip(theme, density_label(density), active))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.choose_density(density, cx)
+                                }))
+                        },
+                    )),
+            )
+            .child(div().mx_2().h(px(1.)).bg(theme.border_soft));
+        let fields = {
+            let mut column = div().flex_1().flex().flex_col().gap(px(1.));
+            column = column.child(section("Fields · Fluid"));
+            for (id, label) in FLUID_FIELDS {
+                let visible = !self.hidden_fields.contains(id);
+                let key = format!("field:{id}");
+                let sink = boxes.clone();
+                column = column.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .mx_1()
+                        .px_1()
+                        .py_1()
+                        .rounded_sm()
+                        .text_xs()
+                        .text_color(if visible {
+                            theme.text
+                        } else {
+                            theme.text_faint
+                        })
+                        .cursor_pointer()
+                        .hover(|style| style.bg(theme.hover))
+                        .on_children_prepainted(move |bounds, _, _| {
+                            if let Some(bounds) = bounds.first() {
+                                sink.borrow_mut().insert(
+                                    key.clone(),
+                                    [
+                                        f32::from(bounds.origin.x),
+                                        f32::from(bounds.origin.y),
+                                        f32::from(bounds.size.width),
+                                        f32::from(bounds.size.height),
+                                    ],
+                                );
+                            }
+                        })
+                        .id(super::sid(format!("layout-field:{id}")))
+                        .child(layout_check(theme, visible))
+                        .child(label)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.toggle_hidden_field(id, cx)
+                        })),
+                );
+            }
+            column
+        };
+        let columns = {
+            let mut column = div().flex_1().flex().flex_col().gap(px(1.));
+            column = column.child(section("Columns"));
+            for (id, label) in COLUMN_FIELDS {
+                let visible = self.columns.contains(id);
+                let key = format!("column:{id}");
+                let sink = boxes.clone();
+                column = column.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .mx_1()
+                        .px_1()
+                        .py_1()
+                        .rounded_sm()
+                        .text_xs()
+                        .text_color(if visible {
+                            theme.text
+                        } else {
+                            theme.text_faint
+                        })
+                        .cursor_pointer()
+                        .hover(|style| style.bg(theme.hover))
+                        .on_children_prepainted(move |bounds, _, _| {
+                            if let Some(bounds) = bounds.first() {
+                                sink.borrow_mut().insert(
+                                    key.clone(),
+                                    [
+                                        f32::from(bounds.origin.x),
+                                        f32::from(bounds.origin.y),
+                                        f32::from(bounds.size.width),
+                                        f32::from(bounds.size.height),
+                                    ],
+                                );
+                            }
+                        })
+                        .id(super::sid(format!("layout-column:{id}")))
+                        .child(layout_check(theme, visible))
+                        .child(label)
+                        .on_click(cx.listener(move |this, _, _, cx| this.toggle_column(id, cx))),
+                );
+            }
+            column
+        };
+        menu.child(
+            div()
+                .flex()
+                .items_start()
+                .gap_2()
+                .pb_1()
+                .child(fields)
+                .child(columns),
+        )
     }
 
     fn render_capture_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -2905,6 +3248,18 @@ impl FlowlistApp {
         row
     }
 
+    /// True when a fluid metadata field is switched on. The hidable set is
+    /// `FLUID_FIELDS`; the title, circle, chevron and drag targets never ask.
+    fn fluid_field_visible(&self, id: &str) -> bool {
+        !self.hidden_fields.contains(id)
+    }
+
+    /// Width of the middle pane, used to fit the Columns layout.
+    fn content_pane_width(&self) -> f32 {
+        let window = self.window_size.map(|(width, _)| width).unwrap_or(1254.0);
+        (window - 240.0 - if self.show_inspector { 320.0 } else { 0.0 }).max(320.0)
+    }
+
     fn render_task_row(
         &self,
         row: &TaskRow,
@@ -3000,6 +3355,29 @@ impl FlowlistApp {
         let root_id = id.clone();
         let drop_root_id = id.clone();
         let row_depth = row.depth;
+        // A compact row trims the air, not the content. Nothing here changes
+        // the title, circle, chevron or drag targets.
+        let compact = self.density == session::Density::Compact;
+        let fluid = self.layout == session::RowLayout::Fluid;
+        let show_project = self.fluid_field_visible("project");
+        let show_dates = self.fluid_field_visible("dates");
+        let show_tags = self.fluid_field_visible("tags");
+        let show_estimate = self.fluid_field_visible("estimate");
+        let show_checklist = self.fluid_field_visible("checklist");
+        let show_attachments = self.fluid_field_visible("attachments");
+        let show_flag = self.fluid_field_visible("flag");
+        let project_meta = show_project.then(|| project.clone()).flatten();
+        let tags_meta = if show_tags { tags.clone() } else { Vec::new() };
+        let estimate_meta = show_estimate.then_some(estimate).flatten();
+        let planned_meta = show_dates.then_some(planned).flatten();
+        let due_meta = show_dates.then_some(due).flatten();
+        let defer_meta = show_dates
+            .then_some(defer)
+            .flatten()
+            .filter(|stamp| stamp.at > now());
+        let repeat_meta = show_dates
+            .then(|| repeat_label(db, &id))
+            .flatten();
         let title_line = div()
             .flex_shrink()
             .min_w_0()
@@ -3017,7 +3395,7 @@ impl FlowlistApp {
             // Right-edge metadata reads in a fixed order: what is
             // attached, where it lives, what it is tagged, how long it
             // takes, when it is due, then the softer signals.
-            .when(subtask_visible > 0, |this| {
+            .when(subtask_visible > 0 && show_checklist, |this| {
                 this.child(
                     div()
                         .text_xs()
@@ -3025,7 +3403,7 @@ impl FlowlistApp {
                         .child(format!("[{subtask_done}/{subtask_visible}]")),
                 )
             })
-            .when(attachment_count > 0, |this| {
+            .when(attachment_count > 0 && show_attachments, |this| {
                 this.child(
                     div()
                         .id(super::sid(format!("attachments:{}", row.id)))
@@ -3060,18 +3438,18 @@ impl FlowlistApp {
                         .child(attachment_count.to_string()),
                 )
             })
-            .when_some(project, |this, project| {
+            .when_some(project_meta, |this, project| {
                 this.child(div().text_xs().text_color(theme.text_faint).child(project))
             })
-            .children(tags.into_iter().map(|tag| widgets::tag_chip(theme, tag)))
-            .when_some(estimate, |this, minutes| {
+            .children(tags_meta.into_iter().map(|tag| widgets::tag_chip(theme, tag)))
+            .when_some(estimate_meta, |this, minutes| {
                 this.child(widgets::chip(
                     theme,
                     format_duration(minutes),
                     theme.text_faint,
                 ))
             })
-            .when_some(planned, |this, stamp| {
+            .when_some(planned_meta, |this, stamp| {
                 let label = human_date(&stamp, now());
                 this.child(
                     div()
@@ -3086,7 +3464,7 @@ impl FlowlistApp {
                         .child(label),
                 )
             })
-            .when_some(due, |this, stamp| {
+            .when_some(due_meta, |this, stamp| {
                 let label = human_date(&stamp, now());
                 this.child(
                     div()
@@ -3101,7 +3479,7 @@ impl FlowlistApp {
                         .child(label),
                 )
             })
-            .when_some(defer.filter(|stamp| stamp.at > now()), |this, stamp| {
+            .when_some(defer_meta, |this, stamp| {
                 this.child(widgets::chip_with_icon(
                     theme,
                     Icon::DeferDate,
@@ -3109,7 +3487,7 @@ impl FlowlistApp {
                     theme.text_faint,
                 ))
             })
-            .when_some(repeat_label(db, &id), |this, label| {
+            .when_some(repeat_meta, |this, label| {
                 this.child(
                     div()
                         .flex()
@@ -3256,7 +3634,10 @@ impl FlowlistApp {
                 }))
             }
         };
-        let first_line = div()
+        // The circle, title and chevron are shared by both layouts. The
+        // chevron belongs to the title, so it comes first; the fluid flag
+        // follows it before the row's spare space.
+        let leading = div()
             .flex()
             .items_center()
             .gap_2()
@@ -3266,44 +3647,138 @@ impl FlowlistApp {
             .overflow_hidden()
             .child(checkbox)
             .child(title_line)
-            // The chevron belongs to the title, so it comes first; the flag
-            // follows it before the row's spare space.
-            .when_some(disclosure, |this, disclosure| this.child(disclosure))
-            .child(flag)
-            .child(div().flex_grow());
-        let content = div()
-            .flex_1()
-            .min_w_0()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .justify_end()
-            .gap_2()
-            .pl_2()
-            .pr_4()
-            .bg(if root_after {
-                theme.accent_soft
-            } else if selected {
-                theme.selection
-            } else {
-                theme.clear
-            })
-            .cursor_pointer()
-            .hover(|style| style.bg(theme.hover))
-            .border_b_1()
-            .border_color(theme.border_soft)
-            .child(first_line)
-            .child(meta_line);
+            .when_some(disclosure, |this, disclosure| this.child(disclosure));
+        let content = if fluid {
+            let first_line = leading
+                .when(show_flag, |this| this.child(flag))
+                .child(div().flex_grow());
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_end()
+                .gap_2()
+                .pl_2()
+                .pr_4()
+                .bg(if root_after {
+                    theme.accent_soft
+                } else if selected {
+                    theme.selection
+                } else {
+                    theme.clear
+                })
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover))
+                .border_b_1()
+                .border_color(theme.border_soft)
+                .child(first_line)
+                .child(meta_line)
+        } else {
+            let ids: Vec<&str> = COLUMN_FIELDS
+                .iter()
+                .map(|(id, _)| *id)
+                .filter(|id| self.columns.contains(*id))
+                .collect();
+            let widths = column_widths(self.content_pane_width(), &ids);
+            let mut line = leading.child(div().flex_grow());
+            let mut flag = Some(flag);
+            for (index, id) in ids.iter().enumerate() {
+                let mut cell = div()
+                    .w(px(widths.get(index).copied().unwrap_or(80.0)))
+                    .flex_shrink_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_xs()
+                    .text_color(theme.text_faint);
+                cell = match *id {
+                    "project" => cell.child(project.clone().unwrap_or_default()),
+                    "tags" => {
+                        let text = tags
+                            .iter()
+                            .map(|tag| format!("#{tag}"))
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        cell.child(text)
+                    }
+                    "due" => match due {
+                        Some(stamp) => {
+                            let label = human_date(&stamp, now());
+                            cell.flex()
+                                .items_center()
+                                .gap_1()
+                                .text_color(due_color)
+                                .child(icons::icon(Icon::DueDate, 11.0, due_color))
+                                .child(label)
+                        }
+                        None => cell,
+                    },
+                    "defer" => match defer.filter(|stamp| stamp.at > now()) {
+                        Some(stamp) => cell
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(icons::icon(Icon::DeferDate, 11.0, theme.text_faint))
+                            .child(human_date(&stamp, now())),
+                        None => cell,
+                    },
+                    "planned" => match planned {
+                        Some(stamp) => cell
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(icons::icon(Icon::PlannedDate, 11.0, theme.text_faint))
+                            .child(human_date(&stamp, now())),
+                        None => cell,
+                    },
+                    "estimate" => match estimate {
+                        Some(minutes) => cell.child(format_duration(minutes)),
+                        None => cell,
+                    },
+                    "checklist" => {
+                        if subtask_visible > 0 {
+                            cell.child(format!("[{subtask_done}/{subtask_visible}]"))
+                        } else {
+                            cell
+                        }
+                    }
+                    "flag" => cell.when_some(flag.take(), |this, flag| this.child(flag)),
+                    _ => cell,
+                };
+                line = line.child(cell);
+            }
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .gap_2()
+                .pl_2()
+                .pr_4()
+                .bg(if root_after {
+                    theme.accent_soft
+                } else if selected {
+                    theme.selection
+                } else {
+                    theme.clear
+                })
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover))
+                .border_b_1()
+                .border_color(theme.border_soft)
+                .child(line)
+        };
         let base = div()
             .id(super::sid(format!("task:{}", id)))
             .group(row_group.clone())
             .flex()
             .items_start()
             .gap_2()
-            .min_h(px(32.))
+            .min_h(px(if compact { 24. } else { 32. }))
             .w_full()
             .pl(px(18.0 + if indented { 36.0 } else { 0.0 } + row.depth as f32 * 18.0))
-            .py_1()
+            .py(px(if compact { 1. } else { 4. }))
             .text_sm()
             .cursor_pointer()
             .when(on_hold, |this| this.opacity(0.55))
@@ -3895,6 +4370,23 @@ fn repeat_label(db: &flowlist_core::db::Db, id: &TaskId) -> Option<String> {
 /// The project label a row shows. A project view already names its project,
 /// and a folder view already names its folder, so only the remaining path is
 /// worth repeating there.
+/// The small checked square used by the Layout menu's field and column rows.
+fn layout_check(theme: super::theme::Theme, checked: bool) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(13.))
+        .rounded_sm()
+        .border_1()
+        .border_color(if checked { theme.accent } else { theme.border })
+        .bg(if checked { theme.accent } else { theme.clear })
+        .when(checked, |this| {
+            this.child(icons::icon(Icon::Check, 9.0, theme.raised))
+        })
+}
+
 fn row_project_label(db: &Db, view: &View, project: Option<&ProjectId>) -> Option<String> {
     let project = project?;
     match view {
@@ -3908,6 +4400,32 @@ fn row_project_label(db: &Db, view: &View, project: Option<&ProjectId>) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn columns_fit_the_pane_and_keep_the_title_room() {
+        // Default four columns at the working window (no inspector).
+        let widths = column_widths(694.0, &["project", "tags", "due", "flag"]);
+        assert_eq!(widths.len(), 4);
+        assert!(widths.iter().all(|width| *width > 0.0));
+        // The title keeps its minimum before the columns share the rest.
+        assert!(widths.iter().sum::<f32>() <= 694.0 - 56.0 - 190.0 + 0.01);
+
+        // Turning on every column still fits; the whole set scales rather
+        // than pushing the title off screen.
+        let all: Vec<&str> = COLUMN_FIELDS.iter().map(|(id, _)| *id).collect();
+        let widths = column_widths(694.0, &all);
+        assert_eq!(widths.len(), all.len());
+        assert!(widths.iter().all(|width| *width > 0.0));
+        assert!(widths.iter().sum::<f32>() <= 694.0 - 56.0 - 190.0 + 0.01);
+
+        // A narrow inspector-width pane stays finite and never negative.
+        let widths = column_widths(320.0, &["project", "tags", "due", "flag"]);
+        assert!(widths.iter().all(|width| *width >= 0.0));
+        assert!(widths.iter().sum::<f32>() <= 74.0 + 0.01);
+
+        // No columns means the title gets the whole line.
+        assert!(column_widths(694.0, &[]).is_empty());
+    }
 
     #[test]
     fn folder_rows_leave_the_project_to_their_heading() {

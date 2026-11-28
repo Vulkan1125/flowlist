@@ -216,9 +216,71 @@ fn folder_is_ancestor(db: &Db, folder: &FolderId, descendant: &FolderId) -> bool
     false
 }
 
+/// How a view lays out its task rows. Fluid keeps today's wrapped rows;
+/// Columns puts every task on one line with fitted metadata columns.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RowLayout {
+    #[default]
+    Fluid,
+    Columns,
+}
+
+impl RowLayout {
+    pub fn slug(self) -> &'static str {
+        match self {
+            RowLayout::Fluid => "fluid",
+            RowLayout::Columns => "columns",
+        }
+    }
+
+    pub fn from_slug(slug: &str) -> Option<Self> {
+        match slug {
+            "fluid" => Some(RowLayout::Fluid),
+            "columns" => Some(RowLayout::Columns),
+            _ => None,
+        }
+    }
+}
+
+/// Row spacing inside a view. Comfortable is the original list; compact trims
+/// the vertical air without changing the content.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Density {
+    #[default]
+    Comfortable,
+    Compact,
+}
+
+impl Density {
+    pub fn slug(self) -> &'static str {
+        match self {
+            Density::Comfortable => "comfortable",
+            Density::Compact => "compact",
+        }
+    }
+
+    pub fn from_slug(slug: &str) -> Option<Self> {
+        match slug {
+            "comfortable" => Some(Density::Comfortable),
+            "compact" => Some(Density::Compact),
+            _ => None,
+        }
+    }
+}
+
+/// The columns a view shows when nothing else is chosen. Kept here so the
+/// session defaults and the GUI's column menu cannot drift apart.
+pub const DEFAULT_COLUMNS: &[&str] = &["project", "tags", "due", "flag"];
+
+pub fn default_columns() -> Vec<String> {
+    DEFAULT_COLUMNS.iter().map(|id| id.to_string()).collect()
+}
+
 /// Sorting, grouping and filters remembered per perspective. The choice lives
 /// in the session so built-in and saved views behave alike.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ViewOptions {
     #[serde(default)]
     pub sort: Option<String>,
@@ -236,6 +298,36 @@ pub struct ViewOptions {
     /// list.
     #[serde(default, alias = "hide_overdue")]
     pub hide_past: Option<bool>,
+    /// Fluid or one-line columns, remembered for this view.
+    #[serde(default)]
+    pub layout: RowLayout,
+    #[serde(default)]
+    pub density: Density,
+    /// Fluid metadata fields the user has checked off. Title, completion,
+    /// the subtask chevron and drag targets are never hidden.
+    #[serde(default)]
+    pub hidden_fields: BTreeSet<String>,
+    /// Visible column ids in the Columns layout. Missing means the original
+    /// Project / Tags / Due / Flag set.
+    #[serde(default = "default_columns")]
+    pub columns: Vec<String>,
+}
+
+impl Default for ViewOptions {
+    fn default() -> Self {
+        Self {
+            sort: None,
+            group: None,
+            show_completed: None,
+            only_available: None,
+            priority: None,
+            hide_past: None,
+            layout: RowLayout::Fluid,
+            density: Density::Comfortable,
+            hidden_fields: BTreeSet::new(),
+            columns: default_columns(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -523,6 +615,10 @@ mod tests {
                     only_available: Some(true),
                     priority: Some("high".to_string()),
                     hide_past: Some(true),
+                    layout: RowLayout::Columns,
+                    density: Density::Compact,
+                    hidden_fields: BTreeSet::from(["project".to_string()]),
+                    columns: vec!["project".to_string(), "due".to_string()],
                 },
             )]),
             ..Session::default()
@@ -541,6 +637,25 @@ mod tests {
             restored.view_options["flagged"].priority.as_deref(),
             Some("high")
         );
+        assert_eq!(
+            restored.view_options["flagged"].layout,
+            RowLayout::Columns
+        );
+        assert_eq!(restored.view_options["flagged"].density, Density::Compact);
+        assert_eq!(
+            restored.view_options["flagged"].hidden_fields,
+            BTreeSet::from(["project".to_string()])
+        );
+        assert_eq!(
+            restored.view_options["flagged"].columns,
+            vec!["project".to_string(), "due".to_string()]
+        );
+        // A record written before the row layout existed keeps today's rows.
+        let legacy: ViewOptions = serde_json::from_str("{}").unwrap();
+        assert_eq!(legacy.layout, RowLayout::Fluid);
+        assert_eq!(legacy.density, Density::Comfortable);
+        assert!(legacy.hidden_fields.is_empty());
+        assert_eq!(legacy.columns, default_columns());
     }
 
     #[test]

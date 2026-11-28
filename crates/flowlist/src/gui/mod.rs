@@ -395,6 +395,39 @@ fn menu_position(
     )
 }
 
+/// Everything a view restores when it becomes active. Kept as a pure mapping
+/// so the per-view switch can be tested without building a window.
+struct RestoredViewState {
+    sort: Option<SortBy>,
+    group: Option<GroupBy>,
+    show_completed: bool,
+    only_available: bool,
+    hide_past: bool,
+    priority: Option<Priority>,
+    layout: session::RowLayout,
+    density: session::Density,
+    hidden_fields: BTreeSet<String>,
+    columns: Vec<String>,
+}
+
+fn restored_view_state(view: &View, options: &session::ViewOptions) -> RestoredViewState {
+    RestoredViewState {
+        sort: options.sort.as_deref().and_then(sort_from_slug),
+        group: options.group.as_deref().and_then(group_from_slug),
+        show_completed: options.show_completed.unwrap_or(false),
+        only_available: options.only_available.unwrap_or(false),
+        hide_past: options.hide_past.unwrap_or(false),
+        priority: effective_priority_filter(
+            view,
+            options.priority.as_deref().and_then(Priority::from_slug),
+        ),
+        layout: options.layout,
+        density: options.density,
+        hidden_fields: options.hidden_fields.clone(),
+        columns: options.columns.clone(),
+    }
+}
+
 /// `1 task` / `3 tasks`. Prose in the header and toasts reads as words
 /// rather than as a template with an optional bracket.
 fn plural(count: usize, one: &str, many: &str) -> String {
@@ -675,6 +708,7 @@ pub struct FlowlistApp {
     sort_menu_open: bool,
     group_menu_open: bool,
     priority_menu_open: bool,
+    layout_menu_open: bool,
     /// Where the header chips painted on the last frame. The menus are root
     /// overlays positioned from these bounds, so their hitboxes line up with
     /// what is on screen (anchored/deferred paint offsets do not move
@@ -684,6 +718,10 @@ pub struct FlowlistApp {
     hide_past_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     group_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     priority_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    layout_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// Layout menu rows measured for the GUI probe, keyed `chip`,
+    /// `mode:fluid`, `density:compact`, `field:project`, `column:due`.
+    layout_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// The first text field in the open sheet, measured so a GUI probe can
     /// click and drag inside it.
     modal_field_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
@@ -779,6 +817,7 @@ pub struct FlowlistApp {
     sort_closed_on_up: bool,
     group_closed_on_up: bool,
     priority_closed_on_up: bool,
+    layout_closed_on_up: bool,
     /// Highlighted completion in the project and tag fields.
     suggestion_index: usize,
     /// True once the user moved through the project dropdown with the arrow
@@ -917,6 +956,12 @@ pub struct FlowlistApp {
     suppressed_tip: Option<SharedString>,
     sort: Option<SortBy>,
     group: Option<GroupBy>,
+    /// Row layout for the active view, plus the fields and columns it shows.
+    layout: session::RowLayout,
+    density: session::Density,
+    hidden_fields: BTreeSet<String>,
+    /// Visible column ids; the row paints them in `COLUMN_FIELDS` order.
+    columns: BTreeSet<String>,
     scroll: ScrollHandle,
     sidebar_scroll: ScrollHandle,
     inspector_scroll: ScrollHandle,
@@ -1206,10 +1251,13 @@ impl FlowlistApp {
             sort_menu_open: false,
             group_menu_open: false,
             priority_menu_open: false,
+            layout_menu_open: false,
             sort_anchor: Rc::new(Cell::new(None)),
             hide_past_anchor: Rc::new(Cell::new(None)),
             group_anchor: Rc::new(Cell::new(None)),
             priority_anchor: Rc::new(Cell::new(None)),
+            layout_anchor: Rc::new(Cell::new(None)),
+            layout_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             modal_field_anchor: Rc::new(Cell::new(None)),
             field_editor_anchor: Rc::new(Cell::new(None)),
             checklist_add_anchor: Rc::new(Cell::new(None)),
@@ -1240,6 +1288,7 @@ impl FlowlistApp {
             sort_closed_on_up: false,
             group_closed_on_up: false,
             priority_closed_on_up: false,
+            layout_closed_on_up: false,
             suggestion_index: 0,
             suggestion_engaged: false,
             selected,
@@ -1340,6 +1389,13 @@ impl FlowlistApp {
             suppressed_tip: None,
             sort,
             group,
+            layout: session::RowLayout::Fluid,
+            density: session::Density::Comfortable,
+            hidden_fields: BTreeSet::new(),
+            columns: session::DEFAULT_COLUMNS
+                .iter()
+                .map(|id| id.to_string())
+                .collect(),
             scroll: ScrollHandle::new(),
             sidebar_scroll: ScrollHandle::new(),
             inspector_scroll: ScrollHandle::new(),
@@ -1866,6 +1922,10 @@ impl FlowlistApp {
             only_available: Some(self.only_available),
             priority,
             hide_past: Some(self.hide_past),
+            layout: self.layout,
+            density: self.density,
+            hidden_fields: self.hidden_fields.clone(),
+            columns: self.columns.iter().cloned().collect(),
         }
     }
 
@@ -1883,15 +1943,17 @@ impl FlowlistApp {
             .get(&self.view.key())
             .cloned()
             .unwrap_or_default();
-        self.sort = options.sort.as_deref().and_then(sort_from_slug);
-        self.group = options.group.as_deref().and_then(group_from_slug);
-        self.show_completed = options.show_completed.unwrap_or(false);
-        self.only_available = options.only_available.unwrap_or(false);
-        self.hide_past = options.hide_past.unwrap_or(false);
-        self.priority_filter = effective_priority_filter(
-            &self.view,
-            options.priority.as_deref().and_then(Priority::from_slug),
-        );
+        let state = restored_view_state(&self.view, &options);
+        self.sort = state.sort;
+        self.group = state.group;
+        self.show_completed = state.show_completed;
+        self.only_available = state.only_available;
+        self.hide_past = state.hide_past;
+        self.priority_filter = state.priority;
+        self.layout = state.layout;
+        self.density = state.density;
+        self.hidden_fields = state.hidden_fields;
+        self.columns = state.columns.into_iter().collect();
     }
 
     fn prune_selection(&mut self) {
@@ -2461,6 +2523,7 @@ impl FlowlistApp {
         self.sort_menu_open = false;
         self.group_menu_open = false;
         self.priority_menu_open = false;
+        self.layout_menu_open = false;
         self.sidebar_menu = None;
         self.date_picker = None;
         self.quick_open = Some(QuickOpenState {
@@ -4075,6 +4138,7 @@ impl FlowlistApp {
         self.sort_menu_open = false;
         self.group_menu_open = false;
         self.priority_menu_open = false;
+        self.layout_menu_open = false;
         self.sidebar_menu = None;
         self.focus = FocusArea::Content;
         cx.notify();
@@ -4817,6 +4881,7 @@ impl FlowlistApp {
         self.sort_menu_open = false;
         self.group_menu_open = false;
         self.priority_menu_open = false;
+        self.layout_menu_open = false;
         self.remember_view_options();
         self.save_session();
         cx.notify();
@@ -4827,6 +4892,45 @@ impl FlowlistApp {
         self.group_menu_open = false;
         self.sort_menu_open = false;
         self.priority_menu_open = false;
+        self.layout_menu_open = false;
+        self.remember_view_options();
+        self.save_session();
+        cx.notify();
+    }
+
+    /// The Layout menu stays open while the user tries modes, density and
+    /// checkboxes, so every choice saves and repaints in place.
+    fn choose_layout(&mut self, layout: session::RowLayout, cx: &mut Context<Self>) {
+        self.layout = layout;
+        self.remember_view_options();
+        self.save_session();
+        cx.notify();
+    }
+
+    fn choose_density(&mut self, density: session::Density, cx: &mut Context<Self>) {
+        self.density = density;
+        self.remember_view_options();
+        self.save_session();
+        cx.notify();
+    }
+
+    /// Check a fluid field off (hide it) or on (show it). The title, the
+    /// completion circle, the subtask chevron and drag targets are not in the
+    /// hidable set.
+    fn toggle_hidden_field(&mut self, id: &str, cx: &mut Context<Self>) {
+        if !self.hidden_fields.remove(id) {
+            self.hidden_fields.insert(id.to_string());
+        }
+        self.remember_view_options();
+        self.save_session();
+        cx.notify();
+    }
+
+    /// Show or hide one Columns layout column.
+    fn toggle_column(&mut self, id: &str, cx: &mut Context<Self>) {
+        if !self.columns.remove(id) {
+            self.columns.insert(id.to_string());
+        }
         self.remember_view_options();
         self.save_session();
         cx.notify();
@@ -4837,6 +4941,7 @@ impl FlowlistApp {
     fn choose_priority_filter(&mut self, priority: Option<Priority>, cx: &mut Context<Self>) {
         self.priority_filter = priority;
         self.priority_menu_open = false;
+        self.layout_menu_open = false;
         self.sort_menu_open = false;
         self.group_menu_open = false;
         if let View::Priority(_) = self.view {
@@ -5383,6 +5488,7 @@ impl FlowlistApp {
         self.sort_menu_open = false;
         self.group_menu_open = false;
         self.priority_menu_open = false;
+        self.layout_menu_open = false;
         self.sidebar_menu = None;
         self.focus = FocusArea::Modal;
         // A sheet belongs to the window rather than a field session, so the
@@ -7052,6 +7158,7 @@ impl FlowlistApp {
                 if self.sort_menu_open
                     || self.group_menu_open
                     || self.priority_menu_open
+                    || self.layout_menu_open
                     || self.notification_menu.is_some()
                     || self.repeat_menu.is_some()
                     || self.sidebar_menu.is_some()
@@ -7059,6 +7166,7 @@ impl FlowlistApp {
                     self.sort_menu_open = false;
                     self.group_menu_open = false;
                     self.priority_menu_open = false;
+                    self.layout_menu_open = false;
                     self.notification_menu = None;
                     self.repeat_menu = None;
                     self.sidebar_menu = None;
@@ -7194,6 +7302,7 @@ impl FlowlistApp {
                 if self.sort_menu_open
                     || self.group_menu_open
                     || self.priority_menu_open
+                    || self.layout_menu_open
                     || self.notification_menu.is_some()
                     || self.repeat_menu.is_some()
                     || self.sidebar_menu.is_some()
@@ -7201,6 +7310,7 @@ impl FlowlistApp {
                     self.sort_menu_open = false;
                     self.group_menu_open = false;
                     self.priority_menu_open = false;
+                    self.layout_menu_open = false;
                     self.notification_menu = None;
                     self.repeat_menu = None;
                     self.sidebar_menu = None;
@@ -8399,12 +8509,19 @@ impl FlowlistApp {
             "follow_system": self.follow_system,
             "sort": self.sort.map(sort_slug),
             "group": self.group.map(group_slug),
+            "layout": self.layout.slug(),
+            "density": self.density.slug(),
+            "hidden_fields": self.hidden_fields.iter().cloned().collect::<Vec<_>>(),
+            "columns": self.columns.iter().cloned().collect::<Vec<_>>(),
             "sort_menu": self.sort_menu_open,
             "group_menu": self.group_menu_open,
             "priority_menu": self.priority_menu_open,
+            "layout_menu": self.layout_menu_open,
             "sort_anchor": self.sort_anchor.get().is_some(),
             "group_anchor": self.group_anchor.get().is_some(),
             "priority_anchor": self.priority_anchor.get().is_some(),
+            "layout_anchor": self.layout_anchor.get().is_some(),
+            "layout_boxes": self.layout_boxes.borrow().clone(),
             "due_anchor": anchor(self.due_anchor.get()),
             "defer_anchor": anchor(self.defer_anchor.get()),
             "planned_anchor": anchor(self.planned_anchor.get()),
@@ -9633,6 +9750,7 @@ impl Render for FlowlistApp {
                     this.sort_closed_on_up = false;
                     this.group_closed_on_up = false;
                     this.priority_closed_on_up = false;
+                    this.layout_closed_on_up = false;
                     this.suppress_hover_tip();
                     window.focus(&this.focus_handle);
                     cx.notify();
@@ -9667,6 +9785,7 @@ impl Render for FlowlistApp {
         if self.sort_menu_open
             || self.group_menu_open
             || self.priority_menu_open
+            || self.layout_menu_open
             || self.notification_menu.is_some()
             || self.repeat_menu.is_some()
             || self.sidebar_menu.is_some()
@@ -9688,9 +9807,11 @@ impl Render for FlowlistApp {
                             this.sort_closed_on_up = this.sort_menu_open;
                             this.group_closed_on_up = this.group_menu_open;
                             this.priority_closed_on_up = this.priority_menu_open;
+                            this.layout_closed_on_up = this.layout_menu_open;
                             this.sort_menu_open = false;
                             this.group_menu_open = false;
                             this.priority_menu_open = false;
+                            this.layout_menu_open = false;
                             this.notification_menu = None;
                             this.repeat_menu = None;
                             this.sidebar_menu = None;
@@ -9704,6 +9825,7 @@ impl Render for FlowlistApp {
                             this.sort_menu_open = false;
                             this.group_menu_open = false;
                             this.priority_menu_open = false;
+                            this.layout_menu_open = false;
                             this.notification_menu = None;
                             this.repeat_menu = None;
                             this.sidebar_menu = None;
@@ -9763,6 +9885,21 @@ impl Render for FlowlistApp {
                     .left(px(x))
                     .top(px(y))
                     .child(self.render_priority_menu(cx)),
+            ));
+        }
+        if self.layout_menu_open
+            && let Some(anchor) = self.layout_anchor.get()
+        {
+            let (x, y) = menu_position(anchor, viewport, 340.0, 390.0);
+            root = root.child(fade_in(
+                "layout-menu-fade",
+                div()
+                    .id("layout-menu-layer")
+                    .absolute()
+                    .occlude()
+                    .left(px(x))
+                    .top(px(y))
+                    .child(self.render_layout_menu(cx)),
             ));
         }
         if let Some(target) = self.notification_menu.clone()
@@ -10305,6 +10442,57 @@ mod tests {
         assert_eq!(pane_band(1254.0, true), (240.0, 1254.0 - 240.0 - 320.0));
         // A tiny window clamps to zero rather than painting outside.
         assert_eq!(pane_band(400.0, true), (240.0, 0.0));
+    }
+
+    #[test]
+    fn switching_views_restores_each_views_row_layout() {
+        use super::session;
+        use super::restored_view_state;
+        use std::collections::BTreeSet;
+
+        let inbox = session::ViewOptions {
+            layout: session::RowLayout::Fluid,
+            density: session::Density::Comfortable,
+            ..session::ViewOptions::default()
+        };
+        let flagged = session::ViewOptions {
+            layout: session::RowLayout::Columns,
+            density: session::Density::Compact,
+            hidden_fields: BTreeSet::from(["tags".to_string()]),
+            columns: vec!["tags".to_string(), "due".to_string()],
+            ..session::ViewOptions::default()
+        };
+        let mut saved = std::collections::BTreeMap::new();
+        saved.insert("inbox".to_string(), inbox);
+        saved.insert("flagged".to_string(), flagged);
+
+        let first = restored_view_state(
+            &View::Builtin(BuiltinPerspective::Inbox),
+            &saved["inbox"],
+        );
+        assert_eq!(first.layout, session::RowLayout::Fluid);
+        assert_eq!(first.density, session::Density::Comfortable);
+        assert!(first.hidden_fields.is_empty());
+        assert_eq!(first.columns, session::default_columns());
+
+        // Switching to another view carries that view's own layout, not the
+        // one that was on screen a moment ago.
+        let second = restored_view_state(
+            &View::Builtin(BuiltinPerspective::Flagged),
+            &saved["flagged"],
+        );
+        assert_eq!(second.layout, session::RowLayout::Columns);
+        assert_eq!(second.density, session::Density::Compact);
+        assert_eq!(second.hidden_fields, BTreeSet::from(["tags".to_string()]));
+        assert_eq!(second.columns, vec!["tags".to_string(), "due".to_string()]);
+
+        // And back again: the first view kept its comfortable fluid rows.
+        let back = restored_view_state(
+            &View::Builtin(BuiltinPerspective::Inbox),
+            &saved["inbox"],
+        );
+        assert_eq!(back.layout, session::RowLayout::Fluid);
+        assert_eq!(back.density, session::Density::Comfortable);
     }
 
     #[test]
