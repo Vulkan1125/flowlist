@@ -14,10 +14,14 @@ class ReminderReceiver : BroadcastReceiver() {
         val project = intent.getStringExtra("project")
         val dueAt = intent.getLongExtra("due_at", System.currentTimeMillis())
         TaskReminders.markFired(context, taskId)
+        val keyguard = context.getSystemService(android.app.KeyguardManager::class.java)
+        val locked = keyguard?.isKeyguardLocked != false
 
         // A reminder card is already on screen: add this task to the batch
-        // silently instead of ringing one alarm after another.
-        if (ReminderOverlayService.active) {
+        // silently instead of ringing one alarm after another. On the lock
+        // screen the overlay is hidden, so the full-screen intent must still
+        // run for every alarm.
+        if (ReminderOverlayService.active && !locked) {
             runCatching {
                 androidx.core.content.ContextCompat.startForegroundService(
                     context,
@@ -47,9 +51,8 @@ class ReminderReceiver : BroadcastReceiver() {
         // unlocked and the user granted "display over other apps", a small
         // foreground service draws the same reminder above whatever is in
         // front, including YouTube.
-        val keyguard = context.getSystemService(android.app.KeyguardManager::class.java)
         val canOverlay = android.provider.Settings.canDrawOverlays(context)
-        if (keyguard?.isKeyguardLocked == false && canOverlay) {
+        if (!locked && canOverlay) {
             ReminderOverlayService.active = true
             runCatching {
                 androidx.core.content.ContextCompat.startForegroundService(

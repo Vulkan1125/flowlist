@@ -9,6 +9,11 @@
   snooze no longer leaves an old alarm to fire on an idle phone.
 - **Overlay permission at the switch.** Turning on Full-screen reminders opens
   the **Display over other apps** screen when the permission is missing.
+- **Locked reminders.** A locked phone still gets the full-screen reminder; a
+  hidden overlay no longer swallows the next alarm.
+- **Dismiss clears the Mac batch.** Dismiss or Esc closes every reminder in a
+  simultaneous batch and clears them on the phone; Complete and Snooze still
+  work one card at a time.
 - **Dismiss and Snooze on the alarm card.** The reminder notification handles
   both without opening the full screen; snooze uses the saved length,
   reschedules the alarm and clears the other device.

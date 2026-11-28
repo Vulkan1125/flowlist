@@ -190,12 +190,17 @@ impl Reminder {
     }
 
     fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(task) = self.current().cloned()
-            && let Some(app) = self.app.upgrade()
-        {
-            let _ = app.update(cx, |app, _| app.dismiss_reminder_task(&task.id));
+        // Dismiss closes the whole batch, not just the card on top. The other
+        // device is told about every task so it can clear its matching cards.
+        let ids: Vec<TaskId> = self.tasks.iter().map(|task| task.id.clone()).collect();
+        if let Some(app) = self.app.upgrade() {
+            let _ = app.update(cx, |app, _| {
+                for id in &ids {
+                    app.dismiss_reminder_task(id);
+                }
+            });
         }
-        self.advance(window, cx, true);
+        self.close(window, cx, true);
     }
 
     /// Remove reminders dismissed on the other device. If the current card is
