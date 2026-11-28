@@ -252,11 +252,29 @@ pub fn add_interval(date: NaiveDate, every: u32, unit: IntervalUnit) -> NaiveDat
 
 /// Apply a date interval while preserving wall-clock time-of-day.
 pub fn add_interval_to_stamp(stamp: Stamp, every: u32, unit: IntervalUnit) -> Stamp {
-    let date = add_interval(stamp.local_date(), every, unit);
-    if stamp.has_time {
-        Stamp::on(date, stamp.local_time())
-    } else {
-        Stamp::date_only(date)
+    let every = every.max(1);
+    match unit {
+        // Sub-day repeats move the clock, not the calendar. A date-only stamp
+        // has no clock to move; callers reject that combination.
+        IntervalUnit::Minutes | IntervalUnit::Hours => {
+            if !stamp.has_time {
+                return stamp;
+            }
+            let minutes = if unit == IntervalUnit::Hours {
+                i64::from(every) * 60
+            } else {
+                i64::from(every)
+            };
+            Stamp::from_local(stamp.local_naive() + Duration::minutes(minutes))
+        }
+        _ => {
+            let date = add_interval(stamp.local_date(), every, unit);
+            if stamp.has_time {
+                Stamp::on(date, stamp.local_time())
+            } else {
+                Stamp::date_only(date)
+            }
+        }
     }
 }
 
@@ -282,6 +300,21 @@ pub fn days_from_today(date: NaiveDate, reference: DateTime<Utc>) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sub_day_intervals_keep_the_clock_across_midnight() {
+        let date = NaiveDate::from_ymd_opt(2026, 11, 28).unwrap();
+        let evening = Stamp::on(date, NaiveTime::from_hms_opt(23, 30, 0).unwrap());
+        let next = add_interval_to_stamp(evening, 2, IntervalUnit::Hours);
+        assert_eq!(
+            next.local_date(),
+            NaiveDate::from_ymd_opt(2026, 11, 29).unwrap()
+        );
+        assert_eq!(next.local_time(), NaiveTime::from_hms_opt(1, 30, 0).unwrap());
+
+        let all_day = Stamp::date_only(date);
+        assert!(!add_interval_to_stamp(all_day, 2, IntervalUnit::Hours).has_time);
+    }
 
     #[test]
     fn month_arithmetic_clamps() {
