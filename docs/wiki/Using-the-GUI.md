@@ -104,12 +104,18 @@ choice, so a compact project list and a roomy Today list can sit side by side.
 ![The same task in Columns mode](images/gui-layout-columns.png)
 
 The View menu stays open while choices change, and every change is saved to
-the view straight away. The chip keeps a fixed width and shows a small dot
-only when the sort or grouping changes; a layout change is named inside the
-card but leaves the chip quiet. **Available** sits beside it as a one-click
-filter, and **Completed** appears where a view can show finished work.
-Priorities keep their own rows in the sidebar rather than repeating in the
-header.
+the view straight away. The header order is **Available**, **View**,
+**Priorities**:
+
+- **Available** is a one-click toggle. When it is on, a check mark sits at its
+  right edge.
+- **View** keeps a fixed width and shows a small dot only when the sort or
+  grouping changes; a layout change is named inside the card but leaves the
+  chip quiet.
+- **Priorities** is a dropdown with a chevron. It selects All priorities,
+  High, Medium or Low and matches the sidebar's High / Medium / Low rows.
+
+**Completed** appears where a view can show finished work.
 
 ## The inspector
 
@@ -453,9 +459,9 @@ titles itself **Search** and ranks the closest matches first.
   means your drag-and-drop order; **None** means one flat list with no
   headings. **Layout** chooses Fluid or Columns rows, their density and the
   fields or columns the view shows.
-- **Available** keeps only tasks you can start now; **Completed** shows or
-  hides finished work in project, folder and tag views. Priorities are set
-  from the sidebar's High / Medium / Low rows.
+- **Available** keeps only tasks you can start now and shows a check mark when
+  on. **Priorities** opens All / High / Medium / Low. **Completed** shows or
+  hides finished work in project, folder and tag views.
 - The choices are remembered per view.
 - **Settings → Workflow → Forecast tag** names a tag whose undated actions
   appear in Forecast without needing a date. **Show flagged undated tasks** does

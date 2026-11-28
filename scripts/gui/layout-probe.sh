@@ -320,6 +320,20 @@ assert "defer" in d["columns"], d["columns"]
 print("  relaunch kept the flagged view's columns layout")
 PY
 
+echo "8. The Priorities dropdown selects and clears a priority"
+click_map header_priority_boxes chip
+wait_value header_priority_menu True
+for key in chip priority:all priority:high priority:medium priority:low; do
+	wait_map header_priority_boxes "$key"
+done
+click_map header_priority_boxes priority:high
+wait_value priority_filter high
+click_map header_priority_boxes priority:all
+wait_value priority_filter ""
+"$helpers/flowctl" key 53
+wait_value header_priority_menu False
+echo "  Priorities menu: High selected, All priorities restored"
+
 if [ -n "${SHOT_DIR:-}" ]; then
 	mkdir -p "$SHOT_DIR"
 	cp "$shots/fluid.png" "$SHOT_DIR/gui-layout-fluid.png"

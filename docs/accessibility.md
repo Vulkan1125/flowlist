@@ -122,15 +122,16 @@ still a gap.
 
 ### Dropdown menus and the new-project prompt
 
-The **View** chip opens Sort, Group and Layout tabs under one popover. It
-stays open while choices change, and `Esc` or an outside click closes it. The
-chip keeps a fixed width and the card names the active sort, grouping and
-layout at the top. The dot marks only a changed sort or grouping; a layout
-change stays quiet. **Available** sits beside View as a one-click filter, and
-**Completed** appears where a view can show finished work. Priorities keep
-their High / Medium / Low rows in the sidebar. When a typed project path does
-not exist, a Create project sheet asks first: `Enter` creates the project and
-files the task, `Esc` leaves the task unchanged.
+The header reads **Available → View → Priorities**. Available is a check-mark
+toggle. View and Priorities are dropdowns with a chevron at the right edge.
+View opens Sort, Group and Layout tabs, stays open while choices change, and
+`Esc` or an outside click closes it. Its card names the active sort, grouping
+and layout at the top, and the dot marks only a changed sort or grouping; a
+layout change stays quiet. Priorities opens All / High / Medium / Low and
+mirrors the sidebar's High / Medium / Low rows. **Completed** appears where a
+view can show finished work. When a typed project path does not exist, a
+Create project sheet asks first: `Enter` creates the project and files the
+task, `Esc` leaves the task unchanged.
 
 ### The View sheet
 

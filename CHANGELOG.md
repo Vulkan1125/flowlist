@@ -4,13 +4,14 @@
 
 ### What's new
 
-- **A leaner content toolbar.** Sort, Group and Layout now share one **View**
-  popover with three tabs. **Available** and **Completed** stay as compact
-  filter chips, and High / Medium / Low priorities keep their sidebar rows
-  instead of repeating in the header. The View chip keeps a fixed width and
-  describes the active view inside its card; the dot only marks a changed
-  sort or grouping, not a layout change. Context actions such as Hide past,
-  Calendar and Planned stay inline.
+- **A leaner content toolbar.** The header now reads **Available → View →
+  Priorities**. Available is a toggle with a check mark when it is on; View
+  and Priorities are dropdowns with a chevron at their right edge. View holds
+  Sort, Group and Layout tabs, and keeps a fixed width with the active view
+  described inside its card. Priorities opens All / High / Medium / Low and
+  mirrors the sidebar's rows. **Completed** stays where a view can show
+  finished work, and context actions such as Hide past, Calendar and Planned
+  stay inline.
 - **Per-view row layouts.** The **View** popover gives every view its own
   choice of **Fluid** rows, the existing wrapped layout, or **Columns**, one
   line per task. The choice is remembered per perspective.

@@ -92,8 +92,9 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] One **View** popover with Sort, Group and Layout tabs, each listing
       every option instead of cycling, with **Default** meaning the view's
       natural order/grouping
-- [x] Available and Completed filter chips beside View, with priorities kept
-      on their sidebar rows instead of repeating in the header
+- [x] Header order Available → View → Priorities: Available is a check-mark
+      toggle, View and Priorities are chevron dropdowns, and Completed appears
+      only where a view can show finished work
 - [x] Per-view Layout tab: Fluid or Columns rows, Comfortable or Compact
       density, hideable fluid fields (project, dates, tags, estimate,
       checklist, attachments, flag) and optional columns (Project, Tags, Due,

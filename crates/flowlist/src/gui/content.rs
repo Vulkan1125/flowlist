@@ -1542,7 +1542,21 @@ impl FlowlistApp {
                                 },
                             )
                             .when(!is_trash && !is_archive, |this| {
-                                this.child({
+                                this.child(
+                                    div()
+                                        .id("only-available")
+                                        .flex_shrink_0()
+                                        .flow_tip(self, cx, theme, "Show next available task")
+                                        .child(check_chip(
+                                            theme,
+                                            "Available",
+                                            self.only_available,
+                                        ))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.toggle_only_available(cx)
+                                        })),
+                                )
+                                .child({
                                     let anchor = self.view_anchor.clone();
                                     let boxes = self.header_view_boxes.clone();
                                     let custom = !self.view_is_default();
@@ -1570,15 +1584,17 @@ impl FlowlistApp {
                                                     "View",
                                                     self.view_menu_open || custom,
                                                     order_changed,
+                                                    64.0,
                                                 ))
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     let suppress =
                                                         std::mem::take(&mut this.view_closed_on_up);
-                                                    this.view_boxes
+                                                    this.header_view_boxes
                                                         .borrow_mut()
                                                         .retain(|key, _| key == "chip");
                                                     this.view_menu_open =
                                                         !this.view_menu_open && !suppress;
+                                                    this.priority_menu_open = false;
                                                     this.sidebar_menu = None;
                                                     cx.notify();
                                                 })),
@@ -1593,20 +1609,63 @@ impl FlowlistApp {
                                             }
                                         })
                                 })
-                                .child(
+                                .child({
+                                    let anchor = self.priority_anchor.clone();
+                                    let boxes = self.header_priority_boxes.clone();
+                                    let active = self.priority_menu_open
+                                        || self.priority_filter.is_some();
+                                    let label = self
+                                        .priority_filter
+                                        .map(|priority| {
+                                            format!("Priorities · {}", priority.label())
+                                        })
+                                        .unwrap_or_else(|| "Priorities".to_string());
+                                    let summary = self
+                                        .priority_filter
+                                        .map(|priority| priority.label().to_string())
+                                        .unwrap_or_else(|| "All priorities".to_string());
                                     div()
-                                        .id("only-available")
                                         .flex_shrink_0()
-                                        .flow_tip(self, cx, theme, "Show next available task")
-                                        .child(widgets::toggle_chip(
-                                            theme,
-                                            "Available",
-                                            self.only_available,
-                                        ))
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.toggle_only_available(cx)
-                                        })),
-                                )
+                                        .child(
+                                            div()
+                                                .id("priority-menu")
+                                                .flow_tip(
+                                                    self,
+                                                    cx,
+                                                    theme,
+                                                    format!("Priority filter — {summary}"),
+                                                )
+                                                .child(toolbar_chip(
+                                                    theme,
+                                                    label,
+                                                    active,
+                                                    false,
+                                                    150.0,
+                                                ))
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    let suppress = std::mem::take(
+                                                        &mut this.priority_closed_on_up,
+                                                    );
+                                                    this.header_priority_boxes
+                                                        .borrow_mut()
+                                                        .retain(|key, _| key == "chip");
+                                                    this.priority_menu_open =
+                                                        !this.priority_menu_open && !suppress;
+                                                    this.view_menu_open = false;
+                                                    this.sidebar_menu = None;
+                                                    cx.notify();
+                                                })),
+                                        )
+                                        .on_children_prepainted(move |bounds, _, _| {
+                                            if let Some(bounds) = bounds.first() {
+                                                anchor.set(Some(*bounds));
+                                                boxes.borrow_mut().insert(
+                                                    "chip".to_string(),
+                                                    bounds_box(bounds),
+                                                );
+                                            }
+                                        })
+                                })
                                 .when(
                                     self.completed_filter_applies() && !is_trash,
                                     |this| {
@@ -1821,6 +1880,76 @@ impl FlowlistApp {
             super::ViewMenuTab::Layout => self.render_layout_tab(cx),
         };
         menu.child(body)
+    }
+
+    /// The Priorities dropdown mirrors the sidebar's High / Medium / Low rows
+    /// as one compact select.
+    pub(super) fn render_priority_menu(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let theme = self.theme;
+        let boxes = self.header_priority_boxes.clone();
+        let mut menu = div()
+            .w(px(160.))
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg();
+        let options: [Option<Priority>; 4] = [
+            None,
+            Some(Priority::High),
+            Some(Priority::Medium),
+            Some(Priority::Low),
+        ];
+        for option in options {
+            let selected = self.priority_filter == option;
+            let (slug, label) = match option {
+                None => ("all", "All priorities".to_string()),
+                Some(priority) => (priority.slug(), priority.label().to_string()),
+            };
+            let key = format!("priority:{slug}");
+            let sink = boxes.clone();
+            menu = menu.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if selected {
+                        theme.accent
+                    } else {
+                        theme.text_dim
+                    })
+                    .bg(if selected {
+                        theme.selection
+                    } else {
+                        theme.clear
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
+                        }
+                    })
+                    .id(super::sid(format!("priority:{}", slug)))
+                    .child(label)
+                    .when(selected, |this| {
+                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+                    })
+                    .on_click(
+                        cx.listener(move |this, _, _, cx| this.choose_priority_filter(option, cx)),
+                    ),
+            );
+        }
+        menu
     }
 
     fn render_sort_tab(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -4263,10 +4392,11 @@ fn toolbar_chip(
     label: impl Into<String>,
     active: bool,
     dot: bool,
+    width: f32,
 ) -> impl IntoElement {
     div()
         .h(px(26.))
-        .w(px(64.))
+        .w(px(width))
         .px_2()
         .flex()
         .items_center()
@@ -4284,6 +4414,37 @@ fn toolbar_chip(
             this.child(div().size(px(4.)).rounded_full().bg(theme.accent))
         })
         .child(label.into())
+        .child(icons::icon(
+            Icon::ChevronDown,
+            10.0,
+            if active { theme.accent } else { theme.text_dim },
+        ))
+}
+
+/// A toggle chip with a check mark at its right edge when it is on.
+fn check_chip(
+    theme: super::theme::Theme,
+    label: impl Into<String>,
+    active: bool,
+) -> impl IntoElement {
+    div()
+        .h(px(26.))
+        .px_2()
+        .flex()
+        .items_center()
+        .gap_1()
+        .rounded_md()
+        .border_1()
+        .border_color(if active { theme.accent } else { theme.border })
+        .bg(if active { theme.selection } else { theme.field })
+        .text_xs()
+        .text_color(if active { theme.accent } else { theme.text_dim })
+        .cursor_pointer()
+        .hover(|style| style.bg(theme.hover))
+        .child(label.into())
+        .when(active, |this| {
+            this.child(icons::icon(Icon::Check, 10.0, theme.accent))
+        })
 }
 
 /// The small checked square used by the Layout menu's field and column rows.

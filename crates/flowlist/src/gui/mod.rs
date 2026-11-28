@@ -757,6 +757,9 @@ pub struct FlowlistApp {
     /// The content-header View popover. Sorting, grouping and layout share it.
     view_menu_open: bool,
     view_menu_tab: ViewMenuTab,
+    /// The Priorities dropdown beside View. It mirrors the sidebar's High /
+    /// Medium / Low rows as a compact select.
+    priority_menu_open: bool,
     /// Where the View chip painted on the last frame. The menu is a root
     /// overlay positioned from these bounds, so its hitboxes line up with what
     /// is on screen (anchored/deferred paint offsets do not move hitboxes in
@@ -764,9 +767,12 @@ pub struct FlowlistApp {
     view_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// Today's Hide past chip, measured so a GUI probe can click it.
     hide_past_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    priority_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// View menu rows measured for the GUI probe, keyed `chip`, `tab:layout`,
     /// `mode:fluid`, `field:project`, …
     header_view_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    /// Priorities menu rows, keyed `chip`, `priority:all`, `priority:high`, …
+    header_priority_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// The first text field in the open sheet, measured so a GUI probe can
     /// click and drag inside it.
     modal_field_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
@@ -860,6 +866,7 @@ pub struct FlowlistApp {
     /// A click's mouse-up closed the View menu. The chip under the same click
     /// must not immediately reopen it.
     view_closed_on_up: bool,
+    priority_closed_on_up: bool,
     /// Highlighted completion in the project and tag fields.
     suggestion_index: usize,
     /// True once the user moved through the project dropdown with the arrow
@@ -1292,9 +1299,12 @@ impl FlowlistApp {
             view_options,
             view_menu_open: false,
             view_menu_tab: ViewMenuTab::Sort,
+            priority_menu_open: false,
             view_anchor: Rc::new(Cell::new(None)),
             hide_past_anchor: Rc::new(Cell::new(None)),
+            priority_anchor: Rc::new(Cell::new(None)),
             header_view_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            header_priority_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             modal_field_anchor: Rc::new(Cell::new(None)),
             field_editor_anchor: Rc::new(Cell::new(None)),
             checklist_add_anchor: Rc::new(Cell::new(None)),
@@ -1323,6 +1333,7 @@ impl FlowlistApp {
             sidebar_menu: None,
             sidebar_menu_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             view_closed_on_up: false,
+            priority_closed_on_up: false,
             suggestion_index: 0,
             suggestion_engaged: false,
             selected,
@@ -2555,6 +2566,7 @@ impl FlowlistApp {
             return;
         }
         self.view_menu_open = false;
+        self.priority_menu_open = false;
         self.sidebar_menu = None;
         self.date_picker = None;
         self.quick_open = Some(QuickOpenState {
@@ -4167,6 +4179,7 @@ impl FlowlistApp {
         self.editing = None;
         self.field_error = None;
         self.view_menu_open = false;
+        self.priority_menu_open = false;
         self.sidebar_menu = None;
         self.focus = FocusArea::Content;
         cx.notify();
@@ -4971,6 +4984,20 @@ impl FlowlistApp {
         cx.notify();
     }
 
+    /// Set the priority filter from the Priorities dropdown. A priority view
+    /// only makes sense while its filter is active, so it follows the choice.
+    fn choose_priority_filter(&mut self, priority: Option<Priority>, cx: &mut Context<Self>) {
+        self.priority_filter = priority;
+        if let View::Priority(_) = self.view {
+            match priority {
+                Some(priority) => self.set_view(View::Priority(priority)),
+                None => self.set_view(View::Builtin(BuiltinPerspective::Inbox)),
+            }
+        }
+        self.save_session();
+        cx.notify();
+    }
+
     /// The Layout menu stays open while the user tries modes, density and
     /// checkboxes, so every choice saves and repaints in place.
     fn choose_layout(&mut self, layout: session::RowLayout, cx: &mut Context<Self>) {
@@ -5541,6 +5568,7 @@ impl FlowlistApp {
         self.settings_toggle_boxes.borrow_mut().clear();
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
         self.view_menu_open = false;
+        self.priority_menu_open = false;
         self.sidebar_menu = None;
         self.focus = FocusArea::Modal;
         // A sheet belongs to the window rather than a field session, so the
@@ -7208,11 +7236,13 @@ impl FlowlistApp {
             }
             "escape" => {
                 if self.view_menu_open
+                    || self.priority_menu_open
                     || self.notification_menu.is_some()
                     || self.repeat_menu.is_some()
                     || self.sidebar_menu.is_some()
                 {
                     self.view_menu_open = false;
+        self.priority_menu_open = false;
                     self.notification_menu = None;
                     self.repeat_menu = None;
                     self.sidebar_menu = None;
@@ -7346,11 +7376,13 @@ impl FlowlistApp {
                 // stay open while the selection cleared underneath them.
                 self.vim.reset();
                 if self.view_menu_open
+                    || self.priority_menu_open
                     || self.notification_menu.is_some()
                     || self.repeat_menu.is_some()
                     || self.sidebar_menu.is_some()
                 {
                     self.view_menu_open = false;
+        self.priority_menu_open = false;
                     self.notification_menu = None;
                     self.repeat_menu = None;
                     self.sidebar_menu = None;
@@ -8558,8 +8590,11 @@ impl FlowlistApp {
             "header_view_label": "View",
             "header_view_summary": self.view_summary(),
             "header_view_dot": self.sort.is_some() || self.group.is_some(),
+            "header_priority_menu": self.priority_menu_open,
             "header_view_anchor": self.view_anchor.get().is_some(),
+            "header_priority_anchor": self.priority_anchor.get().is_some(),
             "header_view_boxes": self.header_view_boxes.borrow().clone(),
+            "header_priority_boxes": self.header_priority_boxes.borrow().clone(),
             "show_completed": self.show_completed,
             "due_anchor": anchor(self.due_anchor.get()),
             "defer_anchor": anchor(self.defer_anchor.get()),
@@ -9787,6 +9822,7 @@ impl Render for FlowlistApp {
                 cx.listener(|this, _, window, cx| {
                     // A new click starts a new mouse-up lifecycle.
                     this.view_closed_on_up = false;
+                    this.priority_closed_on_up = false;
                     this.suppress_hover_tip();
                     window.focus(&this.focus_handle);
                     cx.notify();
@@ -9819,6 +9855,7 @@ impl Render for FlowlistApp {
         // Any open dropdown gets a full-window scrim, so a click anywhere
         // closes it instead of leaving an orphan menu behind.
         if self.view_menu_open
+            || self.priority_menu_open
             || self.notification_menu.is_some()
             || self.repeat_menu.is_some()
             || self.sidebar_menu.is_some()
@@ -9838,7 +9875,9 @@ impl Render for FlowlistApp {
                         MouseButton::Left,
                         cx.listener(|this, _, _, cx| {
                             this.view_closed_on_up = this.view_menu_open;
+                            this.priority_closed_on_up = this.priority_menu_open;
                             this.view_menu_open = false;
+                            this.priority_menu_open = false;
                             this.notification_menu = None;
                             this.repeat_menu = None;
                             this.sidebar_menu = None;
@@ -9850,6 +9889,7 @@ impl Render for FlowlistApp {
                         MouseButton::Right,
                         cx.listener(|this, _, _, cx| {
                             this.view_menu_open = false;
+                            this.priority_menu_open = false;
                             this.notification_menu = None;
                             this.repeat_menu = None;
                             this.sidebar_menu = None;
@@ -9879,6 +9919,21 @@ impl Render for FlowlistApp {
                     .left(px(x))
                     .top(px(y))
                     .child(self.render_view_popover(cx)),
+            ));
+        }
+        if self.priority_menu_open
+            && let Some(anchor) = self.priority_anchor.get()
+        {
+            let (x, y) = menu_position_right(anchor, viewport, 160.0, 160.0);
+            root = root.child(fade_in(
+                "priority-menu-fade",
+                div()
+                    .id("priority-menu-layer")
+                    .absolute()
+                    .occlude()
+                    .left(px(x))
+                    .top(px(y))
+                    .child(self.render_priority_menu(cx)),
             ));
         }
         if let Some(target) = self.notification_menu.clone()
