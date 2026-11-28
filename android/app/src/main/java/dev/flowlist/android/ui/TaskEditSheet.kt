@@ -129,8 +129,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import dev.flowlist.android.data.repeatClockMessage
 import dev.flowlist.android.data.repeatRuleJson
-import dev.flowlist.android.data.repeatNeedsClock
+import dev.flowlist.android.data.repeatWeekdayName
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.isToday
 import dev.flowlist.android.data.label
@@ -318,8 +319,8 @@ fun TaskEditSheet(
             repeatError = null
             return
         }
-        if (repeatNeedsClock(unit, mode, due, defer)) {
-            repeatError = "Add a time first"
+        repeatClockMessage(unit, mode, due, defer)?.let { message ->
+            repeatError = message
             return
         }
         repeatError = null
@@ -646,22 +647,23 @@ fun TaskEditSheet(
                     val patternWeekday = repeatPatternWeekday
                         ?: (due ?: defer)?.local()?.dayOfWeek?.value?.rem(7)
                         ?: 1
+                    val weekdayName = repeatWeekdayName(patternWeekday) ?: "Monday"
                     Spacer(modifier = Modifier.height(8.dp))
-                    Label("Monthly pattern")
+                    Label("Repeat on")
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        PriorityPill("None", repeatPatternKind == null, colors.accent) {
+                        PriorityPill("Same date", repeatPatternKind == null, colors.accent) {
                             setRule(unit = "months", pattern = JsonNull)
                         }
                         listOf("1st", "2nd", "3rd", "4th", "5th")
                             .forEachIndexed { index, label ->
                                 val nth = index + 1
                                 PriorityPill(
-                                    label,
+                                    "$label $weekdayName",
                                     repeatPatternKind == "nth_weekday" &&
                                         repeatPatternNth == nth,
                                     colors.accent,
@@ -673,7 +675,7 @@ fun TaskEditSheet(
                                 }
                             }
                         PriorityPill(
-                            "Last weekend",
+                            "Last weekend day",
                             repeatPatternKind == "last_weekend_day",
                             colors.accent,
                         ) {
@@ -685,8 +687,32 @@ fun TaskEditSheet(
                             )
                         }
                     }
+                    val patternExplanation = when (repeatPatternKind) {
+                        "nth_weekday" -> {
+                            val ordinal = when (repeatPatternNth) {
+                                1 -> "first"
+                                2 -> "second"
+                                3 -> "third"
+                                4 -> "fourth"
+                                else -> "fifth"
+                            }
+                            "Runs on the $ordinal $weekdayName of the month."
+                        }
+                        "last_weekend_day" ->
+                            "Runs on the last Saturday or Sunday of the month."
+                        else -> null
+                    }
+                    patternExplanation?.let { explanation ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = explanation,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.faint,
+                        )
+                    }
                     if (repeatPatternKind == "nth_weekday") {
                         Spacer(modifier = Modifier.height(6.dp))
+                        Label("Weekday")
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1678,11 +1704,7 @@ fun TaskEditSheet(
                     val currentUnit = (currentRepeat?.get("unit") as? JsonPrimitive)?.content
                     val currentMode = (currentRepeat?.get("mode") as? JsonPrimitive)?.content
                         ?: "due_again"
-                    repeatError = if (repeatNeedsClock(currentUnit, currentMode, due, defer)) {
-                        "Add a time first"
-                    } else {
-                        null
-                    }
+                    repeatError = repeatClockMessage(currentUnit, currentMode, due, defer)
                     dateError = if (dueDate != null && deferDate != null && deferDate.isAfter(dueDate)) {
                         "Defer can't be after the due date"
                     } else {

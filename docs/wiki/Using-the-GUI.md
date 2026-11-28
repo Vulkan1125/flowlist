@@ -143,12 +143,14 @@ leaving the list.
   S/M/T/W/T/F/S to repeat only those weekdays. When weekdays are selected the
   interval bar shows a greyed-out “custom”. **Minutes** and **Hours** move the
   clock instead of the calendar, so the task needs a time on its due or defer
-  date; a date-only task is refused with **Add a time first**. When the unit is
-  **Months**, a **Monthly pattern** row offers **None**, **1st** through
-  **5th**, or **Last weekend**, and selecting an nth weekday reveals the same
-  Sunday-to-Saturday row for the weekday. The line beneath says the result in
-  plain words, such as “Every Monday and Wednesday, from the assigned dates,
-  scheduling the next due date.” An **Ends** row sets **Never**, **On date**
+  date; a date-only task is refused with a message naming the date, such as
+  **Add a time to the due date first**. When the unit is **Months**, a **Repeat
+  on** row offers **Same date**, full choices such as **1st Monday** through
+  **5th Monday**, or **Last weekend day**, and selecting an nth weekday reveals
+  a **Weekday** row plus a line explaining the exact result. The summary line
+  beneath says the result in plain words, such as “Every Monday and Wednesday,
+  from the assigned dates, scheduling the next due date.” An **Ends** row sets
+  **Never**, **On date**
   (opening the calendar under the date box) or **After N** times with a −/+
   stepper. The same summary line names the count already done and, for fixed
   schedules, the projected last occurrence; after-completion rules say the

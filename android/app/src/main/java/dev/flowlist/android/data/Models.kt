@@ -315,17 +315,34 @@ fun repeatOrdinal(nth: Int): String = when (nth) {
 }
 
 /// Hourly and minute rules advance the clock, so the anchor they schedule from
-/// must carry a time. A date-only anchor is refused instead of guessing one.
+/// must carry a time. A date-only anchor is refused instead of guessing one,
+/// and the message names the due or defer date the rule uses.
+fun repeatClockMessage(
+    unit: String?,
+    mode: String,
+    due: StampDto?,
+    defer: StampDto?,
+): String? {
+    if (unit != "hours" && unit != "minutes") return null
+    val (anchor, label) = when {
+        mode == "defer_another" && defer != null -> defer to "defer"
+        mode == "defer_another" -> due to "due"
+        due != null -> due to "due"
+        else -> defer to "defer"
+    }
+    return if (anchor != null && !anchor.hasTime) {
+        "Add a time to the $label date first"
+    } else {
+        null
+    }
+}
+
 fun repeatNeedsClock(
     unit: String?,
     mode: String,
     due: StampDto?,
     defer: StampDto?,
-): Boolean {
-    if (unit != "hours" && unit != "minutes") return false
-    val anchor = if (mode == "defer_another") defer ?: due else due ?: defer
-    return anchor != null && !anchor.hasTime
-}
+): Boolean = repeatClockMessage(unit, mode, due, defer) != null
 
 /// The Mac's row metadata for a repeat rule, e.g. "every 2 weeks (defer
 /// another)" or "every Monday and Friday after completion for 6 times". The

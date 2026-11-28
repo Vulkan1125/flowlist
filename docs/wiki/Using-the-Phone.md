@@ -46,7 +46,7 @@ Settings has four ways to change the look:
 Tap a task to open the editor. Change the title and notes, then set:
 
 - due, defer and planned dates with Android's date and time pickers (or clear any),
-- repeat rules: hourly and minute intervals, daily through yearly, a weekday strip for day-based rules, a monthly pattern for the 1st–5th weekday or the last weekend day, fixed or after-completion, due-again or defer-another, and an end that never stops, stops on a date, or stops after N times. Sub-day rules need a time on the due or defer date; a date-only task stops with **Add a time first**. The editor shows how many occurrences are already done and, for fixed schedules, the projected last date,
+- repeat rules: hourly and minute intervals, daily through yearly, a weekday strip for day-based rules, a **Repeat on** row with **Same date**, full choices such as **1st Monday** through **5th Monday**, or **Last weekend day**, fixed or after-completion, due-again or defer-another, and an end that never stops, stops on a date, or stops after N times. Sub-day rules need a time on the due or defer date; a date-only task stops with a message naming that date, such as **Add a time to the due date first**. The editor shows how many occurrences are already done and, for fixed schedules, the projected last date,
 - project, priority (H, M or L), the flag and an estimate. The selected pill and the task circle share the priority colour: red for H, yellow for M and blue for L,
 - any existing tag,
 - files through **Add attachment**, and web links through **Add link**.

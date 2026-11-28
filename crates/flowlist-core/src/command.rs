@@ -2358,7 +2358,7 @@ fn remove_folder_tree(db: &mut Db, id: &FolderId) {
 
 /// Hourly and minute repeats advance the clock, so the date they schedule from
 /// must carry a time. A date-only task is refused rather than promoted to a
-/// guessed time.
+/// guessed time, and the message names the anchor the rule actually uses.
 fn ensure_repeat_has_clock(
     rule: Option<&RepeatRule>,
     due: Option<Stamp>,
@@ -2367,12 +2367,16 @@ fn ensure_repeat_has_clock(
     let Some(rule) = rule.filter(|rule| rule.uses_sub_day()) else {
         return Ok(());
     };
-    let anchor = match rule.mode {
-        RepeatMode::DueAgain => due.or(defer),
-        RepeatMode::DeferAnother => defer.or(due),
+    let (anchor, label) = match rule.mode {
+        RepeatMode::DueAgain if due.is_some() => (due, "due"),
+        RepeatMode::DueAgain => (defer, "defer"),
+        RepeatMode::DeferAnother if defer.is_some() => (defer, "defer"),
+        RepeatMode::DeferAnother => (due, "due"),
     };
     if anchor.is_some_and(|stamp| !stamp.has_time) {
-        return Err(Error::invalid("Add a time first"));
+        return Err(Error::invalid(format!(
+            "Add a time to the {label} date first"
+        )));
     }
     Ok(())
 }

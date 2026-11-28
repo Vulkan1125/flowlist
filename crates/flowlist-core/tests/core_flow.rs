@@ -168,7 +168,10 @@ fn sub_day_repeats_require_a_clock_time() {
         .execute(Command::CreateTask(new_task))
         .unwrap_err()
         .to_string();
-    assert!(error.contains("Add a time first"), "{error}");
+    assert!(
+        error.contains("Add a time to the due date first"),
+        "{error}"
+    );
     assert!(store.db().tasks.is_empty());
 
     let timed = Stamp::on(
@@ -199,8 +202,28 @@ fn sub_day_repeats_require_a_clock_time() {
         })
         .unwrap_err()
         .to_string();
-    assert!(error.contains("Add a time first"), "{error}");
+    assert!(
+        error.contains("Add a time to the due date first"),
+        "{error}"
+    );
     assert!(store.db().tasks[&task_id].due.unwrap().has_time);
+
+    let mut deferred = NewTask::new("Check the freezer");
+    deferred.due = Some(timed);
+    deferred.defer = Some(Stamp::date_only(timed.local_date()));
+    deferred.repeat = Some(RepeatRule::new(
+        RepeatMode::DeferAnother,
+        1,
+        IntervalUnit::Hours,
+    ));
+    let error = store
+        .execute(Command::CreateTask(deferred))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("Add a time to the defer date first"),
+        "{error}"
+    );
 }
 
 #[test]

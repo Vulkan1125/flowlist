@@ -35,6 +35,7 @@ import dev.flowlist.android.data.forecastProjectDays
 import dev.flowlist.android.data.forecastTaskDays
 import dev.flowlist.android.data.forecastUndated
 import dev.flowlist.android.data.batchUpdateTasksCommand
+import dev.flowlist.android.data.repeatClockMessage
 import dev.flowlist.android.data.repeatNeedsClock
 import dev.flowlist.android.data.repeatRowLabel
 import kotlinx.serialization.json.Json
@@ -457,6 +458,15 @@ class DataTest {
         assertTrue(!repeatNeedsClock("days", "due_again", dateOnly, null))
         assertTrue(repeatNeedsClock("minutes", "defer_another", timed, dateOnly))
         assertTrue(!repeatNeedsClock("minutes", "defer_another", dateOnly, timed))
+        assertEquals(
+            "Add a time to the due date first",
+            repeatClockMessage("hours", "due_again", dateOnly, null),
+        )
+        assertEquals(
+            "Add a time to the defer date first",
+            repeatClockMessage("minutes", "defer_another", timed, dateOnly),
+        )
+        assertNull(repeatClockMessage("hours", "due_again", timed, null))
     }
 
     @Test

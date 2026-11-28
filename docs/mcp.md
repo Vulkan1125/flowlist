@@ -87,8 +87,8 @@ spawns the next occurrence with the same series id. Passing `series: true` to
 `delete_task` moves every occurrence in that chain to Trash in one undoable
 step. Repeat rules accept `hourly`, `every 30 minutes`, `every month on the
 third Thursday` and `every 2 months on the last weekend day`; a sub-day rule
-needs a timed due or defer anchor, and a date-only task is rejected with
-**Add a time first**.
+needs a timed due or defer anchor, and a date-only task is rejected with a
+message naming that date, such as **Add a time to the due date first**.
 
 `delete_task` is a soft delete. Trash follows the library's
 `trash_retention_days` setting; restoring or purging is recorded in undo history

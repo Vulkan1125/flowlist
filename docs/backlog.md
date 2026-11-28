@@ -169,8 +169,8 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Advanced repeat schedules** — minute/hour intervals, nth weekday of a
       month and the last weekend day are in the shared model, the CLI/MCP parser
       and both repeat editors. A sub-day rule needs a clock time on its due or
-      defer date: picking one on a date-only task is rejected with
-      **Add a time first**, never promoted to a guessed time. Both editors still
+      defer date: picking one on a date-only task is rejected with a message
+      that names that date, never promoted to a guessed time. Both editors still
       cover the day/week/month/year model and the due/defer and
       assigned/completion choices.
 - [ ] **Capture integrations** — Mail Drop, Mac clippings, Mac share, and

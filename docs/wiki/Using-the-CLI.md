@@ -158,7 +158,7 @@ flowlist done [OPTIONS] <ID>...
 
 Completing a repeating task creates its next occurrence. Hourly and minute
 rules need a clock time on the due or defer date; a date-only task is rejected
-with **Add a time first**.
+with a message naming that date, such as **Add a time to the due date first**.
 
 ## `edit`
 

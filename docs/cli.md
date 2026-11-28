@@ -115,7 +115,8 @@ Completing a repeating task increments the last number in its title, so
 `Week 3 review` spawns `Week 4 review`; `--series` on `remove` moves every
 occurrence of that chain to Trash instead of only the named one. Hourly and
 minute rules need a time on the due or defer date: a date-only task is rejected
-with **Add a time first** instead of being given a guessed clock time.
+with a message naming that date, such as **Add a time to the due date first**,
+instead of being given a guessed clock time.
 
 ### Trash
 

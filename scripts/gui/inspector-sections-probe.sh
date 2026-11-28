@@ -174,13 +174,13 @@ click_box notification_boxes repeat-unit-option:hours
 for _ in $(seq 1 80); do
   if python3 - "$state" <<'PY'
 import json, sys
-sys.exit(0 if json.load(open(sys.argv[1])).get("toast") == "Add a time first" else 1)
+sys.exit(0 if json.load(open(sys.argv[1])).get("toast") == "Add a time to the due date first" else 1)
 PY
   then break; fi
   sleep 0.1
 done
 wait_json task repeat_rejected '"Monday and Wednesday" in d["repeat"]'
-echo "   date-only task rejected with Add a time first"
+echo "   date-only task rejected with the due-date message"
 
 kill "$pid" 2>/dev/null || true
 wait "$pid" 2>/dev/null || true
