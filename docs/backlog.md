@@ -166,11 +166,13 @@ integrations are tracked separately and are not part of this phase.
       visible fields, without fragmenting the shared visual language.
 - [ ] **Rich-text notes** — bold, italics, lists, links and inline images
       alongside the existing plain-text fallback.
-- [ ] **Advanced repeat schedules** — minute/hour intervals, multiple
-      weekdays, nth weekday of a month, last weekend day and other
-      calendar-pattern repeats. The inspector’s Repeat section already covers
-      the day/week/month/year model and the due/defer and assigned/completion
-      choices.
+- [ ] **Advanced repeat schedules** — minute/hour intervals, nth weekday of a
+      month, last weekend day and other calendar-pattern repeats. Multiple
+      weekdays are already in both repeat editors. A sub-day rule needs a clock
+      time on its due or defer date: picking one on a date-only task is rejected
+      with **Add a time first**, never promoted to a guessed time. The inspector’s
+      Repeat section already covers the day/week/month/year model and the
+      due/defer and assigned/completion choices.
 - [ ] **Capture integrations** — Mail Drop, Mac clippings, Mac share, and
       OmniOutliner or plain-text outline paste with hierarchy preserved.
 - [ ] **Nearby map** — map view alongside the distance-sorted list.
