@@ -331,6 +331,7 @@ fun MainScreen(
     var sharePicking by remember { mutableStateOf(false) }
     var selecting by rememberSaveable { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var batchEditing by remember { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf(false) }
     var detail by remember { mutableStateOf<TaskView?>(null) }
     var dueNowIds by remember { mutableStateOf(initialDueNow) }
@@ -531,6 +532,7 @@ fun MainScreen(
 
     val closeSelection: () -> Unit = {
         selecting = false
+        batchEditing = false
         selectedIds = emptySet()
     }
     val selectAllTrash: () -> Unit = {
@@ -694,6 +696,11 @@ fun MainScreen(
                     onComplete = bulkComplete,
                     onTrash = bulkTrash,
                     onPurge = bulkPurge,
+                    onBatchEdit = if (moreView == MoreView.Trash) {
+                        null
+                    } else {
+                        { batchEditing = true }
+                    },
                 )
             } else if (!wide && !(tab == Tab.Settings && settingsSection != null)) {
             Column {
@@ -1470,6 +1477,33 @@ fun MainScreen(
         )
     }
 
+    if (batchEditing) {
+        BatchEditSheet(
+            count = selectedIds.size,
+            projects = snapshot?.db?.projects?.values?.toList().orEmpty(),
+            folders = snapshot?.db?.folders?.values?.toList().orEmpty(),
+            tags = snapshot?.db?.tags?.values?.toList().orEmpty(),
+            weekStartsMonday = preferences.weekStartsMonday,
+            defaultTimeMinutes = preferences.defaultTimeMinutes,
+            onDismiss = { batchEditing = false },
+            onApply = { edit ->
+                val ids = selectedIds.toList()
+                closeSelection()
+                if (ids.isNotEmpty()) {
+                    scope.launch {
+                        repository.batchUpdate(ids, edit)
+                        toasts.show(
+                            message = "Edited ${taskCount(ids.size)}",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Long,
+                            onAction = { repository.undo() },
+                        )
+                    }
+                }
+            },
+        )
+    }
+
     projectEditor?.let { target ->
         val editing = target.project
         ProjectEditorSheet(
@@ -1823,6 +1857,7 @@ private fun SelectionBar(
     onComplete: () -> Unit,
     onTrash: () -> Unit,
     onPurge: () -> Unit,
+    onBatchEdit: (() -> Unit)? = null,
 ) {
     val colors = flow
     Surface(color = colors.field.copy(alpha = 0.92f), tonalElevation = 2.dp) {
@@ -1856,6 +1891,15 @@ private fun SelectionBar(
                     )
                 }
             } else {
+                if (onBatchEdit != null) {
+                    IconButton(onClick = onBatchEdit, enabled = count > 0) {
+                        Icon(
+                            imageVector = Icons.Outlined.Edit,
+                            contentDescription = "Edit selected tasks",
+                            tint = if (count > 0) colors.accent else colors.faint,
+                        )
+                    }
+                }
                 IconButton(onClick = onComplete, enabled = count > 0) {
                     Icon(
                         imageVector = if (reopenMode) Icons.Rounded.Undo else Icons.Rounded.CheckCircle,

@@ -1003,7 +1003,7 @@ private fun PerspectiveMultiSelect(
 }
 
 @Composable
-private fun perspectiveFieldColors() = OutlinedTextFieldDefaults.colors(
+fun perspectiveFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedBorderColor = flow.hairline,
     unfocusedBorderColor = flow.hairline,
     focusedContainerColor = flow.background,

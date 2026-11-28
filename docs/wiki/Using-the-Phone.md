@@ -71,7 +71,11 @@ tasks, opens the new project, and undoes as one step.
   reopen and move to Trash.
 - Lists that support bulk actions have a checklist button at the top right.
   Tap it to enter select mode; it becomes a close button, and tapping it again
-  leaves select mode.
+  leaves select mode. The pencil in the selection bar opens **Batch edit**:
+  only the fields you fill are applied, covering project (including Inbox),
+  add or remove tags with their parent paths, due/defer/planned dates,
+  priority, flag and estimate. The list updates immediately and the snackbar
+  undoes the whole batch as one step.
 
 ## Security
 

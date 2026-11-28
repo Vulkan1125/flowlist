@@ -8,6 +8,7 @@ import dev.flowlist.android.data.TaskDto
 import dev.flowlist.android.data.StampDto
 import dev.flowlist.android.data.Ulid
 import dev.flowlist.android.data.tagBlocking
+import dev.flowlist.android.data.tagPath
 import dev.flowlist.android.data.taggedTaskCount
 import dev.flowlist.android.data.geotaggedTaskCount
 import dev.flowlist.android.data.GeoDto
@@ -28,6 +29,8 @@ import dev.flowlist.android.data.displayTitle
 import dev.flowlist.android.data.normalizeBase
 import dev.flowlist.android.data.projectTaskIds
 import dev.flowlist.android.data.taskViews
+import dev.flowlist.android.data.batchUpdateTasksCommand
+import kotlinx.serialization.json.put
 import dev.flowlist.android.data.convertTaskToProjectCommand
 import dev.flowlist.android.data.savePerspectiveCommand
 import org.junit.Assert.assertEquals
@@ -164,6 +167,25 @@ class DataTest {
     }
 
     @Test
+    fun the_batch_command_carries_every_selected_field() {
+        val command = batchUpdateTasksCommand(
+            ids = listOf("a", "b"),
+            patch = kotlinx.serialization.json.buildJsonObject {
+                put("priority", "high")
+                put("estimate_min", 30)
+            },
+            addTags = listOf("Focus"),
+            removeTags = listOf("Old"),
+        ).toString()
+        assertTrue(command.contains("\"batch_update_tasks\""))
+        assertTrue(command.contains("\"ids\":[\"a\",\"b\"]"))
+        assertTrue(command.contains("\"priority\":\"high\""))
+        assertTrue(command.contains("\"estimate_min\":30"))
+        assertTrue(command.contains("\"add_tags\":[\"Focus\"]"))
+        assertTrue(command.contains("\"remove_tags\":[\"Old\"]"))
+    }
+
+    @Test
     fun the_convert_command_keeps_the_folder_optional() {
         val command = convertTaskToProjectCommand("task-1").toString()
         assertTrue(command.contains("\"convert_task_to_project\""))
@@ -230,6 +252,18 @@ class DataTest {
             listOf("#Focus", "No tag"),
             groupSections(db, views, "tag", "manual").map { it.label },
         )
+    }
+
+    @Test
+    fun nested_tag_paths_keep_their_parent() {
+        val db = Db(
+            tags = mapOf(
+                "parent" to TagDto(id = "parent", name = "Work"),
+                "child" to TagDto(id = "child", name = "Deep", parent = "parent"),
+            ),
+        )
+        assertEquals("Work", db.tagPath("parent"))
+        assertEquals("Work/Deep", db.tagPath("child"))
     }
 
     @Test

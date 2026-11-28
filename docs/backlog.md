@@ -259,9 +259,10 @@ integrations are tracked separately and are not part of this phase.
       turns the task and its subtasks into a project in one undoable step,
       keeping the folder, notes, tags, dates, attachments and checklist as
       project tasks. The new project opens immediately.
-- [ ] **Batch edit fields** — phone select mode only completes, trashes or
-      purges. Add the Mac's project, tags, defer/planned/due, priority, flag
-      and estimate edits as one undo step.
+- [x] **Batch edit fields** — select mode's pencil opens **Batch edit** for
+      project, add/remove tags, due/defer/planned, priority, flag and estimate.
+      Only filled fields apply, tag paths keep their parents, and the whole
+      edit is one undoable step.
 - [ ] **Drag into projects, tags and sibling positions** — phone drag only
       nests or moves a task to the project root. Match the Mac's drops onto
       projects, tags, parents and between siblings in manual order.

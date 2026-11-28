@@ -43,6 +43,10 @@
   its subtasks into a project in one undoable step, keeping the folder, notes,
   tags, dates, attachments and checklist as project tasks. The new project
   opens immediately, and the snackbar undoes the whole conversion.
+- **Batch edit.** Select mode's pencil edits the whole selection at once:
+  project (including Inbox), add or remove tags with parent paths, due, defer
+  and planned dates, priority, flag and estimate. Only filled fields apply,
+  the list updates immediately, and the snackbar undoes the whole batch.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.

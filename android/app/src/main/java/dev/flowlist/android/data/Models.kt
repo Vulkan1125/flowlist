@@ -86,6 +86,29 @@ data class TaskDto(
     @SerialName("steps_one_off") val stepsOneOff: Boolean = false,
 )
 
+/// A date in a batch edit: leave it alone, clear it, or set one value.
+sealed class BatchDate {
+    data object Keep : BatchDate()
+    data object Clear : BatchDate()
+    data class Set(val stamp: StampDto) : BatchDate()
+}
+
+/// Only the fields the user filled in are applied to the selection.
+data class BatchEdit(
+    val projectId: String? = null,
+    val clearProject: Boolean = false,
+    val addTagIds: Set<String> = emptySet(),
+    val removeTagIds: Set<String> = emptySet(),
+    val due: BatchDate = BatchDate.Keep,
+    val defer: BatchDate = BatchDate.Keep,
+    val planned: BatchDate = BatchDate.Keep,
+    val priority: String? = null,
+    val clearPriority: Boolean = false,
+    val flagged: Boolean? = null,
+    val estimate: Int? = null,
+    val clearEstimate: Boolean = false,
+)
+
 @Serializable
 data class ChecklistDto(
     val id: String = "",
@@ -692,6 +715,19 @@ fun tagStatusLabel(status: String): String = when (status) {
     "blocked" -> "Blocked"
     "on_hold" -> "On Hold"
     else -> "Available"
+}
+
+/// A tag's `parent/child` path, as the batch and quick-entry commands expect.
+fun Db.tagPath(id: String): String? {
+    val names = mutableListOf<String>()
+    var cursor: TagDto? = tags[id]
+    var guard = 0
+    while (cursor != null && guard < 64) {
+        names.add(0, cursor.name)
+        cursor = cursor.parent?.let { tags[it] }
+        guard += 1
+    }
+    return names.takeIf { it.isNotEmpty() }?.joinToString("/")
 }
 
 /// Whether a task can be worked on right now, matching the Mac's availability

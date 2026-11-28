@@ -426,6 +426,106 @@ class Repository(context: Context) {
         sync()
     }
 
+    /// Applies only the filled-in fields to every selected task in one
+    /// undoable `batch_update_tasks` command.
+    suspend fun batchUpdate(taskIds: List<String>, edit: BatchEdit) {
+        if (taskIds.isEmpty()) return
+        val snapshot = _state.value.snapshot ?: return
+        val db = snapshot.db
+        val ids = taskIds.filter { db.tasks[it] != null }
+        if (ids.isEmpty()) return
+        val addNames = edit.addTagIds.mapNotNull { db.tagPath(it) }
+        val removeNames = edit.removeTagIds.mapNotNull { db.tagPath(it) }
+        val patch = buildJsonObject {
+            when {
+                edit.clearProject -> put("project", JsonNull)
+                edit.projectId != null -> put("project", JsonPrimitive(edit.projectId))
+            }
+            fun date(key: String, value: BatchDate) {
+                when (value) {
+                    BatchDate.Keep -> Unit
+                    BatchDate.Clear -> put(key, JsonNull)
+                    is BatchDate.Set -> put(key, stampJson(value.stamp))
+                }
+            }
+            date("due", edit.due)
+            date("defer", edit.defer)
+            date("planned", edit.planned)
+            when {
+                edit.clearPriority -> put("priority", JsonNull)
+                edit.priority != null -> put("priority", JsonPrimitive(edit.priority))
+            }
+            edit.flagged?.let { put("flagged", it) }
+            when {
+                edit.clearEstimate -> put("estimate_min", JsonNull)
+                edit.estimate != null -> put("estimate_min", edit.estimate)
+            }
+        }
+        if (patch.isEmpty() && addNames.isEmpty() && removeNames.isEmpty()) return
+        val tasks = db.tasks.toMutableMap()
+        for (id in ids) {
+            var task = tasks[id] ?: continue
+            if (edit.clearProject) {
+                task = task.copy(project = null)
+            } else if (edit.projectId != null) {
+                task = task.copy(project = edit.projectId)
+            }
+            task = when (val value = edit.due) {
+                BatchDate.Keep -> task
+                BatchDate.Clear -> task.copy(due = null)
+                is BatchDate.Set -> task.copy(due = value.stamp)
+            }
+            task = when (val value = edit.defer) {
+                BatchDate.Keep -> task
+                BatchDate.Clear -> task.copy(defer = null)
+                is BatchDate.Set -> task.copy(defer = value.stamp)
+            }
+            task = when (val value = edit.planned) {
+                BatchDate.Keep -> task
+                BatchDate.Clear -> task.copy(planned = null)
+                is BatchDate.Set -> task.copy(planned = value.stamp)
+            }
+            task = when {
+                edit.clearPriority -> task.copy(priority = null)
+                edit.priority != null -> task.copy(priority = edit.priority)
+                else -> task
+            }
+            if (edit.flagged != null) task = task.copy(flagged = edit.flagged)
+            task = when {
+                edit.clearEstimate -> task.copy(estimateMin = null)
+                edit.estimate != null -> task.copy(estimateMin = edit.estimate)
+                else -> task
+            }
+            if (edit.addTagIds.isNotEmpty() || edit.removeTagIds.isNotEmpty()) {
+                task = task.copy(
+                    tags = (task.tags - edit.removeTagIds + edit.addTagIds).distinct(),
+                )
+            }
+            task = task.copy(modifiedAt = java.time.Instant.now().toString())
+            tasks[id] = task
+        }
+        val updated = snapshot.copy(
+            db = db.copy(
+                tasks = tasks,
+                inboxOrder = if (edit.clearProject) {
+                    (db.inboxOrder + ids).distinct()
+                } else {
+                    db.inboxOrder
+                },
+            ),
+        )
+        _state.update { it.copy(snapshot = updated) }
+        persist(updated)
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = batchUpdateTasksCommand(ids, patch, addNames, removeNames),
+                label = "Edit ${ids.size} tasks",
+            ),
+        )
+        sync()
+    }
+
     /// Trashes a selection and returns the local copies so Undo can put them back.
     suspend fun deleteMany(taskIds: List<String>): List<TaskDto> {
         val snapshot = _state.value.snapshot ?: return emptyList()

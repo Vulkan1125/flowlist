@@ -278,6 +278,23 @@ fun convertTaskToProjectCommand(id: String, folder: String? = null): JsonObject 
         )
     }
 
+fun batchUpdateTasksCommand(
+    ids: List<String>,
+    patch: JsonObject,
+    addTags: List<String> = emptyList(),
+    removeTags: List<String> = emptyList(),
+): JsonObject = buildJsonObject {
+    put(
+        "batch_update_tasks",
+        buildJsonObject {
+            put("ids", buildJsonArray { ids.forEach { add(JsonPrimitive(it)) } })
+            put("patch", patch)
+            put("add_tags", buildJsonArray { addTags.forEach { add(JsonPrimitive(it)) } })
+            put("remove_tags", buildJsonArray { removeTags.forEach { add(JsonPrimitive(it)) } })
+        },
+    )
+}
+
 fun deleteCommand(ids: List<String>): JsonObject = buildJsonObject {
     put(
         "delete_tasks",
