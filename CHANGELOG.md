@@ -12,6 +12,8 @@
 - **Dismiss and Snooze on the alarm card.** The reminder notification handles
   both without opening the full screen; snooze uses the saved length,
   reschedules the alarm and clears the other device.
+- **Simultaneous reminders.** Tasks that come due together queue on the
+  phone; dismissing one brings up the next instead of replacing it.
 
 ## 0.10.1 — 2026-11-27
 

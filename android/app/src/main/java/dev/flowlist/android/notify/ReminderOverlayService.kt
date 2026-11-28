@@ -49,24 +49,32 @@ import kotlinx.coroutines.launch
  * unlocked and another app owns the screen. Full-screen intents are only
  * allowed to raise an activity on the lock screen; this is the sanctioned way
  * to cover an app such as YouTube, and it needs "display over other apps".
+ *
+ * Several tasks can come due in the same minute. Their alarms queue here and
+ * each card is shown in turn, so one reminder never hides another.
  */
 class ReminderOverlayService :
     Service(),
     LifecycleOwner,
     SavedStateRegistryOwner,
     ViewModelStoreOwner {
+    private data class Pending(
+        val id: String,
+        val title: String,
+        val project: String?,
+        val dueAt: Long,
+    )
+
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val savedStateController = SavedStateRegistryController.create(this)
     private val store = ViewModelStore()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val pending = ArrayDeque<Pending>()
+    private var current: Pending? = null
     private var windowManager: WindowManager? = null
     private var overlay: ComposeView? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private var polling = false
-    private var taskId = ""
-    private var title = "Task due"
-    private var project: String? = null
-    private var dueAt = 0L
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val savedStateRegistry: SavedStateRegistry
@@ -83,51 +91,80 @@ class ReminderOverlayService :
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val id = intent?.getStringExtra("task_id") ?: run {
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        val reminder = Pending(
+            id = intent?.getStringExtra("task_id") ?: run {
+                stopSelf()
+                return START_NOT_STICKY
+            },
+            title = intent.getStringExtra("title") ?: "Task due",
+            project = intent.getStringExtra("project"),
+            dueAt = intent.getLongExtra("due_at", System.currentTimeMillis()),
+        )
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (overlay != null) {
-            // Two tasks can share a reminder minute. Show the newest and drop
-            // the older card: its alarm has already fired and marked itself,
-            // so leaving both would stack overlays and strand a notification.
-            runCatching { windowManager?.removeView(overlay) }
-            NotificationManagerCompat.from(this).cancel(taskId.hashCode())
-            overlay = null
+        TaskReminders.markFired(this, reminder.id)
+        // The same alarm can arrive twice; keep one copy in the queue.
+        if (current?.id == reminder.id || pending.any { it.id == reminder.id }) {
+            return START_NOT_STICKY
         }
-        taskId = id
-        title = intent.getStringExtra("title") ?: "Task due"
-        project = intent.getStringExtra("project")
-        dueAt = intent.getLongExtra("due_at", System.currentTimeMillis())
-        TaskReminders.markFired(this, id)
+        if (current == null) {
+            present(reminder)
+        } else {
+            pending.addLast(reminder)
+        }
+        return START_NOT_STICKY
+    }
+
+    /// Show one reminder. The freshness check runs first: the alarm comes from
+    /// the last synced snapshot, so the Mac may have completed or snoozed this
+    /// reminder after the phone last synced.
+    private fun present(reminder: Pending) {
+        current = reminder
         startForeground(
-            id.hashCode(),
-            buildReminderNotification(this, id, title, project, dueAt),
+            reminder.id.hashCode(),
+            buildReminderNotification(
+                this,
+                reminder.id,
+                reminder.title,
+                reminder.project,
+                reminder.dueAt,
+            ),
         )
-        // The alarm comes from the last synced snapshot. Give the shared
-        // dismissal list a moment before taking the screen: the Mac may have
-        // completed or snoozed this reminder after the phone last synced.
         scope.launch {
-            if (reminderAlreadyHandled(repository, id)) {
-                stopSelf()
+            if (reminderAlreadyHandled(repository, reminder.id)) {
+                finishCurrent()
                 return@launch
             }
-            // A newer reminder may have replaced this one while we checked.
-            if (taskId != id) return@launch
-            showOverlay()
+            if (current?.id != reminder.id) return@launch
+            showOverlay(reminder)
             if (!polling) {
                 polling = true
                 pollRemoteDismissal()
             }
         }
-        return START_NOT_STICKY
     }
 
-    private fun showOverlay() {
+    /// Close the card on screen and move to the next task due at the same
+    /// time, or stop once the queue is empty.
+    private fun finishCurrent() {
+        val done = current ?: return
+        overlay?.let { view ->
+            runCatching { windowManager?.removeView(view) }
+        }
+        overlay = null
+        current = null
+        NotificationManagerCompat.from(this).cancel(done.id.hashCode())
+        val next = pending.removeFirstOrNull()
+        if (next != null) {
+            present(next)
+        } else {
+            stopSelf()
+        }
+    }
+
+    private fun showOverlay(reminder: Pending) {
         val preferences = PreferencesStore(this).load()
         if (preferences.pauseMediaOnReminder) {
             requestMediaPause()
@@ -158,30 +195,30 @@ class ReminderOverlayService :
                     },
                 ) {
                     ReminderScreen(
-                        title = title,
-                        project = project,
-                        dueAt = dueAt,
+                        title = reminder.title,
+                        project = reminder.project,
+                        dueAt = reminder.dueAt,
                         initialSnoozeMinutes = preferences.snoozeMinutes,
                         lightContent = lightContent,
                         onComplete = {
                             CoroutineScope(Dispatchers.IO).launch {
-                                repository.dismissReminder(taskId)
-                                repository.complete(taskId, true)
+                                repository.dismissReminder(reminder.id)
+                                repository.complete(reminder.id, true)
                             }
-                            stopSelf()
+                            finishCurrent()
                         },
                         onSnooze = { minutes ->
                             CoroutineScope(Dispatchers.IO).launch {
-                                repository.dismissReminder(taskId)
+                                repository.dismissReminder(reminder.id)
                             }
                             TaskReminders.snooze(
                                 this@ReminderOverlayService,
-                                taskId,
-                                title,
-                                project,
+                                reminder.id,
+                                reminder.title,
+                                reminder.project,
                                 minutes,
                             )
-                            stopSelf()
+                            finishCurrent()
                         },
                         onOpen = {
                             startActivity(
@@ -191,20 +228,20 @@ class ReminderOverlayService :
                                     putExtra("tab", "today")
                                 },
                             )
-                            stopSelf()
+                            finishCurrent()
                         },
                         onDismiss = {
                             CoroutineScope(Dispatchers.IO).launch {
-                                repository.dismissReminder(taskId)
+                                repository.dismissReminder(reminder.id)
                             }
-                            stopSelf()
+                            finishCurrent()
                         },
                     )
                 }
             }
         }
         val manager = getSystemService(WindowManager::class.java) ?: run {
-            stopSelf()
+            finishCurrent()
             return
         }
         val params = WindowManager.LayoutParams(
@@ -228,7 +265,7 @@ class ReminderOverlayService :
             }
         }
         runCatching { manager.addView(view, params) }.onFailure {
-            stopSelf()
+            finishCurrent()
             return
         }
         applySystemBarAppearance(view, lightContent)
@@ -262,12 +299,10 @@ class ReminderOverlayService :
         scope.launch {
             while (isActive) {
                 delay(1500)
+                val active = current ?: continue
                 val dismissed = runCatching { repository.dismissedReminders() }
                     .getOrDefault(emptySet())
-                if (taskId in dismissed) {
-                    stopSelf()
-                    break
-                }
+                if (active.id in dismissed) finishCurrent()
             }
         }
     }
@@ -278,6 +313,7 @@ class ReminderOverlayService :
     /// Hold transient audio focus so a playing video or song pauses while the
     /// reminder owns the screen. Releasing it on close lets the app resume.
     private fun requestMediaPause() {
+        if (audioFocusRequest != null) return
         val manager = getSystemService(AudioManager::class.java) ?: return
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
             .setAudioAttributes(
@@ -308,7 +344,9 @@ class ReminderOverlayService :
             getSystemService(AudioManager::class.java)?.abandonAudioFocusRequest(it)
         }
         audioFocusRequest = null
-        NotificationManagerCompat.from(this).cancel(taskId.hashCode())
+        current?.let { NotificationManagerCompat.from(this).cancel(it.id.hashCode()) }
+        current = null
+        pending.clear()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         super.onDestroy()
     }

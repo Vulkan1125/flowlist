@@ -191,8 +191,9 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Reminder notification actions** — the alarm card now carries Dismiss
       and Snooze buttons. Snooze uses the saved length, reschedules the alarm,
       dismisses the other device and closes the reminder.
-- [ ] **Simultaneous reminders** — queue alarms instead of replacing the open
-      overlay with the newest one, or add the Mac's Full-screen list.
+- [x] **Simultaneous reminders** — alarms queue in the overlay service and
+      each card is shown in turn, so a second task due at the same minute no
+      longer replaces the first.
 - [ ] **Per-reminder media pause** — the Pause media switch is global; allow a
       single reminder to keep playing.
 - [ ] **Android docs refresh** — `android/README.md` still describes the old
