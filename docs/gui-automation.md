@@ -82,7 +82,9 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "header_filter_menu": false,
   "header_view_tab": "sort",
   "header_view_label": "View",
+  "header_view_summary": "Default order and grouping",
   "header_filter_label": "Filter",
+  "header_filter_summary": "No filters",
   "header_active_filters": 0,
   "layout": "fluid",
   "density": "comfortable",
@@ -235,7 +237,10 @@ probe can assert the Settings toggle took effect. `layout`, `density`,
 `header_filter_boxes` maps `chip`, `available`, `priority:high`, `completed`
 and `clear` the same way. `header_view_menu` and `header_filter_menu` say
 whether the two header menus are open, `header_view_tab` names the active View
-tab, and the label/count keys expose what each chip says. `sidebar_menu` names
+tab, and `header_view_summary`, `header_filter_summary` and
+`header_active_filters` expose the lines inside each card and the filter
+count. `header_view_label` and `header_filter_label` stay fixed at `View` and
+`Filter`. `sidebar_menu` names
 the row a right-click menu belongs to (`builtin:inbox`, `project:<id>`,
 `tag:<id>`, …) or is null. `header_view_anchor` and `header_filter_anchor`
 confirm the chip bounds needed to position those menus were measured. `title_space` is the

@@ -223,7 +223,9 @@ assert d["hidden_fields"] == [], d["hidden_fields"]
 assert set(d["columns"]) == {"project", "tags", "due", "flag"}, d["columns"]
 assert d["content_rows"], "no task rows"
 assert d["header_view_label"] == "View", d["header_view_label"]
+assert d["header_view_summary"] == "Default order and grouping", d["header_view_summary"]
 assert d["header_filter_label"] == "Filter", d["header_filter_label"]
+assert d["header_filter_summary"] == "No filters", d["header_filter_summary"]
 assert d["header_active_filters"] == 0, d["header_active_filters"]
 print("  fresh view: fluid, comfortable, four default columns")
 PY
@@ -277,6 +279,7 @@ python3 - "$state" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 assert d["layout"] == "columns", d["layout"]
+assert "Columns" in d["header_view_summary"], d["header_view_summary"]
 assert "defer" in d["columns"], d["columns"]
 assert {"project", "tags", "due", "flag"} <= set(d["columns"]), d["columns"]
 print("  columns layout with the Defer column on")
@@ -325,11 +328,13 @@ for key in chip available priority:all priority:high; do
 done
 click_map header_filter_boxes available
 wait_value only_available True
-wait_value header_filter_label "Filter · Available"
+wait_value header_active_filters 1
+wait_value header_filter_summary "Available"
 wait_map header_filter_boxes clear
 click_map header_filter_boxes clear
 wait_value only_available False
-wait_value header_filter_label "Filter"
+wait_value header_active_filters 0
+wait_value header_filter_summary "No filters"
 "$helpers/flowctl" key 53
 wait_value header_filter_menu False
 echo "  Filter menu: one chip, Available toggled, Clear restored the unfiltered view"

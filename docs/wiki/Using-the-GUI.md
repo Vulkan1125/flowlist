@@ -105,8 +105,10 @@ choice, so a compact project list and a roomy Today list can sit side by side.
 
 The View menu stays open while choices change, and every change is saved to
 the view straight away. **Filter** in the same row collects **Available**,
-**Priority** and **Completed**; its chip summarizes a single filter or counts
-several, and the small × clears them in one step.
+**Priority** and **Completed**. Both chips keep a fixed width: the View card
+shows the active order, grouping and layout at the top, and the Filter card
+names the active filters while a small count badge marks how many are on. The
+× on the Filter chip clears them in one step.
 
 ## The inspector
 
@@ -451,8 +453,8 @@ titles itself **Search** and ranks the closest matches first.
   headings. **Layout** chooses Fluid or Columns rows, their density and the
   fields or columns the view shows.
 - **Filter** collects **Available** (only tasks you can start now),
-  **Priority** and **Completed**. A lone filter is named on the chip; several
-  become a count, and the × clears them.
+  **Priority** and **Completed**. The card names the active filters, the chip
+  carries a count badge, and the × clears them.
 - The choices are remembered per view.
 - **Settings → Workflow → Forecast tag** names a tag whose undated actions
   appear in Forecast without needing a date. **Show flagged undated tasks** does

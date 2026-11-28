@@ -1546,7 +1546,7 @@ impl FlowlistApp {
                                     let anchor = self.view_anchor.clone();
                                     let boxes = self.header_view_boxes.clone();
                                     let custom = !self.view_is_default();
-                                    let label = self.view_menu_label();
+                                    let summary = self.view_summary();
                                     div()
                                         .flex_shrink_0()
                                         .child(
@@ -1556,11 +1556,13 @@ impl FlowlistApp {
                                                     self,
                                                     cx,
                                                     theme,
-                                                    "Sort, group and row layout",
+                                                    format!(
+                                                        "Sort, group and row layout — {summary}"
+                                                    ),
                                                 )
                                                 .child(toolbar_chip(
                                                     theme,
-                                                    label,
+                                                    "View",
                                                     self.view_menu_open || custom,
                                                     custom,
                                                 ))
@@ -1592,7 +1594,8 @@ impl FlowlistApp {
                                     let boxes = self.header_filter_boxes.clone();
                                     let active = self.filter_menu_open || self.filter_is_active();
                                     let can_clear = self.filter_is_active();
-                                    let label = self.filter_menu_label();
+                                    let count = self.active_filter_count();
+                                    let summary = self.filter_summary();
                                     div()
                                         .flex_shrink_0()
                                         .child(
@@ -1602,14 +1605,16 @@ impl FlowlistApp {
                                                     self,
                                                     cx,
                                                     theme,
-                                                    "Filter by availability, priority and completion",
+                                                    format!("Filters — {summary}"),
                                                 )
                                                 .child(
                                                     div()
                                                         .h(px(26.))
+                                                        .w(px(96.))
                                                         .px_2()
                                                         .flex()
                                                         .items_center()
+                                                        .justify_center()
                                                         .gap_1()
                                                         .rounded_md()
                                                         .border_1()
@@ -1631,7 +1636,23 @@ impl FlowlistApp {
                                                         })
                                                         .cursor_pointer()
                                                         .hover(|style| style.bg(theme.hover))
-                                                        .child(label)
+                                                        .child("Filter")
+                                                        .when(self.filter_is_active(), |this| {
+                                                            this.child(
+                                                                div()
+                                                                    .min_w(px(14.))
+                                                                    .h(px(14.))
+                                                                    .px(px(3.))
+                                                                    .rounded_full()
+                                                                    .bg(theme.accent)
+                                                                    .text_color(theme.raised)
+                                                                    .text_size(px(9.))
+                                                                    .flex()
+                                                                    .items_center()
+                                                                    .justify_center()
+                                                                    .child(count.to_string()),
+                                                            )
+                                                        })
                                                         .when(can_clear, |this| {
                                                             this.child(
                                                                 div()
@@ -1821,6 +1842,15 @@ impl FlowlistApp {
             .border_color(theme.border)
             .bg(theme.raised)
             .shadow_lg();
+        menu = menu.child(
+            div()
+                .px_2()
+                .pt_1()
+                .pb_1()
+                .text_xs()
+                .text_color(theme.text_faint)
+                .child(self.view_summary()),
+        );
         let mut tabs = div()
             .flex()
             .gap(px(1.))
@@ -2202,6 +2232,15 @@ impl FlowlistApp {
             .border_color(theme.border)
             .bg(theme.raised)
             .shadow_lg();
+        menu = menu.child(
+            div()
+                .px_2()
+                .pt_1()
+                .pb_1()
+                .text_xs()
+                .text_color(theme.text_faint)
+                .child(self.filter_summary()),
+        );
         menu = menu.child(section("Availability"));
         let key = "available".to_string();
         let sink = boxes.clone();
@@ -4488,9 +4527,11 @@ fn toolbar_chip(
 ) -> impl IntoElement {
     div()
         .h(px(26.))
+        .w(px(64.))
         .px_2()
         .flex()
         .items_center()
+        .justify_center()
         .gap_1()
         .rounded_md()
         .border_1()

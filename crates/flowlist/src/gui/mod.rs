@@ -424,19 +424,19 @@ fn menu_position(
     )
 }
 
-/// The same dropdown placement, but with its right edge on the chip's right
-/// edge. A chip that grows its label (View · Due · Columns) then expands its
-/// card to the left instead of dragging the card sideways.
-fn menu_position_right(
+/// Center a dropdown under its chip. The trigger keeps a fixed width, so the
+/// card stays put; the viewport clamps still keep a wide card on screen when
+/// the chip sits near an edge.
+fn menu_position_center(
     anchor: Bounds<gpui::Pixels>,
     viewport: (f32, f32),
     width: f32,
     height: f32,
 ) -> (f32, f32) {
-    let right = f32::from(anchor.origin.x) + f32::from(anchor.size.width);
+    let center = f32::from(anchor.origin.x) + f32::from(anchor.size.width) / 2.0;
     let y = f32::from(anchor.origin.y) + f32::from(anchor.size.height) + 4.0;
     (
-        (right - width)
+        (center - width / 2.0)
             .min((viewport.0 - width).max(0.0))
             .max(0.0),
         y.min((viewport.1 - height).max(0.0)).max(0.0),
@@ -4924,9 +4924,9 @@ impl FlowlistApp {
                 .all(|id| self.columns.contains(*id))
     }
 
-    /// A short summary on the View chip so the row still says what is on:
-    /// `View · Due · Columns`, `View · Compact`, and so on.
-    fn view_menu_label(&self) -> String {
+    /// The line at the top of the View panel. The chip itself stays a fixed
+    /// `View`, so this is where the active order, grouping and layout live.
+    fn view_summary(&self) -> String {
         let mut parts = Vec::new();
         if let Some(sort) = self.sort {
             parts.push(sort_label(Some(sort)).to_string());
@@ -4948,17 +4948,10 @@ impl FlowlistApp {
             parts.push(format!("{} hidden", self.hidden_fields.len()));
         }
         if parts.is_empty() {
-            return "View".to_string();
+            "Default order and grouping".to_string()
+        } else {
+            parts.join(" · ")
         }
-        let extra = parts.len().saturating_sub(2);
-        let mut label = format!(
-            "View · {}",
-            parts.iter().take(2).cloned().collect::<Vec<_>>().join(" · ")
-        );
-        if extra > 0 {
-            label.push_str(&format!(" +{extra}"));
-        }
-        label
     }
 
     /// Completed only filters the views that show finished work.
@@ -4976,11 +4969,12 @@ impl FlowlistApp {
         self.active_filter_count() > 0
     }
 
-    /// The Filter chip spells out a lone filter and counts several, so the
-    /// header never grows a chip per filter.
-    fn filter_menu_label(&self) -> String {
+    /// The line at the top of the Filter panel. The chip keeps a fixed
+    /// `Filter` label and a count badge, so the header never grows a chip per
+    /// filter.
+    fn filter_summary(&self) -> String {
         if !self.filter_is_active() {
-            return "Filter".to_string();
+            return "No filters".to_string();
         }
         let mut parts = Vec::new();
         if self.only_available {
@@ -4992,11 +4986,7 @@ impl FlowlistApp {
         if self.completed_filter_applies() && self.show_completed {
             parts.push("Completed".to_string());
         }
-        if parts.len() == 1 {
-            format!("Filter · {}", parts[0])
-        } else {
-            format!("Filter · {}", self.active_filter_count())
-        }
+        parts.join(" · ")
     }
 
     /// Clear Available, Priority and Completed in one step. A Priority view
@@ -8638,8 +8628,10 @@ impl FlowlistApp {
             "header_view_menu": self.view_menu_open,
             "header_filter_menu": self.filter_menu_open,
             "header_view_tab": self.view_menu_tab.slug(),
-            "header_view_label": self.view_menu_label(),
-            "header_filter_label": self.filter_menu_label(),
+            "header_view_label": "View",
+            "header_view_summary": self.view_summary(),
+            "header_filter_label": "Filter",
+            "header_filter_summary": self.filter_summary(),
             "header_active_filters": self.active_filter_count(),
             "header_view_anchor": self.view_anchor.get().is_some(),
             "header_filter_anchor": self.filter_anchor.get().is_some(),
@@ -9958,7 +9950,7 @@ impl Render for FlowlistApp {
         if self.view_menu_open
             && let Some(anchor) = self.view_anchor.get()
         {
-            let (x, y) = menu_position_right(anchor, viewport, 360.0, 390.0);
+            let (x, y) = menu_position_center(anchor, viewport, 360.0, 390.0);
             root = root.child(fade_in(
                 "view-menu-fade",
                 div()
@@ -9973,7 +9965,7 @@ impl Render for FlowlistApp {
         if self.filter_menu_open
             && let Some(anchor) = self.filter_anchor.get()
         {
-            let (x, y) = menu_position_right(anchor, viewport, 230.0, 260.0);
+            let (x, y) = menu_position_center(anchor, viewport, 230.0, 260.0);
             root = root.child(fade_in(
                 "filter-menu-fade",
                 div()
@@ -10441,7 +10433,7 @@ mod tests {
     use super::{
         DATE_PICKER_HEIGHT, DATE_PICKER_WIDTH, DateField, View, accent_for, clock_dial_position,
         clock_hour_12, clock_hour_24, date_picker_position, effective_priority_filter,
-        first_of_month, menu_position_right, picker_default_time, picker_stamp, stepped_time,
+        first_of_month, menu_position_center, picker_default_time, picker_stamp, stepped_time,
     };
     use chrono::{NaiveDate, NaiveTime};
     use flowlist_core::model::{BuiltinPerspective, Priority};
@@ -10692,35 +10684,33 @@ mod tests {
     }
 
     #[test]
-    fn header_cards_anchor_their_right_edge_to_the_chip() {
-        // A 120px View chip ending at x=1220: the 360px card ends there too,
-        // so a longer chip label grows the card leftwards without moving it.
+    fn header_cards_center_under_their_chip() {
+        // A 64px View chip centred at 1000: the 360px card is centred too.
         let anchor = Bounds {
-            origin: point(px(1100.0), px(60.0)),
-            size: size(px(120.0), px(26.0)),
+            origin: point(px(968.0), px(60.0)),
+            size: size(px(64.0), px(26.0)),
         };
-        let (x, y) = menu_position_right(anchor, (1254.0, 1000.0), 360.0, 390.0);
-        assert_eq!(x, 860.0);
+        let (x, y) = menu_position_center(anchor, (1254.0, 1000.0), 360.0, 390.0);
+        assert_eq!(x, 1000.0 - 180.0);
         assert_eq!(y, 90.0);
 
-        // A card wider than the space to the left clamps to the window edge
-        // instead of painting off screen.
+        // A card wider than the space to the left clamps to the window edge.
         let left = Bounds {
             origin: point(px(10.0), px(60.0)),
-            size: size(px(80.0), px(26.0)),
+            size: size(px(64.0), px(26.0)),
         };
         assert_eq!(
-            menu_position_right(left, (1254.0, 1000.0), 360.0, 390.0).0,
+            menu_position_center(left, (1254.0, 1000.0), 360.0, 390.0).0,
             0.0
         );
 
         // A chip too close to the right edge still leaves the card on screen.
         let right = Bounds {
-            origin: point(px(1240.0), px(60.0)),
-            size: size(px(100.0), px(26.0)),
+            origin: point(px(1220.0), px(60.0)),
+            size: size(px(64.0), px(26.0)),
         };
         assert_eq!(
-            menu_position_right(right, (1254.0, 1000.0), 360.0, 390.0).0,
+            menu_position_center(right, (1254.0, 1000.0), 360.0, 390.0).0,
             1254.0 - 360.0
         );
     }

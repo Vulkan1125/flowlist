@@ -125,11 +125,12 @@ still a gap.
 The **View** chip opens Sort, Group and Layout tabs under one popover, and
 **Filter** collects Available, Priority and Completed. Clicking anywhere
 outside closes either menu, and `Esc` does the same. Both keep themselves open
-while choices change, so several changes can be made in one visit. The View
-chip names the active sort/group/layout and the Filter chip names a lone filter
-or counts several; the × on the Filter chip clears them. When a typed project path does not exist, a Create project
-sheet asks first: `Enter` creates the project and files the task, `Esc` leaves
-the task unchanged.
+while choices change, so several changes can be made in one visit. Both chips
+keep a fixed width; the View card names the active sort/group/layout at the
+top, the Filter card names the active filters, and a count badge marks how
+many are on. The × on the Filter chip clears them. When a typed project path
+does not exist, a Create project sheet asks first: `Enter` creates the project
+and files the task, `Esc` leaves the task unchanged.
 
 ### The View sheet
 

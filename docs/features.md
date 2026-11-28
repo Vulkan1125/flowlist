@@ -93,7 +93,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       every option instead of cycling, with **Default** meaning the view's
       natural order/grouping
 - [x] One **Filter** popover for Available, All priorities / High / Medium /
-      Low and Completed, with a summary chip and a one-click clear
+      Low and Completed, with an in-card summary, a count badge and a
+      one-click clear
 - [x] Per-view Layout tab: Fluid or Columns rows, Comfortable or Compact
       density, hideable fluid fields (project, dates, tags, estimate,
       checklist, attachments, flag) and optional columns (Project, Tags, Due,
