@@ -159,19 +159,6 @@ pub struct DragSettingsScroll;
 #[derive(Clone, Debug)]
 pub struct DragInspectorScroll;
 
-/// The View menu's Sort and Group list scrollbar.
-#[derive(Clone, Copy, Debug)]
-pub struct DragViewMenuScroll;
-
-pub fn view_menu_scroll_ghost(
-    _payload: &DragViewMenuScroll,
-    _position: Point<Pixels>,
-    _window: &mut Window,
-    cx: &mut App,
-) -> gpui::Entity<ResizeGhost> {
-    cx.new(|_| ResizeGhost)
-}
-
 pub fn inspector_scroll_ghost(
     _payload: &DragInspectorScroll,
     _position: Point<Pixels>,

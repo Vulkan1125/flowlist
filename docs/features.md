@@ -95,7 +95,7 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Header order Available → View → Priorities: Available is a toggle, View
       and Priorities are chevron dropdowns, Priorities is hidden in a Priority
       view, and Completed appears only where a view can show finished work.
-      The Sort and Group lists scroll with a scrollbar.
+      The Sort and Group lists scroll with a passive scrollbar.
 - [x] Per-view Layout tab: Fluid or Columns rows, Comfortable or Compact
       density, hideable fluid fields (project, dates, tags, estimate,
       checklist, attachments, flag) and optional columns (Project, Tags, Due,

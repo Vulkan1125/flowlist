@@ -8,7 +8,8 @@
   Priorities**. Available is a quiet toggle; View and Priorities are dropdowns
   with a chevron at their right edge. View holds Sort, Group and Layout tabs,
   keeps a fixed width and describes the active view inside its card. The Sort
-  and Group lists show a scrollbar when they overflow. Priorities opens All /
+  and Group lists show a passive scrollbar when they overflow, so wheel or
+  trackpad scrolling leaves pointer movement smooth. Priorities opens All /
   High / Medium / Low and mirrors the sidebar's rows; it is left out when the
   open view is itself a Priority view. **Completed** stays where a view can
   show finished work, and context actions such as Hide past, Calendar and
@@ -28,6 +29,10 @@
 
 ### Bug fixes
 
+- **Smooth View scrolling.** The Sort and Group scrollbar is a passive
+  position indicator now. Wheel and trackpad scrolling still move the list,
+  but moving the pointer immediately afterwards no longer fights a draggable
+  thumb or a track click target.
 - **Header cards stay put.** The View chip keeps a fixed width, and its card
   opens against the chip's right edge with a small inset. The active sort,
   grouping and layout now live inside the card, so the toolbar never shifts

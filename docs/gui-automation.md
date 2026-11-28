@@ -84,6 +84,7 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "header_view_label": "View",
   "header_view_summary": "Default order and grouping",
   "header_view_dot": false,
+  "header_view_scroll": 0.0,
   "header_priority_menu": false,
   "header_priority_visible": true,
   "layout": "fluid",
@@ -234,6 +235,7 @@ probe can assert the Settings toggle took effect. `layout`, `density`,
 `hidden_fields` and `columns` report the active view's row layout, and
 `header_view_boxes` maps `chip`, `tab:layout`, `mode:fluid`,
 `density:compact`, `field:project` and `column:due` to painted boxes.
+`header_view_scroll` is the current Sort/Group list offset.
 `header_priority_boxes` maps `chip`, `priority:all`, `priority:high`,
 `priority:medium` and `priority:low` the same way. `header_view_menu` and
 `header_priority_menu` say whether the View and Priorities dropdowns are open;

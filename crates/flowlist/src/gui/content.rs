@@ -19,10 +19,7 @@ use flowlist_core::model::{
 use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
 
-use super::drag::{
-    DragForecastResize, DragTask, DragViewMenuScroll, ghost, resize_ghost,
-    view_menu_scroll_ghost,
-};
+use super::drag::{DragForecastResize, DragTask, ghost, resize_ghost};
 use super::icons::{self, Icon};
 use super::widgets::TipExt;
 use super::{
@@ -2035,7 +2032,7 @@ impl FlowlistApp {
                     .on_click(cx.listener(move |this, _, _, cx| this.choose_sort(option, cx))),
             );
         }
-        self.view_tab_scroll_area(theme, cx, list)
+        self.view_tab_scroll_area(theme, list)
     }
 
     fn render_group_tab(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -2107,50 +2104,21 @@ impl FlowlistApp {
                     .on_click(cx.listener(move |this, _, _, cx| this.choose_group(option, cx))),
             );
         }
-        self.view_tab_scroll_area(theme, cx, list)
+        self.view_tab_scroll_area(theme, list)
     }
 
-    /// Wrap the scrolling Sort/Group list with a thin overlay scrollbar.
-    fn view_tab_scroll_area(
-        &self,
-        theme: super::theme::Theme,
-        cx: &mut Context<Self>,
-        list: impl IntoElement,
-    ) -> AnyElement {
+    /// Wrap the scrolling Sort/Group list with a thin, passive scrollbar.
+    /// The wheel and trackpad still move the list; the thumb only reports the
+    /// position so pointer movement over the menu stays smooth.
+    fn view_tab_scroll_area(&self, theme: super::theme::Theme, list: impl IntoElement) -> AnyElement {
         div()
             .relative()
-            .on_drag_move::<DragViewMenuScroll>(cx.listener(
-                |this, event: &DragMoveEvent<DragViewMenuScroll>, _, cx| {
-                    let Some(drag_offset) = this.view_tab_scroll_drag_grab.get() else {
-                        return;
-                    };
-                    let bounds = this.view_tab_scroll.bounds();
-                    let viewport = f32::from(bounds.size.height);
-                    let max_offset = f32::from(this.view_tab_scroll.max_offset().height);
-                    if viewport <= 0.0 || max_offset <= 0.0 {
-                        return;
-                    }
-                    let content = viewport + max_offset;
-                    let thumb_height =
-                        (viewport * viewport / content).clamp(24.0, viewport);
-                    let travel = (viewport - thumb_height).max(1.0);
-                    let pointer = f32::from(event.event.position.y - bounds.origin.y);
-                    let thumb_top = (pointer - drag_offset).clamp(0.0, travel);
-                    let scroll = (thumb_top / travel) * max_offset;
-                    this.view_tab_scroll.set_offset(point(px(0.), px(-scroll)));
-                    cx.notify();
-                },
-            ))
             .child(list)
-            .child(self.view_tab_scrollbar(theme, cx))
+            .child(self.view_tab_scrollbar(theme))
             .into_any_element()
     }
 
-    fn view_tab_scrollbar(
-        &self,
-        theme: super::theme::Theme,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn view_tab_scrollbar(&self, theme: super::theme::Theme) -> AnyElement {
         const THUMB_WIDTH: f32 = 5.0;
         const TRACK_WIDTH: f32 = 12.0;
         const PADDING: f32 = 3.0;
@@ -2168,24 +2136,6 @@ impl FlowlistApp {
         let thumb_height = (viewport * viewport / content).clamp(MIN_THUMB, viewport);
         let travel = (viewport - thumb_height).max(1.0);
         let thumb_top = (scrolled / max_offset) * travel;
-        let thumb_top_window = f32::from(bounds.origin.y) + thumb_top;
-        let grab = self.view_tab_scroll_drag_grab.clone();
-        let thumb = div()
-            .id("view-menu-scroll-thumb")
-            .absolute()
-            .top(px(thumb_top))
-            .right(px(PADDING))
-            .w(px(THUMB_WIDTH))
-            .h(px(thumb_height))
-            .rounded_full()
-            .bg(theme.text_faint.opacity(0.55))
-            .hover(|style| style.bg(theme.text_dim))
-            .on_drag(DragViewMenuScroll, move |payload, position, window, cx| {
-                let pointer = f32::from(position.y);
-                let drag_offset = (pointer - thumb_top_window).clamp(0.0, thumb_height);
-                grab.set(Some(drag_offset));
-                view_menu_scroll_ghost(payload, position, window, cx)
-            });
         div()
             .id("view-menu-scroll-track")
             .absolute()
@@ -2193,31 +2143,17 @@ impl FlowlistApp {
             .right_0()
             .h_full()
             .w(px(TRACK_WIDTH))
-            .on_mouse_down(
-                gpui::MouseButton::Left,
-                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
-                    let pointer = f32::from(event.position.y);
-                    if pointer >= thumb_top_window && pointer <= thumb_top_window + thumb_height {
-                        return;
-                    }
-                    let bounds = this.view_tab_scroll.bounds();
-                    let viewport = f32::from(bounds.size.height);
-                    let max_offset = f32::from(this.view_tab_scroll.max_offset().height);
-                    if viewport <= 0.0 || max_offset <= 0.0 {
-                        return;
-                    }
-                    let content = viewport + max_offset;
-                    let thumb_height =
-                        (viewport * viewport / content).clamp(MIN_THUMB, viewport);
-                    let travel = (viewport - thumb_height).max(1.0);
-                    let pointer = f32::from(event.position.y - bounds.origin.y);
-                    let thumb_top = (pointer - thumb_height / 2.0).clamp(0.0, travel);
-                    let scroll = (thumb_top / travel) * max_offset;
-                    this.view_tab_scroll.set_offset(point(px(0.), px(-scroll)));
-                    cx.notify();
-                }),
+            .child(
+                div()
+                    .id("view-menu-scroll-thumb")
+                    .absolute()
+                    .top(px(thumb_top))
+                    .right(px(PADDING))
+                    .w(px(THUMB_WIDTH))
+                    .h(px(thumb_height))
+                    .rounded_full()
+                    .bg(theme.text_faint.opacity(0.55)),
             )
-            .child(thumb)
             .into_any_element()
     }
 

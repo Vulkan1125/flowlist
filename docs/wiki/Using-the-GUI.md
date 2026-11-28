@@ -110,8 +110,8 @@ the view straight away. The header order is **Available**, **View**,
 - **Available** is a one-click toggle.
 - **View** keeps a fixed width and shows a small dot only when the sort or
   grouping changes; a layout change is named inside the card but leaves the
-  chip quiet. The Sort and Group lists gain a scrollbar when their options
-  overflow.
+  chip quiet. The Sort and Group lists gain a passive scrollbar when their
+  options overflow; the wheel or trackpad scrolls them.
 - **Priorities** is a dropdown with a chevron. It selects All priorities,
   High, Medium or Low and matches the sidebar's High / Medium / Low rows. It
   is hidden when the open view is itself a Priority view.
