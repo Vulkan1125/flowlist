@@ -1253,10 +1253,7 @@ fun MainScreen(
             tasks = dueNowTasks,
             onDismiss = { dueNowIds = emptyList() },
             onToggle = { task -> complete(task, !task.completed) },
-            onClick = { task ->
-                detail = task
-                dueNowIds = emptyList()
-            },
+            onClick = { task -> detail = task },
         )
     }
 
@@ -3013,7 +3010,7 @@ private fun DueNowSheet(
 /// Build a normal task row for the Due now sheet from the batch ids.
 private fun dueTaskView(db: Db, id: String, pending: Set<String>): TaskView? {
     val task = db.tasks[id] ?: return null
-    if (!task.isActive) return null
+    if (task.trashedAt != null) return null
     val project = task.project?.let { db.projects[it] }
     return TaskView(
         id = task.id,

@@ -77,6 +77,7 @@ class ReminderOverlayService :
     private val showBatchList = mutableStateOf(false)
     private val batchItems = mutableStateListOf<ReminderBatchItem>()
     private var current: Pending? = null
+    private var batchSummaryShown = false
     private var windowManager: WindowManager? = null
     private var overlay: ComposeView? = null
     private var audioFocusRequest: AudioFocusRequest? = null
@@ -126,7 +127,11 @@ class ReminderOverlayService :
             // The receiver stays quiet for later alarms; make sure a card it
             // posted before this service was marked active does not linger.
             NotificationManagerCompat.from(this).cancel(reminder.id.hashCode())
-            updateBatchNotification()
+            if (batchCount.value == 2) {
+                scheduleBatchSummary()
+            } else if (batchSummaryShown) {
+                updateBatchNotification()
+            }
         }
         return START_NOT_STICKY
     }
@@ -137,6 +142,7 @@ class ReminderOverlayService :
     private fun present(reminder: Pending) {
         current = reminder
         batchCount.value = 1
+        batchSummaryShown = false
         showBatchList.value = false
         refreshBatchItems()
         startForeground(
@@ -189,6 +195,7 @@ class ReminderOverlayService :
         current = null
         pending.clear()
         batchCount.value = 0
+        batchSummaryShown = false
         showBatchList.value = false
         refreshBatchItems()
         NotificationManagerCompat.from(this).cancel(BATCH_ID)
@@ -229,6 +236,17 @@ class ReminderOverlayService :
                     dueAt = reminder.dueAt,
                 ),
             )
+        }
+    }
+
+    /// Let the first alarm ring before replacing its notification with the
+    /// silent summary. Switching immediately cuts the alarm tone off.
+    private fun scheduleBatchSummary() {
+        scope.launch {
+            delay(2_500)
+            if (batchCount.value <= 1 || current == null) return@launch
+            batchSummaryShown = true
+            updateBatchNotification()
         }
     }
 

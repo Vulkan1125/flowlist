@@ -68,6 +68,7 @@ fun buildReminderNotification(
         .setCategory(NotificationCompat.CATEGORY_ALARM)
         .setPriority(NotificationCompat.PRIORITY_MAX)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setOnlyAlertOnce(true)
         .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
         .setWhen(dueAt)
         .setShowWhen(true)
