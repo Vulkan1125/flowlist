@@ -109,6 +109,7 @@ import kotlin.math.roundToInt
 class ReminderActivity : ComponentActivity() {
     private var audioFocusRequest: AudioFocusRequest? = null
     private var closeReceiver: BroadcastReceiver? = null
+    private var activeTaskId = ""
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -137,6 +138,7 @@ class ReminderActivity : ComponentActivity() {
             finish()
             return
         }
+        activeTaskId = taskId
         val title = intent.getStringExtra("title") ?: "Task due"
         val project = intent.getStringExtra("project")
         val dueAt = intent.getLongExtra("due_at", System.currentTimeMillis())
@@ -154,7 +156,9 @@ class ReminderActivity : ComponentActivity() {
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         TaskReminders.markFired(this, taskId)
-        getSystemService(android.app.NotificationManager::class.java)?.cancel(taskId.hashCode())
+        // Keep the alarm notification while the reminder is open: cancelling
+        // it here cuts the alarm tone off before it can ring. It is removed in
+        // onDestroy once the reminder closes.
         // The alarm is scheduled from the last synced snapshot. If the Mac
         // already completed or snoozed this reminder, stand down before the
         // screen is taken over.
@@ -298,6 +302,9 @@ class ReminderActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        getSystemService(android.app.NotificationManager::class.java)
+            ?.cancel(activeTaskId.hashCode())
+        activeTaskId = ""
         closeReceiver?.let { runCatching { unregisterReceiver(it) } }
         closeReceiver = null
         audioFocusRequest?.let {
