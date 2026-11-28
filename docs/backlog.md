@@ -199,9 +199,10 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Media pause stays FSR-only** — the Pause media switch applies to
       full-screen reminders only; regular due summaries never take audio focus.
       There is no per-reminder override.
-- [ ] **Android docs refresh** — `android/README.md` still describes the old
-      week-strip reminder and calls the default theme Todoist; update it for the
-      overlay, media pause, snooze and cross-device sync.
+- [x] **Android docs refresh** — `android/README.md` now names Tomato as the
+      default theme, explains independent light and dark families, and
+      describes the overlay reminder, media pause, snooze and cross-device
+      dismissal.
 - [x] **Project completion mode** — the Android project editor now toggles
       **Complete with last action**. The shared command layer applies it, so
       the phone and Mac agree.
@@ -288,8 +289,9 @@ integrations are tracked separately and are not part of this phase.
       saved views, switches the Perspectives and Saved sections off, and
       toggles each row's count. Inbox, Today and Trash stay visible; the
       bottom bar and tablet rail follow the same hidden set.
-- [ ] **Task row icons** — phone rows show due/planned text and a flag but no
-      defer clock or repeat glyph. Match the Mac's drawn row metadata.
+- [x] **Task row icons** — the row metadata draws the Mac's defer mark before
+      an upcoming defer date and the repeat arrow before the rule summary, so
+      both stay on the single metadata line and ellipsize with the rest.
 - [ ] **Separate light and dark backgrounds** — the Mac keeps a light and a
       dark wallpaper; the phone has one custom background.
 - [ ] **Import and export** — add JSON/TaskPaper import and TaskPaper export

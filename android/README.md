@@ -39,12 +39,15 @@ sdk.dir=/opt/homebrew/share/android-commandlinetools
   bearer token still guards every request.
 - Offline captures get a client-generated ULID, so the Mac and phone agree on
   the id before the first sync. Operations carry an id the server deduplicates.
-- Themes: Todoist (default), Plain, Paper, Mist, Catppuccin, Nord, Gruvbox,
-  Dracula, Tokyo Night, Vesper, Graphite and Midnight, with theme, wallpaper or
-  custom accent tones and six launcher icons.
+- Themes: Tomato (default), Plain, Paper, Mist, Catppuccin, Nord, Gruvbox,
+  Dracula, Tokyo Night, Vesper, Graphite and Midnight. Light and dark families
+  are chosen separately, with theme, wallpaper or custom accent tones and a
+  launcher icon in the family's colour.
 - Full task editing (title, notes, dates, project, priority, flag, estimate,
-  tags), a home-screen widget and due reminders.
-- A full-screen reminder with a week strip, slide-to-complete, dismiss and an
-  adjustable snooze row.
+  tags and repeat rules), a Forecast calendar, a home-screen widget and due
+  reminders.
+- Full-screen reminders draw over another app: complete, dismiss or snooze from
+  the card, optionally pausing media. Tasks due together merge into one card,
+  and completing or snoozing on the Mac clears the phone's alarm.
 
 Everything in this folder can be deleted without touching the Mac app.

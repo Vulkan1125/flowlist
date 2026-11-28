@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -63,6 +65,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -78,6 +82,8 @@ import dev.flowlist.android.data.TaskView
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.isToday
 import dev.flowlist.android.data.label
+import dev.flowlist.android.data.repeatRowLabel
+import java.time.Instant
 
 @Composable
 fun CheckCircle(
@@ -135,6 +141,16 @@ internal val LowPriorityBlue = androidx.compose.ui.graphics.Color(0xFF3B82F6)
 /** Set while the list is in select mode; rows then toggle ids instead of opening. */
 class TaskSelection(val ids: Set<String>, val toggle: (String) -> Unit)
 val LocalTaskSelection = compositionLocalOf<TaskSelection?> { null }
+
+/// One segment of a row's metadata line: text, or a glyph the Mac also draws
+/// (the defer mark and the repeat arrow).
+private sealed interface DetailPart {
+    data class Label(val text: String, val color: Color) : DetailPart
+    data class Glyph(val icon: ImageVector, val description: String) : DetailPart
+}
+
+private fun isUpcoming(at: String?): Boolean =
+    at?.let { runCatching { Instant.parse(it) }.getOrNull() }?.isAfter(Instant.now()) == true
 
 @Composable
 fun TaskRow(
@@ -285,30 +301,73 @@ fun TaskRow(
             }
             val details = buildList {
                 if (childCount > 0) {
-                    add("[$childDone/$childCount]" to colors.faint)
+                    add(DetailPart.Label("[$childDone/$childCount]", colors.faint))
                 }
-                task.projectName?.let { add(it to colors.faint) }
+                task.projectName?.let { add(DetailPart.Label(it, colors.faint)) }
                 if (task.blockedByTag != null && !task.completed) {
-                    add("Blocked by #${task.blockedByTag}" to colors.warning)
+                    add(DetailPart.Label("Blocked by #${task.blockedByTag}", colors.warning))
                 }
-                task.due?.let { add(it.label() to dueColor) }
-                task.planned?.let { add("Plan ${it.label()}" to colors.faint) }
-                if (task.checklistTotal > 0) add("${task.checklistDone}/${task.checklistTotal}" to colors.faint)
-                if (task.estimateMin != null) add("${task.estimateMin}m" to colors.faint)
-                if (task.tags.isNotEmpty()) add(task.tags.joinToString(" ") { "#$it" } to colors.faint)
+                task.due?.let { add(DetailPart.Label(it.label(), dueColor)) }
+                task.planned?.let { add(DetailPart.Label("Plan ${it.label()}", colors.faint)) }
+                val defer = task.defer
+                if (defer != null && isUpcoming(defer.at)) {
+                    add(DetailPart.Glyph(Icons.Outlined.Schedule, "Deferred"))
+                    add(DetailPart.Label(defer.label(), colors.faint))
+                }
+                repeatRowLabel(task.repeat)?.let { label ->
+                    add(DetailPart.Glyph(Icons.Outlined.Repeat, "Repeats"))
+                    add(DetailPart.Label(label, colors.faint))
+                }
+                if (task.checklistTotal > 0) add(DetailPart.Label("${task.checklistDone}/${task.checklistTotal}", colors.faint))
+                if (task.estimateMin != null) add(DetailPart.Label("${task.estimateMin}m", colors.faint))
+                if (task.tags.isNotEmpty()) add(DetailPart.Label(task.tags.joinToString(" ") { "#$it" }, colors.faint))
             }
             if (details.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(3.dp))
+                val inline = buildMap {
+                    details.forEachIndexed { index, part ->
+                        if (part is DetailPart.Glyph) {
+                            put(
+                                "glyph-$index",
+                                InlineTextContent(
+                                    Placeholder(
+                                        width = 12.sp,
+                                        height = 12.sp,
+                                        placeholderVerticalAlign = PlaceholderVerticalAlign.Center,
+                                    ),
+                                ) {
+                                    Icon(
+                                        imageVector = part.icon,
+                                        contentDescription = null,
+                                        tint = colors.faint,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
                 val text = buildAnnotatedString {
-                    details.forEachIndexed { index, (value, color) ->
-                        if (index > 0) {
+                    details.forEachIndexed { index, part ->
+                        // A glyph and its label are one unit; only separate the
+                        // units from each other.
+                        if (index > 0 && details[index - 1] !is DetailPart.Glyph) {
                             withStyle(SpanStyle(color = colors.faint)) { append("  ·  ") }
                         }
-                        withStyle(SpanStyle(color = color)) { append(value) }
+                        when (part) {
+                            is DetailPart.Label -> withStyle(SpanStyle(color = part.color)) {
+                                append(part.text)
+                            }
+                            is DetailPart.Glyph -> {
+                                appendInlineContent("glyph-$index", part.description)
+                                append(" ")
+                            }
+                        }
                     }
                 }
                 Text(
                     text = text,
+                    inlineContent = inline,
                     style = MaterialTheme.typography.labelMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

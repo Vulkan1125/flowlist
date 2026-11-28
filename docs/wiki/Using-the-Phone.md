@@ -190,6 +190,12 @@ Priority is shown by the task circle and the selected pill: red for high,
 yellow for medium and blue for low. A flagged task shows a single flag at the
 far right of its row; priorities never add their own flag.
 
+The line under the title carries the project, due and planned dates, checklist
+and estimate counts, tags and any blocking tag. An upcoming defer date gets a
+clock mark and a repeating task a repeat arrow, matching the Mac; the repeat
+rule reads in full, such as **every 2 weeks (defer another)**. The line stays
+on one row and ellipsizes when it runs out of space.
+
 Subtasks start collapsed. Tap the chevron at the right of a parent row to open
 or close its children. Long-press a task to drag it: the middle of another row
 nests it, the top edge places it before that sibling and the bottom edge places

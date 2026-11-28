@@ -61,6 +61,9 @@
   rows above each day, Settings → Library → **Forecast** chooses the undated
   tag and whether flagged actions appear, and dragging a task onto a month or
   week cell reschedules its due date while keeping its clock time.
+- **Task row metadata.** Rows now draw the Mac's defer mark before an upcoming
+  defer date and the repeat arrow before the rule summary, so deferred and
+  repeating work is recognisable without opening the task.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.

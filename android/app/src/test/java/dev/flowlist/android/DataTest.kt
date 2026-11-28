@@ -35,6 +35,8 @@ import dev.flowlist.android.data.forecastProjectDays
 import dev.flowlist.android.data.forecastTaskDays
 import dev.flowlist.android.data.forecastUndated
 import dev.flowlist.android.data.batchUpdateTasksCommand
+import dev.flowlist.android.data.repeatRowLabel
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.put
 import dev.flowlist.android.data.convertTaskToProjectCommand
 import dev.flowlist.android.data.savePerspectiveCommand
@@ -388,6 +390,32 @@ class DataTest {
         )
         assertEquals(2, db.taggedTaskCount())
         assertEquals(1, db.geotaggedTaskCount())
+    }
+
+    @Test
+    fun repeat_row_label_matches_the_mac_description() {
+        fun rule(json: String) = Json.parseToJsonElement(json)
+        assertEquals(
+            "every 2 weeks",
+            repeatRowLabel(
+                rule("""{"mode":"due_again","schedule":"fixed","every":2,"unit":"weeks","end":{"kind":"never"}}"""),
+            ),
+        )
+        assertEquals(
+            "every Monday and Friday after completion (defer another) for 6 times",
+            repeatRowLabel(
+                rule(
+                    """{"mode":"defer_another","schedule":"after_completion","every":1,"unit":"days","end":{"kind":"after_count","date":6},"weekdays":[1,5]}""",
+                ),
+            ),
+        )
+        assertEquals(
+            "every month until 2026-12-01",
+            repeatRowLabel(
+                rule("""{"mode":"due_again","schedule":"fixed","every":1,"unit":"months","end":{"kind":"on_date","date":"2026-12-01"}}"""),
+            ),
+        )
+        assertNull(repeatRowLabel(null))
     }
 
     @Test

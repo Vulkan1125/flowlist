@@ -2,7 +2,10 @@ package dev.flowlist.android.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -269,6 +272,8 @@ data class TaskView(
     val due: StampDto?,
     val defer: StampDto?,
     val planned: StampDto? = null,
+    /// The raw repeat rule, so rows can draw the Mac's repeat summary.
+    val repeat: JsonElement? = null,
     val flagged: Boolean,
     val fullscreenReminder: Boolean,
     val reminderAt: StampDto?,
@@ -290,6 +295,67 @@ data class TaskView(
 
 val TaskDto.isActive: Boolean
     get() = !completed && trashedAt == null
+
+/// The Mac's row metadata for a repeat rule, e.g. "every 2 weeks (defer
+/// another)" or "every Monday and Friday after completion for 6 times". The
+/// row owns the glyph, so this is the label only.
+fun repeatRowLabel(repeat: JsonElement?): String? {
+    val rule = repeat as? JsonObject ?: return null
+    val unit = (rule["unit"] as? JsonPrimitive)?.content ?: return null
+    val every = (rule["every"] as? JsonPrimitive)?.content?.toIntOrNull()
+        ?.coerceAtLeast(1) ?: 1
+    val days = (rule["weekdays"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonPrimitive)?.content?.toIntOrNull() }
+        ?.filter { it in 0..6 }
+        ?.distinct()
+        ?.sorted()
+        .orEmpty()
+    val cadence = if (days.isEmpty()) {
+        val noun = when (unit) {
+            "weeks" -> "week"
+            "months" -> "month"
+            "years" -> "year"
+            else -> "day"
+        }
+        if (every == 1) "every $noun" else "every $every ${noun}s"
+    } else {
+        val names = days.map {
+            when (it) {
+                0 -> "Sunday"
+                1 -> "Monday"
+                2 -> "Tuesday"
+                3 -> "Wednesday"
+                4 -> "Thursday"
+                5 -> "Friday"
+                else -> "Saturday"
+            }
+        }
+        val joined = when (names.size) {
+            1 -> names.first()
+            2 -> "${names[0]} and ${names[1]}"
+            else -> names.dropLast(1).joinToString(", ") + ", and " + names.last()
+        }
+        "every $joined"
+    }
+    val schedule = if ((rule["schedule"] as? JsonPrimitive)?.content == "after_completion") {
+        " after completion"
+    } else {
+        ""
+    }
+    val mode = if ((rule["mode"] as? JsonPrimitive)?.content == "defer_another") {
+        " (defer another)"
+    } else {
+        ""
+    }
+    val endObject = rule["end"] as? JsonObject
+    val endValue = (endObject?.get("date") as? JsonPrimitive)?.content
+    val end = when ((endObject?.get("kind") as? JsonPrimitive)?.content) {
+        "on_date" -> endValue?.let { " until $it" }.orEmpty()
+        "after_count" -> endValue?.toIntOrNull()?.let { " for $it times" }.orEmpty()
+        else -> ""
+    }
+    return "$cadence$schedule$mode$end"
+}
 
 /// A task opts into full-screen reminders itself, through a parent task, or
 /// through its project or any folder above the project.
@@ -345,6 +411,7 @@ fun Db.taskViews(
                 due = task.due,
                 defer = task.defer,
                 planned = task.planned,
+                repeat = task.repeat,
                 flagged = task.flagged,
                 fullscreenReminder = task.fullscreenReminder,
                 reminderAt = task.reminderAt,
@@ -595,6 +662,7 @@ private fun TaskDto.toView(db: Db) = TaskView(
     due = due,
     defer = defer,
     planned = planned,
+    repeat = repeat,
     flagged = flagged,
     fullscreenReminder = fullscreenReminder,
     reminderAt = reminderAt,

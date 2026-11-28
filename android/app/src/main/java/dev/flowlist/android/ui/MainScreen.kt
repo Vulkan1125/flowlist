@@ -4232,6 +4232,7 @@ private fun dueTaskView(db: Db, id: String, pending: Set<String>): TaskView? {
         due = task.due,
         defer = task.defer,
         planned = task.planned,
+        repeat = task.repeat,
         flagged = task.flagged,
         fullscreenReminder = task.fullscreenReminder,
         reminderAt = task.reminderAt,
