@@ -1227,6 +1227,7 @@ class Repository(context: Context) {
         defer: StampDto? = null,
         planned: StampDto? = null,
         tags: Set<String> = emptySet(),
+        attachments: List<String> = emptyList(),
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
@@ -1244,6 +1245,7 @@ class Repository(context: Context) {
                 defer,
                 planned,
                 tags,
+                attachments,
             ),
             "New project “$trimmed”",
         )
@@ -1265,6 +1267,7 @@ class Repository(context: Context) {
         defer: StampDto? = project.defer,
         planned: StampDto? = project.planned,
         tags: Set<String> = project.tags.toSet(),
+        attachments: List<String> = project.attachments,
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
@@ -1295,6 +1298,12 @@ class Repository(context: Context) {
             }
             if (tags != project.tags.toSet()) {
                 put("tags", buildJsonArray { tags.sorted().forEach { add(JsonPrimitive(it)) } })
+            }
+            if (attachments != project.attachments) {
+                put(
+                    "attachments",
+                    buildJsonArray { attachments.forEach { add(JsonPrimitive(it)) } },
+                )
             }
         }
         if (patch.isNotEmpty()) {

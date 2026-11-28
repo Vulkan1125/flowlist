@@ -199,7 +199,9 @@ offers the APK when a newer version exists.
 its own menu: edit it, create a project or child folder inside, or delete the
 whole tree. A project's menu edits its name, folder, status, dates and tags, archives it,
 or deletes it and moves its tasks to Trash. The project sheet shows the
-status, type, review cadence, progress, dates and notes above its tasks.
+status, type, review cadence, progress, dates and notes above its tasks. The
+editor also manages project files and links: add an attachment, add a named
+link, or remove either before saving.
 
 The project editor also opens from the pencil beside a project's name. Status
 choices are Active, On Hold, Done and Dropped; Done and Dropped leave Browse

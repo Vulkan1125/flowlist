@@ -462,6 +462,7 @@ fun createProjectCommand(
     defer: StampDto? = null,
     planned: StampDto? = null,
     tags: Set<String> = emptySet(),
+    attachments: List<String> = emptyList(),
 ): JsonObject = buildJsonObject {
     put(
         "create_project",
@@ -479,7 +480,7 @@ fun createProjectCommand(
             put("sequential", kind == "sequential")
             put("kind", kind)
             put("icon", icon)
-            put("attachments", buildJsonArray {})
+            put("attachments", buildJsonArray { attachments.forEach { add(JsonPrimitive(it)) } })
             put("fullscreen_reminder", fullscreenReminder)
             put("position", "end")
         },

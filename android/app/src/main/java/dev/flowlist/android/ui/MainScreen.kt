@@ -1320,9 +1320,10 @@ fun MainScreen(
             target = target,
             folders = snapshot?.db?.folders?.values?.toList().orEmpty(),
             tags = snapshot?.db?.tags?.values?.toList().orEmpty(),
+            onUploadAttachment = { uri -> repository.uploadSharedFile(uri) },
             defaultReviewDays = snapshot?.db?.settings?.defaultReviewDays ?: 7,
             onDismiss = { projectEditor = null },
-            onSave = { name, folder, status, kind, notes, reviewDays, icon, fullscreen, completeWithLastAction, archived, due, defer, planned, tagIds ->
+            onSave = { name, folder, status, kind, notes, reviewDays, icon, fullscreen, completeWithLastAction, archived, due, defer, planned, tagIds, attachmentPaths ->
                 projectEditor = null
                 scope.launch {
                     if (editing == null) {
@@ -1339,6 +1340,7 @@ fun MainScreen(
                             defer = defer,
                             planned = planned,
                             tags = tagIds,
+                            attachments = attachmentPaths,
                         )
                     } else {
                         repository.updateProject(
@@ -1357,6 +1359,7 @@ fun MainScreen(
                             defer = defer,
                             planned = planned,
                             tags = tagIds,
+                            attachments = attachmentPaths,
                         )
                     }
                 }

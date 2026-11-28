@@ -247,8 +247,9 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Project dates, tags and dashboard** — the Android project editor now
       edits due/defer/planned dates and project tags, and the project sheet
       shows status, type, review, progress, dates and notes.
-- [ ] **Project attachments** — add file and link attachments to the Android
-      project editor, matching the Mac's project inspector.
+- [x] **Project attachments** — the Android project editor lists project
+      files and links, adds files through the upload path used by the task
+      editor, adds named links, and removes either before saving.
 - [ ] **Convert task to project** — add the Mac's one-step, undoable convert.
 - [ ] **Batch edit fields** — phone select mode only completes, trashes or
       purges. Add the Mac's project, tags, defer/planned/due, priority, flag

@@ -47,6 +47,11 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import dev.flowlist.android.data.linkWithName
+import dev.flowlist.android.data.attachmentDisplayName
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -112,6 +117,7 @@ fun ProjectEditorSheet(
     target: ProjectEditorTarget,
     folders: List<FolderDto>,
     tags: List<TagDto>,
+    onUploadAttachment: suspend (Uri) -> String?,
     defaultReviewDays: Int = 7,
     onDismiss: () -> Unit,
     onSave: (
@@ -129,6 +135,7 @@ fun ProjectEditorSheet(
         defer: StampDto?,
         planned: StampDto?,
         tags: Set<String>,
+        attachments: List<String>,
     ) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
@@ -162,6 +169,29 @@ fun ProjectEditorSheet(
     var dateTarget by remember { mutableStateOf("due") }
     var showDateSheet by remember { mutableStateOf(false) }
     var dateError by remember { mutableStateOf<String?>(null) }
+    var attachments by remember(project?.id) {
+        mutableStateOf(project?.attachments.orEmpty())
+    }
+    var linkOpen by remember { mutableStateOf(false) }
+    var linkText by remember { mutableStateOf("") }
+    var linkName by remember { mutableStateOf("") }
+    var attachmentError by remember { mutableStateOf<String?>(null) }
+    val attachmentScope = rememberCoroutineScope()
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            attachmentScope.launch {
+                val path = onUploadAttachment(uri)
+                if (path == null) {
+                    attachmentError = "Couldn't upload that file"
+                } else {
+                    attachments = attachments + path
+                    attachmentError = null
+                }
+            }
+        }
+    }
     val sortedFolders = remember(folders) { folders.sortedBy { it.name.lowercase() } }
     val canSave = name.isNotBlank()
 
@@ -324,6 +354,91 @@ fun ProjectEditorSheet(
                             }
                         }
                     }
+                    LibraryLabel("Attachments")
+                    attachments.forEach { path ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            val isLink = path.startsWith("http://") || path.startsWith("https://")
+                            Icon(
+                                imageVector = if (isLink) Icons.Outlined.Link else Icons.Outlined.AttachFile,
+                                contentDescription = null,
+                                tint = colors.faint,
+                                modifier = Modifier.size(17.dp),
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = attachmentDisplayName(path),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.ink,
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(
+                                onClick = { attachments = attachments - path },
+                                modifier = Modifier.size(30.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Remove attachment",
+                                    tint = colors.faint,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                            }
+                        }
+                    }
+                    if (attachmentError != null) {
+                        Text(
+                            text = attachmentError!!,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.danger,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { filePicker.launch(arrayOf("*/*")) }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = null,
+                            tint = colors.accent,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Add attachment",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = colors.faint,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                linkText = ""
+                                linkName = ""
+                                linkOpen = true
+                            }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Link,
+                            contentDescription = null,
+                            tint = colors.accent,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Add link",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = colors.faint,
+                        )
+                    }
                     LibraryLabel("Completion")
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -455,6 +570,7 @@ fun ProjectEditorSheet(
                                 defer,
                                 planned,
                                 selectedTags,
+                                attachments,
                             )
                         }
                     },
@@ -490,6 +606,51 @@ fun ProjectEditorSheet(
                 }
                 dateError = null
                 showDateSheet = false
+            },
+        )
+    }
+    if (linkOpen) {
+        AlertDialog(
+            onDismissRequest = { linkOpen = false },
+            title = { Text("Add a link") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = linkText,
+                        onValueChange = { linkText = it },
+                        label = { Text("URL") },
+                        singleLine = true,
+                        colors = libraryFieldColors(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = linkName,
+                        onValueChange = { linkName = it },
+                        label = { Text("Name (optional)") },
+                        singleLine = true,
+                        colors = libraryFieldColors(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val url = linkText.trim()
+                        if (url.isNotEmpty()) {
+                            attachments = attachments + linkWithName(url, linkName.trim())
+                            linkOpen = false
+                        }
+                    },
+                ) {
+                    Text("Add")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { linkOpen = false }) {
+                    Text("Cancel")
+                }
             },
         )
     }
