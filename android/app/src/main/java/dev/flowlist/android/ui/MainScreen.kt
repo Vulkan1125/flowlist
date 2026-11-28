@@ -55,6 +55,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
@@ -3726,11 +3727,38 @@ private fun BrowseList(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f),
                             )
-                            Text(
-                                text = if (active == 0) "Done" else "$active",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = colors.faint,
-                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            // Match the Mac's sidebar badge: a check for Done, a
+                            // cross for Dropped, a pause for On Hold, the open
+                            // count when there is work left, and nothing for a
+                            // stalled or brand-new project.
+                            when (entry.project.status) {
+                                "done" -> Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = "Done",
+                                    tint = colors.success,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                                "dropped" -> Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Dropped",
+                                    tint = colors.faint,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                                "on_hold" -> Icon(
+                                    imageVector = Icons.Rounded.Pause,
+                                    contentDescription = "On hold",
+                                    tint = colors.warning,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                                else -> if (active > 0) {
+                                    Text(
+                                        text = "$active",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = colors.faint,
+                                    )
+                                }
+                            }
                             Box {
                                 IconButton(
                                     onClick = { menu = true },

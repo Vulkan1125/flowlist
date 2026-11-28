@@ -24,7 +24,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.Add
@@ -835,6 +839,39 @@ val projectIconChoices = listOf(
     "video" to "Video",
     "clock" to "Clock",
 )
+/// The Mac draws Lucide's stethoscope; Material's nearest mark is a heart
+/// monitor, which reads as a different icon at 16dp. Mirror the Mac path so a
+/// Health project looks the same on both platforms.
+private val StethoscopeIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "Stethoscope",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        addPath(
+            pathData = PathParser().parsePathString(
+                "M11 2v2 M5 2v2 M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1 " +
+                    "M8 15a6 6 0 0 0 12 0v-3",
+            ).toNodes(),
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        )
+        addPath(
+            pathData = PathParser().parsePathString(
+                "M18 10a2 2 0 1 0 4 0a2 2 0 1 0-4 0",
+            ).toNodes(),
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        )
+    }.build()
+}
+
 fun projectIcon(slug: String): ImageVector = when (slug) {
     "folder" -> Icons.Outlined.Folder
     "star" -> Icons.Outlined.Star
@@ -893,7 +930,7 @@ fun projectIcon(slug: String): ImageVector = when (slug) {
     "study" -> Icons.Outlined.School
     "sofa" -> Icons.Outlined.Weekend
     "sparkles" -> Icons.Outlined.AutoAwesome
-    "stethoscope" -> Icons.Outlined.MonitorHeart
+    "stethoscope" -> StethoscopeIcon
     "sun" -> Icons.Outlined.LightMode
     "telescope" -> Icons.Outlined.TravelExplore
     "video" -> Icons.Outlined.Videocam

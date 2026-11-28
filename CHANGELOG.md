@@ -68,6 +68,11 @@
   task titles, leaving just the title, flag, pending chip and subtask chevron.
   The phone keeps this per device; the Mac's fuller row-layout setting is still
   to come.
+- **Project rows match the Mac.** The Health icon now draws the Mac's
+  stethoscope instead of a heart monitor, and a stalled project no longer reads
+  **Done**: Done, Dropped and On Hold use the Mac's check, cross and pause
+  marks, a live project shows its open count, and a project with nothing left
+  open shows no badge.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.
