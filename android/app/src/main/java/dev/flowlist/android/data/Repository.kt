@@ -1223,6 +1223,10 @@ class Repository(context: Context) {
         icon: String = "project",
         fullscreenReminder: Boolean = false,
         completeWithLastAction: Boolean = false,
+        due: StampDto? = null,
+        defer: StampDto? = null,
+        planned: StampDto? = null,
+        tags: Set<String> = emptySet(),
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
@@ -1236,6 +1240,10 @@ class Repository(context: Context) {
                 icon,
                 fullscreenReminder,
                 completeWithLastAction,
+                due,
+                defer,
+                planned,
+                tags,
             ),
             "New project “$trimmed”",
         )
@@ -1253,6 +1261,10 @@ class Repository(context: Context) {
         fullscreenReminder: Boolean = project.fullscreenReminder,
         completeWithLastAction: Boolean = project.completeWithLastAction,
         archived: Boolean = project.archived,
+        due: StampDto? = project.due,
+        defer: StampDto? = project.defer,
+        planned: StampDto? = project.planned,
+        tags: Set<String> = project.tags.toSet(),
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
@@ -1276,6 +1288,14 @@ class Repository(context: Context) {
                 put("complete_with_last_action", completeWithLastAction)
             }
             if (archived != project.archived) put("archived", archived)
+            if (due != project.due) put("due", due?.let { stampJson(it) } ?: JsonNull)
+            if (defer != project.defer) put("defer", defer?.let { stampJson(it) } ?: JsonNull)
+            if (planned != project.planned) {
+                put("planned", planned?.let { stampJson(it) } ?: JsonNull)
+            }
+            if (tags != project.tags.toSet()) {
+                put("tags", buildJsonArray { tags.sorted().forEach { add(JsonPrimitive(it)) } })
+            }
         }
         if (patch.isNotEmpty()) {
             enqueue(

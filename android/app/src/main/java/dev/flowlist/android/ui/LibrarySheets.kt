@@ -19,6 +19,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import dev.flowlist.android.data.GeoDto
+import dev.flowlist.android.data.label
 import dev.flowlist.android.notify.DeviceLocation
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
@@ -72,6 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.flowlist.android.data.FolderDto
 import dev.flowlist.android.data.ProjectDto
+import dev.flowlist.android.data.StampDto
 import dev.flowlist.android.data.TagDto
 
 data class ProjectEditorTarget(val project: ProjectDto?, val folder: String? = null)
@@ -109,6 +111,7 @@ fun tagFamily(tagId: String, tags: List<TagDto>): Set<String> {
 fun ProjectEditorSheet(
     target: ProjectEditorTarget,
     folders: List<FolderDto>,
+    tags: List<TagDto>,
     defaultReviewDays: Int = 7,
     onDismiss: () -> Unit,
     onSave: (
@@ -122,6 +125,10 @@ fun ProjectEditorSheet(
         fullscreenReminder: Boolean,
         completeWithLastAction: Boolean,
         archived: Boolean,
+        due: StampDto?,
+        defer: StampDto?,
+        planned: StampDto?,
+        tags: Set<String>,
     ) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
@@ -146,6 +153,15 @@ fun ProjectEditorSheet(
         mutableStateOf(project?.completeWithLastAction ?: false)
     }
     var archived by remember(project?.id) { mutableStateOf(project?.archived ?: false) }
+    var due by remember(project?.id) { mutableStateOf(project?.due) }
+    var defer by remember(project?.id) { mutableStateOf(project?.defer) }
+    var planned by remember(project?.id) { mutableStateOf(project?.planned) }
+    var selectedTags by remember(project?.id) {
+        mutableStateOf(project?.tags?.toSet().orEmpty())
+    }
+    var dateTarget by remember { mutableStateOf("due") }
+    var showDateSheet by remember { mutableStateOf(false) }
+    var dateError by remember { mutableStateOf<String?>(null) }
     val sortedFolders = remember(folders) { folders.sortedBy { it.name.lowercase() } }
     val canSave = name.isNotBlank()
 
@@ -264,6 +280,50 @@ fun ProjectEditorSheet(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
+                    LibraryLabel("Dates")
+                    ProjectDateRow(
+                        label = "Due",
+                        value = due?.label() ?: "No date",
+                        onClear = { due = null; dateError = null },
+                        onClick = { dateTarget = "due"; showDateSheet = true },
+                    )
+                    ProjectDateRow(
+                        label = "Defer",
+                        value = defer?.label() ?: "No date",
+                        onClear = { defer = null; dateError = null },
+                        onClick = { dateTarget = "defer"; showDateSheet = true },
+                    )
+                    ProjectDateRow(
+                        label = "Planned",
+                        value = planned?.label() ?: "No date",
+                        onClear = { planned = null; dateError = null },
+                        onClick = { dateTarget = "planned"; showDateSheet = true },
+                    )
+                    LibraryLabel("Tags")
+                    if (tags.isEmpty()) {
+                        Text(
+                            text = "No tags yet",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.faint,
+                        )
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            tags.sortedBy { it.name.lowercase() }.forEach { tag ->
+                                LibraryPill(tag.name, tag.id in selectedTags) {
+                                    selectedTags = if (tag.id in selectedTags) {
+                                        selectedTags - tag.id
+                                    } else {
+                                        selectedTags + tag.id
+                                    }
+                                }
+                            }
+                        }
+                    }
                     LibraryLabel("Completion")
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -349,6 +409,14 @@ fun ProjectEditorSheet(
             }
 
             Spacer(modifier = Modifier.height(20.dp))
+            if (dateError != null) {
+                Text(
+                    text = dateError!!,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.danger,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (onDelete != null) {
                     TextButton(onClick = onDelete) {
@@ -362,18 +430,33 @@ fun ProjectEditorSheet(
                 Spacer(modifier = Modifier.width(6.dp))
                 Button(
                     onClick = {
-                        onSave(
-                            name.trim(),
-                            folder,
-                            status,
-                            kind,
-                            notes.trim(),
-                            reviewDays.toIntOrNull()?.coerceIn(1, 365) ?: defaultReviewDays,
-                            iconSlug,
-                            fullscreenReminder,
-                            completeWithLastAction,
-                            archived,
-                        )
+                        val dueDate = due?.local()?.toLocalDate()
+                        val deferDate = defer?.local()?.toLocalDate()
+                        dateError = if (
+                            dueDate != null && deferDate != null && deferDate.isAfter(dueDate)
+                        ) {
+                            "Defer can't be after the due date"
+                        } else {
+                            null
+                        }
+                        if (dateError == null) {
+                            onSave(
+                                name.trim(),
+                                folder,
+                                status,
+                                kind,
+                                notes.trim(),
+                                reviewDays.toIntOrNull()?.coerceIn(1, 365) ?: defaultReviewDays,
+                                iconSlug,
+                                fullscreenReminder,
+                                completeWithLastAction,
+                                archived,
+                                due,
+                                defer,
+                                planned,
+                                selectedTags,
+                            )
+                        }
                     },
                     enabled = canSave,
                     colors = ButtonDefaults.buttonColors(
@@ -384,6 +467,68 @@ fun ProjectEditorSheet(
                     Text(if (project == null) "Create" else "Save")
                 }
             }
+        }
+    }
+    if (showDateSheet) {
+        DueDateSheet(
+            title = when (dateTarget) {
+                "defer" -> "Defer date"
+                "planned" -> "Planned date"
+                else -> "Due date"
+            },
+            initial = when (dateTarget) {
+                "defer" -> defer
+                "planned" -> planned
+                else -> due
+            },
+            onDismiss = { showDateSheet = false },
+            onSet = { value ->
+                when (dateTarget) {
+                    "defer" -> defer = value
+                    "planned" -> planned = value
+                    else -> due = value
+                }
+                dateError = null
+                showDateSheet = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun ProjectDateRow(
+    label: String,
+    value: String,
+    onClear: () -> Unit,
+    onClick: () -> Unit,
+) {
+    val colors = flow
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.ink,
+            modifier = Modifier.width(96.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (value == "No date") colors.faint else colors.ink,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onClear) {
+            Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = "Clear $label",
+                tint = colors.faint,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }

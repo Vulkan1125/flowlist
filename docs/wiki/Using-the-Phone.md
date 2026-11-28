@@ -197,8 +197,9 @@ offers the APK when a newer version exists.
 **Browse** groups open projects under their folders. **New project** and
 **New folder** sit at the top of the list. A folder is a section header with
 its own menu: edit it, create a project or child folder inside, or delete the
-whole tree. A project's menu edits its name, folder and status, archives it, or
-deletes it and moves its tasks to Trash.
+whole tree. A project's menu edits its name, folder, status, dates and tags, archives it,
+or deletes it and moves its tasks to Trash. The project sheet shows the
+status, type, review cadence, progress, dates and notes above its tasks.
 
 The project editor also opens from the pencil beside a project's name. Status
 choices are Active, On Hold, Done and Dropped; Done and Dropped leave Browse

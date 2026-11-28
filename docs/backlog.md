@@ -244,10 +244,11 @@ integrations are tracked separately and are not part of this phase.
       rules (defer, planned, latest start, due; relative and absolute) are
       missing on the phone, which only has the global due summary and
       full-screen reminders.
-- [ ] **Project details** — the phone's project sheet is just a task list and
-      its editor has no dates, tags or attachments. Add due/defer/planned
-      dates with inheritance, project tags, project attachments, and the
-      dashboard's progress, status, review and type summary.
+- [x] **Project dates, tags and dashboard** — the Android project editor now
+      edits due/defer/planned dates and project tags, and the project sheet
+      shows status, type, review, progress, dates and notes.
+- [ ] **Project attachments** — add file and link attachments to the Android
+      project editor, matching the Mac's project inspector.
 - [ ] **Convert task to project** — add the Mac's one-step, undoable convert.
 - [ ] **Batch edit fields** — phone select mode only completes, trashes or
       purges. Add the Mac's project, tags, defer/planned/due, priority, flag

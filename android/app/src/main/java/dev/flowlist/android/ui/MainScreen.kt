@@ -8,6 +8,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
@@ -75,6 +76,7 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
@@ -1297,6 +1299,7 @@ fun MainScreen(
                     )
                 }
                 .orEmpty(),
+            db = db,
             onDismiss = { project = null },
             onEdit = {
                 val editing = value
@@ -1316,9 +1319,10 @@ fun MainScreen(
         ProjectEditorSheet(
             target = target,
             folders = snapshot?.db?.folders?.values?.toList().orEmpty(),
+            tags = snapshot?.db?.tags?.values?.toList().orEmpty(),
             defaultReviewDays = snapshot?.db?.settings?.defaultReviewDays ?: 7,
             onDismiss = { projectEditor = null },
-            onSave = { name, folder, status, kind, notes, reviewDays, icon, fullscreen, completeWithLastAction, archived ->
+            onSave = { name, folder, status, kind, notes, reviewDays, icon, fullscreen, completeWithLastAction, archived, due, defer, planned, tagIds ->
                 projectEditor = null
                 scope.launch {
                     if (editing == null) {
@@ -1331,6 +1335,10 @@ fun MainScreen(
                             icon,
                             fullscreen,
                             completeWithLastAction,
+                            due = due,
+                            defer = defer,
+                            planned = planned,
+                            tags = tagIds,
                         )
                     } else {
                         repository.updateProject(
@@ -1345,6 +1353,10 @@ fun MainScreen(
                             fullscreen,
                             completeWithLastAction,
                             archived,
+                            due = due,
+                            defer = defer,
+                            planned = planned,
+                            tags = tagIds,
                         )
                     }
                 }
@@ -2930,6 +2942,7 @@ private fun BrowseList(
 private fun ProjectSheet(
     project: ProjectDto,
     tasks: List<TaskView>,
+    db: Db?,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
     onToggle: (TaskView) -> Unit,
@@ -2963,12 +2976,83 @@ private fun ProjectSheet(
                     )
                 }
             }
-            Text(
-                text = if (tasks.isEmpty()) "Everything is done" else "${tasks.size} open",
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.faint,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
+            val total = db?.tasks?.values?.count { it.project == project.id } ?: tasks.size
+            val done = db?.tasks?.values?.count { it.project == project.id && it.completed } ?: 0
+            val statusLabel = project.status.replaceFirstChar { it.uppercase() }
+            val kindLabel = when (project.kind) {
+                "sequential" -> "Sequential"
+                "single_actions" -> "Single action"
+                else -> "Parallel"
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(
+                    statusLabel,
+                    kindLabel,
+                    "Review in ${project.reviewIntervalDays}d",
+                ).forEach { chip ->
+                    Text(
+                        text = chip,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.faint,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(colors.field)
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
+                }
+            }
+            if (total > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    LinearProgressIndicator(
+                        progress = { done.toFloat() / total },
+                        modifier = Modifier.weight(1f).height(4.dp),
+                        color = colors.accent,
+                        trackColor = colors.field,
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "$done of $total",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.faint,
+                    )
+                }
+            } else {
+                Text(
+                    text = "Everything is done",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.faint,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+            }
+            listOfNotNull(
+                project.due?.let { "Due ${it.label()}" },
+                project.defer?.let { "Defer ${it.label()}" },
+                project.planned?.let { "Planned ${it.label()}" },
+            ).takeIf { it.isNotEmpty() }?.let { dates ->
+                Text(
+                    text = dates.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.faint,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+                )
+            }
+            if (project.notes.isNotBlank()) {
+                Text(
+                    text = project.notes,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.ink,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
             tasks.forEach { task ->
                 TaskRow(task = task, onToggle = { onToggle(task) }, onClick = { onClick(task) })

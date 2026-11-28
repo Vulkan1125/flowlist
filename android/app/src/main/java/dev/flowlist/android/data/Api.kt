@@ -458,6 +458,10 @@ fun createProjectCommand(
     icon: String = "project",
     fullscreenReminder: Boolean = false,
     completeWithLastAction: Boolean = false,
+    due: StampDto? = null,
+    defer: StampDto? = null,
+    planned: StampDto? = null,
+    tags: Set<String> = emptySet(),
 ): JsonObject = buildJsonObject {
     put(
         "create_project",
@@ -465,9 +469,10 @@ fun createProjectCommand(
             put("name", name)
             put("notes", notes)
             put("folder", folder?.let { JsonPrimitive(it) } ?: JsonNull)
-            put("tags", buildJsonArray {})
-            put("due", JsonNull)
-            put("defer", JsonNull)
+            put("tags", buildJsonArray { tags.forEach { add(JsonPrimitive(it)) } })
+            put("due", due?.let { stampJson(it) } ?: JsonNull)
+            put("defer", defer?.let { stampJson(it) } ?: JsonNull)
+            put("planned", planned?.let { stampJson(it) } ?: JsonNull)
             put("review_interval_days", reviewDays?.let { JsonPrimitive(it) } ?: JsonNull)
             put("next_review", JsonNull)
             put("complete_with_last_action", completeWithLastAction)

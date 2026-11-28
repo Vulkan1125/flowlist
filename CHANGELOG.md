@@ -11,6 +11,9 @@
 - **Archive controls.** The Android project editor toggles **Archived**, the
   project menu archives without changing status, and Settings → Library has
   **Archive closed projects**.
+- **Project dates and tags.** The Android project editor edits due, defer and
+  planned dates plus project tags; the project sheet shows status, type,
+  review, progress, dates and notes.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.
