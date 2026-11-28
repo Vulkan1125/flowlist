@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### What's new
+
+- **Per-view row layouts.** A new **Layout** menu beside Sort and Group gives
+  every view its own choice of **Fluid** rows, the existing wrapped layout, or
+  **Columns**, one line per task. The choice is remembered per perspective.
+- **Fluid density and fields.** Fluid rows can stay **Comfortable** or switch
+  to **Compact**, and each view can hide project, dates, tags, estimate,
+  checklist, attachments or the flag. The title, completion circle, subtask
+  chevron and drag targets always stay.
+- **Columns layout.** Columns shows Project, Tags, Due and Flag by default,
+  with optional Defer, Planned, Estimate and Checklist columns. Widths fit the
+  window and inspector, and clicking a row still opens the inspector.
+- **Keyboard and menu polish.** Every layout choice saves immediately, and the
+  Layout menu stays open while several fields or columns are toggled.
+
 ## 0.10.3 — 2026-11-28
 
 ### What's new

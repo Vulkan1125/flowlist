@@ -83,6 +83,29 @@ forward. Each date
 carries its own mark: a signpost for Planned, a clock on a calendar for Due and
 a turning arrow for Defer; hovering names the field.
 
+### Row layout
+
+The **Layout** chip beside Sort and Group controls how the current view shows
+its tasks. Every view remembers its own choice, so a compact project list and a
+roomy Today list can sit side by side.
+
+- **Fluid** keeps the familiar wrapped rows. **Comfortable** is the original
+  spacing; **Compact** trims the vertical air without changing the content.
+  The **Fields** checkboxes hide project, dates, tags, estimate, checklist,
+  attachments or the flag from this view. The title, completion circle,
+  subtask chevron and drag targets always stay.
+- **Columns** puts each task on one line. Project, Tags, Due and Flag are on by
+  default; Defer, Planned, Estimate and Checklist can be added. Column widths
+  fit the window and the inspector. Clicking a row still opens the inspector;
+  cells are not edited in place yet.
+
+![Fluid rows with the Layout menu available in the header](images/gui-layout-fluid.png)
+
+![The same task in Columns mode](images/gui-layout-columns.png)
+
+The menu stays open while choices change, and every change is saved to the
+view straight away.
+
 ## The inspector
 
 Toggle the inspector with `i` or `⌘I`. It edits the selected task without
@@ -425,7 +448,8 @@ titles itself **Search** and ranks the closest matches first.
   means your drag-and-drop order; **None** means one flat list with no
   headings.
   **Available** keeps only tasks you can start now; **Priority** filters by
-  priority. The choices are remembered per view.
+  priority. **Layout** chooses Fluid or Columns rows, their density and the
+  fields or columns the view shows. The choices are remembered per view.
 - **Settings → Workflow → Forecast tag** names a tag whose undated actions
   appear in Forecast without needing a date. **Show flagged undated tasks** does
   the same for flagged actions. A task that already has a due, defer or planned

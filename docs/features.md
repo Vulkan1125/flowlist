@@ -93,6 +93,12 @@ working domain and GUI. This page tracks what is implemented and verified.
       **Default** meaning the view's natural order/grouping
 - [x] Priority menu with All priorities / High / Medium / Low, matching the
       Sort and Group chips
+- [x] Per-view Layout menu: Fluid or Columns rows, Comfortable or Compact
+      density, hideable fluid fields (project, dates, tags, estimate,
+      checklist, attachments, flag) and optional columns (Project, Tags, Due,
+      Flag, Defer, Planned, Estimate, Checklist). The title, completion
+      circle, subtask chevron and drag targets always stay, column widths fit
+      the window and inspector, and every choice is remembered per view.
 - [x] First Available filter (only the next actionable row)
 - [x] Per-perspective sort, grouping, completed and availability memory
 - [x] Separate light and dark main-window backgrounds with a shared opacity
@@ -149,8 +155,8 @@ working domain and GUI. This page tracks what is implemented and verified.
       Archive to a project and pressing back returns to the Archive; a new
       view drops the forward trail, and a vanished project is skipped instead
       of leaving a dead arrow. The arrows dim at the ends of the history.
-- [x] Content header layout: the view title and Sort/Group/Filter chips share
-      one row, while a saved view's description sits on its own row; built-in
+- [x] Content header layout: the view title and Sort/Group/Layout/Filter chips
+      share one row, while a saved view's description sits on its own row; built-in
       views carry no subtitle and skip the row. A view name that cannot
       fit beside the controls is omitted instead of clipped. Search lives in
       the title bar at every window width, centered on the content pane with

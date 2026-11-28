@@ -15,6 +15,7 @@ scripts/gui/forecast-probe.sh
 scripts/gui/quick-capture-probe.sh
 scripts/gui/repeat-ends-probe.sh
 scripts/gui/settings-probe.sh
+scripts/gui/layout-probe.sh
 ```
 
 The script skips on non-macOS hosts and when `swiftc` is missing. It needs
@@ -48,6 +49,12 @@ checks that the dated task left the Inbox, closes with `Enter`, returns focus
 to Finder, confirms the panel keeps layer 3 while Finder is in front, and
 checks that `Esc` closes it without moving the main view.
 
+`scripts/gui/layout-probe.sh` opens the Layout menu, switches density and
+checks the painted row actually shrinks, hides one fluid field, switches to
+Columns, turns on the Defer column, checks the saved session and confirms a
+relaunch restores the same view's layout. Set `SHOT_DIR` to copy the Fluid and
+Columns screenshots out of the temporary directory.
+
 ## The test-state hook
 
 Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
@@ -73,6 +80,11 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "sort_menu": false,
   "group_menu": false,
   "priority_menu": false,
+  "layout_menu": false,
+  "layout": "fluid",
+  "density": "comfortable",
+  "hidden_fields": [],
+  "columns": ["project", "tags", "due", "flag"],
   "sidebar_menu": "project:01M79...",
   "sort_anchor": true,
   "group_anchor": true,
@@ -214,11 +226,16 @@ otherwise. `draft` is true while a
 task created with `o`/`O` is still being titled, and `suggestions` counts the
 rows in the open project picker. `traffic_lights` reports what was last pushed to AppKit for the macOS window
 buttons — `visible`, `hidden`, or `unknown` before the titlebar exists — so a
-probe can assert the Settings toggle took effect. `sort_menu`, `group_menu` and
-`priority_menu` say whether the header menus are open; `sidebar_menu` names the
+probe can assert the Settings toggle took effect. `layout`, `density`,
+`hidden_fields` and `columns` report the active view's row layout, and
+`layout_boxes` maps `chip`, `mode:fluid`, `density:compact`,
+`field:project` and `column:due` to painted boxes so a probe can click them.
+`sort_menu`, `group_menu`, `priority_menu` and `layout_menu` say whether the
+header menus are open; `sidebar_menu` names the
 row a right-click menu belongs to (`builtin:inbox`, `project:<id>`, `tag:<id>`,
-…) or is null. `sort_anchor`, `group_anchor` and `priority_anchor` confirm the
-chip bounds needed to position those menus were measured. `title_space` is the
+…) or is null. `sort_anchor`, `group_anchor`, `priority_anchor` and
+`layout_anchor` confirm the chip bounds needed to position those menus were
+measured. `title_space` is the
 width the view title painted into on the last frame and `title_visible` says
 whether it was drawn at all: a name that cannot fit in full is omitted.
 Deleting a project from the sidebar sets `modal` to
@@ -332,6 +349,9 @@ library:
 - `scripts/gui/notification-parity-probe.sh` removes and restores a default
   notification, adds relative and custom notifications through the Add
   Notification menu, checks the full-screen reminder and collapses the section.
+- `scripts/gui/layout-probe.sh` covers the per-view Layout menu: Fluid default,
+  Compact density, a hidden field, Columns mode, an optional column and the
+  patch in `session.json` that survives a relaunch.
 - `scripts/gui/inspector-sections-probe.sh` builds a repeat rule from the
   editable interval, unit dropdown, **Repeat on** dropdown, weekday strip and
   segmented controls, checks that a date-only task rejects **Hours** with the

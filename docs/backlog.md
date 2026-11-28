@@ -162,13 +162,18 @@ integrations are tracked separately and are not part of this phase.
       expose the two controls.
 - [ ] **Perspective favourites and navigation** — favourites bar, reorder,
       custom icons/colours, copy-as-link and a per-perspective shortcut.
-- [ ] **Configurable row layout** — two per-perspective modes. **Fluid** keeps rows and lets each view choose its density and
-      visible fields; **Columns** puts each task on one line with Project, Tags,
-      Due and Flag by default and a checklist of other columns. Both persist in
-      the Mac session.
-- [ ] **Columns layout polish** — drag a column edge to resize it, drag headers
-      to reorder columns, and edit the field inside a column cell instead of
-      opening the inspector.
+- [x] **Configurable row layout** — two per-perspective modes in the Mac
+      **Layout** menu. **Fluid** keeps rows and lets each view choose
+      Comfortable or Compact density and hide project, dates, tags, estimate,
+      checklist, attachments or the flag; the title, completion circle,
+      subtask chevron and drag targets stay. **Columns** puts each task on one
+      line with Project, Tags, Due and Flag by default, optional Defer,
+      Planned, Estimate and Checklist columns, and widths fitted to the
+      window and inspector. Both modes and every checkbox persist in the Mac
+      session per view.
+- [ ] **Columns layout polish** — still open: drag a column edge to resize it,
+      drag headers to reorder columns, and edit the field inside a column cell
+      instead of opening the inspector.
 - [ ] **Rich-text notes** — bold, italics, lists, links and inline images
       alongside the existing plain-text fallback.
 - [x] **Advanced repeat schedules** — minute/hour intervals, nth weekday of a
@@ -300,8 +305,8 @@ integrations are tracked separately and are not part of this phase.
       an upcoming defer date and the repeat arrow before the rule summary, so
       both stay on the single metadata line and ellipsize with the rest.
 - [x] **Row metadata toggle** — Settings → Tasks → **Rows** hides the project,
-      date, tag and count line under task titles. This is an Android-only
-      density option for now; the Mac's configurable row layout is still open.
+      date, tag and count line under task titles. This is Android's own
+      metadata switch; the Mac has the per-view **Layout** menu instead.
 - [ ] **Separate light and dark backgrounds** — the Mac keeps a light and a
       dark wallpaper; the phone has one custom background.
 - [ ] **Import and export** — add JSON/TaskPaper import and TaskPaper export
@@ -788,9 +793,10 @@ product comparison, not a claim of feature parity.
 - **Latest Start in Forecast and sorting** — the notification already fires at
   due minus estimate. The same derived date is not yet a Forecast filter or a
   sort key.
-- **Custom layouts / compact rows** — per-perspective density, columns and row
-  fields. Keep this behind the design pass so it does not fragment the one
-  visual language.
+- **Column resize, headers and inline editing** — the Mac's per-view row
+  layout has shipped, but the Columns mode still needs draggable column edges,
+  reorderable headers and in-cell editing. Keep it behind the design pass so
+  it does not fragment the one visual language.
 - **Tag status affecting availability** — an On Hold or Dropped tag can make an
   action unavailable in the reference app. We model tag status but do not yet
   let it gate availability.
@@ -809,5 +815,5 @@ product comparison, not a claim of feature parity.
 
 - Hosted sync, web accounts, web access and automation plug-ins: they conflict
   with the single local library and the shared Rust command layer.
-- Custom fluid/column layouts per device: Flowlist is a single desktop app and
-  should keep one adaptive layout until the visual pass is finished.
+- Android parity for the Mac's fluid/columns row layout: the phone keeps its
+  row-metadata switch and does not mirror the per-view Layout menu yet.
