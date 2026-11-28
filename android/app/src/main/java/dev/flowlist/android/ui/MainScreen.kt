@@ -1257,7 +1257,6 @@ fun MainScreen(
             tasks = dueNowTasks,
             onDismiss = { dueNowIds = emptyList() },
             onToggle = { task -> complete(task, !task.completed) },
-            onClick = { task -> detail = task },
         )
     }
 
@@ -2978,9 +2977,10 @@ private fun DueNowDialog(
     tasks: List<TaskView>,
     onDismiss: () -> Unit,
     onToggle: (TaskView) -> Unit,
-    onClick: (TaskView) -> Unit,
 ) {
     val colors = flow
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    val selected = tasks.firstOrNull { it.id == selectedId }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -3003,15 +3003,34 @@ private fun DueNowDialog(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Due now",
+                        text = if (selected == null) "Due now" else "Task",
                         style = MaterialTheme.typography.headlineMedium,
                         color = colors.ink,
                     )
                     Text(
-                        text = if (tasks.size == 1) "1 reminder" else "${tasks.size} reminders",
+                        text = if (selected != null) {
+                            selected.projectName ?: "Inbox"
+                        } else if (tasks.size == 1) {
+                            "1 reminder"
+                        } else {
+                            "${tasks.size} reminders"
+                        },
                         style = MaterialTheme.typography.labelMedium,
                         color = colors.faint,
                     )
+                }
+                if (selected != null) {
+                    Text(
+                        text = "Back",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.accent,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(colors.field)
+                            .clickable { selectedId = null }
+                            .padding(horizontal = 16.dp, vertical = 9.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
                 Text(
                     text = "Close",
@@ -3024,26 +3043,115 @@ private fun DueNowDialog(
                         .padding(horizontal = 16.dp, vertical = 9.dp),
                 )
             }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                tasks.forEach { task ->
-                    TaskRow(task = task, onToggle = { onToggle(task) }, onClick = { onClick(task) })
-                    Hairline(Modifier.padding(start = 58.dp))
-                }
-                if (tasks.isEmpty()) {
-                    Text(
-                        text = "Everything is done.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.faint,
-                        modifier = Modifier.padding(24.dp),
-                    )
+            if (selected != null) {
+                DueNowDetail(
+                    task = selected,
+                    modifier = Modifier.weight(1f),
+                    onToggle = { onToggle(selected) },
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    tasks.forEach { task ->
+                        TaskRow(
+                            task = task,
+                            onToggle = { onToggle(task) },
+                            onClick = { selectedId = task.id },
+                        )
+                        Hairline(Modifier.padding(start = 58.dp))
+                    }
+                    if (tasks.isEmpty()) {
+                        Text(
+                            text = "Everything is done.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.faint,
+                            modifier = Modifier.padding(24.dp),
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DueNowDetail(task: TaskView, modifier: Modifier = Modifier, onToggle: () -> Unit) {
+    val colors = flow
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp),
+    ) {
+        Text(
+            text = task.title,
+            style = MaterialTheme.typography.headlineSmall,
+            color = colors.ink,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        task.due?.let { detailLine("Due", it.label(), colors.ink, colors.faint) }
+        task.defer?.let { detailLine("Defer", it.label(), colors.ink, colors.faint) }
+        task.planned?.let { detailLine("Planned", it.label(), colors.ink, colors.faint) }
+        task.priority?.let {
+            detailLine("Priority", it.replaceFirstChar { c -> c.uppercase() }, colors.ink, colors.faint)
+        }
+        task.estimateMin?.let { detailLine("Estimate", "${it}m", colors.ink, colors.faint) }
+        if (task.tags.isNotEmpty()) {
+            detailLine("Tags", task.tags.joinToString(" ") { "#$it" }, colors.ink, colors.faint)
+        }
+        if (task.checklistTotal > 0) {
+            detailLine(
+                "Checklist",
+                "${task.checklistDone}/${task.checklistTotal}",
+                colors.ink,
+                colors.faint,
+            )
+        }
+        task.blockedByTag?.let {
+            detailLine("Blocked by", "#$it", colors.danger, colors.faint)
+        }
+        if (task.notes.isNotBlank()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = task.notes,
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.ink,
+            )
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = if (task.completed) "Reopen" else "Complete",
+            style = MaterialTheme.typography.labelLarge,
+            color = colors.accent,
+            modifier = Modifier
+                .clip(RoundedCornerShape(percent = 50))
+                .background(colors.field)
+                .clickable(onClick = onToggle)
+                .padding(horizontal = 20.dp, vertical = 11.dp),
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun detailLine(label: String, value: String, ink: androidx.compose.ui.graphics.Color, faint: androidx.compose.ui.graphics.Color) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = faint,
+            modifier = Modifier.width(96.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = ink,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 

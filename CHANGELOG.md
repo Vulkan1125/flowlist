@@ -19,9 +19,10 @@
   reschedules the alarm and clears the other device.
 - **Simultaneous reminders.** Tasks that come due together merge into one
   card that says how many are due, with a read-only View all list, Open
-  Flowlist for a Due now page in the app, and a single Dismiss all. Later
-  alarms stay silent and the batch card has no per-task complete or snooze
-  controls.
+  Flowlist for a Due now page in the app, and a single Dismiss all. The Due
+  now page keeps its list while a task's details are open; completing a task
+  leaves the rest in place. Later alarms stay silent and the batch card has no
+  per-task complete or snooze controls.
 
 ## 0.10.1 — 2026-11-27
 
