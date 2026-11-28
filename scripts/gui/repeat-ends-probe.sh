@@ -129,14 +129,14 @@ PY
 already_open=$(python3 - "$state" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
-print("1" if "repeat-end:never" in d.get("theme_boxes", {}) else "0")
+print("1" if "repeat-end-toggle" in d.get("notification_boxes", {}) else "0")
 PY
 )
 if [ "$already_open" = "0" ]; then
   click_box inspector_section_boxes task:repeat
 fi
 for _ in $(seq 1 80); do
-  if [ -n "$(box_point theme_boxes repeat-end:never)" ]; then break; fi
+  if [ -n "$(box_point notification_boxes repeat-end-toggle)" ]; then break; fi
   "$helpers/flowctl" move $((wx + 600)) $((wy + 300))
   sleep 0.1
 done
@@ -144,7 +144,8 @@ wait_repeat 'd["repeat"] == "every week"'
 echo "   Never selected, no end in the rule"
 
 echo "2. On date opens the calendar and applies the picked day"
-click_box theme_boxes repeat-end:date
+click_box notification_boxes repeat-end-toggle
+click_box notification_boxes repeat-end-option:date
 wait_repeat 'd["repeat"].startswith("every week until ")'
 click_box theme_boxes repeat-end-date
 wait_state date_picker_open 'd == "repeat-end"'
@@ -160,18 +161,31 @@ wait_state date_picker_open 'd is None'
 wait_repeat "d[\"repeat\"].endswith(\"until $day\")"
 echo "   calendar picked $day and the rule ends there"
 
-echo "3. After N steps the count"
-click_box theme_boxes repeat-end:count
+echo "3. After N accepts a typed count"
+click_box notification_boxes repeat-end-toggle
+click_box notification_boxes repeat-end-option:count
 wait_repeat '"for 3 times" in d["repeat"]'
-click_box theme_boxes repeat-end-count-up
+click_box theme_boxes field-box:repeat-end-count
+"$helpers/flowctl" key 0 cmd
+printf '4' | pbcopy
+"$helpers/flowctl" key 9 cmd
+sleep 0.3
+"$helpers/flowctl" key 36
+sleep 0.5
 wait_repeat '"for 4 times" in d["repeat"]'
-click_box theme_boxes repeat-end-count-down
-click_box theme_boxes repeat-end-count-down
+click_box theme_boxes field-box:repeat-end-count
+"$helpers/flowctl" key 0 cmd
+printf '2' | pbcopy
+"$helpers/flowctl" key 9 cmd
+sleep 0.3
+"$helpers/flowctl" key 36
+sleep 0.5
 wait_repeat '"for 2 times" in d["repeat"]'
-echo "   count went 3 -> 4 -> 2"
+echo "   count went 3 -> 4 -> 2 from the input box"
 
 echo "4. Never clears the end again"
-click_box theme_boxes repeat-end:never
+click_box notification_boxes repeat-end-toggle
+click_box notification_boxes repeat-end-option:never
 wait_repeat 'd["repeat"] == "every week"'
 echo "   end cleared"
 

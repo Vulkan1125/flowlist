@@ -137,8 +137,9 @@ leaving the list.
   availability.
 - **Repeat** uses compact controls: a repeat checkbox, one interval box
   with an editable number and a minutes/hours/day/week/month/year dropdown, and
-  segmented choices for **Due Date** or **Defer Until Date** and for
-  **Completion** or **Assigned Dates**. When the unit is **Days**, a single
+  dropdowns for **Schedule the next** (**Due Date** or **Defer Until Date**),
+  **Repeat from** (**Completion** or **Assigned Dates**) and **Ends**
+  (**Never**, **On date** or **After N**). When the unit is **Days**, a single
   Sunday-to-Saturday row appears. Leave it clear to repeat every day; select
   S/M/T/W/T/F/S to repeat only those weekdays. When weekdays are selected the
   interval bar shows a greyed-out “custom”. **Minutes** and **Hours** move the
@@ -147,15 +148,13 @@ leaving the list.
   **Add a time to the due date first**. When the unit is **Months**, a **Repeat
   on** dropdown offers **Same date**, full choices such as **1st Monday**
   through **5th Monday**, or **Last weekend day**, and selecting an nth weekday
-  reveals a **Weekday** row plus a line explaining the exact result. The
-  summary line
-  beneath says the result in plain words, such as “Every Monday and Wednesday,
-  from the assigned dates, scheduling the next due date.” An **Ends** row sets
-  **Never**, **On date**
-  (opening the calendar under the date box) or **After N** times with a −/+
-  stepper. The same summary line names the count already done and, for fixed
-  schedules, the projected last occurrence; after-completion rules say the
-  dates follow each completion.
+  reveals a **Weekday** row plus a line explaining the exact result. **On
+  date** opens the calendar under the date box; **After N** shows a typed
+  **After** box and **times** label. The summary line beneath says the result
+  in plain words, such as “Every Monday and Wednesday, from the assigned
+  dates, scheduling the next due date.” It also names the count already done
+  and, for fixed schedules, the projected last occurrence; after-completion
+  rules say the dates follow each completion.
 - **Tags** is its own section above Notifications, with a bordered chip box and
   a `+` control. Clicking the box or `+` opens the add field; Enter adds the
   tag. **Notes & Attachments** sits in the old Tags position, before Dates.

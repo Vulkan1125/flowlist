@@ -238,10 +238,11 @@ working domain and GUI. This page tracks what is implemented and verified.
       Dates, Repeat, Tags and Notifications, plus the project sections.
 - [x] Repeat controls with one editable interval box, a
       minutes/hours/day/week/month/year dropdown, a Sunday-to-Saturday weekday
-      strip, a **Repeat on** dropdown that names the full choice (“Same date”,
-      “1st Monday” through “5th Monday”, or “Last weekend day”) with a
-      plain-language explanation, and a summary, plus a Review section with
-      Next Review, cadence and Last Reviewed.
+      strip, dropdowns for **Repeat on**, **Schedule the next**, **Repeat
+      from** and **Ends**, a typed **After** count, and a plain-language
+      summary, plus a Review section with Next Review, cadence and Last
+      Reviewed. The **Repeat on** choices spell out **Same date**, **1st
+      Monday** through **5th Monday**, or **Last weekend day**.
 - [x] Single-task inspector tabs: **Properties** and **Subtasks**.
 - [x] Sheets show Save only; Escape still cancels.
 - [x] Calendar events in Forecast, read-only from macOS Calendar, in their own

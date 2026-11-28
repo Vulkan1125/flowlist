@@ -109,6 +109,29 @@ pub enum EditField {
     Reminder,
     Estimate,
     Repeat,
+    RepeatEndCount,
+}
+
+/// The repeat controls whose choices open a root-level dropdown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RepeatMenu {
+    Unit,
+    Pattern,
+    Mode,
+    Schedule,
+    End,
+}
+
+impl RepeatMenu {
+    fn slug(self) -> &'static str {
+        match self {
+            RepeatMenu::Unit => "repeat-unit",
+            RepeatMenu::Pattern => "repeat-pattern",
+            RepeatMenu::Mode => "repeat-mode",
+            RepeatMenu::Schedule => "repeat-schedule",
+            RepeatMenu::End => "repeat-end",
+        }
+    }
 }
 
 impl EditField {
@@ -133,6 +156,7 @@ impl EditField {
             EditField::Reminder => EditField::Estimate,
             EditField::Estimate => EditField::Repeat,
             EditField::Repeat => EditField::Title,
+            EditField::RepeatEndCount => EditField::Title,
         }
     }
 
@@ -147,6 +171,7 @@ impl EditField {
             EditField::Reminder => EditField::Due,
             EditField::Estimate => EditField::Reminder,
             EditField::Repeat => EditField::Estimate,
+            EditField::RepeatEndCount => EditField::Repeat,
         }
     }
 }
@@ -745,12 +770,10 @@ pub struct FlowlistApp {
     /// The open "Add Notification" menu and the control it points at.
     notification_menu: Option<NotificationTarget>,
     notification_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
-    /// The open repeat-unit menu and the interval button it points at.
-    repeat_unit_menu: Option<TaskId>,
-    repeat_unit_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
-    /// The open monthly-pattern menu and the button it points at.
-    repeat_pattern_menu: Option<TaskId>,
-    repeat_pattern_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The open repeat dropdown (unit, pattern, mode, schedule or ends) and
+    /// the button it points at.
+    repeat_menu: Option<(TaskId, RepeatMenu)>,
+    repeat_menu_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// A click's mouse-up closed the sort or group menu. The chip under the
     /// same click must not immediately reopen it.
     sort_closed_on_up: bool,
@@ -1297,10 +1320,8 @@ impl FlowlistApp {
             inspector_tab: InspectorTab::Properties,
             notification_menu: None,
             notification_anchor: Rc::new(Cell::new(None)),
-            repeat_unit_menu: None,
-            repeat_unit_anchor: Rc::new(Cell::new(None)),
-            repeat_pattern_menu: None,
-            repeat_pattern_anchor: Rc::new(Cell::new(None)),
+            repeat_menu: None,
+            repeat_menu_anchor: Rc::new(Cell::new(None)),
             theme_on_open: None,
             plain_accent_light,
             plain_accent_dark,
@@ -4489,6 +4510,14 @@ impl FlowlistApp {
                 .as_ref()
                 .map(|rule| rule.every.max(1).to_string())
                 .unwrap_or_default(),
+            EditField::RepeatEndCount => task
+                .repeat
+                .as_ref()
+                .and_then(|rule| match rule.end {
+                    RepeatEnd::AfterCount(count) => Some(count.to_string()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| "3".to_string()),
         };
         self.field.set(value);
         if field == EditField::Project {
@@ -4650,6 +4679,30 @@ impl FlowlistApp {
                 // Editing the interval returns to an interval schedule; the
                 // weekday strip is the other mode.
                 rule.weekdays = None;
+                patch.repeat = Some(Some(rule));
+            }
+            EditField::RepeatEndCount => {
+                let count = match value.parse::<u32>() {
+                    Ok(count) if (1..=999).contains(&count) => count,
+                    _ => {
+                        self.field_error =
+                            Some("Repeat count must be 1–999".to_string());
+                        cx.notify();
+                        return false;
+                    }
+                };
+                let Some(mut rule) = self
+                    .store
+                    .db()
+                    .tasks
+                    .get(&id)
+                    .and_then(|task| task.repeat.clone())
+                else {
+                    self.field_error = Some("Turn on Repeat first".to_string());
+                    cx.notify();
+                    return false;
+                };
+                rule.end = RepeatEnd::AfterCount(count);
                 patch.repeat = Some(Some(rule));
             }
         }
@@ -7000,16 +7053,14 @@ impl FlowlistApp {
                     || self.group_menu_open
                     || self.priority_menu_open
                     || self.notification_menu.is_some()
-                    || self.repeat_unit_menu.is_some()
-                    || self.repeat_pattern_menu.is_some()
+                    || self.repeat_menu.is_some()
                     || self.sidebar_menu.is_some()
                 {
                     self.sort_menu_open = false;
                     self.group_menu_open = false;
                     self.priority_menu_open = false;
                     self.notification_menu = None;
-                    self.repeat_unit_menu = None;
-                    self.repeat_pattern_menu = None;
+                    self.repeat_menu = None;
                     self.sidebar_menu = None;
                     cx.notify();
                     return;
@@ -7144,16 +7195,14 @@ impl FlowlistApp {
                     || self.group_menu_open
                     || self.priority_menu_open
                     || self.notification_menu.is_some()
-                    || self.repeat_unit_menu.is_some()
-                    || self.repeat_pattern_menu.is_some()
+                    || self.repeat_menu.is_some()
                     || self.sidebar_menu.is_some()
                 {
                     self.sort_menu_open = false;
                     self.group_menu_open = false;
                     self.priority_menu_open = false;
                     self.notification_menu = None;
-                    self.repeat_unit_menu = None;
-                    self.repeat_pattern_menu = None;
+                    self.repeat_menu = None;
                     self.sidebar_menu = None;
                     return;
                 }
@@ -8790,10 +8839,10 @@ impl FlowlistApp {
                 NotificationTarget::Task(id) => format!("task:{id}"),
                 NotificationTarget::Project(id) => format!("project:{id}"),
             }));
-        state["repeat_unit_menu"] =
-            serde_json::json!(self.repeat_unit_menu.as_ref().map(|id| id.to_string()));
-        state["repeat_pattern_menu"] =
-            serde_json::json!(self.repeat_pattern_menu.as_ref().map(|id| id.to_string()));
+        state["repeat_menu"] = serde_json::json!(self
+            .repeat_menu
+            .as_ref()
+            .map(|(id, menu)| format!("{}:{id}", menu.slug())));
         state["batch"] = serde_json::json!(if self.selected.len() > 1 {
             Some(serde_json::json!({
                 "count": self.selected.len(),
@@ -9619,8 +9668,7 @@ impl Render for FlowlistApp {
             || self.group_menu_open
             || self.priority_menu_open
             || self.notification_menu.is_some()
-            || self.repeat_unit_menu.is_some()
-            || self.repeat_pattern_menu.is_some()
+            || self.repeat_menu.is_some()
             || self.sidebar_menu.is_some()
             || self.date_picker.is_some()
         {
@@ -9644,8 +9692,7 @@ impl Render for FlowlistApp {
                             this.group_menu_open = false;
                             this.priority_menu_open = false;
                             this.notification_menu = None;
-                            this.repeat_unit_menu = None;
-                            this.repeat_pattern_menu = None;
+                            this.repeat_menu = None;
                             this.sidebar_menu = None;
                             this.date_picker = None;
                             cx.notify();
@@ -9658,8 +9705,7 @@ impl Render for FlowlistApp {
                             this.group_menu_open = false;
                             this.priority_menu_open = false;
                             this.notification_menu = None;
-                            this.repeat_unit_menu = None;
-                            this.repeat_pattern_menu = None;
+                            this.repeat_menu = None;
                             this.sidebar_menu = None;
                             this.date_picker = None;
                             cx.notify();
@@ -9734,34 +9780,38 @@ impl Render for FlowlistApp {
                     .child(self.render_notification_menu(&target, cx)),
             ));
         }
-        if let Some(id) = self.repeat_unit_menu.clone()
-            && let Some(anchor) = self.repeat_unit_anchor.get()
+        if let Some((id, menu)) = self.repeat_menu.clone()
+            && let Some(anchor) = self.repeat_menu_anchor.get()
         {
-            let (x, y) = menu_position(anchor, viewport, 130.0, 190.0);
+            let (width, height) = match menu {
+                RepeatMenu::Unit => (130.0, 190.0),
+                RepeatMenu::Pattern => (190.0, 260.0),
+                RepeatMenu::Mode | RepeatMenu::Schedule | RepeatMenu::End => (170.0, 170.0),
+            };
+            let (x, y) = menu_position(anchor, viewport, width, height);
+            let (fade_id, layer_id) = match menu {
+                RepeatMenu::Unit => ("repeat-unit-menu-fade", "repeat-unit-menu-layer"),
+                RepeatMenu::Pattern => ("repeat-pattern-menu-fade", "repeat-pattern-menu-layer"),
+                RepeatMenu::Mode => ("repeat-mode-menu-fade", "repeat-mode-menu-layer"),
+                RepeatMenu::Schedule => ("repeat-schedule-menu-fade", "repeat-schedule-menu-layer"),
+                RepeatMenu::End => ("repeat-end-menu-fade", "repeat-end-menu-layer"),
+            };
+            let contents = match menu {
+                RepeatMenu::Unit => self.render_repeat_unit_menu(&id, cx),
+                RepeatMenu::Pattern => self.render_repeat_pattern_menu(&id, cx),
+                RepeatMenu::Mode => self.render_repeat_mode_menu(&id, cx),
+                RepeatMenu::Schedule => self.render_repeat_schedule_menu(&id, cx),
+                RepeatMenu::End => self.render_repeat_end_menu(&id, cx),
+            };
             root = root.child(fade_in(
-                "repeat-unit-menu-fade",
+                fade_id,
                 div()
-                    .id("repeat-unit-menu-layer")
+                    .id(layer_id)
                     .absolute()
                     .occlude()
                     .left(px(x))
                     .top(px(y))
-                    .child(self.render_repeat_unit_menu(&id, cx)),
-            ));
-        }
-        if let Some(id) = self.repeat_pattern_menu.clone()
-            && let Some(anchor) = self.repeat_pattern_anchor.get()
-        {
-            let (x, y) = menu_position(anchor, viewport, 190.0, 260.0);
-            root = root.child(fade_in(
-                "repeat-pattern-menu-fade",
-                div()
-                    .id("repeat-pattern-menu-layer")
-                    .absolute()
-                    .occlude()
-                    .left(px(x))
-                    .top(px(y))
-                    .child(self.render_repeat_pattern_menu(&id, cx)),
+                    .child(contents),
             ));
         }
         if self.toast.is_some() {

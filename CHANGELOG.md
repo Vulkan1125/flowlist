@@ -22,6 +22,10 @@
   day**, with a line explaining the exact result. The Android editor uses the
   same dropdown wording; row metadata, summaries, projected endings and the
   parser all understand the pattern.
+- **Compact Mac repeat controls.** **Schedule the next**, **Repeat from** and
+  **Ends** are now dropdowns instead of segmented chip rows. Choosing **After
+  N** shows a typed **After** input box rather than −/+ stepper buttons, so the
+  whole Repeat section stays compact and the count can be entered directly.
 - **Parser and row metadata.** `every month on the third Thursday` and
   `every 2 months on the last weekend day` parse to the same `RepeatRule`, and
   the Android row label now names minutes and hours instead of treating every

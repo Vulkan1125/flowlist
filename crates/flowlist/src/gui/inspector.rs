@@ -24,7 +24,7 @@ use super::icons::Icon;
 use super::widgets::TipExt;
 use super::{
     BatchDraft, BatchField, ClockUnit, DateField, DatePickerStep, EditField, FlowlistApp,
-    InspectorTab, NotificationTarget, View, icons, widgets,
+    InspectorTab, NotificationTarget, RepeatMenu, View, icons, widgets,
 };
 
 /// A two-or-more choice row that keeps the OmniFocus segmented look without
@@ -2339,140 +2339,42 @@ impl FlowlistApp {
                     )
                     .child(self.inspector_week_strip(&id, &rule, cx));
             }
-            body = body.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child("Schedule the next"),
-                    )
-                    .child(segmented_row(
-                        theme,
-                        "repeat-mode",
-                        &[("due", "Due Date"), ("defer", "Defer Until Date")],
-                        if mode == RepeatMode::DueAgain { 0 } else { 1 },
-                        self.theme_boxes.clone(),
-                        {
-                            let current_rule = rule.clone();
-                            let mode_id = id.clone();
-                            move |this: &mut FlowlistApp, index, cx| {
-                                if let Some(current) = &current_rule {
-                                    this.update_task_repeat(
-                                        &mode_id,
-                                        current,
-                                        |rule| {
-                                            rule.mode = if index == 0 {
-                                                RepeatMode::DueAgain
-                                            } else {
-                                                RepeatMode::DeferAnother
-                                            }
-                                        },
-                                        cx,
-                                    );
-                                }
-                            }
-                        },
-                        cx,
-                    )),
-            );
-            body = body.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child("Repeat from"),
-                    )
-                    .child(segmented_row(
-                        theme,
-                        "repeat-schedule",
-                        &[("completion", "Completion"), ("assigned", "Assigned Dates")],
-                        if schedule == RepeatSchedule::AfterCompletion {
-                            0
-                        } else {
-                            1
-                        },
-                        self.theme_boxes.clone(),
-                        {
-                            let current_rule = rule.clone();
-                            let schedule_id = id.clone();
-                            move |this: &mut FlowlistApp, index, cx| {
-                                if let Some(current) = &current_rule {
-                                    this.update_task_repeat(
-                                        &schedule_id,
-                                        current,
-                                        |rule| {
-                                            rule.schedule = if index == 0 {
-                                                RepeatSchedule::AfterCompletion
-                                            } else {
-                                                RepeatSchedule::Fixed
-                                            }
-                                        },
-                                        cx,
-                                    );
-                                }
-                            }
-                        },
-                        cx,
-                    )),
-            );
-            body = body.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.text_faint)
-                            .child("Ends"),
-                    )
-                    .child(segmented_row(
-                        theme,
-                        "repeat-end",
-                        &[("never", "Never"), ("date", "On date"), ("count", "After N")],
-                        match &end {
-                            RepeatEnd::Never => 0,
-                            RepeatEnd::OnDate(_) => 1,
-                            RepeatEnd::AfterCount(_) => 2,
-                        },
-                        self.theme_boxes.clone(),
-                        {
-                            let current_rule = rule.clone();
-                            let end_id = id.clone();
-                            move |this: &mut FlowlistApp, index, cx| {
-                                if let Some(current) = &current_rule {
-                                    this.update_task_repeat(
-                                        &end_id,
-                                        current,
-                                        |rule| {
-                                            rule.end = match index {
-                                                1 => RepeatEnd::OnDate(match rule.end {
-                                                    RepeatEnd::OnDate(date) => date,
-                                                    _ => local_date(now()),
-                                                }),
-                                                2 => RepeatEnd::AfterCount(match rule.end {
-                                                    RepeatEnd::AfterCount(count) => count,
-                                                    _ => 3,
-                                                }),
-                                                _ => RepeatEnd::Never,
-                                            };
-                                        },
-                                        cx,
-                                    );
-                                }
-                            }
-                        },
-                        cx,
-                    )),
-            );
+            body = body.child(self.inspector_repeat_dropdown(
+                &id,
+                "Schedule the next",
+                if mode == RepeatMode::DueAgain {
+                    "Due Date".to_string()
+                } else {
+                    "Defer Until Date".to_string()
+                },
+                "repeat-mode-toggle",
+                RepeatMenu::Mode,
+                cx,
+            ));
+            body = body.child(self.inspector_repeat_dropdown(
+                &id,
+                "Repeat from",
+                if schedule == RepeatSchedule::AfterCompletion {
+                    "Completion".to_string()
+                } else {
+                    "Assigned Dates".to_string()
+                },
+                "repeat-schedule-toggle",
+                RepeatMenu::Schedule,
+                cx,
+            ));
+            body = body.child(self.inspector_repeat_dropdown(
+                &id,
+                "Ends",
+                match &end {
+                    RepeatEnd::Never => "Never".to_string(),
+                    RepeatEnd::OnDate(_) => "On date".to_string(),
+                    RepeatEnd::AfterCount(_) => "After N".to_string(),
+                },
+                "repeat-end-toggle",
+                RepeatMenu::End,
+                cx,
+            ));
             if let RepeatEnd::OnDate(date) = &end {
                 let anchor = self.repeat_end_anchor.clone();
                 let probe_boxes = self.theme_boxes.clone();
@@ -2511,10 +2413,47 @@ impl FlowlistApp {
             }
             if let RepeatEnd::AfterCount(count) = &end {
                 let count = *count;
-                let down_rule = rule.clone();
-                let up_rule = rule.clone();
-                let down_id = id.clone();
-                let up_id = id.clone();
+                let editing = self.editing == Some(EditField::RepeatEndCount)
+                    && self.focus == super::FocusArea::Field;
+                let number = if editing {
+                    div()
+                        .on_children_prepainted(self.field_editor_probe())
+                        .id("repeat-end-count-editor")
+                        .w(px(70.))
+                        .px_2()
+                        .child(widgets::inline_text_field_with_cursor(
+                            theme,
+                            &self.field,
+                            "3",
+                            true,
+                            cx.listener(|this, hit: &widgets::TextHit, _, cx| {
+                                this.field_text_hit(hit, cx)
+                            }),
+                        ))
+                        .into_any_element()
+                } else {
+                    div()
+                        .on_children_prepainted(
+                            self.theme_probe("field-box:repeat-end-count".to_string()),
+                        )
+                        .id("field:repeat-end-count")
+                        .w(px(70.))
+                        .h(px(28.))
+                        .flex()
+                        .items_center()
+                        .px_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.field)
+                        .text_sm()
+                        .cursor_pointer()
+                        .child(count.to_string())
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.begin_edit(EditField::RepeatEndCount, cx)
+                        }))
+                        .into_any_element()
+                };
                 body = body.child(
                     div()
                         .flex()
@@ -2526,65 +2465,7 @@ impl FlowlistApp {
                                 .text_color(theme.text_faint)
                                 .child("After"),
                         )
-                        .child(
-                            div()
-                                .on_children_prepainted(
-                                    self.theme_probe("repeat-end-count-down".to_string()),
-                                )
-                                .id("repeat-end-count-down")
-                                .px_2()
-                                .py_1()
-                                .rounded_md()
-                                .bg(theme.field)
-                                .cursor_pointer()
-                                .child("−")
-                                .on_click(cx.listener(
-                                    move |this, _, _, cx| {
-                                        if let Some(current) = &down_rule {
-                                            this.update_task_repeat(
-                                                &down_id,
-                                                current,
-                                                |rule| {
-                                                    rule.end = RepeatEnd::AfterCount(
-                                                        count.saturating_sub(1).max(1),
-                                                    )
-                                                },
-                                                cx,
-                                            );
-                                        }
-                                    },
-                                )),
-                        )
-                        .child(div().text_sm().child(count.to_string()))
-                        .child(
-                            div()
-                                .on_children_prepainted(
-                                    self.theme_probe("repeat-end-count-up".to_string()),
-                                )
-                                .id("repeat-end-count-up")
-                                .px_2()
-                                .py_1()
-                                .rounded_md()
-                                .bg(theme.field)
-                                .cursor_pointer()
-                                .child("+")
-                                .on_click(cx.listener(
-                                    move |this, _, _, cx| {
-                                        if let Some(current) = &up_rule {
-                                            this.update_task_repeat(
-                                                &up_id,
-                                                current,
-                                                |rule| {
-                                                    rule.end = RepeatEnd::AfterCount(
-                                                        (count + 1).min(999),
-                                                    )
-                                                },
-                                                cx,
-                                            );
-                                        }
-                                    },
-                                )),
-                        )
+                        .child(number)
                         .child(
                             div()
                                 .text_xs()
@@ -2610,6 +2491,68 @@ impl FlowlistApp {
         body
     }
 
+    fn inspector_repeat_dropdown(
+        &self,
+        id: &TaskId,
+        label: &'static str,
+        current: String,
+        probe_key: &'static str,
+        menu: RepeatMenu,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let anchor = self.repeat_menu_anchor.clone();
+        let probe_boxes = self.notification_boxes.clone();
+        let menu_id = id.clone();
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child(label),
+            )
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            anchor.set(Some(*bounds));
+                            probe_boxes.borrow_mut().insert(
+                                probe_key.to_string(),
+                                [
+                                    f32::from(bounds.origin.x),
+                                    f32::from(bounds.origin.y),
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
+                                ],
+                            );
+                        }
+                    })
+                    .id(super::sid(probe_key))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .h(px(28.))
+                    .px_2()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.field)
+                    .text_sm()
+                    .text_color(theme.text)
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(current)
+                    .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.repeat_menu = Some((menu_id.clone(), menu));
+                        cx.notify();
+                    })),
+            )
+    }
+
     fn inspector_repeat_pattern(
         &self,
         id: &TaskId,
@@ -2618,7 +2561,7 @@ impl FlowlistApp {
     ) -> impl IntoElement {
         let theme = self.theme;
         let current_pattern = rule.as_ref().and_then(|rule| rule.pattern);
-        let anchor = self.repeat_pattern_anchor.clone();
+        let anchor = self.repeat_menu_anchor.clone();
         let probe_boxes = self.notification_boxes.clone();
         let menu_id = id.clone();
         let current_label = repeat_pattern_label(current_pattern);
@@ -2676,7 +2619,7 @@ impl FlowlistApp {
                     .child(current_label)
                     .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.repeat_pattern_menu = Some(menu_id.clone());
+                        this.repeat_menu = Some((menu_id.clone(), RepeatMenu::Pattern));
                         cx.notify();
                     })),
             );
@@ -2738,7 +2681,7 @@ impl FlowlistApp {
                 .on_click(cx.listener(|this, _, _, cx| this.begin_edit(EditField::Repeat, cx)))
                 .into_any_element()
         };
-        let anchor = self.repeat_unit_anchor.clone();
+        let anchor = self.repeat_menu_anchor.clone();
         let probe_boxes = self.notification_boxes.clone();
         let unit_id = id.clone();
         let unit_label = interval_unit_label(unit);
@@ -2783,7 +2726,7 @@ impl FlowlistApp {
                     .child(unit_label)
                     .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.repeat_unit_menu = Some(unit_id.clone());
+                        this.repeat_menu = Some((unit_id.clone(), RepeatMenu::Unit));
                         cx.notify();
                     })),
             )
@@ -2885,6 +2828,212 @@ impl FlowlistApp {
         strip
     }
 
+    fn render_repeat_choice_menu(
+        &self,
+        options: &[(&'static str, &'static str)],
+        selected: usize,
+        probe_prefix: &'static str,
+        on_choose: impl Fn(&mut FlowlistApp, usize, &mut Context<FlowlistApp>) + 'static,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let theme = self.theme;
+        let on_choose = std::rc::Rc::new(on_choose);
+        let mut menu = div()
+            .min_w(px(170.))
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg();
+        for (index, (slug, label)) in options.iter().enumerate() {
+            let on_choose = on_choose.clone();
+            let active = index == selected;
+            menu = menu.child(
+                div()
+                    .on_children_prepainted(
+                        self.notification_probe(format!("{probe_prefix}-option:{slug}")),
+                    )
+                    .id(super::sid(format!("{probe_prefix}-option:{slug}")))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if active { theme.accent } else { theme.text_dim })
+                    .bg(if active { theme.selection } else { theme.clear })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(label.to_string())
+                    .when(active, |this| {
+                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        on_choose(this, index, cx);
+                        this.repeat_menu = None;
+                        this.save_session();
+                        cx.notify();
+                    })),
+            );
+        }
+        menu
+    }
+
+    pub(super) fn render_repeat_mode_menu(
+        &self,
+        id: &TaskId,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let current = self
+            .store
+            .db()
+            .tasks
+            .get(id)
+            .and_then(|task| task.repeat.as_ref())
+            .map(|rule| rule.mode)
+            .unwrap_or_default();
+        let selected = if current == RepeatMode::DueAgain { 0 } else { 1 };
+        let id = id.clone();
+        self.render_repeat_choice_menu(
+            &[("due", "Due Date"), ("defer", "Defer Until Date")],
+            selected,
+            "repeat-mode",
+            move |this, index, cx| {
+                if let Some(current) = this
+                    .store
+                    .db()
+                    .tasks
+                    .get(&id)
+                    .and_then(|task| task.repeat.clone())
+                {
+                    this.update_task_repeat(
+                        &id,
+                        &current,
+                        |rule| {
+                            rule.mode = if index == 0 {
+                                RepeatMode::DueAgain
+                            } else {
+                                RepeatMode::DeferAnother
+                            }
+                        },
+                        cx,
+                    );
+                }
+            },
+            cx,
+        )
+    }
+
+    pub(super) fn render_repeat_schedule_menu(
+        &self,
+        id: &TaskId,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let current = self
+            .store
+            .db()
+            .tasks
+            .get(id)
+            .and_then(|task| task.repeat.as_ref())
+            .map(|rule| rule.schedule)
+            .unwrap_or_default();
+        let selected = if current == RepeatSchedule::AfterCompletion {
+            0
+        } else {
+            1
+        };
+        let id = id.clone();
+        self.render_repeat_choice_menu(
+            &[("completion", "Completion"), ("assigned", "Assigned Dates")],
+            selected,
+            "repeat-schedule",
+            move |this, index, cx| {
+                if let Some(current) = this
+                    .store
+                    .db()
+                    .tasks
+                    .get(&id)
+                    .and_then(|task| task.repeat.clone())
+                {
+                    this.update_task_repeat(
+                        &id,
+                        &current,
+                        |rule| {
+                            rule.schedule = if index == 0 {
+                                RepeatSchedule::AfterCompletion
+                            } else {
+                                RepeatSchedule::Fixed
+                            }
+                        },
+                        cx,
+                    );
+                }
+            },
+            cx,
+        )
+    }
+
+    pub(super) fn render_repeat_end_menu(
+        &self,
+        id: &TaskId,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let current = self
+            .store
+            .db()
+            .tasks
+            .get(id)
+            .and_then(|task| task.repeat.as_ref())
+            .map(|rule| rule.end.clone())
+            .unwrap_or_default();
+        let selected = match current {
+            RepeatEnd::Never => 0,
+            RepeatEnd::OnDate(_) => 1,
+            RepeatEnd::AfterCount(_) => 2,
+        };
+        let id = id.clone();
+        self.render_repeat_choice_menu(
+            &[("never", "Never"), ("date", "On date"), ("count", "After N")],
+            selected,
+            "repeat-end",
+            move |this, index, cx| {
+                if let Some(current) = this
+                    .store
+                    .db()
+                    .tasks
+                    .get(&id)
+                    .and_then(|task| task.repeat.clone())
+                {
+                    this.update_task_repeat(
+                        &id,
+                        &current,
+                        |rule| {
+                            rule.end = match index {
+                                1 => RepeatEnd::OnDate(match rule.end {
+                                    RepeatEnd::OnDate(date) => date,
+                                    _ => local_date(now()),
+                                }),
+                                2 => RepeatEnd::AfterCount(match rule.end {
+                                    RepeatEnd::AfterCount(count) => count,
+                                    _ => 3,
+                                }),
+                                _ => RepeatEnd::Never,
+                            };
+                        },
+                        cx,
+                    );
+                }
+            },
+            cx,
+        )
+    }
+
     pub(super) fn render_repeat_pattern_menu(
         &self,
         id: &TaskId,
@@ -2960,7 +3109,7 @@ impl FlowlistApp {
                                 cx,
                             );
                         }
-                        this.repeat_pattern_menu = None;
+                        this.repeat_menu = None;
                         this.save_session();
                         cx.notify();
                     })),
@@ -3047,7 +3196,7 @@ impl FlowlistApp {
                                 cx,
                             );
                         }
-                        this.repeat_unit_menu = None;
+                        this.repeat_menu = None;
                         this.save_session();
                         cx.notify();
                     })),
@@ -3140,6 +3289,7 @@ impl FlowlistApp {
             EditField::Reminder => "No reminder time",
             EditField::Estimate => "No estimate (e.g. 45m)",
             EditField::Repeat => "1",
+            EditField::RepeatEndCount => "3",
             EditField::Project => "Inbox",
             EditField::Notes => "Notes",
         };

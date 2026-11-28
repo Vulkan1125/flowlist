@@ -161,9 +161,11 @@ for _ in $(seq 1 80); do
   sleep 0.1
 done
 echo "   week strip picks Monday and Wednesday; interval shows custom"
-click_box theme_boxes repeat-schedule:completion
+click_box notification_boxes repeat-schedule-toggle
+click_box notification_boxes repeat-schedule-option:completion
 wait_json task repeat_schedule '"after completion" in d["repeat"]'
-click_box theme_boxes repeat-mode:defer
+click_box notification_boxes repeat-mode-toggle
+click_box notification_boxes repeat-mode-option:defer
 wait_json task repeat_mode '"defer another" in d["repeat"]'
 echo "   weekdays, after completion, defer until"
 
