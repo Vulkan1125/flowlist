@@ -145,6 +145,16 @@ echo "   Never selected, no end in the rule"
 
 echo "2. On date opens the calendar and applies the picked day"
 click_box notification_boxes repeat-end-toggle
+python3 - "$state" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+toggle = d["notification_boxes"]["repeat-end-toggle"]
+option = d["notification_boxes"]["repeat-end-option:date"]
+assert toggle[0] <= option[0] < toggle[0] + toggle[2], (toggle, option)
+assert option[1] >= toggle[1] + toggle[3], (toggle, option)
+assert option[2] >= toggle[2] - 12, (toggle, option)
+print("   menu opens directly under the box and matches its width")
+PY
 click_box notification_boxes repeat-end-option:date
 wait_repeat 'd["repeat"].startswith("every week until ")'
 click_box theme_boxes repeat-end-date

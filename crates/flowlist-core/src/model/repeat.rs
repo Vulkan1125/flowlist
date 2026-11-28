@@ -163,8 +163,8 @@ impl RepeatRule {
         };
         Some(match pattern {
             RepeatPattern::NthWeekday { nth, weekday } => {
-                let day = weekday_name(weekday)?;
-                format!("the {} {day} of {months}", ordinal(nth))
+                let day = weekday_name(weekday % 7)?;
+                format!("the {} {day} of {months}", ordinal(nth.clamp(1, 5)))
             }
             RepeatPattern::LastWeekendDay => {
                 format!("the last weekend day of {months}")
@@ -516,9 +516,10 @@ fn pattern_date_in_month(year: i32, month: u32, pattern: RepeatPattern) -> Optio
         RepeatPattern::NthWeekday { nth, weekday } => {
             let first = NaiveDate::from_ymd_opt(year, month, 1)?;
             let first_weekday = first.weekday().num_days_from_sunday() as u8;
+            let weekday = weekday % 7;
             let day = 1
                 + usize::from((weekday + 7 - first_weekday) % 7)
-                + usize::from(nth.max(1) - 1) * 7;
+                + usize::from(nth.clamp(1, 5) - 1) * 7;
             let date = NaiveDate::from_ymd_opt(year, month, day as u32)?;
             (date.month() == month).then_some(date)
         }
@@ -536,19 +537,20 @@ fn pattern_date_in_month(year: i32, month: u32, pattern: RepeatPattern) -> Optio
 /// phase so "every two months on the third Thursday" stays on odd months.
 fn next_pattern_after(anchor: NaiveDate, every: u32, pattern: RepeatPattern) -> NaiveDate {
     let every = every.max(1);
-    let mut cursor = NaiveDate::from_ymd_opt(anchor.year(), anchor.month(), 1).unwrap_or(anchor);
-    for offset in 0..=240u32 {
-        if offset % every == 0 {
-            if let Some(date) = pattern_date_in_month(cursor.year(), cursor.month(), pattern) {
-                if date > anchor {
-                    return date;
-                }
-            }
-        }
-        cursor = match cursor.checked_add_months(Months::new(1)) {
-            Some(next) => next,
-            None => break,
+    let start = NaiveDate::from_ymd_opt(anchor.year(), anchor.month(), 1).unwrap_or(anchor);
+    // Visit only the months this rule can occupy, so a large interval such as
+    // "every 500 months" still finds its next pattern instead of falling back
+    // to the day after the anchor.
+    for step in 0..=240u32 {
+        let offset = step.saturating_mul(every);
+        let Some(cursor) = start.checked_add_months(Months::new(offset)) else {
+            break;
         };
+        if let Some(date) = pattern_date_in_month(cursor.year(), cursor.month(), pattern)
+            && date > anchor
+        {
+            return date;
+        }
     }
     anchor + Duration::days(1)
 }
@@ -726,6 +728,26 @@ mod tests {
         rule.every = 2;
         let next = rule.next_occurrence(Some(due), None, Utc::now()).unwrap();
         assert_eq!(next.due.unwrap().local_date(), date(2027, 1, 21));
+    }
+
+    #[test]
+    fn large_pattern_intervals_keep_their_month_phase() {
+        let due_date = date(2026, 11, 19); // third Thursday
+        let mut rule = RepeatRule::new(RepeatMode::DueAgain, 500, IntervalUnit::Months);
+        rule.pattern = Some(RepeatPattern::NthWeekday {
+            nth: 3,
+            weekday: 4,
+        });
+        let next = rule
+            .next_occurrence(Some(Stamp::date_only(due_date)), None, Utc::now())
+            .and_then(|outcome| outcome.due)
+            .expect("next occurrence")
+            .local_date();
+        let expected_month = due_date
+            .checked_add_months(Months::new(500))
+            .expect("month arithmetic");
+        assert_eq!(next.year(), expected_month.year());
+        assert_eq!(next.month(), expected_month.month());
     }
 
     #[test]

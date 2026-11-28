@@ -2874,32 +2874,37 @@ impl FlowlistApp {
             let active = index == selected;
             menu = menu.child(
                 div()
+                    .w_full()
                     .on_children_prepainted(
                         self.notification_probe(format!("{probe_prefix}-option:{slug}")),
                     )
-                    .id(super::sid(format!("{probe_prefix}-option:{slug}")))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_2()
-                    .py_1()
-                    .rounded_sm()
-                    .text_xs()
-                    .text_color(if active { theme.accent } else { theme.text_dim })
-                    .bg(if active { theme.selection } else { theme.clear })
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .child(label.to_string())
-                    .when(active, |this| {
-                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
-                    })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        on_choose(this, index, cx);
-                        this.repeat_menu = None;
-                        this.save_session();
-                        cx.notify();
-                    })),
+                    .child(
+                        div()
+                            .id(super::sid(format!("{probe_prefix}-option:{slug}")))
+                            .flex()
+                            .w_full()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .px_2()
+                            .py_1()
+                            .rounded_sm()
+                            .text_xs()
+                            .text_color(if active { theme.accent } else { theme.text_dim })
+                            .bg(if active { theme.selection } else { theme.clear })
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover))
+                            .child(label.to_string())
+                            .when(active, |this| {
+                                this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                on_choose(this, index, cx);
+                                this.repeat_menu = None;
+                                this.save_session();
+                                cx.notify();
+                            })),
+                    ),
             );
         }
         menu
@@ -3092,51 +3097,56 @@ impl FlowlistApp {
             let menu_id = id.clone();
             menu = menu.child(
                 div()
+                    .w_full()
                     .on_children_prepainted(
                         self.notification_probe(format!("repeat-pattern-option:{slug}")),
                     )
-                    .id(super::sid(format!("repeat-pattern-option:{slug}")))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_2()
-                    .py_1()
-                    .rounded_sm()
-                    .text_xs()
-                    .text_color(if active { theme.accent } else { theme.text_dim })
-                    .bg(if active { theme.selection } else { theme.clear })
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .child(label)
-                    .when(active, |this| {
-                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
-                    })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(current) = this
-                            .store
-                            .db()
-                            .tasks
-                            .get(&menu_id)
-                            .and_then(|task| task.repeat.clone())
-                        {
-                            this.update_task_repeat(
-                                &menu_id,
-                                &current,
-                                |rule| {
-                                    rule.pattern = choice;
-                                    if choice.is_some() {
-                                        rule.unit = IntervalUnit::Months;
-                                        rule.weekdays = None;
-                                    }
-                                },
-                                cx,
-                            );
-                        }
-                        this.repeat_menu = None;
-                        this.save_session();
-                        cx.notify();
-                    })),
+                    .child(
+                        div()
+                            .id(super::sid(format!("repeat-pattern-option:{slug}")))
+                            .flex()
+                            .w_full()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .px_2()
+                            .py_1()
+                            .rounded_sm()
+                            .text_xs()
+                            .text_color(if active { theme.accent } else { theme.text_dim })
+                            .bg(if active { theme.selection } else { theme.clear })
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover))
+                            .child(label)
+                            .when(active, |this| {
+                                this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(current) = this
+                                    .store
+                                    .db()
+                                    .tasks
+                                    .get(&menu_id)
+                                    .and_then(|task| task.repeat.clone())
+                                {
+                                    this.update_task_repeat(
+                                        &menu_id,
+                                        &current,
+                                        |rule| {
+                                            rule.pattern = choice;
+                                            if choice.is_some() {
+                                                rule.unit = IntervalUnit::Months;
+                                                rule.weekdays = None;
+                                            }
+                                        },
+                                        cx,
+                                    );
+                                }
+                                this.repeat_menu = None;
+                                this.save_session();
+                                cx.notify();
+                            })),
+                    ),
             );
         }
         menu
@@ -3177,53 +3187,58 @@ impl FlowlistApp {
             let menu_id = id.clone();
             menu = menu.child(
                 div()
+                    .w_full()
                     .on_children_prepainted(
                         self.notification_probe(format!("repeat-unit-option:{slug}")),
                     )
-                    .id(super::sid(format!("repeat-unit-option:{slug}")))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_2()
-                    .py_1()
-                    .rounded_sm()
-                    .text_xs()
-                    .text_color(if active { theme.accent } else { theme.text_dim })
-                    .bg(if active { theme.selection } else { theme.clear })
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .child(label.to_string())
-                    .when(active, |this| {
-                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
-                    })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(current) = this
-                            .store
-                            .db()
-                            .tasks
-                            .get(&menu_id)
-                            .and_then(|task| task.repeat.clone())
-                        {
-                            this.update_task_repeat(
-                                &menu_id,
-                                &current,
-                                |rule| {
-                                    rule.unit = candidate;
-                                    if candidate != IntervalUnit::Days {
-                                        rule.weekdays = None;
-                                    }
-                                    if candidate != IntervalUnit::Months {
-                                        rule.pattern = None;
-                                    }
-                                },
-                                cx,
-                            );
-                        }
-                        this.repeat_menu = None;
-                        this.save_session();
-                        cx.notify();
-                    })),
+                    .child(
+                        div()
+                            .id(super::sid(format!("repeat-unit-option:{slug}")))
+                            .flex()
+                            .w_full()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .px_2()
+                            .py_1()
+                            .rounded_sm()
+                            .text_xs()
+                            .text_color(if active { theme.accent } else { theme.text_dim })
+                            .bg(if active { theme.selection } else { theme.clear })
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover))
+                            .child(label.to_string())
+                            .when(active, |this| {
+                                this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(current) = this
+                                    .store
+                                    .db()
+                                    .tasks
+                                    .get(&menu_id)
+                                    .and_then(|task| task.repeat.clone())
+                                {
+                                    this.update_task_repeat(
+                                        &menu_id,
+                                        &current,
+                                        |rule| {
+                                            rule.unit = candidate;
+                                            if candidate != IntervalUnit::Days {
+                                                rule.weekdays = None;
+                                            }
+                                            if candidate != IntervalUnit::Months {
+                                                rule.pattern = None;
+                                            }
+                                        },
+                                        cx,
+                                    );
+                                }
+                                this.repeat_menu = None;
+                                this.save_session();
+                                cx.notify();
+                            })),
+                    ),
             );
         }
         menu
