@@ -17,11 +17,11 @@
   time is ever written.
 - **Clearer monthly patterns.** A repeated task can fall on the nth weekday of
   the month (1st through 5th) or on the last weekend day, every month or every
-  N months. The **Repeat on** row now spells out **Same date**, **1st Monday**
-  through **5th Monday** (using the chosen weekday), or **Last weekend day**,
-  with a line explaining the exact result. The Android editor uses the same
-  wording; row metadata, summaries, projected endings and the parser all
-  understand the pattern.
+  N months. The **Repeat on** dropdown spells out **Same date**, **1st
+  Monday** through **5th Monday** (using the chosen weekday), or **Last weekend
+  day**, with a line explaining the exact result. The Android editor uses the
+  same dropdown wording; row metadata, summaries, projected endings and the
+  parser all understand the pattern.
 - **Parser and row metadata.** `every month on the third Thursday` and
   `every 2 months on the last weekend day` parse to the same `RepeatRule`, and
   the Android row label now names minutes and hours instead of treating every

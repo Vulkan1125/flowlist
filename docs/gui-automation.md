@@ -332,7 +332,7 @@ library:
   notification, adds relative and custom notifications through the Add
   Notification menu, checks the full-screen reminder and collapses the section.
 - `scripts/gui/inspector-sections-probe.sh` builds a repeat rule from the
-  editable interval, unit dropdown, **Repeat on** row, weekday strip and
+  editable interval, unit dropdown, **Repeat on** dropdown, weekday strip and
   segmented controls, checks that a date-only task rejects **Hours** with the
   due-date message and that a timed task accepts the hourly rule, checks
   the centred tag plus and chip box, then edits a project's review cadence and

@@ -135,11 +135,14 @@ wait_json task repeat_every 'd["repeat"].startswith("every 2 weeks")'
 click_box notification_boxes repeat-unit-toggle
 click_box notification_boxes repeat-unit-option:months
 wait_json task repeat_unit 'd["repeat"].startswith("every 2 months")'
-click_box theme_boxes repeat-pattern:third
+click_box notification_boxes repeat-pattern-toggle
+click_box notification_boxes repeat-pattern-option:third
 wait_json task repeat_pattern '"the third Monday of every 2 months" in d["repeat"]'
-click_box theme_boxes repeat-pattern:last
+click_box notification_boxes repeat-pattern-toggle
+click_box notification_boxes repeat-pattern-option:last
 wait_json task repeat_weekend '"the last weekend day of every 2 months" in d["repeat"]'
-click_box theme_boxes repeat-pattern:none
+click_box notification_boxes repeat-pattern-toggle
+click_box notification_boxes repeat-pattern-option:none
 wait_json task repeat_pattern_cleared 'd["repeat"].startswith("every 2 months")'
 echo "   monthly pattern picks an nth weekday and the last weekend day"
 click_box notification_boxes repeat-unit-toggle

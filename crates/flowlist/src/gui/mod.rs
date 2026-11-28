@@ -748,6 +748,9 @@ pub struct FlowlistApp {
     /// The open repeat-unit menu and the interval button it points at.
     repeat_unit_menu: Option<TaskId>,
     repeat_unit_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// The open monthly-pattern menu and the button it points at.
+    repeat_pattern_menu: Option<TaskId>,
+    repeat_pattern_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// A click's mouse-up closed the sort or group menu. The chip under the
     /// same click must not immediately reopen it.
     sort_closed_on_up: bool,
@@ -1296,6 +1299,8 @@ impl FlowlistApp {
             notification_anchor: Rc::new(Cell::new(None)),
             repeat_unit_menu: None,
             repeat_unit_anchor: Rc::new(Cell::new(None)),
+            repeat_pattern_menu: None,
+            repeat_pattern_anchor: Rc::new(Cell::new(None)),
             theme_on_open: None,
             plain_accent_light,
             plain_accent_dark,
@@ -6996,6 +7001,7 @@ impl FlowlistApp {
                     || self.priority_menu_open
                     || self.notification_menu.is_some()
                     || self.repeat_unit_menu.is_some()
+                    || self.repeat_pattern_menu.is_some()
                     || self.sidebar_menu.is_some()
                 {
                     self.sort_menu_open = false;
@@ -7003,6 +7009,7 @@ impl FlowlistApp {
                     self.priority_menu_open = false;
                     self.notification_menu = None;
                     self.repeat_unit_menu = None;
+                    self.repeat_pattern_menu = None;
                     self.sidebar_menu = None;
                     cx.notify();
                     return;
@@ -7138,6 +7145,7 @@ impl FlowlistApp {
                     || self.priority_menu_open
                     || self.notification_menu.is_some()
                     || self.repeat_unit_menu.is_some()
+                    || self.repeat_pattern_menu.is_some()
                     || self.sidebar_menu.is_some()
                 {
                     self.sort_menu_open = false;
@@ -7145,6 +7153,7 @@ impl FlowlistApp {
                     self.priority_menu_open = false;
                     self.notification_menu = None;
                     self.repeat_unit_menu = None;
+                    self.repeat_pattern_menu = None;
                     self.sidebar_menu = None;
                     return;
                 }
@@ -8783,6 +8792,8 @@ impl FlowlistApp {
             }));
         state["repeat_unit_menu"] =
             serde_json::json!(self.repeat_unit_menu.as_ref().map(|id| id.to_string()));
+        state["repeat_pattern_menu"] =
+            serde_json::json!(self.repeat_pattern_menu.as_ref().map(|id| id.to_string()));
         state["batch"] = serde_json::json!(if self.selected.len() > 1 {
             Some(serde_json::json!({
                 "count": self.selected.len(),
@@ -9609,6 +9620,7 @@ impl Render for FlowlistApp {
             || self.priority_menu_open
             || self.notification_menu.is_some()
             || self.repeat_unit_menu.is_some()
+            || self.repeat_pattern_menu.is_some()
             || self.sidebar_menu.is_some()
             || self.date_picker.is_some()
         {
@@ -9633,6 +9645,7 @@ impl Render for FlowlistApp {
                             this.priority_menu_open = false;
                             this.notification_menu = None;
                             this.repeat_unit_menu = None;
+                            this.repeat_pattern_menu = None;
                             this.sidebar_menu = None;
                             this.date_picker = None;
                             cx.notify();
@@ -9646,6 +9659,7 @@ impl Render for FlowlistApp {
                             this.priority_menu_open = false;
                             this.notification_menu = None;
                             this.repeat_unit_menu = None;
+                            this.repeat_pattern_menu = None;
                             this.sidebar_menu = None;
                             this.date_picker = None;
                             cx.notify();
@@ -9733,6 +9747,21 @@ impl Render for FlowlistApp {
                     .left(px(x))
                     .top(px(y))
                     .child(self.render_repeat_unit_menu(&id, cx)),
+            ));
+        }
+        if let Some(id) = self.repeat_pattern_menu.clone()
+            && let Some(anchor) = self.repeat_pattern_anchor.get()
+        {
+            let (x, y) = menu_position(anchor, viewport, 190.0, 260.0);
+            root = root.child(fade_in(
+                "repeat-pattern-menu-fade",
+                div()
+                    .id("repeat-pattern-menu-layer")
+                    .absolute()
+                    .occlude()
+                    .left(px(x))
+                    .top(px(y))
+                    .child(self.render_repeat_pattern_menu(&id, cx)),
             ));
         }
         if self.toast.is_some() {

@@ -145,9 +145,10 @@ leaving the list.
   clock instead of the calendar, so the task needs a time on its due or defer
   date; a date-only task is refused with a message naming the date, such as
   **Add a time to the due date first**. When the unit is **Months**, a **Repeat
-  on** row offers **Same date**, full choices such as **1st Monday** through
-  **5th Monday**, or **Last weekend day**, and selecting an nth weekday reveals
-  a **Weekday** row plus a line explaining the exact result. The summary line
+  on** dropdown offers **Same date**, full choices such as **1st Monday**
+  through **5th Monday**, or **Last weekend day**, and selecting an nth weekday
+  reveals a **Weekday** row plus a line explaining the exact result. The
+  summary line
   beneath says the result in plain words, such as “Every Monday and Wednesday,
   from the assigned dates, scheduling the next due date.” An **Ends** row sets
   **Never**, **On date**

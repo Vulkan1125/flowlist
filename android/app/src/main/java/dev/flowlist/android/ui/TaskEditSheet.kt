@@ -295,6 +295,7 @@ fun TaskEditSheet(
     val repeatPatternWeekday = (repeatPattern?.get("weekday") as? JsonPrimitive)
         ?.content?.toIntOrNull()
     var showRepeatEndPicker by remember { mutableStateOf(false) }
+    var showRepeatPatternMenu by remember { mutableStateOf(false) }
     var repeatError by remember { mutableStateOf<String?>(null) }
 
     fun nthPatternJson(nth: Int, weekday: Int): JsonObject = buildJsonObject {
@@ -648,43 +649,72 @@ fun TaskEditSheet(
                         ?: (due ?: defer)?.local()?.dayOfWeek?.value?.rem(7)
                         ?: 1
                     val weekdayName = repeatWeekdayName(patternWeekday) ?: "Monday"
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Label("Repeat on")
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        PriorityPill("Same date", repeatPatternKind == null, colors.accent) {
-                            setRule(unit = "months", pattern = JsonNull)
-                        }
+                    val patternChoices: List<Pair<String, JsonElement>> = buildList {
+                        add("Same date" to JsonNull)
                         listOf("1st", "2nd", "3rd", "4th", "5th")
                             .forEachIndexed { index, label ->
-                                val nth = index + 1
-                                PriorityPill(
-                                    "$label $weekdayName",
-                                    repeatPatternKind == "nth_weekday" &&
-                                        repeatPatternNth == nth,
-                                    colors.accent,
-                                ) {
-                                    setRule(
-                                        unit = "months",
-                                        pattern = nthPatternJson(nth, patternWeekday),
-                                    )
-                                }
+                                add(
+                                    "$label $weekdayName" to
+                                        nthPatternJson(index + 1, patternWeekday),
+                                )
                             }
-                        PriorityPill(
-                            "Last weekend day",
-                            repeatPatternKind == "last_weekend_day",
-                            colors.accent,
+                        add(
+                            "Last weekend day" to buildJsonObject {
+                                put("kind", "last_weekend_day")
+                            },
+                        )
+                    }
+                    val patternLabel = when (repeatPatternKind) {
+                        "nth_weekday" -> patternChoices[
+                            (repeatPatternNth ?: 1).coerceIn(1, 5)
+                        ].first
+                        "last_weekend_day" -> patternChoices.last().first
+                        else -> patternChoices.first().first
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Label("Repeat on")
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(colors.field)
+                                .clickable { showRepeatPatternMenu = true }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            setRule(
-                                unit = "months",
-                                pattern = buildJsonObject {
-                                    put("kind", "last_weekend_day")
-                                },
+                            Text(
+                                text = patternLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.ink,
+                                modifier = Modifier.weight(1f),
                             )
+                            Icon(
+                                imageVector = Icons.Rounded.ExpandMore,
+                                contentDescription = null,
+                                tint = colors.faint,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showRepeatPatternMenu,
+                            onDismissRequest = { showRepeatPatternMenu = false },
+                        ) {
+                            patternChoices.forEach { (label, pattern) ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = label,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = colors.ink,
+                                        )
+                                    },
+                                    onClick = {
+                                        setRule(unit = "months", pattern = pattern)
+                                        showRepeatPatternMenu = false
+                                    },
+                                )
+                            }
                         }
                     }
                     val patternExplanation = when (repeatPatternKind) {

@@ -148,6 +148,48 @@ fn repeat_occurrence_word(nth: u8) -> &'static str {
     }
 }
 
+fn repeat_pattern_choices(
+    weekday: u8,
+    weekday_name: &str,
+) -> Vec<(&'static str, String, Option<RepeatPattern>)> {
+    let mut choices = vec![("none", "Same date".to_string(), None)];
+    for nth in 1..=5u8 {
+        let slug = match nth {
+            1 => "first",
+            2 => "second",
+            3 => "third",
+            4 => "fourth",
+            _ => "fifth",
+        };
+        choices.push((
+            slug,
+            format!("{} {weekday_name}", repeat_occurrence_short(nth)),
+            Some(RepeatPattern::NthWeekday {
+                nth,
+                weekday: weekday.min(6),
+            }),
+        ));
+    }
+    choices.push((
+        "last",
+        "Last weekend day".to_string(),
+        Some(RepeatPattern::LastWeekendDay),
+    ));
+    choices
+}
+
+fn repeat_pattern_label(pattern: Option<RepeatPattern>) -> String {
+    match pattern {
+        None => "Same date".to_string(),
+        Some(RepeatPattern::NthWeekday { nth, weekday }) => format!(
+            "{} {}",
+            repeat_occurrence_short(nth),
+            repeat_weekday_label(weekday)
+        ),
+        Some(RepeatPattern::LastWeekendDay) => "Last weekend day".to_string(),
+    }
+}
+
 fn review_step_days(days: u32) -> u32 {
     if days >= 7 && days % 7 == 0 { 7 } else { 1 }
 }
@@ -2576,84 +2618,10 @@ impl FlowlistApp {
     ) -> impl IntoElement {
         let theme = self.theme;
         let current_pattern = rule.as_ref().and_then(|rule| rule.pattern);
-        let display_weekday = match current_pattern {
-            Some(RepeatPattern::NthWeekday { weekday, .. }) => weekday.min(6),
-            _ => self
-                .store
-                .db()
-                .tasks
-                .get(id)
-                .and_then(|task| task.due.or(task.defer))
-                .map(|stamp| stamp.local_date().weekday().num_days_from_sunday() as u8)
-                .unwrap_or(1),
-        };
-        let weekday_name = repeat_weekday_label(display_weekday);
-        let mut options: Vec<(&'static str, String, bool, Option<RepeatPattern>)> = vec![
-            (
-                "none",
-                "Same date".to_string(),
-                current_pattern.is_none(),
-                None,
-            ),
-        ];
-        for nth in 1..=5u8 {
-            let slug = match nth {
-                1 => "first",
-                2 => "second",
-                3 => "third",
-                4 => "fourth",
-                _ => "fifth",
-            };
-            let active = matches!(
-                current_pattern,
-                Some(RepeatPattern::NthWeekday { nth: selected, .. }) if selected == nth
-            );
-            options.push((
-                slug,
-                format!("{} {weekday_name}", repeat_occurrence_short(nth)),
-                active,
-                Some(RepeatPattern::NthWeekday {
-                    nth,
-                    weekday: display_weekday,
-                }),
-            ));
-        }
-        options.push((
-            "last",
-            "Last weekend day".to_string(),
-            matches!(current_pattern, Some(RepeatPattern::LastWeekendDay)),
-            Some(RepeatPattern::LastWeekendDay),
-        ));
-        let mut choices = div().flex().flex_wrap().items_center().gap_1();
-        for (slug, label, active, choice) in options {
-            let current_rule = rule.clone();
-            let pattern_id = id.clone();
-            choices = choices.child(
-                div()
-                    .on_children_prepainted(
-                        self.theme_probe(format!("repeat-pattern:{slug}")),
-                    )
-                    .id(super::sid(format!("repeat-pattern:{slug}")))
-                    .cursor_pointer()
-                    .child(widgets::toggle_chip(theme, label, active))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(current) = &current_rule {
-                            this.update_task_repeat(
-                                &pattern_id,
-                                current,
-                                |rule| {
-                                    rule.pattern = choice;
-                                    if choice.is_some() {
-                                        rule.unit = IntervalUnit::Months;
-                                        rule.weekdays = None;
-                                    }
-                                },
-                                cx,
-                            );
-                        }
-                    })),
-            );
-        }
+        let anchor = self.repeat_pattern_anchor.clone();
+        let probe_boxes = self.notification_boxes.clone();
+        let menu_id = id.clone();
+        let current_label = repeat_pattern_label(current_pattern);
         let explanation = match current_pattern {
             Some(RepeatPattern::NthWeekday { nth, weekday }) => Some(format!(
                 "Runs on the {} {} of the month.",
@@ -2675,7 +2643,43 @@ impl FlowlistApp {
                     .text_color(theme.text_faint)
                     .child("Repeat on"),
             )
-            .child(choices);
+            .child(
+                div()
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            anchor.set(Some(*bounds));
+                            probe_boxes.borrow_mut().insert(
+                                "repeat-pattern-toggle".to_string(),
+                                [
+                                    f32::from(bounds.origin.x),
+                                    f32::from(bounds.origin.y),
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
+                                ],
+                            );
+                        }
+                    })
+                    .id("repeat-pattern-toggle")
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .h(px(28.))
+                    .px_2()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.field)
+                    .text_sm()
+                    .text_color(theme.text)
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(current_label)
+                    .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.repeat_pattern_menu = Some(menu_id.clone());
+                        cx.notify();
+                    })),
+            );
         if let Some(explanation) = explanation {
             container = container.child(
                 div()
@@ -2879,6 +2883,90 @@ impl FlowlistApp {
             );
         }
         strip
+    }
+
+    pub(super) fn render_repeat_pattern_menu(
+        &self,
+        id: &TaskId,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let theme = self.theme;
+        let task = self.store.db().tasks.get(id);
+        let current_pattern = task
+            .and_then(|task| task.repeat.as_ref())
+            .and_then(|rule| rule.pattern);
+        let display_weekday = match current_pattern {
+            Some(RepeatPattern::NthWeekday { weekday, .. }) => weekday.min(6),
+            _ => task
+                .and_then(|task| task.due.or(task.defer))
+                .map(|stamp| stamp.local_date().weekday().num_days_from_sunday() as u8)
+                .unwrap_or(1),
+        };
+        let weekday_name = repeat_weekday_label(display_weekday);
+        let mut menu = div()
+            .min_w(px(190.))
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg();
+        for (slug, label, choice) in repeat_pattern_choices(display_weekday, weekday_name) {
+            let active = choice == current_pattern;
+            let menu_id = id.clone();
+            menu = menu.child(
+                div()
+                    .on_children_prepainted(
+                        self.notification_probe(format!("repeat-pattern-option:{slug}")),
+                    )
+                    .id(super::sid(format!("repeat-pattern-option:{slug}")))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if active { theme.accent } else { theme.text_dim })
+                    .bg(if active { theme.selection } else { theme.clear })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .child(label)
+                    .when(active, |this| {
+                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(current) = this
+                            .store
+                            .db()
+                            .tasks
+                            .get(&menu_id)
+                            .and_then(|task| task.repeat.clone())
+                        {
+                            this.update_task_repeat(
+                                &menu_id,
+                                &current,
+                                |rule| {
+                                    rule.pattern = choice;
+                                    if choice.is_some() {
+                                        rule.unit = IntervalUnit::Months;
+                                        rule.weekdays = None;
+                                    }
+                                },
+                                cx,
+                            );
+                        }
+                        this.repeat_pattern_menu = None;
+                        this.save_session();
+                        cx.notify();
+                    })),
+            );
+        }
+        menu
     }
 
     pub(super) fn render_repeat_unit_menu(&self, id: &TaskId, cx: &mut Context<Self>) -> gpui::Div {
