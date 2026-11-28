@@ -717,6 +717,39 @@ class Repository(context: Context) {
         sync()
     }
 
+    /// Move a task's due date to a Forecast day, keeping its clock time when
+    /// it had one and using an all-day date otherwise.
+    suspend fun rescheduleDue(taskId: String, date: java.time.LocalDate) {
+        val snapshot = _state.value.snapshot ?: return
+        val task = snapshot.db.tasks[taskId] ?: return
+        val hadTime = task.due?.hasTime == true
+        val time = if (hadTime) {
+            task.due?.local()?.toLocalTime() ?: java.time.LocalTime.MIDNIGHT
+        } else {
+            java.time.LocalTime.MIDNIGHT
+        }
+        val stamp = StampDto(
+            java.time.ZonedDateTime.of(date, time, java.time.ZoneId.systemDefault())
+                .toInstant()
+                .toString(),
+            hadTime,
+        )
+        val updatedTask = task.copy(due = stamp)
+        val updated = snapshot.copy(
+            db = snapshot.db.copy(tasks = snapshot.db.tasks + (taskId to updatedTask)),
+        )
+        _state.update { it.copy(snapshot = updated) }
+        persist(updated)
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = updateCommand(task.id, buildJsonObject { put("due", stampJson(stamp)) }),
+                label = task.title,
+            ),
+        )
+        sync()
+    }
+
     suspend fun addTagToTask(taskId: String, tagId: String) {
         val snapshot = _state.value.snapshot ?: return
         val task = snapshot.db.tasks[taskId] ?: return
@@ -965,6 +998,15 @@ class Repository(context: Context) {
             }
             if (updated.autoArchiveClosedProjects != current.autoArchiveClosedProjects) {
                 put("auto_archive_closed_projects", updated.autoArchiveClosedProjects)
+            }
+            if (updated.forecastTag != current.forecastTag) {
+                put(
+                    "forecast_tag",
+                    updated.forecastTag?.let { JsonPrimitive(it) } ?: JsonNull,
+                )
+            }
+            if (updated.forecastFlagged != current.forecastFlagged) {
+                put("forecast_flagged", updated.forecastFlagged)
             }
         }
         if (patch.isEmpty()) return

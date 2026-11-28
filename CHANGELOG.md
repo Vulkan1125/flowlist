@@ -52,6 +52,11 @@
   A drop shelf appears during the drag with Inbox, project and tag targets and
   choosers, so a task can be filed without the Mac sidebar. Moves and tag adds
   undo from the snackbar.
+- **Forecast depth.** Forecast lists due, defer and planned dates, with
+  **Due only** and **Planned** toggles. Project deadlines appear as project
+  rows above each day, Settings → Library → **Forecast** chooses the undated
+  tag and whether flagged actions appear, and dragging a task onto a month or
+  week cell reschedules its due date while keeping its clock time.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.

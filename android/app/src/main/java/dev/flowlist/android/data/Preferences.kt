@@ -16,6 +16,10 @@ data class AppPreferences(
     val bottomBar: List<String> = listOf("inbox", "today", "forecast", "browse"),
     val saveAllAttachments: Boolean = false,
     val forecastView: String = "month",
+    /// Show only due dates in Forecast. Per device, like the Mac.
+    val forecastDueOnly: Boolean = false,
+    /// Show planned dates in Forecast. Mac treats an absent choice as yes.
+    val forecastPlanned: Boolean = true,
     val keepCompletedSubtasks: Boolean = false,
     val nearbyReminders: Boolean = true,
     /// Take over the screen when a task comes due, not just a banner.
@@ -139,6 +143,8 @@ class PreferencesStore(context: Context) {
                 .ifEmpty { listOf("inbox", "today", "forecast", "browse") },
             saveAllAttachments = prefs.getBoolean("save_all_attachments", false),
             forecastView = prefs.getString("forecast_view", "month") ?: "month",
+            forecastDueOnly = prefs.getBoolean("forecast_due_only", false),
+            forecastPlanned = prefs.getBoolean("forecast_planned", true),
             keepCompletedSubtasks = prefs.getBoolean("keep_completed_subtasks", false),
             nearbyReminders = prefs.getBoolean("nearby_reminders", true),
             fullScreenReminders = prefs.getBoolean("full_screen_reminders", false),
@@ -175,6 +181,8 @@ class PreferencesStore(context: Context) {
             .putString("bottom_bar", value.bottomBar.take(4).joinToString("|"))
             .putBoolean("save_all_attachments", value.saveAllAttachments)
             .putString("forecast_view", value.forecastView)
+            .putBoolean("forecast_due_only", value.forecastDueOnly)
+            .putBoolean("forecast_planned", value.forecastPlanned)
             .putBoolean("keep_completed_subtasks", value.keepCompletedSubtasks)
             .putBoolean("nearby_reminders", value.nearbyReminders)
             .putBoolean("full_screen_reminders", value.fullScreenReminders)

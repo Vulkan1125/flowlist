@@ -275,9 +275,11 @@ integrations are tracked separately and are not part of this phase.
       lists group by project, folder, tag, due, defer, priority, flag,
       estimate, added or completed. Project, group, priority and availability
       choices are remembered per view.
-- [ ] **Forecast depth** — add the Mac's due-only mode, project rows on their
-      dates, tag and flagged undated sections, and dragging month-grid chips
-      to reschedule.
+- [x] **Forecast depth** — Forecast shows due, defer and planned dates with a
+      **Due only** toggle and a **Planned** toggle; project deadlines appear as
+      project rows above each day; Settings → Library → **Forecast** picks the
+      undated tag and flagged option; and a task dragged onto a month or week
+      cell moves its due date there, keeping its clock time.
 - [x] **Saved-view options** — the Android editor edits a view's pin, glyph
       (named icon or emoji) and description. Pinned views sit above **Saved**,
       use the pin glyph by default, and appear in the tablet rail. Settings →

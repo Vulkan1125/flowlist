@@ -54,13 +54,17 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.flowlist.android.data.Snapshot
 import dev.flowlist.android.data.TaskView
-import dev.flowlist.android.data.forecast
+import dev.flowlist.android.data.forecastProjectDays
+import dev.flowlist.android.data.forecastTaskDays
+import dev.flowlist.android.data.forecastUndated
 import dev.flowlist.android.data.isActive
 import dev.flowlist.android.data.taskViews
 import kotlin.math.abs
@@ -76,6 +80,10 @@ fun ForecastScreen(
     sort: String,
     priority: String = "all",
     availableOnly: Boolean = false,
+    dueOnly: Boolean = false,
+    planned: Boolean = true,
+    onDueOnlyChange: (Boolean) -> Unit = {},
+    onPlannedChange: (Boolean) -> Unit = {},
     onViewChange: (String) -> Unit,
     snapshot: Snapshot?,
     weekStartsMonday: Boolean,
@@ -85,6 +93,7 @@ fun ForecastScreen(
     onToggle: (TaskView) -> Unit,
     onClick: (TaskView) -> Unit,
     onTrash: (TaskView) -> Unit,
+    onProject: (dev.flowlist.android.data.ProjectDto) -> Unit,
 ) {
     val colors = flow
     val monthMode = view != "agenda"
@@ -100,30 +109,39 @@ fun ForecastScreen(
         val db = snapshot?.db ?: return@remember emptySet<String>()
         filterViewTasks(db, db.taskViews(), priority, availableOnly).map { it.id }.toSet()
     }
-    val byDate = remember(snapshot, visibleIds) {
-        snapshot?.db?.tasks?.values
-            ?.asSequence()
-            ?.filter { it.isActive && it.parent == null && it.due != null }
-            ?.filter { it.id in visibleIds }
-            ?.mapNotNull { task ->
-                val date = task.due?.local()?.toLocalDate() ?: return@mapNotNull null
-                date to task.id
-            }
-            ?.groupBy({ it.first }, { it.second })
-            .orEmpty()
+    val taskDaysAll = remember(snapshot, dueOnly, planned) {
+        snapshot?.db?.forecastTaskDays(dueOnly, planned).orEmpty()
     }
-    val allViews = remember(snapshot) {
-        snapshot?.db?.taskViews().orEmpty().associateBy { it.id }
+    val taskDays = remember(taskDaysAll, visibleIds) {
+        taskDaysAll.mapValues { (_, tasks) -> tasks.filter { it.id in visibleIds } }
+            .filterValues { it.isNotEmpty() }
     }
-    // The counts map and the day's sorted tasks feed the calendar and the list
-    // on every frame; derive them once per snapshot/day instead of per
-    // recomposition.
-    val counts = remember(byDate) { byDate.mapValues { (_, ids) -> ids.size } }
-    val dayTasks = remember(byDate, allViews, selected, sort) {
-        sortTasks(
-            byDate[selected].orEmpty().mapNotNull { allViews[it] },
-            sort,
-        )
+    val projectDays = remember(snapshot, dueOnly, planned) {
+        snapshot?.db?.forecastProjectDays(dueOnly, planned).orEmpty()
+    }
+    val undated = remember(snapshot, visibleIds) {
+        val (tagged, flagged) = snapshot?.db?.forecastUndated()
+            ?: (emptyList<TaskView>() to emptyList<TaskView>())
+        tagged.filter { it.id in visibleIds } to flagged.filter { it.id in visibleIds }
+    }
+    val tagged = undated.first
+    val flagged = undated.second
+    val counts = remember(taskDays, projectDays) {
+        val merged = taskDays.keys + projectDays.keys
+        merged.associateWith { date ->
+            (taskDays[date]?.size ?: 0) + (projectDays[date]?.size ?: 0)
+        }
+    }
+    val dayTasks = remember(taskDays, selected, sort) {
+        sortTasks(taskDays[selected].orEmpty(), sort)
+    }
+    val dayProjects = projectDays[selected].orEmpty()
+    val agendaHorizon = today.plusDays(30)
+    val agendaDays = remember(taskDays) {
+        taskDays.filterKeys { !it.isAfter(agendaHorizon) }
+    }
+    val agendaProjects = remember(projectDays) {
+        projectDays.filterKeys { !it.isAfter(agendaHorizon) }
     }
 
     fun shiftMonth(step: Long) {
@@ -134,10 +152,16 @@ fun ForecastScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             ModePill("Month", monthMode) { onViewChange("month") }
             ModePill("Agenda", !monthMode) { onViewChange("agenda") }
+            Spacer(modifier = Modifier.weight(1f))
+            ModePill("Due only", dueOnly) { onDueOnlyChange(!dueOnly) }
+            if (!dueOnly) {
+                ModePill("Planned", planned) { onPlannedChange(!planned) }
+            }
         }
 
         if (!monthMode) {
@@ -145,12 +169,16 @@ fun ForecastScreen(
                 modifier = Modifier.weight(1f),
                 swipeActions = swipeActions,
                 children = children,
-                groups = snapshot?.db?.forecast().orEmpty(),
+                groups = agendaDays,
+                projectGroups = agendaProjects,
+                tagged = tagged,
+                flagged = flagged,
                 sort = sort,
                 pending = pending,
                 onToggle = onToggle,
                 onClick = onClick,
                 onTrash = onTrash,
+                onProject = onProject,
             )
             return@Column
         }
@@ -255,25 +283,32 @@ fun ForecastScreen(
                         color = colors.ink,
                         modifier = Modifier.weight(1f),
                     )
-                    if (dayTasks.isNotEmpty()) {
+                    val total = dayTasks.size + dayProjects.size
+                    if (total > 0) {
                         Text(
-                            text = "${dayTasks.size}",
+                            text = "$total",
                             style = MaterialTheme.typography.labelMedium,
                             color = colors.faint,
                         )
                     }
                 }
             }
-            if (dayTasks.isEmpty()) {
+            if (dayTasks.isEmpty() && dayProjects.isEmpty()) {
                 item(key = "month-day-empty") {
                     Text(
-                        text = "Nothing due on this day.",
+                        text = "Nothing on this day.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.faint,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
                     )
                 }
             } else {
+                if (dayProjects.isNotEmpty()) {
+                    item(key = "month-day-projects") { SectionLabel("Projects") }
+                    items(dayProjects, key = { "project-${it.id}" }) { project ->
+                        ForecastProjectRow(project = project, onOpen = { onProject(project) })
+                    }
+                }
                 items(dayTasks, key = { it.id }) { task ->
                     TaskTreeItem(
                         task = task,
@@ -289,6 +324,39 @@ fun ForecastScreen(
             }
         }
     }
+}
+
+@Composable
+fun ForecastProjectRow(project: dev.flowlist.android.data.ProjectDto, onOpen: () -> Unit) {
+    val colors = flow
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = projectIcon(project.icon),
+            contentDescription = null,
+            tint = colors.accent,
+            modifier = Modifier.size(17.dp),
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = project.name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.ink,
+            maxLines = 1,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = project.status.replace('_', ' ').replaceFirstChar { it.uppercase() },
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.faint,
+        )
+    }
+    Hairline(Modifier.padding(start = 47.dp))
 }
 
 @Composable
@@ -495,6 +563,9 @@ private fun RowScope.WeekDayCell(
     onClick: () -> Unit,
 ) {
     val colors = flow
+    val drag = LocalTaskDrag.current
+    val dayTarget = drag?.target?.kind == TaskDropKind.Day &&
+        drag.target?.id == date.toString()
     val labelFormatter = remember { DateTimeFormatter.ofPattern("EEEEE", Locale.getDefault()) }
     Column(
         modifier = Modifier
@@ -504,11 +575,15 @@ private fun RowScope.WeekDayCell(
             .clip(RoundedCornerShape(10.dp))
             .background(
                 when {
+                    dayTarget -> colors.accent.copy(alpha = 0.24f)
                     selected -> colors.accent.copy(alpha = 0.16f)
                     today -> colors.field
                     else -> Color.Transparent
                 },
             )
+            .onGloballyPositioned {
+                drag?.bounds["day:$date"] = it.boundsInWindow()
+            }
             .clickable(onClick = onClick)
             .padding(vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -609,6 +684,7 @@ private fun MonthGrid(
     onSelect: (LocalDate) -> Unit,
 ) {
     val colors = flow
+    val drag = LocalTaskDrag.current
     val today = LocalDate.now()
     val startIndex = if (weekStartsMonday) 1 else 7
     val firstOffset = (month.atDay(1).dayOfWeek.value - startIndex + 7) % 7
@@ -626,6 +702,8 @@ private fun MonthGrid(
                         val isToday = date == today
                         val isSelected = date == selected
                         val count = counts[date] ?: 0
+                        val dayTarget = drag?.target?.kind == TaskDropKind.Day &&
+                            drag.target?.id == date.toString()
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -634,11 +712,15 @@ private fun MonthGrid(
                                 .clip(RoundedCornerShape(9.dp))
                                 .background(
                                     when {
+                                        dayTarget -> colors.accent.copy(alpha = 0.24f)
                                         isSelected -> colors.accent.copy(alpha = 0.16f)
                                         isToday -> colors.field
                                         else -> colors.background
                                     },
                                 )
+                                .onGloballyPositioned {
+                                    drag?.bounds["day:$date"] = it.boundsInWindow()
+                                }
                                 .clickable { onSelect(date) },
                             contentAlignment = Alignment.Center,
                         ) {

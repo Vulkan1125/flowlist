@@ -247,8 +247,16 @@ grid opens on the month that was visible, and in full mode the **Today** button
 and previous/next month arrows appear and the calendar can move backwards. The
 full month grid scrolls with the task list, so a long day does not squash it.
 Tapping a day lists its tasks below the calendar. **Agenda** switches back to the
-rolling two-week list and hides the month heading and its controls; the choice
-is remembered across app restarts.
+rolling list and hides the month heading and its controls; the choice is
+remembered across app restarts.
+
+Forecast covers due dates plus defer dates; **Planned** adds planned dates and
+**Due only** drops both defer and planned. A project with a due, defer or
+planned date appears as a project row above that day's tasks, with its status.
+Settings → Library → **Forecast** picks one undated tag and whether undated
+flagged tasks join the list; those appear under **Tagged** and **Flagged** in
+Agenda. Long-press a task and drop it on a month or week day to move its due
+date there; a timed task keeps its clock time, and the snackbar undoes it.
 
 ## Saved perspectives
 

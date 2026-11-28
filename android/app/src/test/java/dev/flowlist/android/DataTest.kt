@@ -29,6 +29,10 @@ import dev.flowlist.android.data.displayTitle
 import dev.flowlist.android.data.normalizeBase
 import dev.flowlist.android.data.projectTaskIds
 import dev.flowlist.android.data.taskViews
+import dev.flowlist.android.data.SettingsDto
+import dev.flowlist.android.data.forecastProjectDays
+import dev.flowlist.android.data.forecastTaskDays
+import dev.flowlist.android.data.forecastUndated
 import dev.flowlist.android.data.batchUpdateTasksCommand
 import kotlinx.serialization.json.put
 import dev.flowlist.android.data.convertTaskToProjectCommand
@@ -264,6 +268,48 @@ class DataTest {
         )
         assertEquals("Work", db.tagPath("parent"))
         assertEquals("Work/Deep", db.tagPath("child"))
+    }
+
+    @Test
+    fun forecast_groups_due_defer_and_planned_dates() {
+        val day = java.time.LocalDate.of(2026, 12, 1)
+        val next = day.plusDays(1)
+        fun stamp(date: java.time.LocalDate) = StampDto(
+            java.time.ZonedDateTime.of(
+                date,
+                java.time.LocalTime.MIDNIGHT,
+                java.time.ZoneId.systemDefault(),
+            ).toInstant().toString(),
+            false,
+        )
+        val db = Db(
+            projects = mapOf(
+                "p" to ProjectDto(id = "p", name = "Deadline", due = stamp(day)),
+            ),
+            tags = mapOf("t" to TagDto(id = "t", name = "Focus")),
+            tasks = mapOf(
+                "both" to TaskDto(
+                    id = "both",
+                    title = "Both",
+                    due = stamp(day),
+                    defer = stamp(day),
+                    planned = stamp(day),
+                ),
+                "planned" to TaskDto(id = "planned", title = "Planned", planned = stamp(next)),
+                "tagged" to TaskDto(id = "tagged", title = "Tagged", tags = listOf("t")),
+            ),
+            settings = SettingsDto(forecastTag = "t", forecastFlagged = true),
+        )
+        val all = db.forecastTaskDays(dueOnly = false, includePlanned = true)
+        assertEquals(listOf("Both"), all[day]?.map { it.title })
+        assertEquals(listOf("Planned"), all[next]?.map { it.title })
+        val dueOnly = db.forecastTaskDays(dueOnly = true, includePlanned = true)
+        assertEquals(listOf("Both"), dueOnly[day]?.map { it.title })
+        assertNull(dueOnly[next])
+        assertEquals(listOf("Deadline"), db.forecastProjectDays(true, true)[day]?.map { it.name })
+        val (tagged, flagged) = db.forecastUndated()
+        assertEquals(listOf("Tagged"), tagged.map { it.title })
+        assertTrue(flagged.isEmpty())
     }
 
     @Test

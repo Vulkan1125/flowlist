@@ -25,6 +25,9 @@ enum class TaskDropKind {
     /// Dropped on the shelf's "Choose" chip; the app opens a picker.
     ChooseProject,
     ChooseTag,
+
+    /// Dropped on a Forecast day; the task's due date moves to that day.
+    Day,
 }
 
 data class TaskDropTarget(val kind: TaskDropKind, val id: String)
@@ -74,8 +77,17 @@ class TaskDragController {
         dragging = null
         offset = Offset.Zero
         target = null
-        // Drop-shelf chips only exist while the shelf is on screen.
-        bounds.keys.filterNot { it.startsWith("task:") }.forEach { bounds.remove(it) }
+        // Drop-shelf chips only exist while the shelf is on screen. Calendar
+        // days persist because they are painted with the calendar.
+        bounds.keys
+            .filter {
+                it.startsWith("project:") ||
+                    it.startsWith("tag:") ||
+                    it == "inbox" ||
+                    it == "choose-project" ||
+                    it == "choose-tag"
+            }
+            .forEach { bounds.remove(it) }
     }
 
     private fun hitTest(point: Offset): TaskDropTarget? {
@@ -94,6 +106,10 @@ class TaskDragController {
                 key == "inbox" -> return TaskDropTarget(TaskDropKind.Inbox, "inbox")
                 key == "choose-project" -> return TaskDropTarget(TaskDropKind.ChooseProject, "")
                 key == "choose-tag" -> return TaskDropTarget(TaskDropKind.ChooseTag, "")
+                key.startsWith("day:") -> return TaskDropTarget(
+                    TaskDropKind.Day,
+                    key.removePrefix("day:"),
+                )
             }
         }
         bounds.forEach { (key, rect) ->

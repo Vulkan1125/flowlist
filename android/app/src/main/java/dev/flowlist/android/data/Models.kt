@@ -53,6 +53,8 @@ data class SettingsDto(
     @SerialName("nearby_radius_km") val nearbyRadiusKm: Double = 25.0,
     @SerialName("due_soon_days") val dueSoonDays: Int = 2,
     @SerialName("auto_archive_closed_projects") val autoArchiveClosedProjects: Boolean = true,
+    @SerialName("forecast_tag") val forecastTag: String? = null,
+    @SerialName("forecast_flagged") val forecastFlagged: Boolean = false,
 )
 
 @Serializable
@@ -466,6 +468,98 @@ fun Db.forecast(): Map<LocalDate, List<TaskView>> {
         .map { it.toView(this) }
         .groupBy { it.due?.local()?.toLocalDate() ?: today }
         .toSortedMap()
+}
+
+/// Forecast's dated tasks: due dates always, defer dates unless due-only, and
+/// planned dates when the planned toggle is on. A task appears once per day
+/// even when two of its dates land together.
+fun Db.forecastTaskDays(
+    dueOnly: Boolean,
+    includePlanned: Boolean,
+): Map<LocalDate, List<TaskView>> {
+    val days = sortedMapOf<LocalDate, LinkedHashMap<String, TaskView>>()
+    for (task in tasks.values) {
+        if (!task.isActive || task.parent != null) continue
+        val project = task.project?.let { projects[it] }
+        if (project != null && (project.archived || (project.status != "active" && project.status != "on_hold"))) {
+            continue
+        }
+        val dates = linkedSetOf<LocalDate>()
+        task.due?.local()?.toLocalDate()?.let { dates += it }
+        if (!dueOnly) {
+            task.defer?.local()?.toLocalDate()?.let { dates += it }
+            if (includePlanned) task.planned?.local()?.toLocalDate()?.let { dates += it }
+        }
+        for (date in dates) {
+            days.getOrPut(date) { linkedMapOf() }[task.id] = task.toView(this)
+        }
+    }
+    return days.mapValues { (_, values) ->
+        values.values.sortedWith(
+            compareBy(
+                { it.due?.local()?.toLocalDate() ?: it.planned?.local()?.toLocalDate() ?: it.defer?.local()?.toLocalDate() },
+                { it.title.lowercase() },
+            ),
+        )
+    }
+}
+
+/// Project deadlines on their due date, plus defer and planned dates unless
+/// due-only. A project appears once per day.
+fun Db.forecastProjectDays(
+    dueOnly: Boolean,
+    includePlanned: Boolean,
+): Map<LocalDate, List<ProjectDto>> {
+    val days = sortedMapOf<LocalDate, LinkedHashMap<String, ProjectDto>>()
+    for (project in projects.values) {
+        if (project.archived || (project.status != "active" && project.status != "on_hold")) {
+            continue
+        }
+        val dates = linkedSetOf<LocalDate>()
+        project.due?.local()?.toLocalDate()?.let { dates += it }
+        if (!dueOnly) {
+            project.defer?.local()?.toLocalDate()?.let { dates += it }
+            if (includePlanned) project.planned?.local()?.toLocalDate()?.let { dates += it }
+        }
+        for (date in dates) {
+            days.getOrPut(date) { linkedMapOf() }[project.id] = project
+        }
+    }
+    return days.mapValues { (_, values) ->
+        values.values.sortedWith(
+            compareBy(
+                {
+                    it.due?.local()?.toLocalDate()
+                        ?: it.planned?.local()?.toLocalDate()
+                        ?: it.defer?.local()?.toLocalDate()
+                },
+                { it.name.lowercase() },
+            ),
+        )
+    }
+}
+
+/// Undated tasks that belong in Forecast because of the chosen tag or the
+/// flagged option. Tagged wins, matching the Mac.
+fun Db.forecastUndated(): Pair<List<TaskView>, List<TaskView>> {
+    val tagged = mutableListOf<TaskView>()
+    val flagged = mutableListOf<TaskView>()
+    val tag = settings.forecastTag
+    for (task in tasks.values) {
+        if (!task.isActive || task.parent != null) continue
+        if (task.due != null || task.defer != null || task.planned != null) continue
+        val project = task.project?.let { projects[it] }
+        if (project != null && (project.archived || (project.status != "active" && project.status != "on_hold"))) {
+            continue
+        }
+        if (tag != null && task.tags.contains(tag)) {
+            tagged += task.toView(this)
+        } else if (settings.forecastFlagged && task.flagged) {
+            flagged += task.toView(this)
+        }
+    }
+    return tagged.sortedBy { it.title.lowercase() } to
+        flagged.sortedBy { it.title.lowercase() }
 }
 
 private fun TaskDto.toView(db: Db) = TaskView(

@@ -17,6 +17,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -87,6 +89,7 @@ import androidx.core.content.ContextCompat
 import dev.flowlist.android.data.AppPreferences
 import dev.flowlist.android.data.AppState
 import dev.flowlist.android.data.SettingsDto
+import dev.flowlist.android.data.TagDto
 import dev.flowlist.android.notify.DeviceLocation
 import dev.flowlist.android.notify.NearbyReminders
 import dev.flowlist.android.data.UpdateChecker
@@ -186,6 +189,7 @@ fun SettingsScreen(
                             ).filter { it.startsWith("/") }.distinct()
                         LibrarySettings(
                             settings = librarySettings,
+                            tags = state.snapshot?.db?.tags?.values?.toList().orEmpty(),
                             onChange = onLibrarySettings,
                             attachmentTotal = attachmentPaths.size,
                             attachmentSaved = attachmentPaths.count { it in state.savedAttachments },
@@ -681,9 +685,11 @@ private fun GeotagSettings(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LibrarySettings(
     settings: SettingsDto,
+    tags: List<TagDto>,
     onChange: (SettingsDto) -> Unit,
     attachmentTotal: Int,
     attachmentSaved: Int,
@@ -723,6 +729,31 @@ private fun LibrarySettings(
             checked = settings.autoArchiveClosedProjects,
         ) {
             onChange(settings.copy(autoArchiveClosedProjects = it))
+        }
+    }
+    Spacer(modifier = Modifier.height(14.dp))
+    SettingsCard("Forecast") {
+        SmallLabel("Undated tag")
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Pill("None", settings.forecastTag == null) {
+                onChange(settings.copy(forecastTag = null))
+            }
+            tags.sortedBy { it.name.lowercase() }.forEach { tag ->
+                Pill("#${tag.name}", settings.forecastTag == tag.id) {
+                    onChange(settings.copy(forecastTag = tag.id))
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        ToggleRow(
+            title = "Show flagged undated tasks",
+            detail = "Add the tagless flagged actions with no date to Forecast",
+            checked = settings.forecastFlagged,
+        ) {
+            onChange(settings.copy(forecastFlagged = it))
         }
     }
     Spacer(modifier = Modifier.height(14.dp))

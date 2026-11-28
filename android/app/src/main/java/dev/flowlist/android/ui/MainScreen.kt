@@ -518,6 +518,20 @@ fun MainScreen(
                     )
                 }
             }
+            TaskDropKind.Day -> {
+                val date = runCatching { LocalDate.parse(drop.id) }.getOrNull()
+                if (date != null) {
+                    scope.launch {
+                        repository.rescheduleDue(task.id, date)
+                        toasts.show(
+                            message = "Due ${date.format(DateTimeFormatter.ofPattern("d MMM"))}",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Long,
+                            onAction = { scope.launch { repository.undo() } },
+                        )
+                    }
+                }
+            }
             TaskDropKind.Nest,
             TaskDropKind.Before,
             TaskDropKind.After,
@@ -1191,6 +1205,14 @@ fun MainScreen(
                     sort = currentSort,
                     priority = viewPriority,
                     availableOnly = viewAvailable,
+                    dueOnly = preferences.forecastDueOnly,
+                    planned = preferences.forecastPlanned,
+                    onDueOnlyChange = {
+                        onPreferencesChange(preferences.copy(forecastDueOnly = it))
+                    },
+                    onPlannedChange = {
+                        onPreferencesChange(preferences.copy(forecastPlanned = it))
+                    },
                     onViewChange = { onPreferencesChange(preferences.copy(forecastView = it)) },
                     snapshot = snapshot,
                     weekStartsMonday = preferences.weekStartsMonday,
@@ -1200,6 +1222,11 @@ fun MainScreen(
                     onToggle = { task -> complete(task, !task.completed) },
                     onClick = { detail = it },
                     onTrash = trash,
+                    onProject = { item ->
+                        moreView = null
+                        savedPerspective = null
+                        project = item
+                    },
                 )
                 Tab.Browse -> BrowseList(
                     snapshot = snapshot,
@@ -3297,14 +3324,22 @@ fun ForecastList(
     swipeActions: Boolean,
     children: Map<String, List<TaskView>>,
     groups: Map<LocalDate, List<TaskView>>,
+    projectGroups: Map<LocalDate, List<ProjectDto>> = emptyMap(),
+    tagged: List<TaskView> = emptyList(),
+    flagged: List<TaskView> = emptyList(),
     sort: String,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
     onClick: (TaskView) -> Unit,
     onTrash: (TaskView) -> Unit,
+    onProject: (ProjectDto) -> Unit,
 ) {
+    val empty = groups.values.all { it.isEmpty() } &&
+        projectGroups.values.all { it.isEmpty() } &&
+        tagged.isEmpty() &&
+        flagged.isEmpty()
     LazyColumn(modifier = modifier, contentPadding = PaddingValues(bottom = 100.dp)) {
-        if (groups.values.all { it.isEmpty() }) {
+        if (empty) {
             item(key = "empty") {
                 Box(
                     modifier = Modifier.fillParentMaxSize(),
@@ -3312,7 +3347,7 @@ fun ForecastList(
                 ) {
                     EmptyState(
                         title = "An open fortnight",
-                        body = "Give a task a date and it appears here, grouped by the day it is due.",
+                        body = "Give a task or project a date and it appears here.",
                         doodle = { ForecastDoodle() },
                     )
                 }
@@ -3320,8 +3355,45 @@ fun ForecastList(
         }
         groups.forEach { (date, rawTasks) ->
             val tasks = sortTasks(rawTasks, sort)
-            item(key = "day-$date") { ForecastHeader(date, tasks.size) }
-            items(tasks, key = { it.id }) { task ->
+            val projects = projectGroups[date].orEmpty()
+            item(key = "day-$date") { ForecastHeader(date, tasks.size + projects.size) }
+            if (projects.isNotEmpty()) {
+                item(key = "day-projects-$date") { SectionLabel("Projects") }
+                items(projects, key = { "day-$date-project-${it.id}" }) { project ->
+                    ForecastProjectRow(project = project, onOpen = { onProject(project) })
+                }
+            }
+            items(tasks, key = { "day-$date-task-${it.id}" }) { task ->
+                TaskTreeItem(
+                    task = task,
+                    children = children,
+                    pending = task.id in pending,
+                    swipeActions = swipeActions,
+                    depth = 0,
+                    onToggle = onToggle,
+                    onTrash = onTrash,
+                    onClick = onClick,
+                )
+            }
+        }
+        if (tagged.isNotEmpty()) {
+            item(key = "tagged-header") { SectionLabel("Tagged") }
+            items(tagged, key = { "tagged-${it.id}" }) { task ->
+                TaskTreeItem(
+                    task = task,
+                    children = children,
+                    pending = task.id in pending,
+                    swipeActions = swipeActions,
+                    depth = 0,
+                    onToggle = onToggle,
+                    onTrash = onTrash,
+                    onClick = onClick,
+                )
+            }
+        }
+        if (flagged.isNotEmpty()) {
+            item(key = "flagged-header") { SectionLabel("Flagged") }
+            items(flagged, key = { "flagged-${it.id}" }) { task ->
                 TaskTreeItem(
                     task = task,
                     children = children,
