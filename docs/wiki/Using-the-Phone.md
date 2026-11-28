@@ -230,8 +230,11 @@ tags wrap onto as many rows as they need. Status
 choices are Active, On Hold, Done and Dropped; Done and Dropped leave Browse
 and appear in Archive. **Complete with last action** marks the project done
 when its last task is ticked. **Archived** hides the project from Browse and
-shows it in Archive without changing its status; archived rows in Archive have
-an **Unarchive** action; Settings → Library →
+shows it in Archive without changing its status. Each Archive row shows the
+project icon, how many of its tasks are done, and its status with the Mac's
+check, cross or pause; **Reopen** returns a Done or Dropped project to Active,
+**Unarchive** clears the archive flag, and **Delete** uses the same
+confirmation as Browse. Settings → Library →
 **Archive closed projects** does the same automatically for Done and Dropped
 projects.
 

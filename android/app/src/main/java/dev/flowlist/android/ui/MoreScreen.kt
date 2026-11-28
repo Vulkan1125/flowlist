@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -73,6 +74,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.flowlist.android.data.Db
@@ -362,6 +364,8 @@ fun MoreDestination(
     onReview: (ProjectDto) -> Unit,
     onProject: (ProjectDto) -> Unit,
     onUnarchive: (ProjectDto) -> Unit,
+    onReopen: (ProjectDto) -> Unit,
+    onDeleteProject: (ProjectDto) -> Unit,
     onNewTag: () -> Unit,
     onEditTag: (TagDto) -> Unit,
     onDeleteTag: (TagDto) -> Unit,
@@ -468,24 +472,101 @@ fun MoreDestination(
                     }
                 }
                 items(db.archivedProjects(), key = { it.id }) { project ->
-                    val count = db.tasks.values.count { it.project == project.id && !it.completed }
+                    val projectTasks = db.tasks.values.filter {
+                        it.project == project.id && it.trashedAt == null
+                    }
+                    val done = projectTasks.count { it.completed }
+                    val total = projectTasks.size
+                    val statusIcon = when (project.status) {
+                        "done" -> Icons.Rounded.Check
+                        "dropped" -> Icons.Rounded.Close
+                        "on_hold" -> Icons.Rounded.Pause
+                        else -> null
+                    }
+                    val statusColor = if (project.status == "done") colors.success else colors.faint
+                    val statusLabel = when (project.status) {
+                        "done" -> "Done"
+                        "dropped" -> "Dropped"
+                        "on_hold" -> "On Hold"
+                        else -> "Active"
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable { onProject(project) }
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            project.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.ink,
-                            modifier = Modifier.weight(1f),
+                        Icon(
+                            imageVector = projectIcon(project.icon),
+                            contentDescription = null,
+                            tint = colors.faint,
+                            modifier = Modifier.size(15.dp),
                         )
-                        if (project.archived) {
-                            TextButton(onClick = { onUnarchive(project) }) {
-                                Text("Unarchive", color = colors.accent)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                project.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.ink,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "$done of $total done",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colors.faint,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                if (statusIcon != null) {
+                                    Icon(
+                                        imageVector = statusIcon,
+                                        contentDescription = statusLabel,
+                                        tint = statusColor,
+                                        modifier = Modifier.size(12.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                }
+                                Text(
+                                    statusLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = statusColor,
+                                )
                             }
                         }
-                        Text("$count", style = MaterialTheme.typography.labelMedium, color = colors.faint)
+                        if (project.archived && project.status == "active") {
+                            TextButton(
+                                onClick = { onUnarchive(project) },
+                                contentPadding = PaddingValues(horizontal = 6.dp),
+                            ) {
+                                Text(
+                                    "Unarchive",
+                                    color = colors.accent,
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
+                        if (project.status != "active") {
+                            TextButton(
+                                onClick = { onReopen(project) },
+                                contentPadding = PaddingValues(horizontal = 6.dp),
+                            ) {
+                                Text(
+                                    "Reopen",
+                                    color = colors.accent,
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
+                        TextButton(
+                            onClick = { onDeleteProject(project) },
+                            contentPadding = PaddingValues(horizontal = 6.dp),
+                        ) {
+                            Text(
+                                "Delete",
+                                color = colors.danger,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
                     }
                     Hairline(Modifier.padding(start = 20.dp))
                 }

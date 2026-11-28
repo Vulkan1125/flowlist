@@ -1168,6 +1168,18 @@ fun MainScreen(
                         onUnarchive = { projectItem ->
                             scope.launch { repository.setProjectArchived(projectItem, false) }
                         },
+                        onReopen = { projectItem ->
+                            scope.launch { repository.setProjectStatus(projectItem, "active") }
+                        },
+                        onDeleteProject = { item ->
+                            confirm = ConfirmRequest(
+                                title = "Delete project?",
+                                body = "“${item.name}” and its tasks move to Trash. You can restore them from Trash.",
+                                confirmLabel = "Delete",
+                            ) {
+                                scope.launch { repository.deleteProject(item) }
+                            }
+                        },
                         onNewTag = { tagEditor = TagEditorTarget() },
                         onEditTag = { item -> tagEditor = TagEditorTarget(item, item.parent) },
                         onDeleteTag = { item ->

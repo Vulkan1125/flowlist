@@ -73,6 +73,11 @@
   **Done**: Done, Dropped and On Hold use the Mac's check, cross and pause
   marks, a live project shows its open count, and a project with nothing left
   open shows no badge.
+- **Archive rows match the Mac.** Each archived project shows its icon, an
+  **X of Y done** line, and its status with the same check, cross or pause.
+  **Reopen** returns Done and Dropped projects to Active in one undoable step,
+  **Unarchive** clears an explicit archive, and **Delete** uses the Browse
+  confirmation.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.
