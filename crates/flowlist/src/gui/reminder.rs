@@ -413,13 +413,6 @@ impl Render for Reminder {
                                         false,
                                         cx,
                                     ))
-                                    .child(self.action(
-                                        "reminder-dismiss",
-                                        "Dismiss",
-                                        Icon::Close,
-                                        false,
-                                        cx,
-                                    ))
                                     .when(self.tasks.len() > 1, |this| {
                                         this.child(self.action(
                                             "reminder-view",
@@ -428,7 +421,14 @@ impl Render for Reminder {
                                             false,
                                             cx,
                                         ))
-                                    }),
+                                    })
+                                    .child(self.action(
+                                        "reminder-dismiss",
+                                        "Dismiss",
+                                        Icon::Close,
+                                        false,
+                                        cx,
+                                    )),
                             )
                             .child(div().text_xs().text_color(theme.text_faint).child(format!(
                                 "{position} · Esc dismisses · S cycles snooze · Enter snoozes · ⌘Enter completes"
