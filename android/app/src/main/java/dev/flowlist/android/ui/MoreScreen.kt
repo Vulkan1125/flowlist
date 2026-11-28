@@ -350,6 +350,9 @@ fun MoreDestination(
     view: MoreView,
     db: Db,
     sort: String,
+    priority: String = "all",
+    availableOnly: Boolean = false,
+    group: String = "none",
     trashSwipe: String,
     pending: Set<String>,
     onTask: (TaskView) -> Unit,
@@ -396,7 +399,18 @@ fun MoreDestination(
             }
         }
         when {
-            tag != null -> TaskList(sortTasks(db.tasksForTag(tag!!.id), sort), sort, pending, onToggle, onTask)
+            tag != null -> TaskList(
+                tasks = sortTasks(
+                    filterViewTasks(db, db.tasksForTag(tag!!.id), priority, availableOnly),
+                    sort,
+                ),
+                sort = sort,
+                group = group,
+                db = db,
+                pending = pending,
+                onToggle = onToggle,
+                onTask = onTask,
+            )
             view == MoreView.Review -> LazyColumn {
                 if (db.reviewProjects().isEmpty()) {
                     item(key = "review-empty") {
@@ -423,8 +437,30 @@ fun MoreDestination(
                     Hairline(Modifier.padding(horizontal = 20.dp))
                 }
             }
-            view == MoreView.Flagged -> TaskList(sortTasks(db.flaggedTasks(), sort), sort, pending, onToggle, onTask)
-            view == MoreView.Completed -> TaskList(sortTasks(db.completedTasks(), sort), sort, pending, onToggle, onTask)
+            view == MoreView.Flagged -> TaskList(
+                tasks = sortTasks(
+                    filterViewTasks(db, db.flaggedTasks(), priority, availableOnly),
+                    sort,
+                ),
+                sort = sort,
+                group = group,
+                db = db,
+                pending = pending,
+                onToggle = onToggle,
+                onTask = onTask,
+            )
+            view == MoreView.Completed -> TaskList(
+                tasks = sortTasks(
+                    filterViewTasks(db, db.completedTasks(), priority, availableOnly),
+                    sort,
+                ),
+                sort = sort,
+                group = group,
+                db = db,
+                pending = pending,
+                onToggle = onToggle,
+                onTask = onTask,
+            )
             view == MoreView.Archive -> LazyColumn {
                 if (db.archivedProjects().isEmpty()) {
                     item(key = "archive-empty") {
@@ -590,7 +626,11 @@ fun MoreDestination(
             }
             view == MoreView.Priorities -> LazyColumn {
                 db.priorityGroups().forEach { (label, rawTasks) ->
-                    val tasks = sortTasks(rawTasks, sort)
+                    val tasks = sortTasks(
+                        filterViewTasks(db, rawTasks, priority, availableOnly),
+                        sort,
+                    )
+                    if (tasks.isEmpty()) return@forEach
                     item(key = "prio-$label") {
                         Text(
                             text = label.uppercase(),
@@ -616,15 +656,29 @@ fun MoreDestination(
                     }
                 }
             }
-            view == MoreView.Changed -> TaskList(sortTasks(db.changedTasks(), sort), sort, pending, onToggle, onTask)
+            view == MoreView.Changed -> TaskList(
+                tasks = sortTasks(
+                    filterViewTasks(db, db.changedTasks(), priority, availableOnly),
+                    sort,
+                ),
+                sort = sort,
+                group = group,
+                db = db,
+                pending = pending,
+                onToggle = onToggle,
+                onTask = onTask,
+            )
             view == MoreView.Attachments -> LazyColumn {
-                val attachments = sortTasks(db.attachmentTasks(), sort)
+                val attachments = sortTasks(
+                    filterViewTasks(db, db.attachmentTasks(), priority, availableOnly),
+                    sort,
+                )
                 if (attachments.isEmpty()) {
                     item(key = "attachments-empty") {
                         EmptyLine("No attachments yet.")
                     }
                 }
-                taskSections(attachments, sort).forEach { section ->
+                groupSections(db, attachments, group, sort).forEach { section ->
                     section.label?.let { label ->
                         item(key = "attach-section-$label") { AttachmentSectionLabel(label) }
                     }
@@ -770,11 +824,13 @@ private fun AttachmentSectionLabel(label: String) {
 private fun TaskList(
     tasks: List<TaskView>,
     sort: String,
+    group: String,
+    db: Db,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
     onTask: (TaskView) -> Unit,
 ) {
-    val sections = taskSections(tasks, sort)
+    val sections = groupSections(db, tasks, group, sort)
     LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
         if (tasks.isEmpty()) {
             item(key = "empty") {

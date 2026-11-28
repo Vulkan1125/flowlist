@@ -201,7 +201,8 @@ create a project or child folder inside, or delete the whole tree. A project's m
 or deletes it and moves its tasks to Trash. A project opens as a full page
 with a back arrow and a banner for status, type, review, progress, dates and
 notes. The header search is limited to that project; sort and grouping sit
-beside it, and **Completed** and **Available** filter the rows. The plus button
+beside it, the header filter menu narrows by priority, and **Completed** and
+**Available** filter the rows. The plus button
 adds a task straight into the open project. The editor also manages project
 files and links: add an attachment, add a named link, or remove either before
 saving.
@@ -263,7 +264,12 @@ Pinned views sit in a **Pinned** block above **Saved**, default to a pin glyph,
 and stay visible when empty. The description shows under the view title. On a
 tablet the rail lists saved views after the built-ins. Each list’s sort is
 remembered for that view, so changing Inbox does not reorder Today, Forecast or
-the other destinations. Settings → Library → **Hide empty views** hides saved
+the other destinations. The header also carries a filter menu with **Available
+only** and All/High/Medium/Low priority, plus a grouping menu on Inbox, Today
+and the task-based More lists. Grouping covers project, folder, tag, due,
+defer, priority, flag, estimate, added and completed. Filter, grouping and
+sort choices are remembered per view; saved views keep the grouping set in
+their editor. Settings → Library → **Hide empty views** hides saved
 views that match nothing right now; pinned views are never hidden.
 
 ## Perspectives and the drawer

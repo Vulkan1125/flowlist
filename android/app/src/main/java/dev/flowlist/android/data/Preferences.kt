@@ -50,6 +50,8 @@ data class AppPreferences(
     val viewSorts: Map<String, String> = emptyMap(),
     /// Per-view grouping, keyed like [viewSorts].
     val viewGroups: Map<String, String> = emptyMap(),
+    /// Per-view priority filter: all, high, medium or low.
+    val viewPriorities: Map<String, String> = emptyMap(),
     /// Views that show completed tasks. A project is keyed `project:<id>`.
     val showCompletedViews: Set<String> = emptySet(),
     /// Views limited to tasks that are available now (not blocked).
@@ -68,6 +70,11 @@ data class AppPreferences(
 
     fun withGroup(view: String, value: String): AppPreferences =
         copy(viewGroups = viewGroups + (view to value))
+
+    fun priorityFor(view: String): String = viewPriorities[view] ?: "all"
+
+    fun withPriority(view: String, value: String): AppPreferences =
+        copy(viewPriorities = viewPriorities + (view to value))
 
     fun showsCompleted(view: String): Boolean = view in showCompletedViews
 
@@ -110,6 +117,7 @@ class PreferencesStore(context: Context) {
                 .toMap()
         val viewSorts = settingsMap("view_sorts")
         val viewGroups = settingsMap("view_groups")
+        val viewPriorities = settingsMap("view_priorities")
         val showCompletedViews = (prefs.getString("show_completed_views", null) ?: "")
             .split('|')
             .filter { it.isNotBlank() }
@@ -147,6 +155,7 @@ class PreferencesStore(context: Context) {
             sortBy = prefs.getString("sort_by", "manual") ?: "manual",
             viewSorts = viewSorts,
             viewGroups = viewGroups,
+            viewPriorities = viewPriorities,
             showCompletedViews = showCompletedViews,
             availableViews = availableViews,
             perspectiveOrder = (prefs.getString("perspective_order", null) ?: "")
@@ -187,6 +196,10 @@ class PreferencesStore(context: Context) {
             .putString(
                 "view_groups",
                 value.viewGroups.entries.joinToString("|") { "${it.key}=${it.value}" },
+            )
+            .putString(
+                "view_priorities",
+                value.viewPriorities.entries.joinToString("|") { "${it.key}=${it.value}" },
             )
             .putString("show_completed_views", value.showCompletedViews.joinToString("|"))
             .putString("available_views", value.availableViews.joinToString("|"))

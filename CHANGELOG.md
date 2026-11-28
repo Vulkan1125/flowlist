@@ -34,6 +34,11 @@
   only its chevron.
 - **Today doodle.** The empty Today view now shows a steaming mug instead of
   the old sun face.
+- **Header filters and grouping.** Built-in lists, saved views and project
+  pages share a filter menu with **Available only** and All/High/Medium/Low
+  priority, and Inbox, Today and the task-based More lists gain per-view
+  grouping by project, folder, tag, due, defer, priority, flag, estimate,
+  added or completed. Choices are remembered per view.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.

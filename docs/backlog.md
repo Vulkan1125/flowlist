@@ -262,11 +262,13 @@ integrations are tracked separately and are not part of this phase.
 - [ ] **Drag into projects, tags and sibling positions** — phone drag only
       nests or moves a task to the project root. Match the Mac's drops onto
       projects, tags, parents and between siblings in manual order.
-- [ ] **Built-in view filters** — add the Mac's Availability, First Available
-      and priority filters; the phone's built-in views only offer sorting.
-- [ ] **Grouping for built-in views** — the phone groups only inside saved
-      views. Add per-view grouping by project, folder, tag, due, defer and the
-      other Mac groupings, with per-view memory.
+- [x] **Built-in view filters** — the header filter menu adds **Available
+      only** and All/High/Medium/Low priority filters to Inbox, Today,
+      Forecast, the task-based More lists, saved views and project pages.
+- [x] **Grouping for built-in views** — Inbox, Today and the task-based More
+      lists group by project, folder, tag, due, defer, priority, flag,
+      estimate, added or completed. Project, group, priority and availability
+      choices are remembered per view.
 - [ ] **Forecast depth** — add the Mac's due-only mode, project rows on their
       dates, tag and flagged undated sections, and dragging month-grid chips
       to reschedule.

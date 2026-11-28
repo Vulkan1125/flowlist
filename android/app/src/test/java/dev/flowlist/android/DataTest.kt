@@ -5,6 +5,7 @@ import dev.flowlist.android.data.Db
 import dev.flowlist.android.data.ProjectDto
 import dev.flowlist.android.data.TagDto
 import dev.flowlist.android.data.TaskDto
+import dev.flowlist.android.data.StampDto
 import dev.flowlist.android.data.Ulid
 import dev.flowlist.android.data.tagBlocking
 import dev.flowlist.android.data.taggedTaskCount
@@ -15,6 +16,8 @@ import dev.flowlist.android.data.PerspectiveDto
 import dev.flowlist.android.ui.Family
 import dev.flowlist.android.ui.Perspective
 import dev.flowlist.android.ui.drawerCount
+import dev.flowlist.android.ui.filterViewTasks
+import dev.flowlist.android.ui.groupSections
 import dev.flowlist.android.ui.ThemeSettings
 import dev.flowlist.android.ui.themeColors
 import dev.flowlist.android.ui.projectIconChoices
@@ -24,6 +27,7 @@ import dev.flowlist.android.ui.toFilter
 import dev.flowlist.android.data.displayTitle
 import dev.flowlist.android.data.normalizeBase
 import dev.flowlist.android.data.projectTaskIds
+import dev.flowlist.android.data.taskViews
 import dev.flowlist.android.data.savePerspectiveCommand
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -186,6 +190,56 @@ class DataTest {
         assertEquals(Family.Paper, Family.fromSlug("paper"))
         assertEquals(Family.Tomato, Family.fromSlug(null))
         assertEquals(Family.Tomato, Family.fromSlug("unknown-family"))
+    }
+
+    @Test
+    fun header_filters_and_groups_apply_to_builtin_views() {
+        val db = Db(
+            projects = mapOf("p" to ProjectDto(id = "p", name = "Personal")),
+            tags = mapOf("t" to TagDto(id = "t", name = "Focus")),
+            tasks = mapOf(
+                "a" to TaskDto(
+                    id = "a",
+                    title = "Call",
+                    project = "p",
+                    priority = "high",
+                    tags = listOf("t"),
+                ),
+                "b" to TaskDto(id = "b", title = "Read", priority = "low"),
+            ),
+        )
+        val views = db.taskViews()
+        assertEquals(
+            listOf("Call"),
+            filterViewTasks(db, views, "high", availableOnly = false).map { it.title },
+        )
+        assertEquals(
+            listOf("Personal", "No project"),
+            groupSections(db, views, "project", "manual").map { it.label },
+        )
+        assertEquals(
+            listOf("#Focus", "No tag"),
+            groupSections(db, views, "tag", "manual").map { it.label },
+        )
+    }
+
+    @Test
+    fun availability_filter_matches_defer_and_project_state() {
+        val later = StampDto(java.time.Instant.now().plusSeconds(3600).toString())
+        val db = Db(
+            projects = mapOf(
+                "paused" to ProjectDto(id = "paused", name = "Paused", status = "on_hold"),
+            ),
+            tasks = mapOf(
+                "later" to TaskDto(id = "later", title = "Later", defer = later),
+                "paused" to TaskDto(id = "paused", title = "Paused work", project = "paused"),
+                "now" to TaskDto(id = "now", title = "Now"),
+            ),
+        )
+        assertEquals(
+            listOf("Now"),
+            filterViewTasks(db, db.taskViews(), "all", availableOnly = true).map { it.title },
+        )
     }
 
     @Test

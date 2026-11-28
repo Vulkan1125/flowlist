@@ -60,6 +60,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MoreVert
@@ -876,6 +877,30 @@ fun MainScreen(
             }
             val currentSort = preferences.sortFor(sortKey)
             val headerSort = activeSaved?.sort ?: currentSort
+            val viewPriority = preferences.priorityFor(sortKey)
+            val viewAvailable = preferences.onlyAvailable(sortKey)
+            val viewGroup = when {
+                activeProject != null -> projectGroup
+                activeSaved != null -> activeSaved.groupBy
+                else -> preferences.groupFor(sortKey)
+            }
+            val groupable = activeProject != null || (activeSaved == null && when {
+                activeMore != null -> activeMore == MoreView.Flagged ||
+                    activeMore == MoreView.Completed ||
+                    activeMore == MoreView.Changed ||
+                    activeMore == MoreView.Attachments
+                else -> tab == Tab.Inbox || tab == Tab.Today
+            })
+            val filtersApply = activeProject != null ||
+                activeSaved != null ||
+                (activeMore != null && (
+                    activeMore == MoreView.Flagged ||
+                        activeMore == MoreView.Completed ||
+                        activeMore == MoreView.Changed ||
+                        activeMore == MoreView.Attachments ||
+                        activeMore == MoreView.Priorities
+                    )) ||
+                (activeMore == null && (tab == Tab.Inbox || tab == Tab.Today || tab == Tab.Forecast))
             if (!(tab == Tab.Settings && settingsSection != null)) {
             Header(
                 title = activeProject?.name ?: activeSaved?.name ?: activeMore?.label ?: tab.label,
@@ -898,9 +923,28 @@ fun MainScreen(
                     }
                     else -> null
                 },
-                group = projectGroup,
-                onGroup = projectKey?.let { key ->
-                    { option: String -> onPreferencesChange(preferences.withGroup(key, option)) }
+                group = if (activeSaved != null) activeSaved.groupBy else viewGroup,
+                onGroup = if (!groupable || activeSaved != null) {
+                    null
+                } else {
+                    { option: String -> onPreferencesChange(preferences.withGroup(sortKey, option)) }
+                },
+                groupOptions = if (activeProject != null) {
+                    projectGroupOptions
+                } else {
+                    builtinGroupOptions
+                },
+                available = viewAvailable,
+                onAvailable = if (filtersApply && activeProject == null) {
+                    { enabled -> onPreferencesChange(preferences.withAvailable(sortKey, enabled)) }
+                } else {
+                    null
+                },
+                priority = viewPriority,
+                onPriority = if (filtersApply) {
+                    { value -> onPreferencesChange(preferences.withPriority(sortKey, value)) }
+                } else {
+                    null
                 },
                 onBack = activeProject?.let { { project = null } },
                 selecting = selecting,
@@ -928,6 +972,7 @@ fun MainScreen(
                     db = snapshot?.db,
                     sort = projectSort,
                     group = projectGroup,
+                    priority = viewPriority,
                     showCompleted = projectShowCompleted,
                     availableOnly = projectAvailable,
                     swipeActions = preferences.swipeActions,
@@ -976,6 +1021,8 @@ fun MainScreen(
                 SavedPerspectiveView(
                     perspective = activeSaved,
                     snapshot = snapshot,
+                    priority = viewPriority,
+                    availableOnly = viewAvailable,
                     swipeActions = preferences.swipeActions,
                     pending = state.pending,
                     onToggle = { task -> complete(task, !task.completed) },
@@ -989,6 +1036,9 @@ fun MainScreen(
                         view = activeMore,
                         db = db,
                         sort = currentSort,
+                        priority = viewPriority,
+                        availableOnly = viewAvailable,
+                        group = viewGroup,
                         trashSwipe = preferences.trashSwipe,
                         pending = state.pending,
                         onTask = { task -> detail = task },
@@ -1020,18 +1070,34 @@ fun MainScreen(
                 }
             } else when (tab) {
                 Tab.Inbox -> InboxList(
+                    db = snapshot?.db,
                     swipeActions = preferences.swipeActions,
                     children = children,
-                    tasks = sortTasks(snapshot?.db?.inbox().orEmpty(), currentSort),
+                    tasks = filterViewTasks(
+                        snapshot?.db,
+                        sortTasks(snapshot?.db?.inbox().orEmpty(), currentSort),
+                        viewPriority,
+                        viewAvailable,
+                    ),
+                    group = viewGroup,
+                    sort = currentSort,
                     pending = state.pending,
                     onToggle = { task -> complete(task, !task.completed) },
                     onClick = { detail = it },
                     onTrash = trash,
                 )
                 Tab.Today -> TodayList(
+                    db = snapshot?.db,
                     swipeActions = preferences.swipeActions,
                     children = children,
-                    tasks = sortTasks(snapshot?.db?.today().orEmpty(), currentSort),
+                    tasks = filterViewTasks(
+                        snapshot?.db,
+                        sortTasks(snapshot?.db?.today().orEmpty(), currentSort),
+                        viewPriority,
+                        viewAvailable,
+                    ),
+                    group = viewGroup,
+                    sort = currentSort,
                     pending = state.pending,
                     onToggle = { task -> complete(task, !task.completed) },
                     onClick = { detail = it },
@@ -1040,6 +1106,8 @@ fun MainScreen(
                 Tab.Forecast -> ForecastScreen(
                     view = preferences.forecastView,
                     sort = currentSort,
+                    priority = viewPriority,
+                    availableOnly = viewAvailable,
                     onViewChange = { onPreferencesChange(preferences.copy(forecastView = it)) },
                     snapshot = snapshot,
                     weekStartsMonday = preferences.weekStartsMonday,
@@ -2451,6 +2519,10 @@ private fun Header(
     group: String = "none",
     onGroup: ((String) -> Unit)? = null,
     groupOptions: List<Pair<String, String>> = projectGroupOptions,
+    available: Boolean = false,
+    onAvailable: ((Boolean) -> Unit)? = null,
+    priority: String = "all",
+    onPriority: ((String) -> Unit)? = null,
     onBack: (() -> Unit)? = null,
     selecting: Boolean = false,
     onSelect: (() -> Unit)? = null,
@@ -2458,6 +2530,7 @@ private fun Header(
 ) {
     var sortMenu by remember { mutableStateOf(false) }
     var groupMenu by remember { mutableStateOf(false) }
+    var filterMenu by remember { mutableStateOf(false) }
     val colors = flow
     Column(
         modifier = modifier
@@ -2644,6 +2717,114 @@ private fun Header(
                     }
                 }
             }
+            if (onAvailable != null || onPriority != null) {
+                Spacer(modifier = Modifier.width(2.dp))
+                Box {
+                    IconButton(
+                        onClick = { filterMenu = true },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.FilterAlt,
+                            contentDescription = "Filter tasks",
+                            tint = if (available || priority != "all") {
+                                colors.accent
+                            } else {
+                                colors.faint
+                            },
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = filterMenu,
+                        onDismissRequest = { filterMenu = false },
+                        modifier = Modifier.width(232.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = colors.raised,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 12.dp,
+                        border = BorderStroke(1.dp, colors.hairline),
+                    ) {
+                        Text(
+                            text = "FILTER",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.faint,
+                            modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
+                        )
+                        if (onAvailable != null) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "Available only",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (available) colors.accent else colors.ink,
+                                    )
+                                },
+                                leadingIcon = {
+                                    if (available) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            tint = colors.accent,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    } else {
+                                        Spacer(modifier = Modifier.size(18.dp))
+                                    }
+                                },
+                                onClick = { onAvailable(!available) },
+                                modifier = Modifier.background(
+                                    if (available) colors.field else Color.Transparent,
+                                ),
+                            )
+                        }
+                        if (onPriority != null) {
+                            HorizontalDivider(
+                                color = colors.hairline,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            )
+                            listOf(
+                                "all" to "All priorities",
+                                "high" to "High priority",
+                                "medium" to "Medium priority",
+                                "low" to "Low priority",
+                            ).forEach { (value, label) ->
+                                val selected = value == priority
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = label,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = if (selected) colors.accent else colors.ink,
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        if (selected) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = null,
+                                                tint = colors.accent,
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                        } else {
+                                            Spacer(modifier = Modifier.size(18.dp))
+                                        }
+                                    },
+                                    onClick = {
+                                        filterMenu = false
+                                        onPriority(value)
+                                    },
+                                    modifier = Modifier.background(
+                                        if (selected) colors.field else Color.Transparent,
+                                    ),
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                }
+            }
             if (onSelect != null) {
                 Spacer(modifier = Modifier.width(4.dp))
                 IconButton(onClick = onSelect, modifier = Modifier.size(32.dp)) {
@@ -2739,14 +2920,18 @@ private fun OfflineNotice(onRetry: () -> Unit) {
 
 @Composable
 private fun InboxList(
+    db: Db?,
     swipeActions: Boolean,
     children: Map<String, List<TaskView>>,
     tasks: List<TaskView>,
+    group: String,
+    sort: String,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
     onClick: (TaskView) -> Unit,
     onTrash: (TaskView) -> Unit,
 ) {
+    val sections = groupSections(db, tasks, group, sort)
     LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
         if (tasks.isEmpty()) {
             item(key = "empty") {
@@ -2762,25 +2947,30 @@ private fun InboxList(
                 }
             }
         }
-        items(tasks, key = { it.id }) { task ->
-            if (swipeActions) {
-                TaskTreeItem(
-                    task = task,
-                    children = children,
-                    pending = task.id in pending,
-                    swipeActions = swipeActions,
-                    depth = 0,
-                    onToggle = onToggle,
-                    onTrash = onTrash,
-                    onClick = onClick,
-                )
-            } else {
-                TaskRow(
-                    task = task.copy(pending = task.id in pending),
-                    onToggle = { onToggle(task) },
-                    onClick = { onClick(task) },
-                )
-                Hairline(Modifier.padding(start = 58.dp))
+        sections.forEach { section ->
+            section.label?.let { label ->
+                item(key = "section-$label") { SectionLabel(label) }
+            }
+            items(section.tasks, key = { it.id }) { task ->
+                if (swipeActions) {
+                    TaskTreeItem(
+                        task = task,
+                        children = children,
+                        pending = task.id in pending,
+                        swipeActions = swipeActions,
+                        depth = 0,
+                        onToggle = onToggle,
+                        onTrash = onTrash,
+                        onClick = onClick,
+                    )
+                } else {
+                    TaskRow(
+                        task = task.copy(pending = task.id in pending),
+                        onToggle = { onToggle(task) },
+                        onClick = { onClick(task) },
+                    )
+                    Hairline(Modifier.padding(start = 58.dp))
+                }
             }
         }
     }
@@ -2788,9 +2978,12 @@ private fun InboxList(
 
 @Composable
 private fun TodayList(
+    db: Db?,
     swipeActions: Boolean,
     children: Map<String, List<TaskView>>,
     tasks: List<TaskView>,
+    group: String,
+    sort: String,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
     onClick: (TaskView) -> Unit,
@@ -2798,6 +2991,16 @@ private fun TodayList(
 ) {
     val overdue = tasks.filter { it.due?.isOverdue() == true }
     val today = tasks - overdue.toSet()
+    val sections = if (group == "none") {
+        listOfNotNull(
+            overdue.takeIf { it.isNotEmpty() }?.let { TaskSection("Overdue", it) },
+            today.takeIf { it.isNotEmpty() }?.let {
+                TaskSection(if (overdue.isEmpty()) "Due today" else "Today", it)
+            },
+        )
+    } else {
+        groupSections(db, tasks, group, sort)
+    }
     LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
         if (tasks.isEmpty()) {
             item(key = "empty") {
@@ -2813,24 +3016,11 @@ private fun TodayList(
                 }
             }
         }
-        if (overdue.isNotEmpty()) {
-            item { SectionLabel("Overdue") }
-            items(overdue, key = { it.id }) { task ->
-                TaskTreeItem(
-                    task = task,
-                    children = children,
-                    pending = task.id in pending,
-                    swipeActions = swipeActions,
-                    depth = 0,
-                    onToggle = onToggle,
-                    onTrash = onTrash,
-                    onClick = onClick,
-                )
+        sections.forEach { section ->
+            section.label?.let { label ->
+                item(key = "section-$label") { SectionLabel(label) }
             }
-        }
-        if (today.isNotEmpty()) {
-            item { SectionLabel(if (overdue.isEmpty()) "Due today" else "Today") }
-            items(today, key = { it.id }) { task ->
+            items(section.tasks, key = { it.id }) { task ->
                 TaskTreeItem(
                     task = task,
                     children = children,
@@ -3227,6 +3417,7 @@ private fun ProjectPage(
     db: Db?,
     sort: String,
     group: String,
+    priority: String,
     showCompleted: Boolean,
     availableOnly: Boolean,
     swipeActions: Boolean,
@@ -3266,14 +3457,8 @@ private fun ProjectPage(
     }
     val roots = remember(views) { views.filter { it.parent == null } }
     val sorted = remember(roots, sort) { sortTasks(roots, sort) }
-    val visible = remember(sorted, availableOnly, db) {
-        if (availableOnly) {
-            sorted.filter { task ->
-                task.blockedByTag == null && db?.sequenceBlocker(task.id) == null
-            }
-        } else {
-            sorted
-        }
+    val visible = remember(sorted, availableOnly, priority, db) {
+        filterViewTasks(db, sorted, priority, availableOnly)
     }
     val sections = remember(visible, group, sort, db) {
         when (group) {

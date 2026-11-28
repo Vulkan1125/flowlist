@@ -70,6 +70,7 @@ import dev.flowlist.android.data.Snapshot
 import dev.flowlist.android.data.TagDto
 import dev.flowlist.android.data.TaskView
 import dev.flowlist.android.data.reminderStamp
+import dev.flowlist.android.data.isAvailableNow
 import dev.flowlist.android.data.taskViews
 import dev.flowlist.android.data.wantsFullscreenReminder
 import java.time.Instant
@@ -1024,6 +1025,8 @@ fun countPerspectiveTasks(db: Db?, perspective: PerspectiveDto): Int {
 fun SavedPerspectiveView(
     perspective: PerspectiveDto,
     snapshot: Snapshot?,
+    priority: String = "all",
+    availableOnly: Boolean = false,
     swipeActions: Boolean,
     pending: Set<String>,
     onToggle: (TaskView) -> Unit,
@@ -1041,11 +1044,11 @@ fun SavedPerspectiveView(
             ?.groupBy { it.parent!! }
             .orEmpty()
     }
-    val tasks = remember(all, perspective) {
+    val tasks = remember(all, perspective, priority, availableOnly, db) {
         val matched = all.filter { task ->
             task.parent == null && matchesFilter(db, task, perspective.filter)
         }
-        sortTasks(matched, perspective.sort)
+        sortTasks(filterViewTasks(db, matched, priority, availableOnly), perspective.sort)
     }
     val sections = remember(tasks, perspective) {
         if (perspective.groupBy == "none") {
@@ -1582,8 +1585,66 @@ val projectGroupOptions: List<Pair<String, String>> = listOf(
     "completed" to "Completed",
 )
 
+/// Groupings shared by the built-in lists. Project and folder blocks only make
+/// sense once there is more than one container in the list.
+val builtinGroupOptions: List<Pair<String, String>> = listOf(
+    "none" to "None",
+    "project" to "Project",
+    "folder" to "Folder",
+    "tag" to "Tag",
+    "due" to "Due date",
+    "defer" to "Defer date",
+    "priority" to "Priority",
+    "flagged" to "Flagged",
+    "estimate" to "Estimate",
+    "created" to "Added",
+    "completed" to "Completed",
+)
+
 fun groupOptionLabel(group: String): String =
-    projectGroupOptions.firstOrNull { it.first == group }?.second ?: "None"
+    (builtinGroupOptions.firstOrNull { it.first == group }
+        ?: projectGroupOptions.firstOrNull { it.first == group })
+        ?.second
+        ?: "None"
+
+/// Shared header filters: a priority level and the Mac's First Available rule.
+fun filterViewTasks(
+    db: Db?,
+    tasks: List<TaskView>,
+    priority: String,
+    availableOnly: Boolean,
+): List<TaskView> {
+    var out = tasks
+    if (priority != "all") {
+        out = out.filter { it.priority == priority }
+    }
+    if (availableOnly) {
+        out = out.filter { task -> db?.isAvailableNow(task) ?: (task.blockedByTag == null) }
+    }
+    return out
+}
+
+/// Sections for a chosen grouping, falling back to date sections for a sort.
+fun groupSections(
+    db: Db?,
+    tasks: List<TaskView>,
+    group: String,
+    sort: String,
+): List<TaskSection> = when (group) {
+    "none" -> taskSections(tasks, sort)
+    "due" -> taskSections(tasks, "due")
+    "defer" -> taskSections(tasks, "defer")
+    "priority" -> taskSections(tasks, "priority")
+    "created" -> taskSections(tasks, "created")
+    "completed" -> taskSections(tasks, "completed_at")
+    else -> {
+        val map = LinkedHashMap<String, MutableList<TaskView>>()
+        tasks.forEach { task ->
+            map.getOrPut(groupLabel(db, task, group)) { mutableListOf() }.add(task)
+        }
+        map.map { TaskSection(it.key, it.value.toList()) }
+    }
+}
 
 data class TaskSection(val label: String?, val tasks: List<TaskView>)
 

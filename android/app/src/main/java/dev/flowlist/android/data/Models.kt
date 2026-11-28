@@ -694,6 +694,35 @@ fun tagStatusLabel(status: String): String = when (status) {
     else -> "Available"
 }
 
+/// Whether a task can be worked on right now, matching the Mac's availability
+/// rules: open project, defer dates passed, parent available, no blocked tag
+/// and no earlier task in a sequential list.
+fun Db.isAvailableNow(task: TaskView): Boolean {
+    if (task.completed) return false
+    val now = ZonedDateTime.now()
+    if (task.defer?.local()?.isAfter(now) == true) return false
+    var projectId = task.projectId
+    var parentId = task.parent
+    while (parentId != null) {
+        val parent = tasks[parentId] ?: break
+        if (parent.completed) return false
+        if (parent.defer?.local()?.isAfter(now) == true) return false
+        if (tagBlocking(parent) != null) return false
+        if (sequenceBlocker(parent.id) != null) return false
+        if (projectId == null) projectId = parent.project
+        parentId = parent.parent
+    }
+    val project = projectId?.let { projects[it] }
+    if (project != null) {
+        if (project.status == "done" || project.status == "dropped" || project.status == "on_hold") {
+            return false
+        }
+        if (project.defer?.local()?.isAfter(now) == true) return false
+    }
+    if (task.blockedByTag != null) return false
+    return sequenceBlocker(task.id) == null
+}
+
 /// The earlier incomplete task that blocks this one in a sequential list, or
 /// null when completing it is allowed.
 fun Db.sequenceBlocker(taskId: String): TaskDto? {

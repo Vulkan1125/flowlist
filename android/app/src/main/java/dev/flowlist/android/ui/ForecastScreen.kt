@@ -74,6 +74,8 @@ import java.util.Locale
 fun ForecastScreen(
     view: String,
     sort: String,
+    priority: String = "all",
+    availableOnly: Boolean = false,
     onViewChange: (String) -> Unit,
     snapshot: Snapshot?,
     weekStartsMonday: Boolean,
@@ -94,10 +96,15 @@ fun ForecastScreen(
     val monthFormatter = remember { DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()) }
     val dayFormatter = remember { DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()) }
 
-    val byDate = remember(snapshot) {
+    val visibleIds = remember(snapshot, priority, availableOnly) {
+        val db = snapshot?.db ?: return@remember emptySet<String>()
+        filterViewTasks(db, db.taskViews(), priority, availableOnly).map { it.id }.toSet()
+    }
+    val byDate = remember(snapshot, visibleIds) {
         snapshot?.db?.tasks?.values
             ?.asSequence()
             ?.filter { it.isActive && it.parent == null && it.due != null }
+            ?.filter { it.id in visibleIds }
             ?.mapNotNull { task ->
                 val date = task.due?.local()?.toLocalDate() ?: return@mapNotNull null
                 date to task.id
