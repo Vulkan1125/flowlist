@@ -85,9 +85,9 @@ a turning arrow for Defer; hovering names the field.
 
 ### Row layout
 
-The **Layout** chip beside Sort and Group controls how the current view shows
-its tasks. Every view remembers its own choice, so a compact project list and a
-roomy Today list can sit side by side.
+The **View** chip holds Sort, Group and Layout in three tabs. The Layout tab
+controls how the current view shows its tasks. Every view remembers its own
+choice, so a compact project list and a roomy Today list can sit side by side.
 
 - **Fluid** keeps the familiar wrapped rows. **Comfortable** is the original
   spacing; **Compact** trims the vertical air without changing the content.
@@ -99,12 +99,14 @@ roomy Today list can sit side by side.
   fit the window and the inspector. Clicking a row still opens the inspector;
   cells are not edited in place yet.
 
-![Fluid rows with the Layout menu available in the header](images/gui-layout-fluid.png)
+![Fluid rows with the View and Filter chips in the header](images/gui-layout-fluid.png)
 
 ![The same task in Columns mode](images/gui-layout-columns.png)
 
-The menu stays open while choices change, and every change is saved to the
-view straight away.
+The View menu stays open while choices change, and every change is saved to
+the view straight away. **Filter** in the same row collects **Available**,
+**Priority** and **Completed**; its chip summarizes a single filter or counts
+several, and the small × clears them in one step.
 
 ## The inspector
 
@@ -443,13 +445,15 @@ titles itself **Search** and ranks the closest matches first.
 - Right-click a sidebar row for Open, Rename, Delete, New child, project status
   and tag location. Rename is also `⌘R`.
 - Drag tasks between projects, tags and parents; drag projects into folders.
-- **Sort** and **Group** chips at the top of the list open a menu of orders.
+- The **View** chip at the top of the list opens Sort, Group and Layout tabs.
   **Default** means “use this view’s natural order or grouping”; **Manual**
   means your drag-and-drop order; **None** means one flat list with no
-  headings.
-  **Available** keeps only tasks you can start now; **Priority** filters by
-  priority. **Layout** chooses Fluid or Columns rows, their density and the
-  fields or columns the view shows. The choices are remembered per view.
+  headings. **Layout** chooses Fluid or Columns rows, their density and the
+  fields or columns the view shows.
+- **Filter** collects **Available** (only tasks you can start now),
+  **Priority** and **Completed**. A lone filter is named on the chip; several
+  become a count, and the × clears them.
+- The choices are remembered per view.
 - **Settings → Workflow → Forecast tag** names a tag whose undated actions
   appear in Forecast without needing a date. **Show flagged undated tasks** does
   the same for flagged actions. A task that already has a due, defer or planned

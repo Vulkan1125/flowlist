@@ -1417,8 +1417,6 @@ impl FlowlistApp {
         } else {
             None
         };
-        let shows_completed =
-            matches!(self.view, View::Project(_) | View::Folder(_) | View::Tag(_));
         let is_trash = matches!(self.view, View::Builtin(BuiltinPerspective::Trash));
         div()
             .flex()
@@ -1545,102 +1543,36 @@ impl FlowlistApp {
                             )
                             .when(!is_trash && !is_archive, |this| {
                                 this.child({
-                                    let anchor = self.sort_anchor.clone();
+                                    let anchor = self.view_anchor.clone();
+                                    let boxes = self.header_view_boxes.clone();
+                                    let custom = !self.view_is_default();
+                                    let label = self.view_menu_label();
                                     div()
                                         .flex_shrink_0()
                                         .child(
                                             div()
-                                                .id("sort")
-                                                .flow_tip(self, cx, theme, "Pick a sort order")
-                                                .child(widgets::toggle_chip(
-                                                    theme,
-                                                    format!("Sort · {}", sort_label(self.sort)),
-                                                    self.sort_menu_open,
-                                                ))
-                                                .on_click(cx.listener(|this, _, _, cx| {
-                                                    let suppress =
-                                                        std::mem::take(&mut this.sort_closed_on_up);
-                                                    this.sort_menu_open =
-                                                        !this.sort_menu_open && !suppress;
-                                                    this.group_menu_open = false;
-                                                    this.priority_menu_open = false;
-                                                    this.layout_menu_open = false;
-                                                    this.sidebar_menu = None;
-                                                    cx.notify();
-                                                })),
-                                        )
-                                        .on_children_prepainted(move |bounds, _, _| {
-                                            if let Some(bounds) = bounds.first() {
-                                                anchor.set(Some(*bounds));
-                                            }
-                                        })
-                                })
-                                .child({
-                                    let anchor = self.group_anchor.clone();
-                                    div()
-                                        .flex_shrink_0()
-                                        .child(
-                                            div()
-                                                .id("group")
-                                                .flow_tip(self, cx, theme, "Pick a grouping")
-                                                .child(widgets::toggle_chip(
-                                                    theme,
-                                                    format!("Group · {}", group_label(self.group)),
-                                                    self.group_menu_open,
-                                                ))
-                                                .on_click(cx.listener(|this, _, _, cx| {
-                                                    let suppress = std::mem::take(
-                                                        &mut this.group_closed_on_up,
-                                                    );
-                                                    this.group_menu_open =
-                                                        !this.group_menu_open && !suppress;
-                                                    this.sort_menu_open = false;
-                                                    this.priority_menu_open = false;
-                                                    this.layout_menu_open = false;
-                                                    this.sidebar_menu = None;
-                                                    cx.notify();
-                                                })),
-                                        )
-                                        .on_children_prepainted(move |bounds, _, _| {
-                                            if let Some(bounds) = bounds.first() {
-                                                anchor.set(Some(*bounds));
-                                            }
-                                        })
-                                })
-                                .child({
-                                    let anchor = self.layout_anchor.clone();
-                                    let boxes = self.layout_boxes.clone();
-                                    div()
-                                        .flex_shrink_0()
-                                        .child(
-                                            div()
-                                                .id("layout")
+                                                .id("view-menu")
                                                 .flow_tip(
                                                     self,
                                                     cx,
                                                     theme,
-                                                    "Choose the row layout, density and fields",
+                                                    "Sort, group and row layout",
                                                 )
-                                                .child(widgets::toggle_chip(
+                                                .child(toolbar_chip(
                                                     theme,
-                                                    format!(
-                                                        "Layout · {}",
-                                                        layout_label(self.layout)
-                                                    ),
-                                                    self.layout_menu_open,
+                                                    label,
+                                                    self.view_menu_open || custom,
+                                                    custom,
                                                 ))
                                                 .on_click(cx.listener(|this, _, _, cx| {
-                                                    let suppress = std::mem::take(
-                                                        &mut this.layout_closed_on_up,
-                                                    );
-                                                    this.layout_boxes
+                                                    let suppress =
+                                                        std::mem::take(&mut this.view_closed_on_up);
+                                                    this.view_boxes
                                                         .borrow_mut()
-                                                        .retain(|key, _| !key.contains(':'));
-                                                    this.layout_menu_open =
-                                                        !this.layout_menu_open && !suppress;
-                                                    this.sort_menu_open = false;
-                                                    this.group_menu_open = false;
-                                                    this.priority_menu_open = false;
+                                                        .retain(|key, _| key == "chip");
+                                                    this.view_menu_open =
+                                                        !this.view_menu_open && !suppress;
+                                                    this.filter_menu_open = false;
                                                     this.sidebar_menu = None;
                                                     cx.notify();
                                                 })),
@@ -1650,90 +1582,113 @@ impl FlowlistApp {
                                                 anchor.set(Some(*bounds));
                                                 boxes.borrow_mut().insert(
                                                     "chip".to_string(),
-                                                    [
-                                                        f32::from(bounds.origin.x),
-                                                        f32::from(bounds.origin.y),
-                                                        f32::from(bounds.size.width),
-                                                        f32::from(bounds.size.height),
-                                                    ],
+                                                    bounds_box(bounds),
                                                 );
                                             }
                                         })
                                 })
-                                .child(
-                                    div()
-                                        .id("only-available")
-                                        .flex_shrink_0()
-                                        .flow_tip(self, cx, theme, "Show next available task")
-                                        .child(widgets::toggle_chip(
-                                            theme,
-                                            "Available",
-                                            self.only_available,
-                                        ))
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.toggle_only_available(cx)
-                                        })),
-                                )
                                 .child({
-                                    let anchor = self.priority_anchor.clone();
+                                    let anchor = self.filter_anchor.clone();
+                                    let boxes = self.header_filter_boxes.clone();
+                                    let active = self.filter_menu_open || self.filter_is_active();
+                                    let can_clear = self.filter_is_active();
+                                    let label = self.filter_menu_label();
                                     div()
                                         .flex_shrink_0()
                                         .child(
                                             div()
-                                                .id("priority-filter")
+                                                .id("filter-menu")
                                                 .flow_tip(
                                                     self,
                                                     cx,
                                                     theme,
-                                                    "Filter every view by priority",
+                                                    "Filter by availability, priority and completion",
                                                 )
-                                                .child(widgets::toggle_chip(
-                                                    theme,
-                                                    format!(
-                                                        "Priority · {}",
-                                                        self.priority_filter
-                                                            .map(|priority| priority
-                                                                .label()
-                                                                .to_string())
-                                                            .unwrap_or_else(|| "All".to_string())
-                                                    ),
-                                                    self.priority_filter.is_some(),
-                                                ))
-                                                .on_click(cx.listener(|this, _, _, cx| {
-                                                    let suppress = std::mem::take(
-                                                        &mut this.priority_closed_on_up,
-                                                    );
-                                                    this.priority_menu_open =
-                                                        !this.priority_menu_open && !suppress;
-                                                    this.sort_menu_open = false;
-                                                    this.group_menu_open = false;
-                                                    this.layout_menu_open = false;
-                                                    this.sidebar_menu = None;
-                                                    cx.notify();
-                                                })),
+                                                .child(
+                                                    div()
+                                                        .h(px(26.))
+                                                        .px_2()
+                                                        .flex()
+                                                        .items_center()
+                                                        .gap_1()
+                                                        .rounded_md()
+                                                        .border_1()
+                                                        .border_color(if active {
+                                                            theme.accent
+                                                        } else {
+                                                            theme.border
+                                                        })
+                                                        .bg(if active {
+                                                            theme.selection
+                                                        } else {
+                                                            theme.field
+                                                        })
+                                                        .text_xs()
+                                                        .text_color(if active {
+                                                            theme.accent
+                                                        } else {
+                                                            theme.text_dim
+                                                        })
+                                                        .cursor_pointer()
+                                                        .hover(|style| style.bg(theme.hover))
+                                                        .child(label)
+                                                        .when(can_clear, |this| {
+                                                            this.child(
+                                                                div()
+                                                                    .id("filter-clear")
+                                                                    .flex()
+                                                                    .items_center()
+                                                                    .justify_center()
+                                                                    .size(px(14.))
+                                                                    .rounded_sm()
+                                                                    .hover(|style| {
+                                                                        style.bg(theme.raised)
+                                                                    })
+                                                                    .flow_tip(
+                                                                        self,
+                                                                        cx,
+                                                                        theme,
+                                                                        "Clear filters",
+                                                                    )
+                                                                    .child(icons::icon(
+                                                                        Icon::Close,
+                                                                        9.0,
+                                                                        theme.accent,
+                                                                    ))
+                                                                    .on_click(cx.listener(
+                                                                        |this, _, _, cx| {
+                                                                            cx.stop_propagation();
+                                                                            this.clear_filters(cx);
+                                                                        },
+                                                                    )),
+                                                            )
+                                                        })
+                                                        .id("filter-chip")
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            let suppress = std::mem::take(
+                                                                &mut this.filter_closed_on_up,
+                                                            );
+                                                            this.header_filter_boxes
+                                                                .borrow_mut()
+                                                                .retain(|key, _| key == "chip");
+                                                            this.filter_menu_open =
+                                                                !this.filter_menu_open && !suppress;
+                                                            this.view_menu_open = false;
+                                                            this.sidebar_menu = None;
+                                                            cx.notify();
+                                                        })),
+                                                ),
                                         )
                                         .on_children_prepainted(move |bounds, _, _| {
                                             if let Some(bounds) = bounds.first() {
                                                 anchor.set(Some(*bounds));
+                                                boxes.borrow_mut().insert(
+                                                    "chip".to_string(),
+                                                    bounds_box(bounds),
+                                                );
                                             }
                                         })
                                 })
-                            })
-                            .when(shows_completed && !is_trash, |this| {
-                                this.child(
-                                    div()
-                                        .id("show-completed")
-                                        .flex_shrink_0()
-                                        .flow_tip(self, cx, theme, "Show or hide completed tasks")
-                                        .child(widgets::toggle_chip(
-                                            theme,
-                                            "Completed",
-                                            self.show_completed,
-                                        ))
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.toggle_show_completed(cx)
-                                        })),
-                                )
                             })
                             .when(is_trash, |this| {
                                 this.child(
@@ -1851,12 +1806,12 @@ impl FlowlistApp {
             )
     }
 
-    /// A real list of sort choices: the chip opens a menu instead of
-    /// silently cycling, so the user can jump straight to the order they want.
-    pub(super) fn render_sort_menu(&self, cx: &mut Context<Self>) -> gpui::Div {
+    /// One View popover holds sorting, grouping and the row layout. The tabs
+    /// keep the panel small while every option stays one click away.
+    pub(super) fn render_view_popover(&self, cx: &mut Context<Self>) -> gpui::Div {
         let theme = self.theme;
         let mut menu = div()
-            .min_w(px(150.))
+            .w(px(360.))
             .flex()
             .flex_col()
             .gap(px(1.))
@@ -1866,6 +1821,66 @@ impl FlowlistApp {
             .border_color(theme.border)
             .bg(theme.raised)
             .shadow_lg();
+        let mut tabs = div()
+            .flex()
+            .gap(px(1.))
+            .p_1()
+            .mb_1()
+            .rounded_md()
+            .bg(theme.field);
+        for tab in [
+            super::ViewMenuTab::Sort,
+            super::ViewMenuTab::Group,
+            super::ViewMenuTab::Layout,
+        ] {
+            let active = self.view_menu_tab == tab;
+            let key = format!("tab:{}", tab.slug());
+            let sink = self.header_view_boxes.clone();
+            tabs = tabs.child(
+                div()
+                    .flex_1()
+                    .h(px(26.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_sm()
+                    .bg(if active { theme.raised } else { theme.clear })
+                    .text_xs()
+                    .text_color(if active { theme.accent } else { theme.text_dim })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
+                        }
+                    })
+                    .id(super::sid(format!("view-tab:{}", tab.slug())))
+                    .child(tab.label())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.view_menu_tab = tab;
+                        this.view_boxes.borrow_mut().retain(|key, _| key == "chip");
+                        cx.notify();
+                    })),
+            );
+        }
+        menu = menu.child(tabs);
+        let body = match self.view_menu_tab {
+            super::ViewMenuTab::Sort => self.render_sort_tab(cx),
+            super::ViewMenuTab::Group => self.render_group_tab(cx),
+            super::ViewMenuTab::Layout => self.render_layout_tab(cx),
+        };
+        menu.child(body)
+    }
+
+    fn render_sort_tab(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.theme;
+        let mut list = div()
+            .id("view-sort-list")
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .max_h(px(300.))
+            .overflow_y_scroll();
         let options: Vec<Option<SortBy>> = vec![
             None,
             Some(SortBy::Manual),
@@ -1887,9 +1902,10 @@ impl FlowlistApp {
         for option in options {
             let selected = self.sort == option;
             let slug = option.map(sort_slug).unwrap_or("default");
-            menu = menu.child(
+            let key = format!("sort:{slug}");
+            let sink = self.header_view_boxes.clone();
+            list = list.child(
                 div()
-                    .id(super::sid(format!("sort-option:{slug}")))
                     .flex()
                     .items_center()
                     .justify_between()
@@ -1910,6 +1926,12 @@ impl FlowlistApp {
                     })
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover))
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
+                        }
+                    })
+                    .id(super::sid(format!("view-sort:{slug}")))
                     .child(sort_label(option))
                     .when(selected, |this| {
                         this.child(icons::icon(Icon::Check, 11.0, theme.accent))
@@ -1917,22 +1939,18 @@ impl FlowlistApp {
                     .on_click(cx.listener(move |this, _, _, cx| this.choose_sort(option, cx))),
             );
         }
-        menu
+        list.into_any_element()
     }
 
-    pub(super) fn render_group_menu(&self, cx: &mut Context<Self>) -> gpui::Div {
+    fn render_group_tab(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
-        let mut menu = div()
-            .min_w(px(150.))
+        let mut list = div()
+            .id("view-group-list")
             .flex()
             .flex_col()
             .gap(px(1.))
-            .p_1()
-            .rounded_lg()
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.raised)
-            .shadow_lg();
+            .max_h(px(300.))
+            .overflow_y_scroll();
         let options: Vec<Option<GroupBy>> = vec![
             None,
             Some(GroupBy::Project),
@@ -1954,9 +1972,10 @@ impl FlowlistApp {
         for option in options {
             let selected = self.group == option;
             let slug = option.map(group_slug).unwrap_or("default");
-            menu = menu.child(
+            let key = format!("group:{slug}");
+            let sink = self.header_view_boxes.clone();
+            list = list.child(
                 div()
-                    .id(super::sid(format!("group-option:{slug}")))
                     .flex()
                     .items_center()
                     .justify_between()
@@ -1977,6 +1996,12 @@ impl FlowlistApp {
                     })
                     .cursor_pointer()
                     .hover(|style| style.bg(theme.hover))
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
+                        }
+                    })
+                    .id(super::sid(format!("view-group:{slug}")))
                     .child(group_label(option))
                     .when(selected, |this| {
                         this.child(icons::icon(Icon::Check, 11.0, theme.accent))
@@ -1984,76 +2009,14 @@ impl FlowlistApp {
                     .on_click(cx.listener(move |this, _, _, cx| this.choose_group(option, cx))),
             );
         }
-        menu
+        list.into_any_element()
     }
 
-    pub(super) fn render_priority_menu(&self, cx: &mut Context<Self>) -> gpui::Div {
+    /// The Layout tab: mode, density and the checkboxes that were previously
+    /// a chip of their own.
+    fn render_layout_tab(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.theme;
-        let mut menu = div()
-            .min_w(px(140.))
-            .flex()
-            .flex_col()
-            .gap(px(1.))
-            .p_1()
-            .rounded_lg()
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.raised)
-            .shadow_lg();
-        let options: [Option<Priority>; 4] = [
-            None,
-            Some(Priority::High),
-            Some(Priority::Medium),
-            Some(Priority::Low),
-        ];
-        for option in options {
-            let selected = self.priority_filter == option;
-            let (slug, label) = match option {
-                None => ("all", "All priorities".to_string()),
-                Some(priority) => (priority.slug(), priority.label().to_string()),
-            };
-            menu = menu.child(
-                div()
-                    .id(super::sid(format!("priority-option:{slug}")))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_2()
-                    .py_1()
-                    .rounded_sm()
-                    .text_xs()
-                    .text_color(if selected {
-                        theme.accent
-                    } else {
-                        theme.text_dim
-                    })
-                    .bg(if selected {
-                        theme.selection
-                    } else {
-                        theme.clear
-                    })
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .child(label)
-                    .when(selected, |this| {
-                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
-                    })
-                    .on_click(
-                        cx.listener(move |this, _, _, cx| this.choose_priority_filter(option, cx)),
-                    ),
-            );
-        }
-        menu
-    }
-
-    /// Layout, density and the field/column checkboxes. The menu stays open
-    /// while choices change so a view can be tuned in one visit.
-    pub(super) fn render_layout_menu(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let theme = self.theme;
-        // The chip's box is measured once and stays; menu keys are cleared
-        // when the chip opens the menu so a probe cannot read a stale row.
-        let boxes = self.layout_boxes.clone();
+        let boxes = self.header_view_boxes.clone();
         let section = |label: &'static str| {
             div()
                 .px_2()
@@ -2064,17 +2027,7 @@ impl FlowlistApp {
                 .text_color(theme.text_faint)
                 .child(label)
         };
-        let mut menu = div()
-            .w(px(340.))
-            .flex()
-            .flex_col()
-            .gap(px(1.))
-            .p_1()
-            .rounded_lg()
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.raised)
-            .shadow_lg();
+        let mut menu = div().flex().flex_col().gap(px(1.));
         menu = menu
             .child(section("Layout"))
             .child(
@@ -2093,15 +2046,8 @@ impl FlowlistApp {
                                 .flex_1()
                                 .on_children_prepainted(move |bounds, _, _| {
                                     if let Some(bounds) = bounds.first() {
-                                        sink.borrow_mut().insert(
-                                            key.clone(),
-                                            [
-                                                f32::from(bounds.origin.x),
-                                                f32::from(bounds.origin.y),
-                                                f32::from(bounds.size.width),
-                                                f32::from(bounds.size.height),
-                                            ],
-                                        );
+                                        sink.borrow_mut()
+                                            .insert(key.clone(), bounds_box(bounds));
                                     }
                                 })
                                 .id(super::sid(format!("layout-mode:{slug}")))
@@ -2129,15 +2075,8 @@ impl FlowlistApp {
                                 .flex_1()
                                 .on_children_prepainted(move |bounds, _, _| {
                                     if let Some(bounds) = bounds.first() {
-                                        sink.borrow_mut().insert(
-                                            key.clone(),
-                                            [
-                                                f32::from(bounds.origin.x),
-                                                f32::from(bounds.origin.y),
-                                                f32::from(bounds.size.width),
-                                                f32::from(bounds.size.height),
-                                            ],
-                                        );
+                                        sink.borrow_mut()
+                                            .insert(key.clone(), bounds_box(bounds));
                                     }
                                 })
                                 .id(super::sid(format!("layout-density:{slug}")))
@@ -2175,15 +2114,7 @@ impl FlowlistApp {
                         .hover(|style| style.bg(theme.hover))
                         .on_children_prepainted(move |bounds, _, _| {
                             if let Some(bounds) = bounds.first() {
-                                sink.borrow_mut().insert(
-                                    key.clone(),
-                                    [
-                                        f32::from(bounds.origin.x),
-                                        f32::from(bounds.origin.y),
-                                        f32::from(bounds.size.width),
-                                        f32::from(bounds.size.height),
-                                    ],
-                                );
+                                sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
                             }
                         })
                         .id(super::sid(format!("layout-field:{id}")))
@@ -2222,15 +2153,7 @@ impl FlowlistApp {
                         .hover(|style| style.bg(theme.hover))
                         .on_children_prepainted(move |bounds, _, _| {
                             if let Some(bounds) = bounds.first() {
-                                sink.borrow_mut().insert(
-                                    key.clone(),
-                                    [
-                                        f32::from(bounds.origin.x),
-                                        f32::from(bounds.origin.y),
-                                        f32::from(bounds.size.width),
-                                        f32::from(bounds.size.height),
-                                    ],
-                                );
+                                sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
                             }
                         })
                         .id(super::sid(format!("layout-column:{id}")))
@@ -2250,6 +2173,180 @@ impl FlowlistApp {
                 .child(fields)
                 .child(columns),
         )
+        .into_any_element()
+    }
+
+    /// One Filter popover holds Available, Priority and Completed, so the
+    /// header never grows a chip per filter.
+    pub(super) fn render_filter_menu(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let theme = self.theme;
+        let boxes = self.header_filter_boxes.clone();
+        let section = |label: &'static str| {
+            div()
+                .px_2()
+                .pt_2()
+                .pb_1()
+                .text_xs()
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(theme.text_faint)
+                .child(label)
+        };
+        let mut menu = div()
+            .w(px(230.))
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .p_1()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .shadow_lg();
+        menu = menu.child(section("Availability"));
+        let key = "available".to_string();
+        let sink = boxes.clone();
+        menu = menu.child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .mx_1()
+                .px_1()
+                .py_1()
+                .rounded_sm()
+                .text_xs()
+                .text_color(if self.only_available {
+                    theme.text
+                } else {
+                    theme.text_dim
+                })
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.hover))
+                .on_children_prepainted(move |bounds, _, _| {
+                    if let Some(bounds) = bounds.first() {
+                        sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
+                    }
+                })
+                .id("filter-available")
+                .child(layout_check(theme, self.only_available))
+                .child("Available")
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_only_available(cx))),
+        );
+        menu = menu.child(section("Priority"));
+        let options: [Option<Priority>; 4] = [
+            None,
+            Some(Priority::High),
+            Some(Priority::Medium),
+            Some(Priority::Low),
+        ];
+        for option in options {
+            let selected = self.priority_filter == option;
+            let (slug, label) = match option {
+                None => ("all", "All priorities".to_string()),
+                Some(priority) => (priority.slug(), priority.label().to_string()),
+            };
+            let key = format!("priority:{slug}");
+            let sink = boxes.clone();
+            menu = menu.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .mx_1()
+                    .px_1()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if selected {
+                        theme.accent
+                    } else {
+                        theme.text_dim
+                    })
+                    .bg(if selected {
+                        theme.selection
+                    } else {
+                        theme.clear
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
+                        }
+                    })
+                    .id(super::sid(format!("filter-priority:{slug}")))
+                    .child(label)
+                    .when(selected, |this| {
+                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
+                    })
+                    .on_click(
+                        cx.listener(move |this, _, _, cx| this.choose_priority_filter(option, cx)),
+                    ),
+            );
+        }
+        if self.completed_filter_applies() {
+            menu = menu.child(section("Completed"));
+            let key = "completed".to_string();
+            let sink = boxes.clone();
+            menu = menu.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .mx_1()
+                    .px_1()
+                    .py_1()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if self.show_completed {
+                        theme.text
+                    } else {
+                        theme.text_dim
+                    })
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.hover))
+                    .on_children_prepainted(move |bounds, _, _| {
+                        if let Some(bounds) = bounds.first() {
+                            sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
+                        }
+                    })
+                    .id("filter-completed")
+                    .child(layout_check(theme, self.show_completed))
+                    .child("Show completed")
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_show_completed(cx))),
+            );
+        }
+        if self.filter_is_active() {
+            let key = "clear".to_string();
+            let sink = boxes.clone();
+            menu = menu
+                .child(div().mx_2().my_1().h(px(1.)).bg(theme.border_soft))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .mx_1()
+                        .px_1()
+                        .py_1()
+                        .rounded_sm()
+                        .text_xs()
+                        .text_color(theme.text_dim)
+                        .cursor_pointer()
+                        .hover(|style| style.bg(theme.hover))
+                        .on_children_prepainted(move |bounds, _, _| {
+                            if let Some(bounds) = bounds.first() {
+                                sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
+                            }
+                        })
+                        .id("filter-clear-all")
+                        .child(icons::icon(Icon::Close, 10.0, theme.text_faint))
+                        .child("Clear filters")
+                        .on_click(cx.listener(|this, _, _, cx| this.clear_filters(cx))),
+                );
+        }
+        menu
     }
 
     fn render_capture_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -4370,6 +4467,45 @@ fn repeat_label(db: &flowlist_core::db::Db, id: &TaskId) -> Option<String> {
 /// The project label a row shows. A project view already names its project,
 /// and a folder view already names its folder, so only the remaining path is
 /// worth repeating there.
+/// Convert a painted bounds into the `[x, y, width, height]` arrays the test
+/// state publishes for GUI probes.
+fn bounds_box(bounds: &gpui::Bounds<gpui::Pixels>) -> [f32; 4] {
+    [
+        f32::from(bounds.origin.x),
+        f32::from(bounds.origin.y),
+        f32::from(bounds.size.width),
+        f32::from(bounds.size.height),
+    ]
+}
+
+/// A header menu trigger with the same shape as `toggle_chip`, plus an accent
+/// dot when the view or filter differs from its defaults.
+fn toolbar_chip(
+    theme: super::theme::Theme,
+    label: impl Into<String>,
+    active: bool,
+    dot: bool,
+) -> impl IntoElement {
+    div()
+        .h(px(26.))
+        .px_2()
+        .flex()
+        .items_center()
+        .gap_1()
+        .rounded_md()
+        .border_1()
+        .border_color(if active { theme.accent } else { theme.border })
+        .bg(if active { theme.selection } else { theme.field })
+        .text_xs()
+        .text_color(if active { theme.accent } else { theme.text_dim })
+        .cursor_pointer()
+        .hover(|style| style.bg(theme.hover))
+        .when(dot, |this| {
+            this.child(div().size(px(4.)).rounded_full().bg(theme.accent))
+        })
+        .child(label.into())
+}
+
 /// The small checked square used by the Layout menu's field and column rows.
 fn layout_check(theme: super::theme::Theme, checked: bool) -> impl IntoElement {
     div()

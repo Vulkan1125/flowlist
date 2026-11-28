@@ -222,22 +222,30 @@ assert d["density"] == "comfortable", d["density"]
 assert d["hidden_fields"] == [], d["hidden_fields"]
 assert set(d["columns"]) == {"project", "tags", "due", "flag"}, d["columns"]
 assert d["content_rows"], "no task rows"
+assert d["header_view_label"] == "View", d["header_view_label"]
+assert d["header_filter_label"] == "Filter", d["header_filter_label"]
+assert d["header_active_filters"] == 0, d["header_active_filters"]
 print("  fresh view: fluid, comfortable, four default columns")
 PY
 shot fluid
 
-echo "2. The Layout chip opens the mode, density, field and column menu"
-click_map layout_boxes chip
-wait_value layout_menu True
-for key in chip mode:fluid mode:columns density:comfortable density:compact \
-	field:project field:flag column:project column:defer; do
-	wait_map layout_boxes "$key"
+echo "2. The View chip holds Sort, Group and Layout; Layout has every control"
+click_map header_view_boxes chip
+wait_value header_view_menu True
+for key in chip tab:sort tab:group tab:layout; do
+	wait_map header_view_boxes "$key"
 done
-echo "  Layout menu: mode pills, density pills, seven fields, eight columns"
+click_map header_view_boxes tab:layout
+wait_value header_view_tab layout
+for key in mode:fluid mode:columns density:comfortable density:compact \
+	field:project field:flag column:project column:defer; do
+	wait_map header_view_boxes "$key"
+done
+echo "  View menu: three tabs, mode pills, density pills, seven fields, eight columns"
 
 echo "3. Compact density actually shrinks the row"
 comfortable=$(row_height)
-click_map layout_boxes density:compact
+click_map header_view_boxes density:compact
 wait_value density compact
 for _ in $(seq 1 40); do
 	compact=$(row_height)
@@ -251,7 +259,7 @@ fi
 echo "  row height: comfortable ${comfortable}px -> compact ${compact}px"
 
 echo "4. One fluid field can be hidden and is remembered"
-click_map layout_boxes field:project
+click_map header_view_boxes field:project
 wait_has hidden_fields project
 python3 - "$state" <<'PY'
 import json, sys
@@ -261,9 +269,9 @@ print("  project field is checked off in the menu")
 PY
 
 echo "5. Columns mode and one optional column"
-click_map layout_boxes mode:columns
+click_map header_view_boxes mode:columns
 wait_value layout columns
-click_map layout_boxes column:defer
+click_map header_view_boxes column:defer
 wait_has columns defer
 python3 - "$state" <<'PY'
 import json, sys
@@ -275,7 +283,7 @@ print("  columns layout with the Defer column on")
 PY
 # Close the menu so the next screenshot shows the rows, not the card.
 "$helpers/flowctl" key 53
-wait_value layout_menu False
+wait_value header_view_menu False
 shot columns
 
 echo "6. The session keeps this view's layout"
@@ -308,6 +316,23 @@ assert "project" in d["hidden_fields"], d["hidden_fields"]
 assert "defer" in d["columns"], d["columns"]
 print("  relaunch kept the flagged view's columns layout")
 PY
+
+echo "8. The Filter chip holds Available, Priority and a clear action"
+click_map header_filter_boxes chip
+wait_value header_filter_menu True
+for key in chip available priority:all priority:high; do
+	wait_map header_filter_boxes "$key"
+done
+click_map header_filter_boxes available
+wait_value only_available True
+wait_value header_filter_label "Filter · Available"
+wait_map header_filter_boxes clear
+click_map header_filter_boxes clear
+wait_value only_available False
+wait_value header_filter_label "Filter"
+"$helpers/flowctl" key 53
+wait_value header_filter_menu False
+echo "  Filter menu: one chip, Available toggled, Clear restored the unfiltered view"
 
 if [ -n "${SHOT_DIR:-}" ]; then
 	mkdir -p "$SHOT_DIR"

@@ -489,9 +489,8 @@ impl FlowlistApp {
     ) {
         self.sidebar_cursor = Some(target.clone());
         self.focus = FocusArea::Sidebar;
-        self.sort_menu_open = false;
-        self.group_menu_open = false;
-        self.priority_menu_open = false;
+        self.view_menu_open = false;
+        self.filter_menu_open = false;
         self.sidebar_menu = Some(SidebarMenu { target, position });
         cx.notify();
     }

@@ -85,6 +85,35 @@ pub(super) enum TaskStepMode {
     OneOff,
 }
 
+/// The three sections inside the single View menu. Keeping them as tabs means
+/// one header chip can hold sorting, grouping and the row layout without
+/// painting every option at once.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum ViewMenuTab {
+    #[default]
+    Sort,
+    Group,
+    Layout,
+}
+
+impl ViewMenuTab {
+    pub(super) fn slug(self) -> &'static str {
+        match self {
+            ViewMenuTab::Sort => "sort",
+            ViewMenuTab::Group => "group",
+            ViewMenuTab::Layout => "layout",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            ViewMenuTab::Sort => "Sort",
+            ViewMenuTab::Group => "Group",
+            ViewMenuTab::Layout => "Layout",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FocusArea {
     Content,
@@ -704,24 +733,23 @@ pub struct FlowlistApp {
     follow_system: bool,
     /// Per-perspective sort/group/filter memory.
     view_options: std::collections::BTreeMap<String, session::ViewOptions>,
-    /// The header dropdowns, which list every option instead of cycling.
-    sort_menu_open: bool,
-    group_menu_open: bool,
-    priority_menu_open: bool,
-    layout_menu_open: bool,
+    /// The two content-header menus. Sorting, grouping and layout share one
+    /// View popover; Available, Priority and Completed share Filter.
+    view_menu_open: bool,
+    filter_menu_open: bool,
+    view_menu_tab: ViewMenuTab,
     /// Where the header chips painted on the last frame. The menus are root
     /// overlays positioned from these bounds, so their hitboxes line up with
     /// what is on screen (anchored/deferred paint offsets do not move
     /// hitboxes in GPUI 0.2).
-    sort_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    view_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// Today's Hide past chip, measured so a GUI probe can click it.
     hide_past_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
-    group_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
-    priority_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
-    layout_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
-    /// Layout menu rows measured for the GUI probe, keyed `chip`,
-    /// `mode:fluid`, `density:compact`, `field:project`, `column:due`.
-    layout_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    filter_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    /// View and Filter menu rows measured for the GUI probe, keyed `chip`,
+    /// `tab:layout`, `mode:fluid`, `field:project`, `available`, …
+    header_view_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
+    header_filter_boxes: Rc<RefCell<BTreeMap<String, [f32; 4]>>>,
     /// The first text field in the open sheet, measured so a GUI probe can
     /// click and drag inside it.
     modal_field_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
@@ -812,12 +840,10 @@ pub struct FlowlistApp {
     /// the button each control points at.
     repeat_menu: Option<(TaskId, RepeatMenu)>,
     repeat_menu_anchors: Rc<RefCell<BTreeMap<String, Bounds<gpui::Pixels>>>>,
-    /// A click's mouse-up closed the sort or group menu. The chip under the
-    /// same click must not immediately reopen it.
-    sort_closed_on_up: bool,
-    group_closed_on_up: bool,
-    priority_closed_on_up: bool,
-    layout_closed_on_up: bool,
+    /// A click's mouse-up closed a header menu. The chip under the same click
+    /// must not immediately reopen it.
+    view_closed_on_up: bool,
+    filter_closed_on_up: bool,
     /// Highlighted completion in the project and tag fields.
     suggestion_index: usize,
     /// True once the user moved through the project dropdown with the arrow
@@ -1248,16 +1274,14 @@ impl FlowlistApp {
             empty_note: Rc::new(RefCell::new(None)),
             follow_system,
             view_options,
-            sort_menu_open: false,
-            group_menu_open: false,
-            priority_menu_open: false,
-            layout_menu_open: false,
-            sort_anchor: Rc::new(Cell::new(None)),
+            view_menu_open: false,
+            filter_menu_open: false,
+            view_menu_tab: ViewMenuTab::Sort,
+            view_anchor: Rc::new(Cell::new(None)),
             hide_past_anchor: Rc::new(Cell::new(None)),
-            group_anchor: Rc::new(Cell::new(None)),
-            priority_anchor: Rc::new(Cell::new(None)),
-            layout_anchor: Rc::new(Cell::new(None)),
-            layout_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            filter_anchor: Rc::new(Cell::new(None)),
+            header_view_boxes: Rc::new(RefCell::new(BTreeMap::new())),
+            header_filter_boxes: Rc::new(RefCell::new(BTreeMap::new())),
             modal_field_anchor: Rc::new(Cell::new(None)),
             field_editor_anchor: Rc::new(Cell::new(None)),
             checklist_add_anchor: Rc::new(Cell::new(None)),
@@ -1285,10 +1309,8 @@ impl FlowlistApp {
             title_visible: Rc::new(Cell::new(true)),
             sidebar_menu: None,
             sidebar_menu_boxes: Rc::new(RefCell::new(BTreeMap::new())),
-            sort_closed_on_up: false,
-            group_closed_on_up: false,
-            priority_closed_on_up: false,
-            layout_closed_on_up: false,
+            view_closed_on_up: false,
+            filter_closed_on_up: false,
             suggestion_index: 0,
             suggestion_engaged: false,
             selected,
@@ -2520,10 +2542,8 @@ impl FlowlistApp {
         if self.modal.is_some() {
             return;
         }
-        self.sort_menu_open = false;
-        self.group_menu_open = false;
-        self.priority_menu_open = false;
-        self.layout_menu_open = false;
+        self.view_menu_open = false;
+        self.filter_menu_open = false;
         self.sidebar_menu = None;
         self.date_picker = None;
         self.quick_open = Some(QuickOpenState {
@@ -4135,10 +4155,8 @@ impl FlowlistApp {
             .map(|stamp| stamp.local_time());
         self.editing = None;
         self.field_error = None;
-        self.sort_menu_open = false;
-        self.group_menu_open = false;
-        self.priority_menu_open = false;
-        self.layout_menu_open = false;
+        self.view_menu_open = false;
+        self.filter_menu_open = false;
         self.sidebar_menu = None;
         self.focus = FocusArea::Content;
         cx.notify();
@@ -4869,6 +4887,113 @@ impl FlowlistApp {
 
     // ------------------------------------------------------------ mutations
 
+    /// True when the view shows its natural order, grouping and row layout.
+    /// The View chip stays quiet until something here changes.
+    fn view_is_default(&self) -> bool {
+        self.sort.is_none()
+            && self.group.is_none()
+            && self.layout == session::RowLayout::Fluid
+            && self.density == session::Density::Comfortable
+            && self.hidden_fields.is_empty()
+            && self.columns_are_default()
+    }
+
+    fn columns_are_default(&self) -> bool {
+        self.columns.len() == session::DEFAULT_COLUMNS.len()
+            && session::DEFAULT_COLUMNS
+                .iter()
+                .all(|id| self.columns.contains(*id))
+    }
+
+    /// A short summary on the View chip so the row still says what is on:
+    /// `View · Due · Columns`, `View · Compact`, and so on.
+    fn view_menu_label(&self) -> String {
+        let mut parts = Vec::new();
+        if let Some(sort) = self.sort {
+            parts.push(sort_label(Some(sort)).to_string());
+        }
+        if let Some(group) = self.group {
+            parts.push(group_label(Some(group)).to_string());
+        }
+        if self.layout == session::RowLayout::Columns {
+            parts.push("Columns".to_string());
+        }
+        if self.density == session::Density::Compact {
+            parts.push("Compact".to_string());
+        }
+        if self.layout == session::RowLayout::Columns {
+            if !self.columns_are_default() {
+                parts.push(format!("{} cols", self.columns.len()));
+            }
+        } else if !self.hidden_fields.is_empty() {
+            parts.push(format!("{} hidden", self.hidden_fields.len()));
+        }
+        if parts.is_empty() {
+            return "View".to_string();
+        }
+        let extra = parts.len().saturating_sub(2);
+        let mut label = format!(
+            "View · {}",
+            parts.iter().take(2).cloned().collect::<Vec<_>>().join(" · ")
+        );
+        if extra > 0 {
+            label.push_str(&format!(" +{extra}"));
+        }
+        label
+    }
+
+    /// Completed only filters the views that show finished work.
+    fn completed_filter_applies(&self) -> bool {
+        matches!(self.view, View::Project(_) | View::Folder(_) | View::Tag(_))
+    }
+
+    fn active_filter_count(&self) -> usize {
+        usize::from(self.only_available)
+            + usize::from(self.priority_filter.is_some())
+            + usize::from(self.completed_filter_applies() && self.show_completed)
+    }
+
+    fn filter_is_active(&self) -> bool {
+        self.active_filter_count() > 0
+    }
+
+    /// The Filter chip spells out a lone filter and counts several, so the
+    /// header never grows a chip per filter.
+    fn filter_menu_label(&self) -> String {
+        if !self.filter_is_active() {
+            return "Filter".to_string();
+        }
+        let mut parts = Vec::new();
+        if self.only_available {
+            parts.push("Available".to_string());
+        }
+        if let Some(priority) = self.priority_filter {
+            parts.push(priority.label().to_string());
+        }
+        if self.completed_filter_applies() && self.show_completed {
+            parts.push("Completed".to_string());
+        }
+        if parts.len() == 1 {
+            format!("Filter · {}", parts[0])
+        } else {
+            format!("Filter · {}", self.active_filter_count())
+        }
+    }
+
+    /// Clear Available, Priority and Completed in one step. A Priority view
+    /// only exists while its filter is on, so clearing leaves it for Inbox.
+    fn clear_filters(&mut self, cx: &mut Context<Self>) {
+        if self.priority_filter.is_some() && matches!(self.view, View::Priority(_)) {
+            self.set_view(View::Builtin(BuiltinPerspective::Inbox));
+        }
+        self.only_available = false;
+        self.priority_filter = None;
+        self.show_completed = false;
+        self.remember_view_options();
+        self.save_session();
+        cx.notify();
+    }
+
     fn toggle_show_completed(&mut self, cx: &mut Context<Self>) {
         self.show_completed = !self.show_completed;
         self.remember_view_options();
@@ -4878,10 +5003,6 @@ impl FlowlistApp {
 
     fn choose_sort(&mut self, sort: Option<SortBy>, cx: &mut Context<Self>) {
         self.sort = sort;
-        self.sort_menu_open = false;
-        self.group_menu_open = false;
-        self.priority_menu_open = false;
-        self.layout_menu_open = false;
         self.remember_view_options();
         self.save_session();
         cx.notify();
@@ -4889,10 +5010,6 @@ impl FlowlistApp {
 
     fn choose_group(&mut self, group: Option<GroupBy>, cx: &mut Context<Self>) {
         self.group = group;
-        self.group_menu_open = false;
-        self.sort_menu_open = false;
-        self.priority_menu_open = false;
-        self.layout_menu_open = false;
         self.remember_view_options();
         self.save_session();
         cx.notify();
@@ -4940,10 +5057,6 @@ impl FlowlistApp {
     /// only makes sense while its filter is active, so it follows the choice.
     fn choose_priority_filter(&mut self, priority: Option<Priority>, cx: &mut Context<Self>) {
         self.priority_filter = priority;
-        self.priority_menu_open = false;
-        self.layout_menu_open = false;
-        self.sort_menu_open = false;
-        self.group_menu_open = false;
         if let View::Priority(_) = self.view {
             match priority {
                 Some(priority) => self.set_view(View::Priority(priority)),
@@ -5485,10 +5598,8 @@ impl FlowlistApp {
         self.view_boxes.borrow_mut().clear();
         self.settings_toggle_boxes.borrow_mut().clear();
         self.modal_scroll.set_offset(point(px(0.), px(0.)));
-        self.sort_menu_open = false;
-        self.group_menu_open = false;
-        self.priority_menu_open = false;
-        self.layout_menu_open = false;
+        self.view_menu_open = false;
+        self.filter_menu_open = false;
         self.sidebar_menu = None;
         self.focus = FocusArea::Modal;
         // A sheet belongs to the window rather than a field session, so the
@@ -7155,18 +7266,14 @@ impl FlowlistApp {
                 }
             }
             "escape" => {
-                if self.sort_menu_open
-                    || self.group_menu_open
-                    || self.priority_menu_open
-                    || self.layout_menu_open
+                if self.view_menu_open
+                    || self.filter_menu_open
                     || self.notification_menu.is_some()
                     || self.repeat_menu.is_some()
                     || self.sidebar_menu.is_some()
                 {
-                    self.sort_menu_open = false;
-                    self.group_menu_open = false;
-                    self.priority_menu_open = false;
-                    self.layout_menu_open = false;
+                    self.view_menu_open = false;
+                    self.filter_menu_open = false;
                     self.notification_menu = None;
                     self.repeat_menu = None;
                     self.sidebar_menu = None;
@@ -7299,18 +7406,14 @@ impl FlowlistApp {
                 // before the plain key map, so without this the menus would
                 // stay open while the selection cleared underneath them.
                 self.vim.reset();
-                if self.sort_menu_open
-                    || self.group_menu_open
-                    || self.priority_menu_open
-                    || self.layout_menu_open
+                if self.view_menu_open
+                    || self.filter_menu_open
                     || self.notification_menu.is_some()
                     || self.repeat_menu.is_some()
                     || self.sidebar_menu.is_some()
                 {
-                    self.sort_menu_open = false;
-                    self.group_menu_open = false;
-                    self.priority_menu_open = false;
-                    self.layout_menu_open = false;
+                    self.view_menu_open = false;
+                    self.filter_menu_open = false;
                     self.notification_menu = None;
                     self.repeat_menu = None;
                     self.sidebar_menu = None;
@@ -8513,15 +8616,16 @@ impl FlowlistApp {
             "density": self.density.slug(),
             "hidden_fields": self.hidden_fields.iter().cloned().collect::<Vec<_>>(),
             "columns": self.columns.iter().cloned().collect::<Vec<_>>(),
-            "sort_menu": self.sort_menu_open,
-            "group_menu": self.group_menu_open,
-            "priority_menu": self.priority_menu_open,
-            "layout_menu": self.layout_menu_open,
-            "sort_anchor": self.sort_anchor.get().is_some(),
-            "group_anchor": self.group_anchor.get().is_some(),
-            "priority_anchor": self.priority_anchor.get().is_some(),
-            "layout_anchor": self.layout_anchor.get().is_some(),
-            "layout_boxes": self.layout_boxes.borrow().clone(),
+            "header_view_menu": self.view_menu_open,
+            "header_filter_menu": self.filter_menu_open,
+            "header_view_tab": self.view_menu_tab.slug(),
+            "header_view_label": self.view_menu_label(),
+            "header_filter_label": self.filter_menu_label(),
+            "header_active_filters": self.active_filter_count(),
+            "header_view_anchor": self.view_anchor.get().is_some(),
+            "header_filter_anchor": self.filter_anchor.get().is_some(),
+            "header_view_boxes": self.header_view_boxes.borrow().clone(),
+            "header_filter_boxes": self.header_filter_boxes.borrow().clone(),
             "due_anchor": anchor(self.due_anchor.get()),
             "defer_anchor": anchor(self.defer_anchor.get()),
             "planned_anchor": anchor(self.planned_anchor.get()),
@@ -9747,10 +9851,8 @@ impl Render for FlowlistApp {
                 MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
                     // A new click starts a new mouse-up lifecycle.
-                    this.sort_closed_on_up = false;
-                    this.group_closed_on_up = false;
-                    this.priority_closed_on_up = false;
-                    this.layout_closed_on_up = false;
+                    this.view_closed_on_up = false;
+                    this.filter_closed_on_up = false;
                     this.suppress_hover_tip();
                     window.focus(&this.focus_handle);
                     cx.notify();
@@ -9782,10 +9884,8 @@ impl Render for FlowlistApp {
         root = root.child(self.render_status(window, cx));
         // Any open dropdown gets a full-window scrim, so a click anywhere
         // closes it instead of leaving an orphan menu behind.
-        if self.sort_menu_open
-            || self.group_menu_open
-            || self.priority_menu_open
-            || self.layout_menu_open
+        if self.view_menu_open
+            || self.filter_menu_open
             || self.notification_menu.is_some()
             || self.repeat_menu.is_some()
             || self.sidebar_menu.is_some()
@@ -9804,14 +9904,10 @@ impl Render for FlowlistApp {
                     .on_mouse_up(
                         MouseButton::Left,
                         cx.listener(|this, _, _, cx| {
-                            this.sort_closed_on_up = this.sort_menu_open;
-                            this.group_closed_on_up = this.group_menu_open;
-                            this.priority_closed_on_up = this.priority_menu_open;
-                            this.layout_closed_on_up = this.layout_menu_open;
-                            this.sort_menu_open = false;
-                            this.group_menu_open = false;
-                            this.priority_menu_open = false;
-                            this.layout_menu_open = false;
+                            this.view_closed_on_up = this.view_menu_open;
+                            this.filter_closed_on_up = this.filter_menu_open;
+                            this.view_menu_open = false;
+                            this.filter_menu_open = false;
                             this.notification_menu = None;
                             this.repeat_menu = None;
                             this.sidebar_menu = None;
@@ -9822,10 +9918,8 @@ impl Render for FlowlistApp {
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(|this, _, _, cx| {
-                            this.sort_menu_open = false;
-                            this.group_menu_open = false;
-                            this.priority_menu_open = false;
-                            this.layout_menu_open = false;
+                            this.view_menu_open = false;
+                            this.filter_menu_open = false;
                             this.notification_menu = None;
                             this.repeat_menu = None;
                             this.sidebar_menu = None;
@@ -9842,64 +9936,34 @@ impl Render for FlowlistApp {
         // measured on the previous frame, so their hitboxes are exactly where
         // they paint.
         let viewport = self.window_size.unwrap_or((1254.0, 1404.0));
-        if self.sort_menu_open
-            && let Some(anchor) = self.sort_anchor.get()
+        if self.view_menu_open
+            && let Some(anchor) = self.view_anchor.get()
         {
-            let (x, y) = menu_position(anchor, viewport, 160.0, 250.0);
+            let (x, y) = menu_position(anchor, viewport, 360.0, 390.0);
             root = root.child(fade_in(
-                "sort-menu-fade",
+                "view-menu-fade",
                 div()
-                    .id("sort-menu-layer")
+                    .id("view-menu-layer")
                     .absolute()
                     .occlude()
                     .left(px(x))
                     .top(px(y))
-                    .child(self.render_sort_menu(cx)),
+                    .child(self.render_view_popover(cx)),
             ));
         }
-        if self.group_menu_open
-            && let Some(anchor) = self.group_anchor.get()
+        if self.filter_menu_open
+            && let Some(anchor) = self.filter_anchor.get()
         {
-            let (x, y) = menu_position(anchor, viewport, 160.0, 250.0);
+            let (x, y) = menu_position(anchor, viewport, 230.0, 260.0);
             root = root.child(fade_in(
-                "group-menu-fade",
+                "filter-menu-fade",
                 div()
-                    .id("group-menu-layer")
+                    .id("filter-menu-layer")
                     .absolute()
                     .occlude()
                     .left(px(x))
                     .top(px(y))
-                    .child(self.render_group_menu(cx)),
-            ));
-        }
-        if self.priority_menu_open
-            && let Some(anchor) = self.priority_anchor.get()
-        {
-            let (x, y) = menu_position(anchor, viewport, 150.0, 160.0);
-            root = root.child(fade_in(
-                "priority-menu-fade",
-                div()
-                    .id("priority-menu-layer")
-                    .absolute()
-                    .occlude()
-                    .left(px(x))
-                    .top(px(y))
-                    .child(self.render_priority_menu(cx)),
-            ));
-        }
-        if self.layout_menu_open
-            && let Some(anchor) = self.layout_anchor.get()
-        {
-            let (x, y) = menu_position(anchor, viewport, 340.0, 390.0);
-            root = root.child(fade_in(
-                "layout-menu-fade",
-                div()
-                    .id("layout-menu-layer")
-                    .absolute()
-                    .occlude()
-                    .left(px(x))
-                    .top(px(y))
-                    .child(self.render_layout_menu(cx)),
+                    .child(self.render_filter_menu(cx)),
             ));
         }
         if let Some(target) = self.notification_menu.clone()

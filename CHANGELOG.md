@@ -4,9 +4,13 @@
 
 ### What's new
 
-- **Per-view row layouts.** A new **Layout** menu beside Sort and Group gives
-  every view its own choice of **Fluid** rows, the existing wrapped layout, or
-  **Columns**, one line per task. The choice is remembered per perspective.
+- **A leaner content toolbar.** Sort, Group and Layout now share one **View**
+  popover, and Available, Priority and Completed share one **Filter** popover.
+  The header keeps two chips instead of five, and each chip summarizes what is
+  active. Context actions such as Hide past, Calendar and Planned stay inline.
+- **Per-view row layouts.** The **View** popover gives every view its own
+  choice of **Fluid** rows, the existing wrapped layout, or **Columns**, one
+  line per task. The choice is remembered per perspective.
 - **Fluid density and fields.** Fluid rows can stay **Comfortable** or switch
   to **Compact**, and each view can hide project, dates, tags, estimate,
   checklist, attachments or the flag. The title, completion circle, subtask

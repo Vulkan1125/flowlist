@@ -122,11 +122,12 @@ still a gap.
 
 ### Dropdown menus and the new-project prompt
 
-Sort, Group and Layout open a menu under their chip, and the inspector's
-project picker opens once you type. Clicking anywhere outside closes them, and
-`Esc` does the same. The Layout menu keeps itself open while mode, density,
-field and column choices are toggled, so several changes can be made in one
-visit. When a typed project path does not exist, a Create project
+The **View** chip opens Sort, Group and Layout tabs under one popover, and
+**Filter** collects Available, Priority and Completed. Clicking anywhere
+outside closes either menu, and `Esc` does the same. Both keep themselves open
+while choices change, so several changes can be made in one visit. The View
+chip names the active sort/group/layout and the Filter chip names a lone filter
+or counts several; the × on the Filter chip clears them. When a typed project path does not exist, a Create project
 sheet asks first: `Enter` creates the project and files the task, `Esc` leaves
 the task unchanged.
 
@@ -191,10 +192,10 @@ field. The time starts at the library's default due/defer time (9 AM when none
 is set) and is only written on Done or Enter, so backing out leaves the stored
 stamp alone.
 
-Toolbar chips (`Sort`, `Group`, `Layout`, `Completed`, `Priority`) and project
-status and type chips are labelled buttons rather than icon-only controls, so
-they work with the mouse and are described by their text. Their tooltips add
-detail about what a click does.
+Toolbar chips (`View`, `Filter`, `Completed`, `Priority`) and project status
+and type chips are labelled buttons rather than icon-only controls, so they
+work with the mouse and are described by their text. Their tooltips add detail
+about what a click does. The small × that clears filters has its own tooltip.
 
 Trash is an ordinary perspective in the same keyboard model. `Delete` moves
 selected tasks to Trash everywhere except inside Trash, where it permanently
