@@ -57,6 +57,7 @@ fn single_word_rule(text: &str) -> Option<(u32, IntervalUnit)> {
     let (every, unit) = match text.split_whitespace().next()? {
         "daily" => (1, IntervalUnit::Days),
         "weekly" => (1, IntervalUnit::Weeks),
+        "hourly" => (1, IntervalUnit::Hours),
         "monthly" => (1, IntervalUnit::Months),
         "yearly" | "annually" => (1, IntervalUnit::Years),
         _ => return None,
@@ -83,6 +84,8 @@ fn parse_interval(text: &str) -> Result<(u32, IntervalUnit)> {
         .copied()
         .ok_or_else(|| Error::invalid("repeat rule is missing a unit"))?;
     let unit = match unit_token.trim_end_matches('s') {
+        "minute" => IntervalUnit::Minutes,
+        "hour" => IntervalUnit::Hours,
         "day" => IntervalUnit::Days,
         "week" => IntervalUnit::Weeks,
         "month" => IntervalUnit::Months,
@@ -107,6 +110,22 @@ mod tests {
         let rule = parse_repeat("daily", now).unwrap();
         assert_eq!(rule.unit, IntervalUnit::Days);
         assert_eq!(rule.every, 1);
+    }
+
+    #[test]
+    fn parses_sub_day_intervals() {
+        let now = Utc::now();
+        let rule = parse_repeat("every 30 minutes", now).unwrap();
+        assert_eq!(rule.every, 30);
+        assert_eq!(rule.unit, IntervalUnit::Minutes);
+
+        let rule = parse_repeat("hourly", now).unwrap();
+        assert_eq!(rule.every, 1);
+        assert_eq!(rule.unit, IntervalUnit::Hours);
+
+        let rule = parse_repeat("every 2 hours", now).unwrap();
+        assert_eq!(rule.every, 2);
+        assert_eq!(rule.unit, IntervalUnit::Hours);
     }
 
     #[test]
