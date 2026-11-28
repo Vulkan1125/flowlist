@@ -283,6 +283,8 @@ fun MainScreen(
     onMoreConsumed: () -> Unit = {},
     initialCapture: Boolean = false,
     onCaptureConsumed: () -> Unit = {},
+    initialDueNow: List<String> = emptyList(),
+    onDueNowConsumed: () -> Unit = {},
     preferences: AppPreferences,
     onPreferencesChange: (AppPreferences) -> Unit,
 ) {
@@ -318,6 +320,7 @@ fun MainScreen(
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var search by rememberSaveable { mutableStateOf(false) }
     var detail by remember { mutableStateOf<TaskView?>(null) }
+    var dueNowIds by remember { mutableStateOf(initialDueNow) }
     var project by remember { mutableStateOf<ProjectDto?>(null) }
     var moreView by remember { mutableStateOf<MoreView?>(null) }
     var settingsSection by rememberSaveable { mutableStateOf<String?>(null) }
@@ -338,6 +341,12 @@ fun MainScreen(
             offlineWarning = true
         } else {
             offlineWarning = false
+        }
+    }
+    LaunchedEffect(initialDueNow) {
+        if (initialDueNow.isNotEmpty()) {
+            dueNowIds = initialDueNow
+            onDueNowConsumed()
         }
     }
     LaunchedEffect(initialMore) {
@@ -1234,6 +1243,21 @@ fun MainScreen(
             )
         }
         }
+    }
+
+    if (dueNowIds.isNotEmpty()) {
+        val dueNowTasks = dueNowIds.mapNotNull { id ->
+            snapshot?.db?.let { db -> dueTaskView(db, id, state.pending) }
+        }
+        DueNowSheet(
+            tasks = dueNowTasks,
+            onDismiss = { dueNowIds = emptyList() },
+            onToggle = { task -> complete(task, !task.completed) },
+            onClick = { task ->
+                detail = task
+                dueNowIds = emptyList()
+            },
+        )
     }
 
     project?.let { value ->
@@ -2946,6 +2970,75 @@ private fun ProjectSheet(
             }
         }
     }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun DueNowSheet(
+    tasks: List<TaskView>,
+    onDismiss: () -> Unit,
+    onToggle: (TaskView) -> Unit,
+    onClick: (TaskView) -> Unit,
+) {
+    val colors = flow
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheet,
+        containerColor = colors.background,
+        dragHandle = { SheetHandle() },
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 28.dp)) {
+            Text(
+                text = "Due now",
+                style = MaterialTheme.typography.headlineMedium,
+                color = colors.ink,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            Text(
+                text = if (tasks.size == 1) "1 reminder" else "${tasks.size} reminders",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.faint,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            tasks.forEach { task ->
+                TaskRow(task = task, onToggle = { onToggle(task) }, onClick = { onClick(task) })
+                Hairline(Modifier.padding(start = 58.dp))
+            }
+        }
+    }
+}
+
+/// Build a normal task row for the Due now sheet from the batch ids.
+private fun dueTaskView(db: Db, id: String, pending: Set<String>): TaskView? {
+    val task = db.tasks[id] ?: return null
+    if (!task.isActive) return null
+    val project = task.project?.let { db.projects[it] }
+    return TaskView(
+        id = task.id,
+        title = task.title,
+        notes = task.notes,
+        projectName = project?.name,
+        projectId = task.project,
+        parent = task.parent,
+        tags = task.tags.mapNotNull { db.tags[it]?.name },
+        due = task.due,
+        defer = task.defer,
+        planned = task.planned,
+        flagged = task.flagged,
+        fullscreenReminder = task.fullscreenReminder,
+        reminderAt = task.reminderAt,
+        reminderMatchDue = task.reminderMatchDue,
+        priority = task.priority,
+        completed = task.completed,
+        pending = task.id in pending,
+        checklistDone = task.checklist.count { it.completed },
+        checklistTotal = task.checklist.size,
+        estimateMin = task.estimateMin,
+        createdAt = task.createdAt,
+        blockedByTag = db.tagBlocking(task)?.name,
+    )
 }
 
 @Composable

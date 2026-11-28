@@ -192,9 +192,10 @@ integrations are tracked separately and are not part of this phase.
       and Snooze buttons. Snooze uses the saved length, reschedules the alarm,
       dismisses the other device and closes the reminder.
 - [x] **Simultaneous reminders** — tasks due together merge into one card
-      that says how many are due, with a read-only **View all** list and one
-      **Dismiss all** button. Later alarms stay silent and there is no
-      per-task marking on the batch card.
+      that says how many are due, with a read-only **View all** list, **Open
+      Flowlist** for a Due now page inside the app, and one **Dismiss all**
+      button. Later alarms stay silent and there is no per-task marking on the
+      batch card.
 - [x] **Media pause stays FSR-only** — the Pause media switch applies to
       full-screen reminders only; regular due summaries never take audio focus.
       There is no per-reminder override.

@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
     private var shared by mutableStateOf<SharedPayload?>(null)
     private var openMore by mutableStateOf<String?>(null)
     private var openCapture by mutableStateOf(false)
+    private var dueNowIds by mutableStateOf<List<String>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity() {
         openTab = intent.getStringExtra("tab")
         openMore = intent.getStringExtra("more")
         openCapture = intent?.getBooleanExtra("capture", false) == true
+        dueNowIds = intent?.getStringArrayListExtra("due_task_ids")?.toList().orEmpty()
         shared = sharedPayload(intent)
         setContent {
             FlowlistApp(
@@ -64,6 +66,8 @@ class MainActivity : ComponentActivity() {
                 onMoreConsumed = { openMore = null },
                 initialCapture = openCapture,
                 onCaptureConsumed = { openCapture = false },
+                initialDueNow = dueNowIds,
+                onDueNowConsumed = { dueNowIds = emptyList() },
             )
         }
     }
@@ -74,6 +78,7 @@ class MainActivity : ComponentActivity() {
         openTab = intent.getStringExtra("tab")
         openMore = intent.getStringExtra("more")
         openCapture = intent.getBooleanExtra("capture", false)
+        dueNowIds = intent.getStringArrayListExtra("due_task_ids")?.toList().orEmpty()
         shared = sharedPayload(intent)
     }
 
@@ -146,6 +151,8 @@ private fun FlowlistApp(
     onMoreConsumed: () -> Unit = {},
     initialCapture: Boolean = false,
     onCaptureConsumed: () -> Unit = {},
+    initialDueNow: List<String> = emptyList(),
+    onDueNowConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val repository = remember {
@@ -210,6 +217,8 @@ private fun FlowlistApp(
                 onMoreConsumed = onMoreConsumed,
                 initialCapture = initialCapture,
                 onCaptureConsumed = onCaptureConsumed,
+                initialDueNow = initialDueNow,
+                onDueNowConsumed = onDueNowConsumed,
                 preferences = preferences,
                 onPreferencesChange = {
                     preferencesStore.save(it)

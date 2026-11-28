@@ -181,7 +181,7 @@ class ReminderOverlayService :
     }
 
     /// Dismiss the whole batch (and the Mac's matching reminders).
-    private fun dismissBatch() {
+    private fun dismissBatch(open: Boolean = false) {
         val all = buildList {
             current?.let { add(it) }
             addAll(pending)
@@ -195,6 +195,15 @@ class ReminderOverlayService :
         all.forEach { NotificationManagerCompat.from(this).cancel(it.id.hashCode()) }
         CoroutineScope(Dispatchers.IO).launch {
             all.forEach { repository.dismissReminder(it.id) }
+        }
+        if (open) {
+            startActivity(
+                Intent(this, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra("tab", "today")
+                    putStringArrayListExtra("due_task_ids", ArrayList(all.map { it.id }))
+                },
+            )
         }
         stopSelf()
     }
@@ -272,6 +281,7 @@ class ReminderOverlayService :
                                 count = batchCount.value,
                                 lightContent = lightContent,
                                 onViewAll = { showBatchList.value = true },
+                                onOpen = { dismissBatch(open = true) },
                                 onDismiss = { dismissBatch() },
                             )
                         }

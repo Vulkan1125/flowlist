@@ -53,6 +53,7 @@ internal fun ReminderBatchScreen(
     count: Int,
     lightContent: Boolean,
     onViewAll: () -> Unit,
+    onOpen: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = flow
@@ -91,17 +92,33 @@ internal fun ReminderBatchScreen(
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.weight(1.1f))
-            Text(
-                text = "View all",
-                color = ink,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(percent = 50))
-                    .background(ink.copy(alpha = 0.14f))
-                    .clickable(onClick = onViewAll)
-                    .padding(horizontal = 22.dp, vertical = 11.dp),
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "View all",
+                    color = ink,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(ink.copy(alpha = 0.10f))
+                        .clickable(onClick = onViewAll)
+                        .padding(horizontal = 20.dp, vertical = 11.dp),
+                )
+                Text(
+                    text = "Open Flowlist",
+                    color = ink,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(ink.copy(alpha = 0.16f))
+                        .clickable(onClick = onOpen)
+                        .padding(horizontal = 20.dp, vertical = 11.dp),
+                )
+            }
         }
     }
 }
