@@ -9,14 +9,31 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import dev.flowlist.android.data.TaskView
 
-enum class TaskDropKind { Nest, RootAfter }
+enum class TaskDropKind {
+    /// Put the task under the target row.
+    Nest,
+
+    /// Put the task beside the target row, before or after it.
+    Before,
+    After,
+
+    /// File the task at the end of a project, a tag or the Inbox.
+    Project,
+    Tag,
+    Inbox,
+
+    /// Dropped on the shelf's "Choose" chip; the app opens a picker.
+    ChooseProject,
+    ChooseTag,
+}
 
 data class TaskDropTarget(val kind: TaskDropKind, val id: String)
 
 /**
  * Shared drag state for the task lists. Each row records its painted bounds;
  * the dragged row follows the finger and the row under the pointer decides
- * whether a release nests the task or moves it to the project root.
+ * whether a release nests the task, places it beside a sibling, files it into
+ * a project or the Inbox, or adds a tag.
  */
 class TaskDragController {
     var dragging: TaskView? by mutableStateOf(null)
@@ -57,20 +74,36 @@ class TaskDragController {
         dragging = null
         offset = Offset.Zero
         target = null
+        // Drop-shelf chips only exist while the shelf is on screen.
+        bounds.keys.filterNot { it.startsWith("task:") }.forEach { bounds.remove(it) }
     }
 
     private fun hitTest(point: Offset): TaskDropTarget? {
+        // The shelf and destination chips paint over the rows, so they win.
+        bounds.forEach { (key, rect) ->
+            if (!rect.contains(point)) return@forEach
+            when {
+                key.startsWith("project:") -> return TaskDropTarget(
+                    TaskDropKind.Project,
+                    key.removePrefix("project:"),
+                )
+                key.startsWith("tag:") -> return TaskDropTarget(
+                    TaskDropKind.Tag,
+                    key.removePrefix("tag:"),
+                )
+                key == "inbox" -> return TaskDropTarget(TaskDropKind.Inbox, "inbox")
+                key == "choose-project" -> return TaskDropTarget(TaskDropKind.ChooseProject, "")
+                key == "choose-tag" -> return TaskDropTarget(TaskDropKind.ChooseTag, "")
+            }
+        }
         bounds.forEach { (key, rect) ->
             if (!key.startsWith("task:") || !rect.contains(point)) return@forEach
             val id = key.removePrefix("task:")
-            // The bottom third of a root row is the "move out to the root"
-            // zone; the rest of a row is a nest target.
-            val root = roots.containsKey(id)
-            val rootZone = root && point.y >= rect.bottom - rect.height * 0.45f
-            return if (rootZone) {
-                TaskDropTarget(TaskDropKind.RootAfter, id)
-            } else {
-                TaskDropTarget(TaskDropKind.Nest, id)
+            val zone = (point.y - rect.top) / rect.height
+            return when {
+                zone <= 0.22f -> TaskDropTarget(TaskDropKind.Before, id)
+                zone >= 0.75f -> TaskDropTarget(TaskDropKind.After, id)
+                else -> TaskDropTarget(TaskDropKind.Nest, id)
             }
         }
         return null

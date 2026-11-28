@@ -717,6 +717,26 @@ class Repository(context: Context) {
         sync()
     }
 
+    suspend fun addTagToTask(taskId: String, tagId: String) {
+        val snapshot = _state.value.snapshot ?: return
+        val task = snapshot.db.tasks[taskId] ?: return
+        if (tagId in task.tags) return
+        val updatedTask = task.copy(tags = task.tags + tagId)
+        val updated = snapshot.copy(
+            db = snapshot.db.copy(tasks = snapshot.db.tasks + (taskId to updatedTask)),
+        )
+        _state.update { it.copy(snapshot = updated) }
+        persist(updated)
+        enqueue(
+            PendingOp(
+                id = "op_${UUID.randomUUID()}",
+                command = setTagsCommand(taskId, listOf(tagId), emptyList()),
+                label = task.title,
+            ),
+        )
+        sync()
+    }
+
     suspend fun moveTask(taskId: String, placement: JsonObject) {
         val title = _state.value.snapshot?.db?.tasks?.get(taskId)?.title.orEmpty()
         enqueue(

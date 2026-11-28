@@ -332,6 +332,9 @@ fun MainScreen(
     var selecting by rememberSaveable { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var batchEditing by remember { mutableStateOf(false) }
+    var dragPickerTask by remember { mutableStateOf<TaskView?>(null) }
+    var dragProjectPicker by remember { mutableStateOf(false) }
+    var dragTagPicker by remember { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf(false) }
     var detail by remember { mutableStateOf<TaskView?>(null) }
     var dueNowIds by remember { mutableStateOf(initialDueNow) }
@@ -468,26 +471,89 @@ fun MainScreen(
     val taskDrag = remember { TaskDragController() }
     taskDrag.onDrop = { task, drop ->
         val db = state.snapshot?.db
-        if (db != null && task.id != drop.id && !isTaskDescendant(db, task.id, drop.id)) {
-            when (drop.kind) {
-                TaskDropKind.Nest -> {
-                    taskDrag.revealed[drop.id] = true
-                    scope.launch {
-                        repository.moveTask(
-                            task.id,
-                            parentPlacement(drop.id, JsonPrimitive("end")),
-                        )
-                    }
+        when (drop.kind) {
+            TaskDropKind.ChooseProject -> {
+                dragPickerTask = task
+                dragProjectPicker = true
+            }
+            TaskDropKind.ChooseTag -> {
+                dragPickerTask = task
+                dragTagPicker = true
+            }
+            TaskDropKind.Project -> {
+                val name = db?.projects?.get(drop.id)?.name.orEmpty()
+                scope.launch {
+                    repository.moveTask(
+                        task.id,
+                        projectPlacement(drop.id, JsonPrimitive("end")),
+                    )
+                    toasts.show(
+                        message = if (name.isBlank()) "Moved to project" else "Moved to “$name”",
+                        actionLabel = "Undo",
+                        duration = SnackbarDuration.Long,
+                        onAction = { scope.launch { repository.undo() } },
+                    )
                 }
-                TaskDropKind.RootAfter -> {
-                    val target = db.tasks[drop.id]
-                    val position = buildJsonObject { put("after", drop.id) }
-                    val placement = if (target?.project != null) {
-                        projectPlacement(target.project, position)
-                    } else {
-                        inboxPlacement(position)
+            }
+            TaskDropKind.Tag -> {
+                val name = db?.tags?.get(drop.id)?.name.orEmpty()
+                scope.launch {
+                    repository.addTagToTask(task.id, drop.id)
+                    toasts.show(
+                        message = if (name.isBlank()) "Tag added" else "Tagged #$name",
+                        actionLabel = "Undo",
+                        duration = SnackbarDuration.Long,
+                        onAction = { scope.launch { repository.undo() } },
+                    )
+                }
+            }
+            TaskDropKind.Inbox -> {
+                scope.launch {
+                    repository.moveTask(task.id, inboxPlacement(JsonPrimitive("end")))
+                    toasts.show(
+                        message = "Moved to Inbox",
+                        actionLabel = "Undo",
+                        duration = SnackbarDuration.Long,
+                        onAction = { scope.launch { repository.undo() } },
+                    )
+                }
+            }
+            TaskDropKind.Nest,
+            TaskDropKind.Before,
+            TaskDropKind.After,
+            -> {
+                if (db != null && task.id != drop.id &&
+                    !isTaskDescendant(db, task.id, drop.id)
+                ) {
+                    when (drop.kind) {
+                        TaskDropKind.Nest -> {
+                            taskDrag.revealed[drop.id] = true
+                            scope.launch {
+                                repository.moveTask(
+                                    task.id,
+                                    parentPlacement(drop.id, JsonPrimitive("end")),
+                                )
+                            }
+                        }
+                        TaskDropKind.Before, TaskDropKind.After -> {
+                            val target = db.tasks[drop.id]
+                            val position = buildJsonObject {
+                                put(
+                                    if (drop.kind == TaskDropKind.Before) "before" else "after",
+                                    drop.id,
+                                )
+                            }
+                            val placement = when {
+                                target?.parent != null ->
+                                    parentPlacement(target.parent, position)
+                                target?.project != null ->
+                                    projectPlacement(target.project, position)
+                                else -> inboxPlacement(position)
+                            }
+                            scope.launch { repository.moveTask(task.id, placement) }
+                        }
+                        else -> Unit
                     }
-                    scope.launch { repository.moveTask(task.id, placement) }
                 }
             }
         }
@@ -771,7 +837,7 @@ fun MainScreen(
             }
         },
         floatingActionButton = {
-            if (tab != Tab.Settings) {
+            if (tab != Tab.Settings && taskDrag.dragging == null) {
                 FloatingActionButton(
                     onClick = {
                     if (preferences.haptics) {
@@ -851,11 +917,12 @@ fun MainScreen(
                         .background(colors.hairline),
                 )
             }
-            Column(
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
             ) {
+            Column(modifier = Modifier.fillMaxSize()) {
             val activeMore = moreView
             val activeSaved = savedPerspective
             val activeProject = project?.let { known ->
@@ -1199,6 +1266,25 @@ fun MainScreen(
                 )
             }
         }
+            if (taskDrag.dragging != null) {
+                TaskDragShelf(
+                    projects = snapshot?.db?.projects?.values
+                        ?.filter {
+                            !it.archived &&
+                                (it.status == "active" || it.status == "on_hold")
+                        }
+                        ?.sortedBy { it.name.lowercase() }
+                        .orEmpty(),
+                    tags = snapshot?.db?.tags?.values
+                        ?.sortedBy { it.name.lowercase() }
+                        .orEmpty(),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 12.dp),
+                )
+            }
+            }
     }
     }
     }
@@ -1474,6 +1560,97 @@ fun MainScreen(
             tasks = dueNowTasks,
             onDismiss = { dueNowIds = emptyList() },
             onToggle = { task -> complete(task, !task.completed) },
+        )
+    }
+
+    if (dragProjectPicker) {
+        val folders = snapshot?.db?.folders?.values?.toList().orEmpty()
+        val folderNames = folders.associate { it.id to it.name }
+        val options = buildList {
+            add("inbox" to "Inbox")
+            snapshot?.db?.projects?.values
+                ?.filter { !it.archived && (it.status == "active" || it.status == "on_hold") }
+                ?.sortedBy { it.name.lowercase() }
+                ?.forEach { project ->
+                    val label = project.folder?.let { folderNames[it] }?.let {
+                        "$it / ${project.name}"
+                    } ?: project.name
+                    add(project.id to label)
+                }
+        }
+        DragPickerSheet(
+            title = "Move to project",
+            options = options,
+            onDismiss = {
+                dragProjectPicker = false
+                dragPickerTask = null
+            },
+            onPick = { id ->
+                dragProjectPicker = false
+                val task = dragPickerTask
+                dragPickerTask = null
+                if (task != null) {
+                    scope.launch {
+                        if (id == "inbox") {
+                            repository.moveTask(task.id, inboxPlacement(JsonPrimitive("end")))
+                            toasts.show(
+                                message = "Moved to Inbox",
+                                actionLabel = "Undo",
+                                duration = SnackbarDuration.Long,
+                                onAction = { scope.launch { repository.undo() } },
+                            )
+                        } else {
+                            val name = snapshot?.db?.projects?.get(id)?.name.orEmpty()
+                            repository.moveTask(
+                                task.id,
+                                projectPlacement(id, JsonPrimitive("end")),
+                            )
+                            toasts.show(
+                                message = if (name.isBlank()) {
+                                    "Moved to project"
+                                } else {
+                                    "Moved to “$name”"
+                                },
+                                actionLabel = "Undo",
+                                duration = SnackbarDuration.Long,
+                                onAction = { scope.launch { repository.undo() } },
+                            )
+                        }
+                    }
+                }
+            },
+        )
+    }
+
+    if (dragTagPicker) {
+        val options = snapshot?.db?.tags?.values
+            ?.sortedBy { it.name.lowercase() }
+            ?.map { it.id to "#${it.name}" }
+            .orEmpty()
+        DragPickerSheet(
+            title = "Add tag",
+            options = options,
+            onDismiss = {
+                dragTagPicker = false
+                dragPickerTask = null
+            },
+            onPick = { id ->
+                dragTagPicker = false
+                val task = dragPickerTask
+                dragPickerTask = null
+                if (task != null) {
+                    val name = snapshot?.db?.tags?.get(id)?.name.orEmpty()
+                    scope.launch {
+                        repository.addTagToTask(task.id, id)
+                        toasts.show(
+                            message = if (name.isBlank()) "Tag added" else "Tagged #$name",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Long,
+                            onAction = { scope.launch { repository.undo() } },
+                        )
+                    }
+                }
+            },
         )
     }
 

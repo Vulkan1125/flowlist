@@ -191,9 +191,13 @@ yellow for medium and blue for low. A flagged task shows a single flag at the
 far right of its row; priorities never add their own flag.
 
 Subtasks start collapsed. Tap the chevron at the right of a parent row to open
-or close its children. Long-press a task to drag it: drop it on another task to
-nest it, or on the lower half of a root task to move it back to the project
-root at that position. The whole row tints while it is the target.
+or close its children. Long-press a task to drag it: the middle of another row
+nests it, the top edge places it before that sibling and the bottom edge places
+it after, so root tasks and subtasks reorder in manual order. While dragging, a
+shelf at the bottom offers **Inbox**, project and tag targets plus **Choose
+project…** and **Choose tag…** lists for the rest, since the phone has no
+visible sidebar during a drag. A project move, Inbox move or tag add shows a
+snackbar Undo. The whole row tints while it is the target.
 
 
 Settings → About → **Check for updates** reads the latest GitHub release and

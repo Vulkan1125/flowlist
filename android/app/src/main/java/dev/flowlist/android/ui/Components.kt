@@ -424,7 +424,7 @@ fun TaskTreeItem(
     val nestTarget = drop?.kind == TaskDropKind.Nest &&
         drop.id == task.id &&
         drag?.dragging?.id != task.id
-    val rootTarget = drop?.kind == TaskDropKind.RootAfter &&
+    val rootTarget = (drop?.kind == TaskDropKind.Before || drop?.kind == TaskDropKind.After) &&
         drop.id == task.id &&
         drag?.dragging?.id != task.id
     val dragging = drag?.dragging?.id == task.id

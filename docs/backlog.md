@@ -263,9 +263,11 @@ integrations are tracked separately and are not part of this phase.
       project, add/remove tags, due/defer/planned, priority, flag and estimate.
       Only filled fields apply, tag paths keep their parents, and the whole
       edit is one undoable step.
-- [ ] **Drag into projects, tags and sibling positions** — phone drag only
-      nests or moves a task to the project root. Match the Mac's drops onto
-      projects, tags, parents and between siblings in manual order.
+- [x] **Drag into projects, tags and sibling positions** — dropping on the
+      top or bottom edge of a task places it before or after that sibling,
+      including subtasks in manual order; the middle still nests. A drop shelf
+      appears while dragging with Inbox, project and tag targets plus
+      choosers, so projects and tags are reachable without the Mac sidebar.
 - [x] **Built-in view filters** — the header filter menu adds **Available
       only** and All/High/Medium/Low priority filters to Inbox, Today,
       Forecast, the task-based More lists, saved views and project pages.

@@ -47,6 +47,11 @@
   project (including Inbox), add or remove tags with parent paths, due, defer
   and planned dates, priority, flag and estimate. Only filled fields apply,
   the list updates immediately, and the snackbar undoes the whole batch.
+- **Drag targets.** Dragging a task now places it before or after a sibling,
+  including subtasks in manual order, while the middle of a row still nests.
+  A drop shelf appears during the drag with Inbox, project and tag targets and
+  choosers, so a task can be filed without the Mac sidebar. Moves and tag adds
+  undo from the snackbar.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.
