@@ -2702,7 +2702,8 @@ private fun BrowseList(
     val db = snapshot?.db
     val projects = db?.projects?.values.orEmpty()
     val folders = db?.folders?.values.orEmpty()
-    val entries = remember(snapshot) {
+    var collapsedFolders by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val entries = remember(snapshot, collapsedFolders) {
         val open = projects
             .filter { !it.archived && (it.status == "active" || it.status == "on_hold") }
             .sortedBy { it.name.lowercase() }
@@ -2715,7 +2716,9 @@ private fun BrowseList(
             }
             orderedFolders.filter { it.parent == folderId }.forEach { folder ->
                 rows += BrowseEntry.Folder(folder, depth)
-                rows += collect(folder.id, depth + 1)
+                if (folder.id !in collapsedFolders) {
+                    rows += collect(folder.id, depth + 1)
+                }
             }
             return rows
         }
@@ -2782,13 +2785,39 @@ private fun BrowseList(
                                 ),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            val collapsed = entry.folder.id in collapsedFolders
+                            IconButton(
+                                onClick = {
+                                    collapsedFolders = if (collapsed) {
+                                        collapsedFolders - entry.folder.id
+                                    } else {
+                                        collapsedFolders + entry.folder.id
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp),
+                            ) {
+                                Icon(
+                                    imageVector = if (collapsed) {
+                                        Icons.Rounded.ChevronRight
+                                    } else {
+                                        Icons.Rounded.ExpandMore
+                                    },
+                                    contentDescription = if (collapsed) {
+                                        "Expand folder"
+                                    } else {
+                                        "Collapse folder"
+                                    },
+                                    tint = colors.faint,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                             Icon(
                                 imageVector = Icons.Outlined.FolderOpen,
                                 contentDescription = null,
                                 tint = colors.faint,
                                 modifier = Modifier.size(18.dp),
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = entry.folder.name,
                                 style = MaterialTheme.typography.bodyMedium,

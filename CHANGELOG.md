@@ -17,6 +17,10 @@
 - **Project attachments.** The Android project editor lists project files and
   links, adds files through the shared upload path, adds named links, and
   removes either before saving.
+- **Editor and Browse polish.** Folders fold from their chevron in Browse, the
+  project icon grid stays collapsed until the current icon is tapped, tags wrap
+  instead of running under the switches, and every editor switch is right
+  aligned with the same accent colours.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.

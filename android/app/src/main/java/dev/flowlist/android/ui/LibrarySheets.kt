@@ -44,6 +44,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -140,6 +142,13 @@ fun ProjectEditorSheet(
     onDelete: (() -> Unit)?,
 ) {
     val colors = flow
+    val switchColors = SwitchDefaults.colors(
+        checkedThumbColor = colors.onAccent,
+        checkedTrackColor = colors.accent,
+        uncheckedThumbColor = colors.faint,
+        uncheckedTrackColor = colors.field,
+        uncheckedBorderColor = colors.hairline,
+    )
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val project = target.project
     var name by remember(project?.id) { mutableStateOf(project?.name.orEmpty()) }
@@ -166,6 +175,7 @@ fun ProjectEditorSheet(
     var selectedTags by remember(project?.id) {
         mutableStateOf(project?.tags?.toSet().orEmpty())
     }
+    var iconPickerOpen by remember { mutableStateOf(false) }
     var dateTarget by remember { mutableStateOf("due") }
     var showDateSheet by remember { mutableStateOf(false) }
     var dateError by remember { mutableStateOf<String?>(null) }
@@ -252,32 +262,70 @@ fun ProjectEditorSheet(
             }
 
             LibraryLabel("Icon")
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { iconPickerOpen = !iconPickerOpen }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                projectIconChoices.forEach { (slug, label) ->
-                    val chosen = iconSlug == slug
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (chosen) colors.field else colors.background)
-                            .border(
-                                1.dp,
-                                if (chosen) colors.accent else colors.hairline,
-                                RoundedCornerShape(10.dp),
+                Icon(
+                    imageVector = projectIcon(iconSlug),
+                    contentDescription = "Current icon",
+                    tint = colors.accent,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = projectIconChoices.firstOrNull { it.first == iconSlug }?.second
+                        ?: "Project",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.ink,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = if (iconPickerOpen) {
+                        Icons.Rounded.ExpandLess
+                    } else {
+                        Icons.Rounded.ExpandMore
+                    },
+                    contentDescription = if (iconPickerOpen) "Hide icons" else "Change icon",
+                    tint = colors.faint,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            if (iconPickerOpen) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    projectIconChoices.forEach { (slug, label) ->
+                        val chosen = iconSlug == slug
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (chosen) colors.field else colors.background)
+                                .border(
+                                    1.dp,
+                                    if (chosen) colors.accent else colors.hairline,
+                                    RoundedCornerShape(10.dp),
+                                )
+                                .clickable {
+                                    iconSlug = slug
+                                    iconPickerOpen = false
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = projectIcon(slug),
+                                contentDescription = label,
+                                tint = if (chosen) colors.accent else colors.faint,
+                                modifier = Modifier.size(20.dp),
                             )
-                            .clickable { iconSlug = slug },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = projectIcon(slug),
-                            contentDescription = label,
-                            tint = if (chosen) colors.accent else colors.faint,
-                            modifier = Modifier.size(20.dp),
-                        )
+                        }
                     }
                 }
             }
@@ -337,11 +385,10 @@ fun ProjectEditorSheet(
                             color = colors.faint,
                         )
                     } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             tags.sortedBy { it.name.lowercase() }.forEach { tag ->
                                 LibraryPill(tag.name, tag.id in selectedTags) {
@@ -459,6 +506,7 @@ fun ProjectEditorSheet(
                         Switch(
                             checked = completeWithLastAction,
                             onCheckedChange = { completeWithLastAction = it },
+                            colors = switchColors,
                         )
                     }
                     if (project != null) {
@@ -481,27 +529,29 @@ fun ProjectEditorSheet(
                             Switch(
                                 checked = archived,
                                 onCheckedChange = { archived = it },
+                                colors = switchColors,
                             )
                         }
                     }
-                    LibraryLabel("Full-screen reminder")
-                    Text(
-                        text = "Take over the screen when a task in this project is due.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.faint,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            LibraryLabel("Full-screen reminder")
+                            Text(
+                                text = "Take over the screen when a task in this project is due.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.faint,
+                            )
+                        }
+                        Switch(
+                            checked = fullscreenReminder,
+                            onCheckedChange = { fullscreenReminder = it },
+                            colors = switchColors,
+                        )
+                    }
                 }
-                Switch(
-                    checked = fullscreenReminder,
-                    onCheckedChange = { fullscreenReminder = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = colors.onAccent,
-                        checkedTrackColor = colors.accent,
-                        uncheckedThumbColor = colors.faint,
-                        uncheckedTrackColor = colors.field,
-                        uncheckedBorderColor = colors.hairline,
-                    ),
-                )
             }
 
             if (project != null) {
