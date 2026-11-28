@@ -424,19 +424,21 @@ fn menu_position(
     )
 }
 
-/// Center a dropdown under its chip. The trigger keeps a fixed width, so the
-/// card stays put; the viewport clamps still keep a wide card on screen when
-/// the chip sits near an edge.
-fn menu_position_center(
+/// Right-anchor a dropdown to its chip with a small inset. The trigger keeps a
+/// fixed width, so the card stays put; the inset keeps the card from sitting
+/// flush against the chip's edge while the viewport clamps still protect a
+/// card near the window edge.
+fn menu_position_right(
     anchor: Bounds<gpui::Pixels>,
     viewport: (f32, f32),
     width: f32,
     height: f32,
 ) -> (f32, f32) {
-    let center = f32::from(anchor.origin.x) + f32::from(anchor.size.width) / 2.0;
+    const INSET: f32 = 8.0;
+    let right = f32::from(anchor.origin.x) + f32::from(anchor.size.width) - INSET;
     let y = f32::from(anchor.origin.y) + f32::from(anchor.size.height) + 4.0;
     (
-        (center - width / 2.0)
+        (right - width)
             .min((viewport.0 - width).max(0.0))
             .max(0.0),
         y.min((viewport.1 - height).max(0.0)).max(0.0),
@@ -9950,7 +9952,7 @@ impl Render for FlowlistApp {
         if self.view_menu_open
             && let Some(anchor) = self.view_anchor.get()
         {
-            let (x, y) = menu_position_center(anchor, viewport, 360.0, 390.0);
+            let (x, y) = menu_position_right(anchor, viewport, 360.0, 390.0);
             root = root.child(fade_in(
                 "view-menu-fade",
                 div()
@@ -9965,7 +9967,7 @@ impl Render for FlowlistApp {
         if self.filter_menu_open
             && let Some(anchor) = self.filter_anchor.get()
         {
-            let (x, y) = menu_position_center(anchor, viewport, 230.0, 260.0);
+            let (x, y) = menu_position_right(anchor, viewport, 230.0, 260.0);
             root = root.child(fade_in(
                 "filter-menu-fade",
                 div()
@@ -10433,7 +10435,7 @@ mod tests {
     use super::{
         DATE_PICKER_HEIGHT, DATE_PICKER_WIDTH, DateField, View, accent_for, clock_dial_position,
         clock_hour_12, clock_hour_24, date_picker_position, effective_priority_filter,
-        first_of_month, menu_position_center, picker_default_time, picker_stamp, stepped_time,
+        first_of_month, menu_position_right, picker_default_time, picker_stamp, stepped_time,
     };
     use chrono::{NaiveDate, NaiveTime};
     use flowlist_core::model::{BuiltinPerspective, Priority};
@@ -10684,14 +10686,15 @@ mod tests {
     }
 
     #[test]
-    fn header_cards_center_under_their_chip() {
-        // A 64px View chip centred at 1000: the 360px card is centred too.
+    fn header_cards_right_anchor_with_an_inset() {
+        // A 64px View chip ending at x=1190: the 360px card ends 8px inside
+        // that edge, leaving a little air beside the chip.
         let anchor = Bounds {
-            origin: point(px(968.0), px(60.0)),
+            origin: point(px(1126.0), px(60.0)),
             size: size(px(64.0), px(26.0)),
         };
-        let (x, y) = menu_position_center(anchor, (1254.0, 1000.0), 360.0, 390.0);
-        assert_eq!(x, 1000.0 - 180.0);
+        let (x, y) = menu_position_right(anchor, (1254.0, 1000.0), 360.0, 390.0);
+        assert_eq!(x, 1190.0 - 8.0 - 360.0);
         assert_eq!(y, 90.0);
 
         // A card wider than the space to the left clamps to the window edge.
@@ -10700,7 +10703,7 @@ mod tests {
             size: size(px(64.0), px(26.0)),
         };
         assert_eq!(
-            menu_position_center(left, (1254.0, 1000.0), 360.0, 390.0).0,
+            menu_position_right(left, (1254.0, 1000.0), 360.0, 390.0).0,
             0.0
         );
 
@@ -10710,7 +10713,7 @@ mod tests {
             size: size(px(64.0), px(26.0)),
         };
         assert_eq!(
-            menu_position_center(right, (1254.0, 1000.0), 360.0, 390.0).0,
+            menu_position_right(right, (1254.0, 1000.0), 360.0, 390.0).0,
             1254.0 - 360.0
         );
     }

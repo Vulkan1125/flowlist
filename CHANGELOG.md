@@ -25,9 +25,9 @@
 ### Bug fixes
 
 - **Header cards stay put.** The View and Filter chips keep a fixed width, and
-  their cards open centered under them. The active sort, grouping, layout and
-  filters now live inside the cards, so the toolbar never shifts as the view
-  changes.
+  their cards open against the chip's right edge with a small inset. The
+  active sort, grouping, layout and filters now live inside the cards, so the
+  toolbar never shifts as the view changes.
 
 ## 0.10.3 — 2026-11-28
 
