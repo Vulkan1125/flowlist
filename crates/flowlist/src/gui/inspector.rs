@@ -2369,7 +2369,7 @@ impl FlowlistApp {
                 match &end {
                     RepeatEnd::Never => "Never".to_string(),
                     RepeatEnd::OnDate(_) => "On date".to_string(),
-                    RepeatEnd::AfterCount(_) => "After N".to_string(),
+                    RepeatEnd::AfterCount(_) => "After N times".to_string(),
                 },
                 "repeat-end-toggle",
                 RepeatMenu::End,
@@ -2501,9 +2501,10 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
-        let anchor = self.repeat_menu_anchor.clone();
+        let anchors = self.repeat_menu_anchors.clone();
         let probe_boxes = self.notification_boxes.clone();
         let menu_id = id.clone();
+        let menu_key = menu.slug();
         div()
             .flex()
             .flex_col()
@@ -2516,9 +2517,10 @@ impl FlowlistApp {
             )
             .child(
                 div()
+                    .w_full()
                     .on_children_prepainted(move |bounds, _, _| {
                         if let Some(bounds) = bounds.first() {
-                            anchor.set(Some(*bounds));
+                            anchors.borrow_mut().insert(menu_key.to_string(), *bounds);
                             probe_boxes.borrow_mut().insert(
                                 probe_key.to_string(),
                                 [
@@ -2530,26 +2532,30 @@ impl FlowlistApp {
                             );
                         }
                     })
-                    .id(super::sid(probe_key))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .h(px(28.))
-                    .px_2()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(theme.border)
-                    .bg(theme.field)
-                    .text_sm()
-                    .text_color(theme.text)
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .child(current)
-                    .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.repeat_menu = Some((menu_id.clone(), menu));
-                        cx.notify();
-                    })),
+                    .child(
+                        div()
+                            .id(super::sid(probe_key))
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .w_full()
+                            .h(px(28.))
+                            .px_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(theme.border)
+                            .bg(theme.field)
+                            .text_sm()
+                            .text_color(theme.text)
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover))
+                            .child(current)
+                            .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.repeat_menu = Some((menu_id.clone(), menu));
+                                cx.notify();
+                            })),
+                    ),
             )
     }
 
@@ -2561,7 +2567,7 @@ impl FlowlistApp {
     ) -> impl IntoElement {
         let theme = self.theme;
         let current_pattern = rule.as_ref().and_then(|rule| rule.pattern);
-        let anchor = self.repeat_menu_anchor.clone();
+        let anchors = self.repeat_menu_anchors.clone();
         let probe_boxes = self.notification_boxes.clone();
         let menu_id = id.clone();
         let current_label = repeat_pattern_label(current_pattern);
@@ -2588,9 +2594,12 @@ impl FlowlistApp {
             )
             .child(
                 div()
+                    .w_full()
                     .on_children_prepainted(move |bounds, _, _| {
                         if let Some(bounds) = bounds.first() {
-                            anchor.set(Some(*bounds));
+                            anchors
+                                .borrow_mut()
+                                .insert(RepeatMenu::Pattern.slug().to_string(), *bounds);
                             probe_boxes.borrow_mut().insert(
                                 "repeat-pattern-toggle".to_string(),
                                 [
@@ -2602,26 +2611,30 @@ impl FlowlistApp {
                             );
                         }
                     })
-                    .id("repeat-pattern-toggle")
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .h(px(28.))
-                    .px_2()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(theme.border)
-                    .bg(theme.field)
-                    .text_sm()
-                    .text_color(theme.text)
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .child(current_label)
-                    .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.repeat_menu = Some((menu_id.clone(), RepeatMenu::Pattern));
-                        cx.notify();
-                    })),
+                    .child(
+                        div()
+                            .id("repeat-pattern-toggle")
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .w_full()
+                            .h(px(28.))
+                            .px_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(theme.border)
+                            .bg(theme.field)
+                            .text_sm()
+                            .text_color(theme.text)
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover))
+                            .child(current_label)
+                            .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.repeat_menu = Some((menu_id.clone(), RepeatMenu::Pattern));
+                                cx.notify();
+                            })),
+                    ),
             );
         if let Some(explanation) = explanation {
             container = container.child(
@@ -2681,7 +2694,7 @@ impl FlowlistApp {
                 .on_click(cx.listener(|this, _, _, cx| this.begin_edit(EditField::Repeat, cx)))
                 .into_any_element()
         };
-        let anchor = self.repeat_menu_anchor.clone();
+        let anchors = self.repeat_menu_anchors.clone();
         let probe_boxes = self.notification_boxes.clone();
         let unit_id = id.clone();
         let unit_label = interval_unit_label(unit);
@@ -2697,9 +2710,13 @@ impl FlowlistApp {
             .child(number)
             .child(
                 div()
+                    .flex()
+                    .h_full()
                     .on_children_prepainted(move |bounds, _, _| {
                         if let Some(bounds) = bounds.first() {
-                            anchor.set(Some(*bounds));
+                            anchors
+                                .borrow_mut()
+                                .insert(RepeatMenu::Unit.slug().to_string(), *bounds);
                             probe_boxes.borrow_mut().insert(
                                 "repeat-unit-toggle".to_string(),
                                 [
@@ -2711,24 +2728,27 @@ impl FlowlistApp {
                             );
                         }
                     })
-                    .id("repeat-unit-toggle")
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .h_full()
-                    .px_2()
-                    .border_l_1()
-                    .border_color(theme.border)
-                    .text_sm()
-                    .text_color(theme.text_dim)
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .child(unit_label)
-                    .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.repeat_menu = Some((unit_id.clone(), RepeatMenu::Unit));
-                        cx.notify();
-                    })),
+                    .child(
+                        div()
+                            .id("repeat-unit-toggle")
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .h_full()
+                            .px_2()
+                            .border_l_1()
+                            .border_color(theme.border)
+                            .text_sm()
+                            .text_color(theme.text_dim)
+                            .cursor_pointer()
+                            .hover(|style| style.bg(theme.hover))
+                            .child(unit_label)
+                            .child(icons::icon(Icon::ChevronDown, 10.0, theme.text_faint))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.repeat_menu = Some((unit_id.clone(), RepeatMenu::Unit));
+                                cx.notify();
+                            })),
+                    ),
             )
     }
 
@@ -2839,7 +2859,7 @@ impl FlowlistApp {
         let theme = self.theme;
         let on_choose = std::rc::Rc::new(on_choose);
         let mut menu = div()
-            .min_w(px(170.))
+            .w_full()
             .flex()
             .flex_col()
             .gap(px(1.))
@@ -2999,7 +3019,11 @@ impl FlowlistApp {
         };
         let id = id.clone();
         self.render_repeat_choice_menu(
-            &[("never", "Never"), ("date", "On date"), ("count", "After N")],
+            &[
+                ("never", "Never"),
+                ("date", "On date"),
+                ("count", "After N times"),
+            ],
             selected,
             "repeat-end",
             move |this, index, cx| {
@@ -3053,7 +3077,7 @@ impl FlowlistApp {
         };
         let weekday_name = repeat_weekday_label(display_weekday);
         let mut menu = div()
-            .min_w(px(190.))
+            .w_full()
             .flex()
             .flex_col()
             .gap(px(1.))
@@ -3129,7 +3153,7 @@ impl FlowlistApp {
             .map(|rule| rule.unit)
             .unwrap_or(IntervalUnit::Weeks);
         let mut menu = div()
-            .min_w(px(120.))
+            .w_full()
             .flex()
             .flex_col()
             .gap(px(1.))

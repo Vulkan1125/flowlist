@@ -161,7 +161,7 @@ wait_state date_picker_open 'd is None'
 wait_repeat "d[\"repeat\"].endswith(\"until $day\")"
 echo "   calendar picked $day and the rule ends there"
 
-echo "3. After N accepts a typed count"
+echo "3. After N times accepts a typed count"
 click_box notification_boxes repeat-end-toggle
 click_box notification_boxes repeat-end-option:count
 wait_repeat '"for 3 times" in d["repeat"]'
@@ -189,4 +189,4 @@ click_box notification_boxes repeat-end-option:never
 wait_repeat 'd["repeat"] == "every week"'
 echo "   end cleared"
 
-echo "PASS: repeat Ends controls write Never, On date and After N"
+echo "PASS: repeat Ends controls write Never, On date and After N times"

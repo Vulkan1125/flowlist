@@ -311,7 +311,7 @@ library:
 - `scripts/gui/quick-capture-probe.sh` covers Inbox versus scheduled capture,
   focus restoration, and the panel's floating layer.
 - `scripts/gui/repeat-ends-probe.sh` opens the inspector's Ends dropdown and
-  chooses Never, On date and After N, confirms the calendar applies the picked
+  chooses Never, On date and After N times, confirms the calendar applies the picked
   day, types the After count into its input box, and checks every rule through
   the CLI.
 - `scripts/gui/forecast-probe.sh` covers the merged Forecast calendar.

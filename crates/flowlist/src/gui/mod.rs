@@ -771,9 +771,9 @@ pub struct FlowlistApp {
     notification_menu: Option<NotificationTarget>,
     notification_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     /// The open repeat dropdown (unit, pattern, mode, schedule or ends) and
-    /// the button it points at.
+    /// the button each control points at.
     repeat_menu: Option<(TaskId, RepeatMenu)>,
-    repeat_menu_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    repeat_menu_anchors: Rc<RefCell<BTreeMap<String, Bounds<gpui::Pixels>>>>,
     /// A click's mouse-up closed the sort or group menu. The chip under the
     /// same click must not immediately reopen it.
     sort_closed_on_up: bool,
@@ -1321,7 +1321,7 @@ impl FlowlistApp {
             notification_menu: None,
             notification_anchor: Rc::new(Cell::new(None)),
             repeat_menu: None,
-            repeat_menu_anchor: Rc::new(Cell::new(None)),
+            repeat_menu_anchors: Rc::new(RefCell::new(BTreeMap::new())),
             theme_on_open: None,
             plain_accent_light,
             plain_accent_dark,
@@ -9781,12 +9781,22 @@ impl Render for FlowlistApp {
             ));
         }
         if let Some((id, menu)) = self.repeat_menu.clone()
-            && let Some(anchor) = self.repeat_menu_anchor.get()
+            && let Some(anchor) = self
+                .repeat_menu_anchors
+                .borrow()
+                .get(menu.slug())
+                .copied()
         {
-            let (width, height) = match menu {
-                RepeatMenu::Unit => (130.0, 190.0),
-                RepeatMenu::Pattern => (190.0, 260.0),
-                RepeatMenu::Mode | RepeatMenu::Schedule | RepeatMenu::End => (170.0, 170.0),
+            let height = match menu {
+                RepeatMenu::Unit => 190.0,
+                RepeatMenu::Pattern => 260.0,
+                RepeatMenu::Mode | RepeatMenu::Schedule | RepeatMenu::End => 170.0,
+            };
+            // Match the trigger box exactly, with a readable floor for the
+            // compact unit button inside the interval bar.
+            let width = match menu {
+                RepeatMenu::Unit => f32::from(anchor.size.width).max(130.0),
+                _ => f32::from(anchor.size.width),
             };
             let (x, y) = menu_position(anchor, viewport, width, height);
             let (fade_id, layer_id) = match menu {
@@ -9811,6 +9821,7 @@ impl Render for FlowlistApp {
                     .occlude()
                     .left(px(x))
                     .top(px(y))
+                    .w(px(width))
                     .child(contents),
             ));
         }

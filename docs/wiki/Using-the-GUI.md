@@ -139,7 +139,8 @@ leaving the list.
   with an editable number and a minutes/hours/day/week/month/year dropdown, and
   dropdowns for **Schedule the next** (**Due Date** or **Defer Until Date**),
   **Repeat from** (**Completion** or **Assigned Dates**) and **Ends**
-  (**Never**, **On date** or **After N**). When the unit is **Days**, a single
+  (**Never**, **On date** or **After N times**). When the unit is **Days**, a
+  single
   Sunday-to-Saturday row appears. Leave it clear to repeat every day; select
   S/M/T/W/T/F/S to repeat only those weekdays. When weekdays are selected the
   interval bar shows a greyed-out “custom”. **Minutes** and **Hours** move the
@@ -149,7 +150,7 @@ leaving the list.
   on** dropdown offers **Same date**, full choices such as **1st Monday**
   through **5th Monday**, or **Last weekend day**, and selecting an nth weekday
   reveals a **Weekday** row plus a line explaining the exact result. **On
-  date** opens the calendar under the date box; **After N** shows a typed
+  date** opens the calendar under the date box; **After N times** shows a typed
   **After** box and **times** label. The summary line beneath says the result
   in plain words, such as “Every Monday and Wednesday, from the assigned
   dates, scheduling the next due date.” It also names the count already done

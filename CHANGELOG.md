@@ -8,7 +8,8 @@
   30 minutes` or `every 2 hours` in the CLI, MCP server and both editors. The
   clock moves across midnight and after-completion rules count from the moment
   the task is completed. Fixed schedules keep the wall-clock time, and an
-  **After N** ending projects the last date with the clock change included.
+  **After N times** ending projects the last date with the clock change
+  included.
 - **Time-first errors name the date.** A sub-day rule needs a time on its due
   or defer anchor. Picking **Minutes** or **Hours** on a date-only task is
   refused by the shared command layer with **Add a time to the due date first**
@@ -24,8 +25,9 @@
   parser all understand the pattern.
 - **Compact Mac repeat controls.** **Schedule the next**, **Repeat from** and
   **Ends** are now dropdowns instead of segmented chip rows. Choosing **After
-  N** shows a typed **After** input box rather than −/+ stepper buttons, so the
-  whole Repeat section stays compact and the count can be entered directly.
+  N times** shows a typed **After** input box rather than −/+ stepper buttons,
+  so the whole Repeat section stays compact and the count can be entered
+  directly.
 - **Parser and row metadata.** `every month on the third Thursday` and
   `every 2 months on the last weekend day` parse to the same `RepeatRule`, and
   the Android row label now names minutes and hours instead of treating every
