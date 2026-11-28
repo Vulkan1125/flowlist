@@ -13,6 +13,7 @@ cargo build --release
 scripts/gui-smoke.sh
 scripts/gui/forecast-probe.sh
 scripts/gui/quick-capture-probe.sh
+scripts/gui/repeat-ends-probe.sh
 scripts/gui/settings-probe.sh
 ```
 
@@ -309,6 +310,9 @@ library:
   the Inbox.
 - `scripts/gui/quick-capture-probe.sh` covers Inbox versus scheduled capture,
   focus restoration, and the panel's floating layer.
+- `scripts/gui/repeat-ends-probe.sh` clicks the inspector's Ends row through
+  Never, On date and After N, confirms the calendar applies the picked day,
+  steps the count up and down, and checks every rule through the CLI.
 - `scripts/gui/forecast-probe.sh` covers the merged Forecast calendar.
 - `scripts/gui/archive-probe.sh` checks Archive grouping, Reopen, Delete with
   its confirmation sheet, Undo, row opening and the empty state.
