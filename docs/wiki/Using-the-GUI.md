@@ -143,7 +143,8 @@ leaving the list.
   repeat only those weekdays. When weekdays are selected the interval bar shows
   a greyed-out “custom”. The line beneath says the result in plain words, such
   as “Every Monday and Wednesday, from the assigned dates, scheduling the next
-  due date.”
+  due date.” An **Ends** row sets **Never**, **On date** (opening the calendar
+  under the date box) or **After N** times with a −/+ stepper.
 - **Tags** is its own section above Notifications, with a bordered chip box and
   a `+` control. Clicking the box or `+` opens the add field; Enter adds the
   tag. **Notes & Attachments** sits in the old Tags position, before Dates.
