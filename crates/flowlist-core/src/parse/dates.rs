@@ -151,6 +151,7 @@ fn parse_date_tokens(tokens: &[String], today: NaiveDate) -> Option<NaiveDate> {
             }
             let unit = unit_from_token(&tokens[2])?;
             return Some(match unit {
+                IntervalUnit::Minutes | IntervalUnit::Hours => return None,
                 IntervalUnit::Days => today + Duration::days(count),
                 IntervalUnit::Weeks => today + Duration::days(count * 7),
                 IntervalUnit::Months => add_interval(today, count as u32, IntervalUnit::Months),

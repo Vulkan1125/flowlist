@@ -96,6 +96,8 @@ fn segmented_row(
 
 fn interval_unit_label(unit: IntervalUnit) -> &'static str {
     match unit {
+        IntervalUnit::Minutes => "Minutes",
+        IntervalUnit::Hours => "Hours",
         IntervalUnit::Days => "Days",
         IntervalUnit::Weeks => "Weeks",
         IntervalUnit::Months => "Months",
@@ -105,6 +107,8 @@ fn interval_unit_label(unit: IntervalUnit) -> &'static str {
 
 fn interval_unit_slug(unit: IntervalUnit) -> &'static str {
     match unit {
+        IntervalUnit::Minutes => "minutes",
+        IntervalUnit::Hours => "hours",
         IntervalUnit::Days => "days",
         IntervalUnit::Weeks => "weeks",
         IntervalUnit::Months => "months",

@@ -209,6 +209,8 @@ pub fn start_of_week(date: NaiveDate, week_starts_on: Weekday) -> NaiveDate {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum IntervalUnit {
+    Minutes,
+    Hours,
     Days,
     Weeks,
     Months,
@@ -218,6 +220,8 @@ pub enum IntervalUnit {
 impl IntervalUnit {
     pub fn label(self, every: u32) -> String {
         let unit = match self {
+            IntervalUnit::Minutes => "minute",
+            IntervalUnit::Hours => "hour",
             IntervalUnit::Days => "day",
             IntervalUnit::Weeks => "week",
             IntervalUnit::Months => "month",
@@ -235,6 +239,8 @@ impl IntervalUnit {
 pub fn add_interval(date: NaiveDate, every: u32, unit: IntervalUnit) -> NaiveDate {
     let every = every.max(1);
     match unit {
+        // Sub-day units need a clock time; date-only rules never reach here.
+        IntervalUnit::Minutes | IntervalUnit::Hours => date,
         IntervalUnit::Days => date + Duration::days(every as i64),
         IntervalUnit::Weeks => date + Duration::days(every as i64 * 7),
         IntervalUnit::Months => date.checked_add_months(Months::new(every)).unwrap_or(date),
