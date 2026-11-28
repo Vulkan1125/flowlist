@@ -201,7 +201,8 @@ deletes it and moves its tasks to Trash.
 
 The project editor also opens from the pencil beside a project's name. Status
 choices are Active, On Hold, Done and Dropped; Done and Dropped leave Browse
-and appear in Archive.
+and appear in Archive. **Complete with last action** marks the project done
+when its last task is ticked.
 
 **Tags** has a New tag row. Each tag's menu renames or re-parents it, or
 deletes it from every task and project. Tag names and sibling uniqueness follow
