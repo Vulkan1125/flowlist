@@ -142,6 +142,9 @@ internal val LowPriorityBlue = androidx.compose.ui.graphics.Color(0xFF3B82F6)
 class TaskSelection(val ids: Set<String>, val toggle: (String) -> Unit)
 val LocalTaskSelection = compositionLocalOf<TaskSelection?> { null }
 
+/// Settings → Tasks can hide the metadata line under each task title.
+val LocalShowRowMetadata = compositionLocalOf { true }
+
 /// One segment of a row's metadata line: text, or a glyph the Mac also draws
 /// (the defer mark and the repeat arrow).
 private sealed interface DetailPart {
@@ -322,7 +325,7 @@ fun TaskRow(
                 if (task.estimateMin != null) add(DetailPart.Label("${task.estimateMin}m", colors.faint))
                 if (task.tags.isNotEmpty()) add(DetailPart.Label(task.tags.joinToString(" ") { "#$it" }, colors.faint))
             }
-            if (details.isNotEmpty()) {
+            if (LocalShowRowMetadata.current && details.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(3.dp))
                 val inline = buildMap {
                     details.forEachIndexed { index, part ->

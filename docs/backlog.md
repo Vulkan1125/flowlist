@@ -292,6 +292,9 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Task row icons** — the row metadata draws the Mac's defer mark before
       an upcoming defer date and the repeat arrow before the rule summary, so
       both stay on the single metadata line and ellipsize with the rest.
+- [x] **Row metadata toggle** — Settings → Tasks → **Rows** hides the project,
+      date, tag and count line under task titles. This is an Android-only
+      density option for now; the Mac's configurable row layout is still open.
 - [ ] **Separate light and dark backgrounds** — the Mac keeps a light and a
       dark wallpaper; the phone has one custom background.
 - [ ] **Import and export** — add JSON/TaskPaper import and TaskPaper export

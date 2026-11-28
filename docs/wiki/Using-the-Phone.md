@@ -106,7 +106,7 @@ Settings is grouped into cards:
 
 - **Appearance** — system/light/dark, theme, accent and launcher icon.
 - **Tasks** — first day of the week, the default time used by the date sheet,
-  haptics and swipe actions.
+  haptics, swipe actions and the row metadata line.
 - **Notifications** — due reminders, permission state and a test notification.
 - **Connection** — the Mac address, live status, last sync, a manual sync and
   unpairing.
@@ -330,7 +330,8 @@ Today and Trash always stay visible; hidden rows and counts also leave the
 bottom bar and tablet rail. On a child page the child's name becomes the main heading and the bottom
 bar steps away, leaving the back arrow and the page content. The header no
 longer carries a gear. **Settings → Tasks → Open on** chooses Inbox, Today,
-Forecast or Library for a normal launch.
+Forecast or Library for a normal launch, and **Rows → Row metadata** can hide
+the project, date, tag and count line under every task title.
 
 Library defaults — review interval, changed window, completed visibility and
 trash retention — write through `update_settings`, so the Mac sees the same

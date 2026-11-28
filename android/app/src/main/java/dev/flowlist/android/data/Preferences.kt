@@ -64,6 +64,8 @@ data class AppPreferences(
     val perspectiveOrder: List<String> = emptyList(),
     /// Hide saved views that match nothing right now. Pinned views stay.
     val hideEmptyViews: Boolean = false,
+    /// Hide the metadata line (project, dates, tags, counts) under task titles.
+    val hideRowMetadata: Boolean = false,
 ) {
     fun sortFor(view: String): String = viewSorts[view] ?: sortBy
 
@@ -168,6 +170,7 @@ class PreferencesStore(context: Context) {
                 .split('|')
                 .filter { it.isNotBlank() },
             hideEmptyViews = prefs.getBoolean("hide_empty_views", false),
+            hideRowMetadata = prefs.getBoolean("hide_row_metadata", false),
         )
     }
 
@@ -213,6 +216,7 @@ class PreferencesStore(context: Context) {
             .putString("available_views", value.availableViews.joinToString("|"))
             .putString("perspective_order", value.perspectiveOrder.joinToString("|"))
             .putBoolean("hide_empty_views", value.hideEmptyViews)
+            .putBoolean("hide_row_metadata", value.hideRowMetadata)
             .apply()
     }
 }

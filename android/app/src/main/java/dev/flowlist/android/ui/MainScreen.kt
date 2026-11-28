@@ -891,6 +891,7 @@ fun MainScreen(
         CompositionLocalProvider(
             LocalTaskDrag provides taskDrag,
             LocalTaskSelection provides selectionState,
+            LocalShowRowMetadata provides !preferences.hideRowMetadata,
         ) {
         Row(
             modifier = Modifier

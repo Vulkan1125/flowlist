@@ -561,6 +561,16 @@ private fun TaskSettings(preferences: AppPreferences, onChange: (AppPreferences)
         }
     }
     Spacer(modifier = Modifier.height(14.dp))
+    SettingsCard("Rows") {
+        ToggleRow(
+            "Row metadata",
+            "Project, dates, tags and counts under each title",
+            !preferences.hideRowMetadata,
+        ) {
+            onChange(preferences.copy(hideRowMetadata = !it))
+        }
+    }
+    Spacer(modifier = Modifier.height(14.dp))
     SettingsCard("Interaction") {
         ToggleRow("Haptics", "A tap when a task is completed", preferences.haptics) {
             onChange(preferences.copy(haptics = it))
