@@ -162,8 +162,13 @@ integrations are tracked separately and are not part of this phase.
       expose the two controls.
 - [ ] **Perspective favourites and navigation** — favourites bar, reorder,
       custom icons/colours, copy-as-link and a per-perspective shortcut.
-- [ ] **Configurable row layout** — per-perspective density, columns and
-      visible fields, without fragmenting the shared visual language.
+- [ ] **Configurable row layout** — two per-perspective modes. **Fluid** keeps rows and lets each view choose its density and
+      visible fields; **Columns** puts each task on one line with Project, Tags,
+      Due and Flag by default and a checklist of other columns. Both persist in
+      the Mac session.
+- [ ] **Columns layout polish** — drag a column edge to resize it, drag headers
+      to reorder columns, and edit the field inside a column cell instead of
+      opening the inspector.
 - [ ] **Rich-text notes** — bold, italics, lists, links and inline images
       alongside the existing plain-text fallback.
 - [x] **Advanced repeat schedules** — minute/hour intervals, nth weekday of a
