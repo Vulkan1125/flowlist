@@ -296,6 +296,39 @@ fun repeatCommand(unit: String): JsonObject = buildJsonObject {
     put("completed_count", 0)
 }
 
+fun repeatRuleJson(
+    mode: String,
+    schedule: String,
+    every: Int,
+    unit: String,
+    endKind: String,
+    endDate: String?,
+    endCount: Int,
+    completedCount: Int,
+    weekdays: JsonElement?,
+): JsonObject = buildJsonObject {
+    put("mode", mode)
+    put("schedule", schedule)
+    put("every", every)
+    put("unit", unit)
+    put(
+        "end",
+        when (endKind) {
+            "on_date" -> buildJsonObject {
+                put("kind", "on_date")
+                put("date", endDate.orEmpty())
+            }
+            "after_count" -> buildJsonObject {
+                put("kind", "after_count")
+                put("date", endCount)
+            }
+            else -> buildJsonObject { put("kind", "never") }
+        },
+    )
+    put("completed_count", completedCount)
+    put("weekdays", weekdays ?: JsonNull)
+}
+
 fun priorityCommand(ids: List<String>, priority: String?, series: Boolean): JsonObject =
     buildJsonObject {
         put(

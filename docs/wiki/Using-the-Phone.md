@@ -46,6 +46,7 @@ Settings has four ways to change the look:
 Tap a task to open the editor. Change the title and notes, then set:
 
 - due, defer and planned dates with Android's date and time pickers (or clear any),
+- repeat rules: an interval, fixed or after-completion, due-again or defer-another, and an end that never stops, stops on a date, or stops after N times,
 - project, priority (H, M or L), the flag and an estimate. The selected pill and the task circle share the priority colour: red for H, yellow for M and blue for L,
 - any existing tag,
 - files through **Add attachment**, and web links through **Add link**.

@@ -234,9 +234,9 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Planned dates** — the task editor now edits the Mac's third date
       alongside due and defer, the row shows it as **Plan …**, and the value
       round-trips through `update_task`.
-- [ ] **Full repeat editor** — the phone only picks a day/week/month/year unit.
-      Add the interval, fixed versus after-completion mode, due-again versus
-      defer-another, and the end date or count.
+- [x] **Full repeat editor** — the phone now edits the interval, fixed versus
+      after-completion mode, due-again versus defer-another, and the end as
+      never, a date or a count, preserving the completed count and weekdays.
 - [ ] **Per-item notifications** — the Mac's task and project notification
       rules (defer, planned, latest start, due; relative and absolute) are
       missing on the phone, which only has the global due summary and

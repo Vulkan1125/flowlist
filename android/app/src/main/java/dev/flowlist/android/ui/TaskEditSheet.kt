@@ -1,5 +1,7 @@
 package dev.flowlist.android.ui
 
+import android.app.DatePickerDialog
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -95,6 +97,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
+import java.time.LocalDate
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -119,7 +123,7 @@ import dev.flowlist.android.data.TaskDto
 import dev.flowlist.android.data.TaskEdit
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import dev.flowlist.android.data.repeatCommand
+import dev.flowlist.android.data.repeatRuleJson
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.isToday
 import dev.flowlist.android.data.label
@@ -258,10 +262,47 @@ fun TaskEditSheet(
     var dateError by remember { mutableStateOf<String?>(null) }
     var pendingSave by remember(task.id) { mutableStateOf<TaskEdit?>(null) }
 
-    val repeatUnit = ((repeat as? JsonObject)?.get("unit") as? JsonPrimitive)?.content
-    fun setRepeat(unit: String?) {
-        repeat = unit?.let { repeatCommand(it) }
+    val repeatObject = repeat as? JsonObject
+    val repeatUnit = (repeatObject?.get("unit") as? JsonPrimitive)?.content
+    val repeatEvery = (repeatObject?.get("every") as? JsonPrimitive)?.content?.toIntOrNull() ?: 1
+    val repeatSchedule = (repeatObject?.get("schedule") as? JsonPrimitive)?.content ?: "fixed"
+    val repeatMode = (repeatObject?.get("mode") as? JsonPrimitive)?.content ?: "due_again"
+    val repeatEndObject = repeatObject?.get("end") as? JsonObject
+    val repeatEndKind = (repeatEndObject?.get("kind") as? JsonPrimitive)?.content ?: "never"
+    val repeatEndValue = (repeatEndObject?.get("date") as? JsonPrimitive)?.content
+    val repeatEndCount = repeatEndValue?.toIntOrNull() ?: 3
+    val repeatCompleted = (repeatObject?.get("completed_count") as? JsonPrimitive)
+        ?.content?.toIntOrNull() ?: 0
+    val repeatWeekdays = repeatObject?.get("weekdays")
+    var showRepeatEndPicker by remember { mutableStateOf(false) }
+
+    fun setRule(
+        unit: String? = repeatUnit,
+        every: Int = repeatEvery,
+        schedule: String = repeatSchedule,
+        mode: String = repeatMode,
+        endKind: String = repeatEndKind,
+        endDate: String? = repeatEndValue,
+        endCount: Int = repeatEndCount,
+    ) {
+        if (unit == null) {
+            repeat = null
+            return
+        }
+        repeat = repeatRuleJson(
+            mode = mode,
+            schedule = schedule,
+            every = every,
+            unit = unit,
+            endKind = endKind,
+            endDate = endDate,
+            endCount = endCount,
+            completedCount = repeatCompleted,
+            weekdays = repeatWeekdays,
+        )
     }
+
+    fun setRepeat(unit: String?) = setRule(unit = unit)
 
     fun submitSubtask() {
         val name = subtaskTitle.trim()
@@ -491,6 +532,177 @@ fun TaskEditSheet(
                 PriorityPill("Weekly", repeatUnit == "weeks", colors.accent) { setRepeat("weeks") }
                 PriorityPill("Monthly", repeatUnit == "months", colors.accent) { setRepeat("months") }
                 PriorityPill("Yearly", repeatUnit == "years", colors.accent) { setRepeat("years") }
+            }
+            if (repeat != null) {
+                val unitLabel = when (repeatUnit) {
+                    "weeks" -> "weeks"
+                    "months" -> "months"
+                    "years" -> "years"
+                    else -> "days"
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Every",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.faint,
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "−",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.accent,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(percent = 50))
+                            .clickable { setRule(every = (repeatEvery - 1).coerceAtLeast(1)) }
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                    Text(
+                        text = repeatEvery.toString(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.ink,
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                    )
+                    Text(
+                        text = "+",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.accent,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(percent = 50))
+                            .clickable { setRule(every = (repeatEvery + 1).coerceAtMost(99)) }
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = unitLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.ink,
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Label("Schedule")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PriorityPill("Fixed", repeatSchedule == "fixed", colors.accent) {
+                        setRule(schedule = "fixed")
+                    }
+                    PriorityPill(
+                        "After completion",
+                        repeatSchedule == "after_completion",
+                        colors.accent,
+                    ) {
+                        setRule(schedule = "after_completion")
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Label("From")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PriorityPill("Due again", repeatMode == "due_again", colors.accent) {
+                        setRule(mode = "due_again")
+                    }
+                    PriorityPill("Defer another", repeatMode == "defer_another", colors.accent) {
+                        setRule(mode = "defer_another")
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Label("Ends")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PriorityPill("Never", repeatEndKind == "never", colors.accent) {
+                        setRule(endKind = "never")
+                    }
+                    PriorityPill("On date", repeatEndKind == "on_date", colors.accent) {
+                        setRule(
+                            endKind = "on_date",
+                            endDate = repeatEndValue ?: LocalDate.now().toString(),
+                        )
+                    }
+                    PriorityPill("After N", repeatEndKind == "after_count", colors.accent) {
+                        setRule(endKind = "after_count")
+                    }
+                }
+                when (repeatEndKind) {
+                    "on_date" -> {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        EditRow(
+                            label = "Repeat ends",
+                            value = repeatEndValue ?: "Choose a date",
+                            valueColor = if (repeatEndValue != null) colors.ink else colors.faint,
+                            clearable = false,
+                            onClear = {},
+                            onClick = { showRepeatEndPicker = true },
+                        )
+                    }
+                    "after_count" -> {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "After",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.faint,
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "−",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = colors.accent,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(percent = 50))
+                                    .clickable {
+                                        setRule(endCount = (repeatEndCount - 1).coerceAtLeast(1))
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                            )
+                            Text(
+                                text = repeatEndCount.toString(),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = colors.ink,
+                                modifier = Modifier.padding(horizontal = 8.dp),
+                            )
+                            Text(
+                                text = "+",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = colors.accent,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(percent = 50))
+                                    .clickable {
+                                        setRule(endCount = (repeatEndCount + 1).coerceAtMost(99))
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "times",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.ink,
+                            )
+                        }
+                    }
+                }
+                if (showRepeatEndPicker) {
+                    val context = LocalContext.current
+                    LaunchedEffect(Unit) {
+                        val initial = repeatEndValue
+                            ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                            ?: LocalDate.now()
+                        val dialog = DatePickerDialog(
+                            context,
+                            { _, year, month, day ->
+                                setRule(
+                                    endKind = "on_date",
+                                    endDate = LocalDate.of(year, month + 1, day).toString(),
+                                )
+                                showRepeatEndPicker = false
+                            },
+                            initial.year,
+                            initial.monthValue - 1,
+                            initial.dayOfMonth,
+                        )
+                        dialog.setOnCancelListener { showRepeatEndPicker = false }
+                        dialog.show()
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))

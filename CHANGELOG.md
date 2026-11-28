@@ -11,6 +11,9 @@
 - **Archive controls.** The Android project editor toggles **Archived**, the
   project menu archives without changing status, and Settings → Library has
   **Archive closed projects**.
+- **Full repeat rules.** The Android task editor now edits the interval,
+  fixed versus after-completion, due-again versus defer-another, and an end
+  date or count, not just the unit.
 
 ### Android reminders
 
