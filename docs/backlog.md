@@ -255,7 +255,10 @@ integrations are tracked separately and are not part of this phase.
       **Completed** and **Available** filters, and project-aware capture.
 - [x] **Folder cells** — tapping anywhere on a folder row folds or opens it,
       not only its chevron.
-- [ ] **Convert task to project** — add the Mac's one-step, undoable convert.
+- [x] **Convert task to project** — the task editor's **Convert to project**
+      turns the task and its subtasks into a project in one undoable step,
+      keeping the folder, notes, tags, dates, attachments and checklist as
+      project tasks. The new project opens immediately.
 - [ ] **Batch edit fields** — phone select mode only completes, trashes or
       purges. Add the Mac's project, tags, defer/planned/due, priority, flag
       and estimate edits as one undo step.

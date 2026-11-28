@@ -28,6 +28,7 @@ import dev.flowlist.android.data.displayTitle
 import dev.flowlist.android.data.normalizeBase
 import dev.flowlist.android.data.projectTaskIds
 import dev.flowlist.android.data.taskViews
+import dev.flowlist.android.data.convertTaskToProjectCommand
 import dev.flowlist.android.data.savePerspectiveCommand
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -160,6 +161,14 @@ class DataTest {
         assertTrue(draft.pinned)
         assertEquals("🏃", draft.icon)
         assertEquals("Today's focus", draft.description)
+    }
+
+    @Test
+    fun the_convert_command_keeps_the_folder_optional() {
+        val command = convertTaskToProjectCommand("task-1").toString()
+        assertTrue(command.contains("\"convert_task_to_project\""))
+        assertTrue(command.contains("\"id\":\"task-1\""))
+        assertTrue(!command.contains("\"folder\""))
     }
 
     @Test

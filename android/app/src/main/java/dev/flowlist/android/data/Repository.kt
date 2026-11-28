@@ -1351,6 +1351,16 @@ class Repository(context: Context) {
         send(deleteProjectCommand(project.id), "Delete project “${project.name}”")
     }
 
+    /// Turn a task and its subtasks into a project in one undoable step. The
+    /// command layer keeps the task's folder, tags, dates, notes and
+    /// attachments, and converts checklist items into project tasks.
+    suspend fun convertToProject(task: TaskView) {
+        send(
+            convertTaskToProjectCommand(task.id),
+            "Convert “${task.title}” to a project",
+        )
+    }
+
     suspend fun createFolder(name: String, parent: String?, fullscreenReminder: Boolean = false) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return

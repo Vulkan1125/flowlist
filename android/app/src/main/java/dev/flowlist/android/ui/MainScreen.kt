@@ -357,6 +357,15 @@ fun MainScreen(
             offlineWarning = false
         }
     }
+    // A project can disappear under an open page (undo, or a delete from the
+    // Mac). Close the stale page instead of showing a ghost.
+    LaunchedEffect(project?.id, state.snapshot?.db?.projects) {
+        val known = project
+        val projects = state.snapshot?.db?.projects
+        if (known != null && projects != null && !projects.containsKey(known.id)) {
+            project = null
+        }
+    }
     LaunchedEffect(initialDueNow) {
         if (initialDueNow.isNotEmpty()) {
             dueNowIds = initialDueNow
@@ -1415,6 +1424,31 @@ fun MainScreen(
                 onComplete = {
                     complete(taskView, !taskView.completed)
                     detail = null
+                },
+                onConvertToProject = {
+                    detail = null
+                    val folder = taskView.projectId
+                        ?.let { id -> db.projects[id]?.folder }
+                    scope.launch {
+                        repository.convertToProject(taskView)
+                        val created = repository.state.value.snapshot?.db?.projects
+                            ?.values
+                            ?.firstOrNull {
+                                it.name == taskView.title && it.folder == folder
+                            }
+                        if (created != null) {
+                            tab = Tab.Browse
+                            moreView = null
+                            savedPerspective = null
+                            project = created
+                        }
+                        toasts.show(
+                            message = "Converted “${taskView.title}” to a project",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Long,
+                            onAction = { scope.launch { repository.undo() } },
+                        )
+                    }
                 },
                 onDelete = {
                     trash(taskView)

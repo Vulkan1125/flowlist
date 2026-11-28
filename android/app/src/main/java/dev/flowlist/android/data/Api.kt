@@ -267,6 +267,17 @@ fun addTaskCommand(title: String, attachments: List<String> = emptyList()): Json
         )
     }
 
+fun convertTaskToProjectCommand(id: String, folder: String? = null): JsonObject =
+    buildJsonObject {
+        put(
+            "convert_task_to_project",
+            buildJsonObject {
+                put("id", id)
+                folder?.let { put("folder", it) }
+            },
+        )
+    }
+
 fun deleteCommand(ids: List<String>): JsonObject = buildJsonObject {
     put(
         "delete_tasks",

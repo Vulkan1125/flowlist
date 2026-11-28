@@ -169,6 +169,7 @@ fun TaskEditSheet(
     onMoveChecklist: (ChecklistDto, Int) -> Unit,
     onDeleteSeries: () -> Unit,
     onComplete: () -> Unit,
+    onConvertToProject: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val colors = flow
@@ -1564,6 +1565,12 @@ fun TaskEditSheet(
                 Text("Save")
             }
             Spacer(modifier = Modifier.height(4.dp))
+            TextButton(
+                onClick = onConvertToProject,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Convert to project", color = colors.accent)
+            }
             TextButton(
                 onClick = { confirmDelete = true },
                 modifier = Modifier.fillMaxWidth(),

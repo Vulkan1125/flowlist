@@ -53,7 +53,10 @@ Tap a task to open the editor. Change the title and notes, then set:
 
 **Save** sends one `update_task` command through the same engine as the Mac, plus a `set_task_tags` command when tags changed. On a repeating task, changing the priority asks whether to apply it to **This task** or **All repeats**; the series choice uses `set_task_priority` with `series: true`.
 
-A defer date after the due date is rejected before saving, with the message under the date rows. Clearing a date, project, estimate or repeat sends an explicit `null`, which now clears that field instead of leaving the old value in place. It works offline: the change waits with the other queued operations and syncs later. Complete and Move to Trash are in the same sheet; the snackbar undoes either.
+A defer date after the due date is rejected before saving, with the message under the date rows. Clearing a date, project, estimate or repeat sends an explicit `null`, which now clears that field instead of leaving the old value in place. It works offline: the change waits with the other queued operations and syncs later. Complete, **Convert to project** and Move to Trash are in the same sheet; the
+snackbar undoes any of them. Converting keeps the task's folder, notes, tags,
+dates and attachments, turns its subtasks and checklist items into project
+tasks, opens the new project, and undoes as one step.
 
 ## Screens
 

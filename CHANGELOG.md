@@ -39,6 +39,10 @@
   priority, and Inbox, Today and the task-based More lists gain per-view
   grouping by project, folder, tag, due, defer, priority, flag, estimate,
   added or completed. Choices are remembered per view.
+- **Convert task to project.** The Android task editor converts a task and
+  its subtasks into a project in one undoable step, keeping the folder, notes,
+  tags, dates, attachments and checklist as project tasks. The new project
+  opens immediately, and the snackbar undoes the whole conversion.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.
