@@ -1,37 +1,31 @@
 # Changelog
 
-## Unreleased
+## 0.10.3 — 2026-11-28
 
-### Advanced repeats
+### What's new
 
-- **Hourly and minute repeats.** A repeat rule can now say `hourly`, `every
-  30 minutes` or `every 2 hours` in the CLI, MCP server and both editors. The
-  clock moves across midnight and after-completion rules count from the moment
-  the task is completed. Fixed schedules keep the wall-clock time, and an
-  **After N times** ending projects the last date with the clock change
-  included.
-- **Time-first errors name the date.** A sub-day rule needs a time on its due
-  or defer anchor. Picking **Minutes** or **Hours** on a date-only task is
-  refused by the shared command layer with **Add a time to the due date first**
-  or **Add a time to the defer date first**, naming the anchor the rule uses;
-  clearing a timed date on an existing sub-day rule is refused too. No guessed
-  time is ever written.
-- **Clearer monthly patterns.** A repeated task can fall on the nth weekday of
-  the month (1st through 5th) or on the last weekend day, every month or every
-  N months. The **Repeat on** dropdown spells out **Same date**, **1st
-  Monday** through **5th Monday** (using the chosen weekday), or **Last weekend
-  day**, with a line explaining the exact result. The Android editor uses the
-  same dropdown wording; row metadata, summaries, projected endings and the
-  parser all understand the pattern.
-- **Compact Mac repeat controls.** **Schedule the next**, **Repeat from** and
-  **Ends** are now dropdowns instead of segmented chip rows. Choosing **After
-  N times** shows a typed **After** input box rather than −/+ stepper buttons,
-  so the whole Repeat section stays compact and the count can be entered
-  directly.
-- **Parser and row metadata.** `every month on the third Thursday` and
-  `every 2 months on the last weekend day` parse to the same `RepeatRule`, and
-  the Android row label now names minutes and hours instead of treating every
-  sub-day rule as a daily one.
+- **Hourly and minute repeats.** Actions can repeat every 30 minutes, every 2
+  hours, or any other minute/hour interval. Repeats keep the wall-clock time,
+  cross midnight correctly, and after-completion repeats continue from the
+  moment you finish.
+- **Monthly patterns.** A repeating action can now land on a chosen weekday
+  (1st Monday through 5th Monday) or on the last weekend day of the month. The
+  Mac and Android repeat editors use the same choices, and the summary spells
+  out the exact date.
+- **A simpler repeat editor.** The Mac Repeat section now uses dropdowns for
+  **Schedule the next**, **Repeat from**, **Repeat on** and **Ends**. Choosing
+  **After N times** opens a typed count box instead of −/+ buttons.
+- **Clearer time errors.** Hourly and minute repeats need a clock time.
+  Flowlist now names the date that needs one — **Add a time to the due date
+  first** or **Add a time to the defer date first** — instead of guessing.
+
+### Bug fixes
+
+- **Repeat dropdowns line up.** Each menu now opens directly under its own
+  control and matches the control's width.
+- **Long and unusual patterns stay predictable.** Monthly repeats with long
+  intervals land in the correct future month, and unusual pattern values from
+  older data are handled safely.
 
 ## 0.10.2 — 2026-11-28
 
