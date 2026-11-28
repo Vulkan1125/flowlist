@@ -488,6 +488,7 @@ class Repository(context: Context) {
             project = edit.project,
             due = edit.due,
             defer = edit.defer,
+            planned = edit.planned,
             priority = edit.priority,
             flagged = edit.flagged,
             fullscreenReminder = edit.fullscreenReminder,
@@ -512,12 +513,14 @@ class Repository(context: Context) {
         val estimateJson: JsonElement = edit.estimateMin?.let { JsonPrimitive(it) } ?: JsonNull
         val dueJson: JsonElement = if (edit.due != null) stampJson(edit.due) else JsonNull
         val deferJson: JsonElement = if (edit.defer != null) stampJson(edit.defer) else JsonNull
+        val plannedJson: JsonElement = if (edit.planned != null) stampJson(edit.planned) else JsonNull
         val patch = kotlinx.serialization.json.buildJsonObject {
             put("title", edit.title)
             put("notes", edit.notes)
             put("project", projectJson)
             put("due", dueJson)
             put("defer", deferJson)
+            put("planned", plannedJson)
             put("priority", priorityJson)
             put("flagged", edit.flagged)
             put("fullscreen_reminder", edit.fullscreenReminder)

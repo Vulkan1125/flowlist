@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Android parity
+
+- **Planned dates.** The Android task editor now edits the Mac's third date
+  beside due and defer, and the task row shows **Plan …**.
+
 ### Android reminders
 
 - **No stale alarms.** The phone checks the shared dismissal list and the

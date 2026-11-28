@@ -170,6 +170,7 @@ fun TaskEditSheet(
     var project by remember(task.id) { mutableStateOf(task.project) }
     var due by remember(task.id) { mutableStateOf(task.due) }
     var defer by remember(task.id) { mutableStateOf(task.defer) }
+    var planned by remember(task.id) { mutableStateOf(task.planned) }
     var priority by remember(task.id) { mutableStateOf(task.priority) }
     var flagged by remember(task.id) { mutableStateOf(task.flagged) }
     var fullscreenReminder by remember(task.id) { mutableStateOf(task.fullscreenReminder) }
@@ -251,7 +252,7 @@ fun TaskEditSheet(
     var newProjectOpen by remember { mutableStateOf(false) }
     var newTagOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    var datePickerForDue by remember { mutableStateOf(true) }
+    var datePickerTarget by remember { mutableStateOf("due") }
     var showDueSheet by remember { mutableStateOf(false) }
     var showReminderSheet by remember { mutableStateOf(false) }
     var dateError by remember { mutableStateOf<String?>(null) }
@@ -271,7 +272,11 @@ fun TaskEditSheet(
     }
 
     fun applyStamp(value: StampDto?) {
-        if (datePickerForDue) due = value else defer = value
+        when (datePickerTarget) {
+            "defer" -> defer = value
+            "planned" -> planned = value
+            else -> due = value
+        }
         dateError = null
     }
 
@@ -504,7 +509,7 @@ fun TaskEditSheet(
                     dateError = null
                 },
                 onClick = {
-                    datePickerForDue = true
+                    datePickerTarget = "due"
                     showDueSheet = true
                 },
             )
@@ -518,7 +523,21 @@ fun TaskEditSheet(
                     dateError = null
                 },
                 onClick = {
-                    datePickerForDue = false
+                    datePickerTarget = "defer"
+                    showDueSheet = true
+                },
+            )
+            EditRow(
+                label = "Planned",
+                value = planned?.label() ?: "No date",
+                valueColor = if (planned != null) colors.ink else colors.faint,
+                clearable = planned != null,
+                onClear = {
+                    planned = null
+                    dateError = null
+                },
+                onClick = {
+                    datePickerTarget = "planned"
                     showDueSheet = true
                 },
             )
@@ -1189,6 +1208,7 @@ fun TaskEditSheet(
                         project = project,
                         due = due,
                         defer = defer,
+                        planned = planned,
                         priority = priority,
                         flagged = flagged,
                         fullscreenReminder = fullscreenReminder,
@@ -1297,8 +1317,16 @@ fun TaskEditSheet(
 
     if (showDueSheet) {
         DueDateSheet(
-            title = if (datePickerForDue) "Due date" else "Defer date",
-            initial = if (datePickerForDue) due else defer,
+            title = when (datePickerTarget) {
+                "defer" -> "Defer date"
+                "planned" -> "Planned date"
+                else -> "Due date"
+            },
+            initial = when (datePickerTarget) {
+                "defer" -> defer
+                "planned" -> planned
+                else -> due
+            },
             weekStartsMonday = weekStartsMonday,
             defaultTime = java.time.LocalTime.of(
                 defaultTimeMinutes / 60,

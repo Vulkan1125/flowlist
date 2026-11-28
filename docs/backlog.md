@@ -230,8 +230,9 @@ integrations are tracked separately and are not part of this phase.
       on a plain checkbox and pop-up editor and switches to the rule tree on
       Comprehensive; the Android editor only offers the full form. Add both
       tabs and remember the last one used per view.
-- [ ] **Planned dates** — the phone edits due and defer only. Add the Mac's
-      third date to the task editor, the task row and date validation.
+- [x] **Planned dates** — the task editor now edits the Mac's third date
+      alongside due and defer, the row shows it as **Plan …**, and the value
+      round-trips through `update_task`.
 - [ ] **Full repeat editor** — the phone only picks a day/week/month/year unit.
       Add the interval, fixed versus after-completion mode, due-again versus
       defer-another, and the end date or count.

@@ -193,6 +193,7 @@ data class TaskEdit(
     val project: String?,
     val due: StampDto?,
     val defer: StampDto?,
+    val planned: StampDto?,
     val priority: String?,
     val flagged: Boolean,
     val fullscreenReminder: Boolean,
