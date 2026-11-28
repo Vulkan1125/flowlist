@@ -153,6 +153,66 @@ impl RepeatRule {
         format!("{every}, {origin}, scheduling {next}{end}.")
     }
 
+    /// The date of the last occurrence this rule will produce, when the
+    /// schedule makes it predictable. After-completion rules depend on when
+    /// the user completes each copy, so they return None.
+    pub fn projected_last_date(&self, due: Option<Stamp>, defer: Option<Stamp>) -> Option<NaiveDate> {
+        match self.end {
+            RepeatEnd::OnDate(date) => Some(date),
+            RepeatEnd::Never => None,
+            RepeatEnd::AfterCount(limit) => {
+                if self.completed_count >= limit {
+                    return None;
+                }
+                if !matches!(self.schedule, RepeatSchedule::Fixed) {
+                    return None;
+                }
+                let remaining = limit - self.completed_count;
+                let anchor = match self.mode {
+                    RepeatMode::DueAgain => due.or(defer),
+                    RepeatMode::DeferAnother => defer.or(due),
+                }?;
+                let mut date = anchor.local_date();
+                let selected = self.selected_weekdays();
+                for _ in 1..remaining {
+                    date = if selected.is_empty() {
+                        add_interval(date, self.every.max(1), self.unit)
+                    } else {
+                        next_weekday_after(date, &selected)
+                    };
+                }
+                Some(date)
+            }
+        }
+    }
+
+    /// One line under the ends controls: how many occurrences remain and,
+    /// where possible, the date of the last one.
+    pub fn ending_summary(&self, due: Option<Stamp>, defer: Option<Stamp>) -> Option<String> {
+        match self.end {
+            RepeatEnd::Never => None,
+            RepeatEnd::OnDate(date) => {
+                Some(format!("Ends on {}", date.format("%b %-d, %Y")))
+            }
+            RepeatEnd::AfterCount(limit) => {
+                let done = self.completed_count.min(limit);
+                let mut text = format!(
+                    "Ends after {limit} occurrence{}",
+                    if limit == 1 { "" } else { "s" }
+                );
+                if done > 0 {
+                    text.push_str(&format!(" · {done} done"));
+                }
+                if let Some(date) = self.projected_last_date(due, defer) {
+                    text.push_str(&format!(" · last on {}", date.format("%b %-d, %Y")));
+                } else if matches!(self.schedule, RepeatSchedule::AfterCompletion) {
+                    text.push_str(" · dates follow each completion");
+                }
+                Some(text)
+            }
+        }
+    }
+
     pub fn description(&self) -> String {
         let schedule = match self.schedule {
             RepeatSchedule::Fixed => String::new(),
@@ -488,5 +548,28 @@ mod tests {
             "Nothing numbered"
         );
         assert_eq!(increment_repeat_title("Version 1.4"), "Version 1.5");
+    }
+}
+
+#[cfg(test)]
+mod projected_tests {
+    use super::*;
+
+    #[test]
+    fn after_count_projects_the_last_fixed_date() {
+        let due = Stamp::date_only(NaiveDate::from_ymd_opt(2026, 1, 5).unwrap());
+        let mut rule = RepeatRule::new(RepeatMode::DueAgain, 2, IntervalUnit::Weeks);
+        rule.end = RepeatEnd::AfterCount(3);
+        assert_eq!(
+            rule.projected_last_date(Some(due), None),
+            NaiveDate::from_ymd_opt(2026, 2, 2)
+        );
+        rule.completed_count = 1;
+        assert_eq!(
+            rule.projected_last_date(Some(due), None),
+            NaiveDate::from_ymd_opt(2026, 1, 19)
+        );
+        rule.schedule = RepeatSchedule::AfterCompletion;
+        assert_eq!(rule.projected_last_date(Some(due), None), None);
     }
 }

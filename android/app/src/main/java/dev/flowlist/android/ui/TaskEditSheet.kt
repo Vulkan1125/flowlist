@@ -99,6 +99,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -722,6 +723,63 @@ fun TaskEditSheet(
                             )
                         }
                     }
+                }
+                val repeatEndSummary = when (repeatEndKind) {
+                    "on_date" -> repeatEndValue?.let { value ->
+                        runCatching {
+                            "Ends on ${LocalDate.parse(value).format(DateTimeFormatter.ofPattern("d MMM yyyy"))}"
+                        }.getOrNull()
+                    }
+                    "after_count" -> {
+                        val done = repeatCompleted.coerceAtMost(repeatEndCount)
+                        val remaining = (repeatEndCount - done).coerceAtLeast(1)
+                        val anchor = when (repeatMode) {
+                            "defer_another" -> defer ?: due
+                            else -> due ?: defer
+                        }?.local()?.toLocalDate()
+                        var last = anchor
+                        if (repeatSchedule == "fixed" && anchor != null) {
+                            var date = anchor!!
+                            repeat(remaining - 1) {
+                                date = if (repeatWeekdays.isNotEmpty()) {
+                                    var next = date.plusDays(1)
+                                    while ((next.dayOfWeek.value % 7) !in repeatWeekdays) {
+                                        next = next.plusDays(1)
+                                    }
+                                    next
+                                } else {
+                                    when (repeatUnit) {
+                                        "weeks" -> date.plusWeeks(repeatEvery.toLong())
+                                        "months" -> date.plusMonths(repeatEvery.toLong())
+                                        "years" -> date.plusYears(repeatEvery.toLong())
+                                        else -> date.plusDays(repeatEvery.toLong())
+                                    }
+                                }
+                            }
+                            last = date
+                        }
+                        buildString {
+                            append("Ends after $repeatEndCount occurrence")
+                            if (repeatEndCount != 1) append("s")
+                            if (done > 0) append(" · $done done")
+                            if (last != null) {
+                                append(
+                                    " · last on ${last.format(DateTimeFormatter.ofPattern("d MMM yyyy"))}",
+                                )
+                            } else if (repeatSchedule == "after_completion") {
+                                append(" · dates follow each completion")
+                            }
+                        }
+                    }
+                    else -> null
+                }
+                if (repeatEndSummary != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = repeatEndSummary,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.faint,
+                    )
                 }
                 if (showRepeatEndPicker) {
                     val context = LocalContext.current
