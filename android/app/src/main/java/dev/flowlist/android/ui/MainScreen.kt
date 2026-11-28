@@ -8,6 +8,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.clickable
@@ -118,6 +120,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.activity.compose.BackHandler
@@ -1249,7 +1253,7 @@ fun MainScreen(
         val dueNowTasks = dueNowIds.mapNotNull { id ->
             snapshot?.db?.let { db -> dueTaskView(db, id, state.pending) }
         }
-        DueNowSheet(
+        DueNowDialog(
             tasks = dueNowTasks,
             onDismiss = { dueNowIds = emptyList() },
             onToggle = { task -> complete(task, !task.completed) },
@@ -2969,39 +2973,75 @@ private fun ProjectSheet(
     }
 }
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun DueNowSheet(
+private fun DueNowDialog(
     tasks: List<TaskView>,
     onDismiss: () -> Unit,
     onToggle: (TaskView) -> Unit,
     onClick: (TaskView) -> Unit,
 ) {
     val colors = flow
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
+    Dialog(
         onDismissRequest = onDismiss,
-        sheetState = sheet,
-        containerColor = colors.background,
-        dragHandle = { SheetHandle() },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 28.dp)) {
-            Text(
-                text = "Due now",
-                style = MaterialTheme.typography.headlineMedium,
-                color = colors.ink,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
-            Text(
-                text = if (tasks.size == 1) "1 reminder" else "${tasks.size} reminders",
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.faint,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            tasks.forEach { task ->
-                TaskRow(task = task, onToggle = { onToggle(task) }, onClick = { onClick(task) })
-                Hairline(Modifier.padding(start = 58.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colors.background)
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Due now",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = colors.ink,
+                    )
+                    Text(
+                        text = if (tasks.size == 1) "1 reminder" else "${tasks.size} reminders",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.faint,
+                    )
+                }
+                Text(
+                    text = "Close",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.accent,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(colors.field)
+                        .clickable(onClick = onDismiss)
+                        .padding(horizontal = 16.dp, vertical = 9.dp),
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                tasks.forEach { task ->
+                    TaskRow(task = task, onToggle = { onToggle(task) }, onClick = { onClick(task) })
+                    Hairline(Modifier.padding(start = 58.dp))
+                }
+                if (tasks.isEmpty()) {
+                    Text(
+                        text = "Everything is done.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.faint,
+                        modifier = Modifier.padding(24.dp),
+                    )
+                }
             }
         }
     }
