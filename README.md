@@ -2,8 +2,9 @@
 
 **A fast, local-first task manager for macOS and Android.** Inbox, projects,
 tags, repeats, reviews and a floating capture panel in one native window. A
-phone app uses the same library, and the `flowlist` CLI and MCP server expose it
-to scripts and AI assistants.
+phone app uses the same library — Android is in development but already usable
+daily — and the `flowlist` CLI and MCP server expose it to scripts and AI
+assistants.
 
 **[Download Flowlist 0.9.51](https://github.com/Vulkan1125/flowlist/releases/latest)**
 · [Wiki](https://github.com/Vulkan1125/flowlist/wiki)
