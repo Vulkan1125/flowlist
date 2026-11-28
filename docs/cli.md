@@ -34,7 +34,7 @@ flowlist add 'Draft launch email #Work/Website ::Work/Launch due:tomorrow est:45
 | `due:`, `defer:` | natural-language dates (`due:(next friday 5pm)`) or compact offsets (`due:3d`) |
 | `fsr:` | full-screen reminder time (`fsr:1h30m`, `fsr:2d`); bare `fsr` follows due |
 | `est:` / `estimate:` | duration (`15m`, `1h30m`) |
-| `repeat:` | repeat rule (`every 2 weeks`, `every week after completion`) |
+| `repeat:` | repeat rule (`every 2 weeks`, `every week after completion`, `hourly`, `every 30 minutes`, `every month on the third Thursday`, `every 2 months on the last weekend day`) |
 | `@1`, `@2`, `@3` | priority: high, medium, low |
 | `!` | flag |
 | `//` | the rest of the line is a note |
@@ -113,7 +113,9 @@ date/time; date-only values use the custom-notification default time. The same
 notification flags work on `task edit` and `project edit`.
 Completing a repeating task increments the last number in its title, so
 `Week 3 review` spawns `Week 4 review`; `--series` on `remove` moves every
-occurrence of that chain to Trash instead of only the named one.
+occurrence of that chain to Trash instead of only the named one. Hourly and
+minute rules need a time on the due or defer date: a date-only task is rejected
+with **Add a time first** instead of being given a guessed clock time.
 
 ### Trash
 

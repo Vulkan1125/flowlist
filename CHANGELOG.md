@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Advanced repeats
+
+- **Hourly and minute repeats.** A repeat rule can now say `hourly`, `every
+  30 minutes` or `every 2 hours` in the CLI, MCP server and both editors. The
+  clock moves across midnight and after-completion rules count from the moment
+  the task is completed. Fixed schedules keep the wall-clock time, and an
+  **After N** ending projects the last date with the clock change included.
+- **Add a time first.** A sub-day rule needs a time on its due or defer anchor.
+  Picking **Minutes** or **Hours** on a date-only task is refused by the shared
+  command layer, with the same message on the Mac and the phone; clearing a
+  timed date on an existing sub-day rule is refused too. No guessed time is
+  ever written.
+- **Monthly calendar patterns.** A repeated task can fall on the nth weekday of
+  the month (1st through 5th) or on the last weekend day, every month or every
+  N months. The Mac inspector has a **Monthly pattern** row and the Android
+  editor has the same choices; row metadata, summaries, projected endings and
+  the parser all understand the pattern.
+- **Parser and row metadata.** `every month on the third Thursday` and
+  `every 2 months on the last weekend day` parse to the same `RepeatRule`, and
+  the Android row label now names minutes and hours instead of treating every
+  sub-day rule as a daily one.
+
 ## 0.10.2 — 2026-11-28
 
 ### Android parity

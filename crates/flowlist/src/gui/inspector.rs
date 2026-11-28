@@ -11,7 +11,7 @@ use flowlist_core::command::{Command, ProjectPatch, TaskPatch};
 use flowlist_core::ids::{ChecklistId, TaskId};
 use flowlist_core::model::{
     AlertEvent, DefaultNotification, IconSpec, Priority, ProjectKind, ProjectStatus, RepeatEnd,
-    RepeatMode, RepeatRule, RepeatSchedule,
+    RepeatMode, RepeatPattern, RepeatRule, RepeatSchedule,
 };
 use flowlist_core::parse::{parse_duration, parse_stamp};
 use flowlist_core::time::{IntervalUnit, Stamp, format_duration, human_date, local_date, now};
@@ -2140,13 +2140,20 @@ impl FlowlistApp {
     }
 
     pub(super) fn set_task_repeat(&mut self, id: &TaskId, rule: Option<RepeatRule>, cx: &mut Context<Self>) {
-        self.execute(Command::UpdateTask {
-            id: id.clone(),
-            patch: TaskPatch {
-                repeat: Some(rule),
-                ..Default::default()
-            },
-        });
+        let applied = self
+            .execute(Command::UpdateTask {
+                id: id.clone(),
+                patch: TaskPatch {
+                    repeat: Some(rule),
+                    ..Default::default()
+                },
+            })
+            .is_some();
+        if applied {
+            self.field_error = None;
+        } else {
+            self.field_error = self.command_error.clone();
+        }
         cx.notify();
     }
 
@@ -2185,6 +2192,10 @@ impl FlowlistApp {
         let weekdays_selected = rule
             .as_ref()
             .is_some_and(|rule| !rule.selected_weekdays().is_empty());
+        let nth_weekday = matches!(
+            rule.as_ref().and_then(|rule| rule.pattern),
+            Some(RepeatPattern::NthWeekday { .. })
+        );
         let toggle_id = id.clone();
         let mut body = div().flex().flex_col().gap_2().child(
             div()
@@ -2237,7 +2248,12 @@ impl FlowlistApp {
                 }),
         );
         if enabled {
-            if unit == IntervalUnit::Days {
+            if unit == IntervalUnit::Months
+                || rule.as_ref().is_some_and(|rule| rule.pattern.is_some())
+            {
+                body = body.child(self.inspector_repeat_pattern(&id, &rule, cx));
+            }
+            if unit == IntervalUnit::Days || nth_weekday {
                 body = body.child(self.inspector_week_strip(&id, &rule, cx));
             }
             body = body.child(
@@ -2511,6 +2527,83 @@ impl FlowlistApp {
         body
     }
 
+    fn inspector_repeat_pattern(
+        &self,
+        id: &TaskId,
+        rule: &Option<RepeatRule>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.theme;
+        let current_pattern = rule.as_ref().and_then(|rule| rule.pattern);
+        let selected = match current_pattern {
+            None => 0,
+            Some(RepeatPattern::NthWeekday { nth, .. }) => usize::from(nth.clamp(1, 5)),
+            Some(RepeatPattern::LastWeekendDay) => 6,
+        };
+        let default_weekday = match current_pattern {
+            Some(RepeatPattern::NthWeekday { weekday, .. }) => weekday.min(6),
+            _ => self
+                .store
+                .db()
+                .tasks
+                .get(id)
+                .and_then(|task| task.due.or(task.defer))
+                .map(|stamp| stamp.local_date().weekday().num_days_from_sunday() as u8)
+                .unwrap_or(1),
+        };
+        let current_rule = rule.clone();
+        let pattern_id = id.clone();
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.text_faint)
+                    .child("Monthly pattern"),
+            )
+            .child(segmented_row(
+                theme,
+                "repeat-pattern",
+                &[
+                    ("none", "None"),
+                    ("first", "1st"),
+                    ("second", "2nd"),
+                    ("third", "3rd"),
+                    ("fourth", "4th"),
+                    ("fifth", "5th"),
+                    ("last", "Last weekend"),
+                ],
+                selected,
+                self.theme_boxes.clone(),
+                move |this: &mut FlowlistApp, index, cx| {
+                    if let Some(current) = &current_rule {
+                        this.update_task_repeat(
+                            &pattern_id,
+                            current,
+                            |rule| {
+                                rule.pattern = match index {
+                                    0 => None,
+                                    1..=5 => Some(RepeatPattern::NthWeekday {
+                                        nth: index as u8,
+                                        weekday: default_weekday,
+                                    }),
+                                    _ => Some(RepeatPattern::LastWeekendDay),
+                                };
+                                if rule.pattern.is_some() {
+                                    rule.unit = IntervalUnit::Months;
+                                    rule.weekdays = None;
+                                }
+                            },
+                            cx,
+                        );
+                    }
+                },
+                cx,
+            ))
+    }
+
     fn inspector_repeat_interval(
         &self,
         id: &TaskId,
@@ -2616,10 +2709,18 @@ impl FlowlistApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.theme;
-        let selected = rule
-            .as_ref()
-            .map(|rule| rule.selected_weekdays())
-            .unwrap_or_default();
+        let pattern_weekday = rule.as_ref().and_then(|rule| match rule.pattern {
+            Some(RepeatPattern::NthWeekday { weekday, .. }) => Some(weekday),
+            _ => None,
+        });
+        let pattern_mode = pattern_weekday.is_some();
+        let selected = pattern_weekday
+            .map(|weekday| BTreeSet::from([weekday]))
+            .unwrap_or_else(|| {
+                rule.as_ref()
+                    .map(|rule| rule.selected_weekdays())
+                    .unwrap_or_default()
+            });
         let letters = ["S", "M", "T", "W", "T", "F", "S"];
         let mut strip = div()
             .flex()
@@ -2653,6 +2754,25 @@ impl FlowlistApp {
                     .child(*letter)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(current) = &current_rule {
+                            if pattern_mode {
+                                this.update_task_repeat(
+                                    &strip_id,
+                                    current,
+                                    |rule| {
+                                        if let Some(RepeatPattern::NthWeekday { nth, .. }) =
+                                            rule.pattern
+                                        {
+                                            rule.pattern = Some(RepeatPattern::NthWeekday {
+                                                nth,
+                                                weekday: day,
+                                            });
+                                            rule.unit = IntervalUnit::Months;
+                                        }
+                                    },
+                                    cx,
+                                );
+                                return;
+                            }
                             let mut days = current.selected_weekdays();
                             if days.contains(&day) {
                                 days.remove(&day);
@@ -2700,6 +2820,8 @@ impl FlowlistApp {
             .bg(theme.raised)
             .shadow_lg();
         for candidate in [
+            IntervalUnit::Minutes,
+            IntervalUnit::Hours,
             IntervalUnit::Days,
             IntervalUnit::Weeks,
             IntervalUnit::Months,
@@ -2746,6 +2868,9 @@ impl FlowlistApp {
                                     rule.unit = candidate;
                                     if candidate != IntervalUnit::Days {
                                         rule.weekdays = None;
+                                    }
+                                    if candidate != IntervalUnit::Months {
+                                        rule.pattern = None;
                                     }
                                 },
                                 cx,

@@ -24,7 +24,10 @@ working domain and GUI. This page tracks what is implemented and verified.
       projects start with the project icon
 - [x] Restorable Trash with configurable auto-delete
 - [x] Repeat rules: fixed/after-completion, due-again/defer-another, end date,
-      end count, completion counter
+      end count, completion counter, hourly and minute intervals, and monthly
+      patterns for the nth weekday or the last weekend day. Sub-day rules need
+      a clock time on the due or defer anchor; a date-only task is rejected
+      with **Add a time first**.
 - [x] Auto-incrementing repeat titles: the last number in a title moves on
       with each occurrence (“Week 3” becomes “Week 4”), stopping at the rule's
       end date or count
@@ -233,9 +236,10 @@ working domain and GUI. This page tracks what is implemented and verified.
 - [x] Collapsible Properties sections: Title, Action, Notes & Attachments,
       Dates, Repeat, Tags and Notifications, plus the project sections.
 - [x] Repeat controls with one editable interval box, a
-      day/week/month/year dropdown, a Sunday-to-Saturday weekday strip and a
-      plain-language summary, plus a Review section with Next Review, cadence
-      and Last Reviewed.
+      minutes/hours/day/week/month/year dropdown, a Sunday-to-Saturday weekday
+      strip, a monthly pattern row for the 1st–5th weekday or the last weekend
+      day, and a plain-language summary, plus a Review section with Next
+      Review, cadence and Last Reviewed.
 - [x] Single-task inspector tabs: **Properties** and **Subtasks**.
 - [x] Sheets show Save only; Escape still cancels.
 - [x] Calendar events in Forecast, read-only from macOS Calendar, in their own

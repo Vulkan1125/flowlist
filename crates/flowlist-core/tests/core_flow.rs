@@ -1,6 +1,6 @@
 //! End-to-end tests for the command, history and persistence layers.
 
-use chrono::Utc;
+use chrono::{NaiveTime, Utc};
 use flowlist_core::command::{
     Command, ContainerPlacement, ImportMode, NewProject, NewTask, ProjectPatch, SettingsPatch,
     TaskPatch, TaskPlacement,
@@ -9,7 +9,7 @@ use flowlist_core::db::{ContainerPosition, Position};
 use flowlist_core::ids::{FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
     BuiltinPerspective, Condition, FilterNode, GroupBy, IconSpec, Priority, ProjectKind,
-    ProjectStatus, RepeatMode, RepeatRule, SortBy, TagStatus, Task,
+    ProjectStatus, RepeatMode, RepeatPattern, RepeatRule, SortBy, TagStatus, Task,
 };
 use flowlist_core::paths::DataPaths;
 use flowlist_core::store::Store;
@@ -150,6 +150,140 @@ fn repeated_task_spawns_the_next_occurrence() {
 
     store.undo().unwrap();
     assert_eq!(store.db().tasks.len(), 1);
+}
+
+#[test]
+fn sub_day_repeats_require_a_clock_time() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let mut new_task = NewTask::new("Check the oven");
+    new_task.due = Some(Stamp::date_only(local_date(Utc::now())));
+    new_task.repeat = Some(RepeatRule::new(
+        RepeatMode::DueAgain,
+        1,
+        IntervalUnit::Hours,
+    ));
+    let error = store
+        .execute(Command::CreateTask(new_task))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("Add a time first"), "{error}");
+    assert!(store.db().tasks.is_empty());
+
+    let timed = Stamp::on(
+        local_date(Utc::now()),
+        NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+    );
+    let mut new_task = NewTask::new("Check the oven");
+    new_task.due = Some(timed);
+    new_task.repeat = Some(RepeatRule::new(
+        RepeatMode::DueAgain,
+        30,
+        IntervalUnit::Minutes,
+    ));
+    let id = store
+        .execute(Command::CreateTask(new_task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let task_id = store.db().resolve_task(&id).unwrap();
+
+    let error = store
+        .execute(Command::UpdateTask {
+            id: task_id.clone(),
+            patch: TaskPatch {
+                due: Some(Some(Stamp::date_only(timed.local_date()))),
+                ..TaskPatch::default()
+            },
+        })
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("Add a time first"), "{error}");
+    assert!(store.db().tasks[&task_id].due.unwrap().has_time);
+}
+
+#[test]
+fn completing_a_sub_day_repeat_moves_the_clock() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let due = Stamp::on(
+        local_date(Utc::now()),
+        NaiveTime::from_hms_opt(23, 30, 0).unwrap(),
+    );
+    let mut new_task = NewTask::new("Water the garden");
+    new_task.due = Some(due);
+    new_task.repeat = Some(RepeatRule::new(
+        RepeatMode::DueAgain,
+        2,
+        IntervalUnit::Hours,
+    ));
+    let id = store
+        .execute(Command::CreateTask(new_task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let task_id = store.db().resolve_task(&id).unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![task_id.clone()],
+            completed: true,
+        })
+        .unwrap();
+
+    let next = store
+        .db()
+        .tasks
+        .values()
+        .find(|task| task.id != task_id)
+        .and_then(|task| task.due)
+        .expect("next due exists");
+    assert_eq!(
+        next.local_date(),
+        due.local_date() + chrono::Duration::days(1)
+    );
+    assert_eq!(
+        next.local_time(),
+        NaiveTime::from_hms_opt(1, 30, 0).unwrap()
+    );
+}
+
+#[test]
+fn completing_an_nth_weekday_repeat_uses_the_pattern() {
+    let (_dir, paths) = setup();
+    let mut store = Store::open(paths).unwrap();
+
+    let due = Stamp::date_only(chrono::NaiveDate::from_ymd_opt(2026, 11, 19).unwrap());
+    let mut rule = RepeatRule::new(RepeatMode::DueAgain, 1, IntervalUnit::Months);
+    rule.pattern = Some(RepeatPattern::NthWeekday { nth: 3, weekday: 4 });
+    let mut new_task = NewTask::new("Board meeting");
+    new_task.due = Some(due);
+    new_task.repeat = Some(rule);
+    let id = store
+        .execute(Command::CreateTask(new_task))
+        .unwrap()
+        .created[0]
+        .clone();
+    let task_id = store.db().resolve_task(&id).unwrap();
+    store
+        .execute(Command::CompleteTasks {
+            ids: vec![task_id.clone()],
+            completed: true,
+        })
+        .unwrap();
+
+    let next = store
+        .db()
+        .tasks
+        .values()
+        .find(|task| task.id != task_id)
+        .and_then(|task| task.due)
+        .expect("next due exists");
+    assert_eq!(
+        next.local_date(),
+        chrono::NaiveDate::from_ymd_opt(2026, 12, 17).unwrap()
+    );
 }
 
 #[test]

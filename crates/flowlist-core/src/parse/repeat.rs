@@ -5,9 +5,9 @@ use chrono::DateTime;
 use chrono::Utc;
 
 use crate::error::{Error, Result};
-use crate::model::{RepeatEnd, RepeatMode, RepeatRule, RepeatSchedule};
+use crate::model::{RepeatEnd, RepeatMode, RepeatPattern, RepeatRule, RepeatSchedule};
 use crate::parse::dates::parse_stamp;
-use crate::time::IntervalUnit;
+use crate::time::{IntervalUnit, parse_weekday};
 
 pub fn parse_repeat(input: &str, reference: DateTime<Utc>) -> Result<RepeatRule> {
     let mut text = input.trim().to_lowercase();
@@ -18,11 +18,21 @@ pub fn parse_repeat(input: &str, reference: DateTime<Utc>) -> Result<RepeatRule>
         text = rest.trim().to_string();
     }
 
-    let (every, unit) = match single_word_rule(&text) {
-        Some(pair) => pair,
-        None => parse_interval(&text)?,
+    let pattern = detect_pattern(&text);
+    let (every, unit) = if pattern.is_some() {
+        parse_interval_anywhere(&text).unwrap_or((1, IntervalUnit::Months))
+    } else {
+        match single_word_rule(&text) {
+            Some(pair) => pair,
+            None => parse_interval(&text)?,
+        }
     };
     let mut rule = RepeatRule::new(RepeatMode::DueAgain, every, unit);
+    if let Some(pattern) = pattern {
+        rule.pattern = Some(pattern);
+        rule.unit = IntervalUnit::Months;
+        rule.weekdays = None;
+    }
 
     if text.contains("after completion") || text.contains("from completion") {
         rule.schedule = RepeatSchedule::AfterCompletion;
@@ -51,6 +61,65 @@ pub fn parse_repeat(input: &str, reference: DateTime<Utc>) -> Result<RepeatRule>
     }
 
     Ok(rule)
+}
+
+fn clean_token(token: &str) -> &str {
+    token.trim_matches(|c: char| !c.is_ascii_alphanumeric())
+}
+
+fn ordinal_value(token: &str) -> Option<u8> {
+    Some(match clean_token(token) {
+        "first" | "1st" => 1,
+        "second" | "2nd" => 2,
+        "third" | "3rd" => 3,
+        "fourth" | "4th" => 4,
+        "fifth" | "5th" => 5,
+        _ => return None,
+    })
+}
+
+fn detect_pattern(text: &str) -> Option<RepeatPattern> {
+    let tokens: Vec<&str> = text.split_whitespace().collect();
+    for (index, token) in tokens.iter().enumerate() {
+        if clean_token(token) == "last"
+            && tokens
+                .get(index + 1)
+                .is_some_and(|next| clean_token(next).starts_with("weekend"))
+        {
+            return Some(RepeatPattern::LastWeekendDay);
+        }
+        if let Some(nth) = ordinal_value(token) {
+            if let Some(weekday) = tokens
+                .get(index + 1)
+                .and_then(|next| parse_weekday(clean_token(next)))
+            {
+                return Some(RepeatPattern::NthWeekday {
+                    nth,
+                    weekday: weekday.num_days_from_sunday() as u8,
+                });
+            }
+        }
+    }
+    None
+}
+
+/// Find a cadence anywhere in the phrase so pattern wording may come before or
+/// after it: "monthly on the third Thursday" and "the last weekend day of every
+/// two months" both work.
+fn parse_interval_anywhere(text: &str) -> Option<(u32, IntervalUnit)> {
+    let tokens: Vec<&str> = text.split_whitespace().collect();
+    for (index, token) in tokens.iter().enumerate() {
+        if let Some(pair) = single_word_rule(clean_token(token)) {
+            return Some(pair);
+        }
+        if clean_token(token) == "every" {
+            let rest = tokens[index..].join(" ");
+            if let Ok(pair) = parse_interval(&rest) {
+                return Some(pair);
+            }
+        }
+    }
+    None
 }
 
 fn single_word_rule(text: &str) -> Option<(u32, IntervalUnit)> {
@@ -126,6 +195,33 @@ mod tests {
         let rule = parse_repeat("every 2 hours", now).unwrap();
         assert_eq!(rule.every, 2);
         assert_eq!(rule.unit, IntervalUnit::Hours);
+    }
+
+    #[test]
+    fn parses_monthly_calendar_patterns() {
+        let now = Utc::now();
+        let rule = parse_repeat("every month on the third thursday", now).unwrap();
+        assert_eq!(rule.unit, IntervalUnit::Months);
+        assert_eq!(rule.every, 1);
+        assert_eq!(
+            rule.pattern,
+            Some(RepeatPattern::NthWeekday { nth: 3, weekday: 4 })
+        );
+
+        let rule = parse_repeat("every 2 months on the last weekend day", now).unwrap();
+        assert_eq!(rule.every, 2);
+        assert_eq!(rule.pattern, Some(RepeatPattern::LastWeekendDay));
+
+        let rule = parse_repeat("second tuesday of every month", now).unwrap();
+        assert_eq!(rule.every, 1);
+        assert_eq!(
+            rule.pattern,
+            Some(RepeatPattern::NthWeekday { nth: 2, weekday: 2 })
+        );
+
+        let rule = parse_repeat("last weekend day", now).unwrap();
+        assert_eq!(rule.unit, IntervalUnit::Months);
+        assert_eq!(rule.pattern, Some(RepeatPattern::LastWeekendDay));
     }
 
     #[test]

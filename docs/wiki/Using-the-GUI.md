@@ -136,18 +136,23 @@ leaving the list.
   a toast, so the picker stays open for another choice. Planned never changes
   availability.
 - **Repeat** uses compact controls: a repeat checkbox, one interval box
-  with an editable number and a day/week/month/year dropdown, and segmented
-  choices for **Due Date** or **Defer Until Date** and for **Completion** or
-  **Assigned Dates**. When the unit is **Days**, a single Sunday-to-Saturday
-  row appears. Leave it clear to repeat every day; select S/M/T/W/T/F/S to
-  repeat only those weekdays. When weekdays are selected the interval bar shows
-  a greyed-out “custom”. The line beneath says the result in plain words, such
-  as “Every Monday and Wednesday, from the assigned dates, scheduling the next
-  due date.” An **Ends** row sets **Never**, **On date** (opening the calendar
-  under the date box) or **After N** times with a −/+ stepper. The same
-  summary line names the count already done and, for fixed schedules, the
-  projected last occurrence; after-completion rules say the dates follow each
-  completion.
+  with an editable number and a minutes/hours/day/week/month/year dropdown, and
+  segmented choices for **Due Date** or **Defer Until Date** and for
+  **Completion** or **Assigned Dates**. When the unit is **Days**, a single
+  Sunday-to-Saturday row appears. Leave it clear to repeat every day; select
+  S/M/T/W/T/F/S to repeat only those weekdays. When weekdays are selected the
+  interval bar shows a greyed-out “custom”. **Minutes** and **Hours** move the
+  clock instead of the calendar, so the task needs a time on its due or defer
+  date; a date-only task is refused with **Add a time first**. When the unit is
+  **Months**, a **Monthly pattern** row offers **None**, **1st** through
+  **5th**, or **Last weekend**, and selecting an nth weekday reveals the same
+  Sunday-to-Saturday row for the weekday. The line beneath says the result in
+  plain words, such as “Every Monday and Wednesday, from the assigned dates,
+  scheduling the next due date.” An **Ends** row sets **Never**, **On date**
+  (opening the calendar under the date box) or **After N** times with a −/+
+  stepper. The same summary line names the count already done and, for fixed
+  schedules, the projected last occurrence; after-completion rules say the
+  dates follow each completion.
 - **Tags** is its own section above Notifications, with a bordered chip box and
   a `+` control. Clicking the box or `+` opens the add field; Enter adds the
   tag. **Notes & Attachments** sits in the old Tags position, before Dates.

@@ -46,7 +46,7 @@ Settings has four ways to change the look:
 Tap a task to open the editor. Change the title and notes, then set:
 
 - due, defer and planned dates with Android's date and time pickers (or clear any),
-- repeat rules: an interval, fixed or after-completion, due-again or defer-another, a weekday strip for day-based rules, and an end that never stops, stops on a date, or stops after N times. The editor shows how many occurrences are already done and, for fixed schedules, the projected last date,
+- repeat rules: hourly and minute intervals, daily through yearly, a weekday strip for day-based rules, a monthly pattern for the 1st–5th weekday or the last weekend day, fixed or after-completion, due-again or defer-another, and an end that never stops, stops on a date, or stops after N times. Sub-day rules need a time on the due or defer date; a date-only task stops with **Add a time first**. The editor shows how many occurrences are already done and, for fixed schedules, the projected last date,
 - project, priority (H, M or L), the flag and an estimate. The selected pill and the task circle share the priority colour: red for H, yellow for M and blue for L,
 - any existing tag,
 - files through **Add attachment**, and web links through **Add link**.
@@ -338,5 +338,6 @@ the project, date, tag and count line under every task title.
 
 Library defaults — review interval, changed window, completed visibility and
 trash retention — write through `update_settings`, so the Mac sees the same
-values. Repeating tasks can be set to None, Daily, Weekly, Monthly or Yearly,
-and a series can be deleted in one action.
+values. Repeating tasks can be set to None, Hourly, Minutes, Daily, Weekly,
+Monthly or Yearly, with monthly calendar patterns, and a series can be deleted
+in one action.

@@ -127,7 +127,10 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import dev.flowlist.android.data.repeatRuleJson
+import dev.flowlist.android.data.repeatNeedsClock
 import dev.flowlist.android.data.isOverdue
 import dev.flowlist.android.data.isToday
 import dev.flowlist.android.data.label
@@ -283,7 +286,21 @@ fun TaskEditSheet(
         ?.mapNotNull { (it as? JsonPrimitive)?.content?.toIntOrNull() }
         ?.toSet()
         .orEmpty()
+    val repeatPatternJson = repeatObject?.get("pattern")
+    val repeatPattern = repeatPatternJson as? JsonObject
+    val repeatPatternKind = (repeatPattern?.get("kind") as? JsonPrimitive)?.content
+    val repeatPatternNth = (repeatPattern?.get("nth") as? JsonPrimitive)
+        ?.content?.toIntOrNull()
+    val repeatPatternWeekday = (repeatPattern?.get("weekday") as? JsonPrimitive)
+        ?.content?.toIntOrNull()
     var showRepeatEndPicker by remember { mutableStateOf(false) }
+    var repeatError by remember { mutableStateOf<String?>(null) }
+
+    fun nthPatternJson(nth: Int, weekday: Int): JsonObject = buildJsonObject {
+        put("kind", "nth_weekday")
+        put("nth", nth)
+        put("weekday", weekday % 7)
+    }
 
     fun setRule(
         unit: String? = repeatUnit,
@@ -294,11 +311,18 @@ fun TaskEditSheet(
         endDate: String? = repeatEndValue,
         endCount: Int = repeatEndCount,
         weekdays: JsonElement? = repeatWeekdaysJson,
+        pattern: JsonElement? = repeatPatternJson,
     ) {
         if (unit == null) {
             repeat = null
+            repeatError = null
             return
         }
+        if (repeatNeedsClock(unit, mode, due, defer)) {
+            repeatError = "Add a time first"
+            return
+        }
+        repeatError = null
         repeat = repeatRuleJson(
             mode = mode,
             schedule = schedule,
@@ -309,10 +333,19 @@ fun TaskEditSheet(
             endCount = endCount,
             completedCount = repeatCompleted,
             weekdays = weekdays,
+            pattern = pattern,
         )
     }
 
-    fun setRepeat(unit: String?) = setRule(unit = unit)
+    fun setRepeat(unit: String?) {
+        if (unit == null) {
+            repeat = null
+            repeatError = null
+            return
+        }
+        val pattern = if (unit == "months") repeatPatternJson else JsonNull
+        setRule(unit = unit, pattern = pattern)
+    }
 
     fun submitSubtask() {
         val name = subtaskTitle.trim()
@@ -329,6 +362,7 @@ fun TaskEditSheet(
             else -> due = value
         }
         dateError = null
+        repeatError = null
     }
 
     ModalBottomSheet(
@@ -538,6 +572,20 @@ fun TaskEditSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 PriorityPill("None", repeat == null, colors.accent) { setRepeat(null) }
+                PriorityPill("Hourly", repeatUnit == "hours", colors.accent) {
+                    setRule(
+                        unit = "hours",
+                        every = if (repeatUnit == "hours") repeatEvery else 1,
+                        pattern = JsonNull,
+                    )
+                }
+                PriorityPill("Minutes", repeatUnit == "minutes", colors.accent) {
+                    setRule(
+                        unit = "minutes",
+                        every = if (repeatUnit == "minutes") repeatEvery else 30,
+                        pattern = JsonNull,
+                    )
+                }
                 PriorityPill("Daily", repeatUnit == "days", colors.accent) { setRepeat("days") }
                 PriorityPill("Weekly", repeatUnit == "weeks", colors.accent) { setRepeat("weeks") }
                 PriorityPill("Monthly", repeatUnit == "months", colors.accent) { setRepeat("months") }
@@ -545,6 +593,8 @@ fun TaskEditSheet(
             }
             if (repeat != null) {
                 val unitLabel = when (repeatUnit) {
+                    "minutes" -> if (repeatEvery == 1) "minute" else "minutes"
+                    "hours" -> if (repeatEvery == 1) "hour" else "hours"
                     "weeks" -> "weeks"
                     "months" -> "months"
                     "years" -> "years"
@@ -591,6 +641,83 @@ fun TaskEditSheet(
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.ink,
                     )
+                }
+                if (repeatUnit == "months") {
+                    val patternWeekday = repeatPatternWeekday
+                        ?: (due ?: defer)?.local()?.dayOfWeek?.value?.rem(7)
+                        ?: 1
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Label("Monthly pattern")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        PriorityPill("None", repeatPatternKind == null, colors.accent) {
+                            setRule(unit = "months", pattern = JsonNull)
+                        }
+                        listOf("1st", "2nd", "3rd", "4th", "5th")
+                            .forEachIndexed { index, label ->
+                                val nth = index + 1
+                                PriorityPill(
+                                    label,
+                                    repeatPatternKind == "nth_weekday" &&
+                                        repeatPatternNth == nth,
+                                    colors.accent,
+                                ) {
+                                    setRule(
+                                        unit = "months",
+                                        pattern = nthPatternJson(nth, patternWeekday),
+                                    )
+                                }
+                            }
+                        PriorityPill(
+                            "Last weekend",
+                            repeatPatternKind == "last_weekend_day",
+                            colors.accent,
+                        ) {
+                            setRule(
+                                unit = "months",
+                                pattern = buildJsonObject {
+                                    put("kind", "last_weekend_day")
+                                },
+                            )
+                        }
+                    }
+                    if (repeatPatternKind == "nth_weekday") {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            listOf(
+                                0 to "Sun",
+                                1 to "Mon",
+                                2 to "Tue",
+                                3 to "Wed",
+                                4 to "Thu",
+                                5 to "Fri",
+                                6 to "Sat",
+                            ).forEach { (day, label) ->
+                                PriorityPill(
+                                    label,
+                                    repeatPatternWeekday == day,
+                                    colors.accent,
+                                ) {
+                                    setRule(
+                                        unit = "months",
+                                        pattern = nthPatternJson(
+                                            repeatPatternNth ?: 1,
+                                            day,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
                 if (repeatUnit == "days") {
                     Spacer(modifier = Modifier.height(6.dp))
@@ -806,6 +933,14 @@ fun TaskEditSheet(
                     }
                 }
             }
+            repeatError?.let { message ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.danger,
+                )
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
             EditRow(
@@ -821,6 +956,7 @@ fun TaskEditSheet(
                 onClear = {
                     due = null
                     dateError = null
+                    repeatError = null
                 },
                 onClick = {
                     datePickerTarget = "due"
@@ -835,6 +971,7 @@ fun TaskEditSheet(
                 onClear = {
                     defer = null
                     dateError = null
+                    repeatError = null
                 },
                 onClick = {
                     datePickerTarget = "defer"
@@ -849,6 +986,7 @@ fun TaskEditSheet(
                 onClear = {
                     planned = null
                     dateError = null
+                    repeatError = null
                 },
                 onClick = {
                     datePickerTarget = "planned"
@@ -1536,12 +1674,21 @@ fun TaskEditSheet(
                     )
                     val dueDate = due?.local()?.toLocalDate()
                     val deferDate = defer?.local()?.toLocalDate()
+                    val currentRepeat = repeat as? JsonObject
+                    val currentUnit = (currentRepeat?.get("unit") as? JsonPrimitive)?.content
+                    val currentMode = (currentRepeat?.get("mode") as? JsonPrimitive)?.content
+                        ?: "due_again"
+                    repeatError = if (repeatNeedsClock(currentUnit, currentMode, due, defer)) {
+                        "Add a time first"
+                    } else {
+                        null
+                    }
                     dateError = if (dueDate != null && deferDate != null && deferDate.isAfter(dueDate)) {
                         "Defer can't be after the due date"
                     } else {
                         null
                     }
-                    if (dateError == null) {
+                    if (dateError == null && repeatError == null) {
                         val repeats = task.repeat != null && edit.repeat != null
                         if (repeats && edit.priority != task.priority) {
                             pendingSave = edit

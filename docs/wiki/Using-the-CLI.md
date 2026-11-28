@@ -66,7 +66,7 @@ flowlist add 'Draft the launch email #writing ::Website due:friday est:45m // as
 | `::Website`, `::Work/Website` | Project. Created if missing. |
 | `due:friday`, `defer:tomorrow`, `planned:(next monday)`, `due:3d` | Dates. Compact offsets and parenthesised phrases work. |
 | `est:45m`, `est:2h30m` | Estimate. |
-| `repeat:every week` | Repeat rule. |
+| `repeat:every week` | Repeat rule (`hourly`, `every 30 minutes`, `every month on the third Thursday`, `every 2 months on the last weekend day`). |
 | `!` | Flag. |
 | `// text` | Note. |
 | `fsr`, `fsr:1h30m` | Full-screen reminder follows due, or fires at an offset. |
@@ -156,7 +156,9 @@ flowlist done [OPTIONS] <ID>...
 | --- | --- |
 | `--undo` | Reopen the task instead of completing it. |
 
-Completing a repeating task creates its next occurrence.
+Completing a repeating task creates its next occurrence. Hourly and minute
+rules need a clock time on the due or defer date; a date-only task is rejected
+with **Add a time first**.
 
 ## `edit`
 

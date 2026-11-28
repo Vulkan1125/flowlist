@@ -326,6 +326,7 @@ fun repeatRuleJson(
     endCount: Int,
     completedCount: Int,
     weekdays: JsonElement?,
+    pattern: JsonElement?,
 ): JsonObject = buildJsonObject {
     put("mode", mode)
     put("schedule", schedule)
@@ -347,6 +348,7 @@ fun repeatRuleJson(
     )
     put("completed_count", completedCount)
     put("weekdays", weekdays ?: JsonNull)
+    put("pattern", pattern ?: JsonNull)
 }
 
 fun priorityCommand(ids: List<String>, priority: String?, series: Boolean): JsonObject =

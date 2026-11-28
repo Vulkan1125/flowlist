@@ -135,6 +135,13 @@ wait_json task repeat_every 'd["repeat"].startswith("every 2 weeks")'
 click_box notification_boxes repeat-unit-toggle
 click_box notification_boxes repeat-unit-option:months
 wait_json task repeat_unit 'd["repeat"].startswith("every 2 months")'
+click_box theme_boxes repeat-pattern:third
+wait_json task repeat_pattern '"the third Monday of every 2 months" in d["repeat"]'
+click_box theme_boxes repeat-pattern:last
+wait_json task repeat_weekend '"the last weekend day of every 2 months" in d["repeat"]'
+click_box theme_boxes repeat-pattern:none
+wait_json task repeat_pattern_cleared 'd["repeat"].startswith("every 2 months")'
+echo "   monthly pattern picks an nth weekday and the last weekend day"
 click_box notification_boxes repeat-unit-toggle
 click_box notification_boxes repeat-unit-option:days
 for _ in $(seq 1 80); do
@@ -156,6 +163,33 @@ wait_json task repeat_schedule '"after completion" in d["repeat"]'
 click_box theme_boxes repeat-mode:defer
 wait_json task repeat_mode '"defer another" in d["repeat"]'
 echo "   weekdays, after completion, defer until"
+
+echo "2b. Hourly units need a clock time"
+kill "$pid" 2>/dev/null || true
+wait "$pid" 2>/dev/null || true
+"$bin" --data-dir "$lib" edit "$task" --due today >/dev/null
+launch "today" "$task"
+click_box notification_boxes repeat-unit-toggle
+click_box notification_boxes repeat-unit-option:hours
+for _ in $(seq 1 80); do
+  if python3 - "$state" <<'PY'
+import json, sys
+sys.exit(0 if json.load(open(sys.argv[1])).get("toast") == "Add a time first" else 1)
+PY
+  then break; fi
+  sleep 0.1
+done
+wait_json task repeat_rejected '"Monday and Wednesday" in d["repeat"]'
+echo "   date-only task rejected with Add a time first"
+
+kill "$pid" 2>/dev/null || true
+wait "$pid" 2>/dev/null || true
+"$bin" --data-dir "$lib" edit "$task" --due "today 9am" >/dev/null
+launch "today" "$task"
+click_box notification_boxes repeat-unit-toggle
+click_box notification_boxes repeat-unit-option:hours
+wait_json task repeat_hours '"every hour" in d["repeat"]'
+echo "   timed task accepts an hourly rule"
 
 echo "3. Tags use the OmniFocus chip box"
 click_box inspector_section_boxes task:tags

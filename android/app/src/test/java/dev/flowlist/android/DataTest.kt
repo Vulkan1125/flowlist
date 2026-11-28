@@ -35,6 +35,7 @@ import dev.flowlist.android.data.forecastProjectDays
 import dev.flowlist.android.data.forecastTaskDays
 import dev.flowlist.android.data.forecastUndated
 import dev.flowlist.android.data.batchUpdateTasksCommand
+import dev.flowlist.android.data.repeatNeedsClock
 import dev.flowlist.android.data.repeatRowLabel
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.put
@@ -415,7 +416,47 @@ class DataTest {
                 rule("""{"mode":"due_again","schedule":"fixed","every":1,"unit":"months","end":{"kind":"on_date","date":"2026-12-01"}}"""),
             ),
         )
+        assertEquals(
+            "every 2 hours",
+            repeatRowLabel(
+                rule("""{"mode":"due_again","schedule":"fixed","every":2,"unit":"hours","end":{"kind":"never"}}"""),
+            ),
+        )
+        assertEquals(
+            "every 30 minutes",
+            repeatRowLabel(
+                rule("""{"mode":"due_again","schedule":"fixed","every":30,"unit":"minutes","end":{"kind":"never"}}"""),
+            ),
+        )
+        assertEquals(
+            "the third Thursday of every month",
+            repeatRowLabel(
+                rule(
+                    """{"mode":"due_again","schedule":"fixed","every":1,"unit":"months","end":{"kind":"never"},"pattern":{"kind":"nth_weekday","nth":3,"weekday":4}}""",
+                ),
+            ),
+        )
+        assertEquals(
+            "the last weekend day of every 2 months",
+            repeatRowLabel(
+                rule(
+                    """{"mode":"due_again","schedule":"fixed","every":2,"unit":"months","end":{"kind":"never"},"pattern":{"kind":"last_weekend_day"}}""",
+                ),
+            ),
+        )
         assertNull(repeatRowLabel(null))
+    }
+
+    @Test
+    fun sub_day_repeats_need_a_timed_anchor() {
+        val dateOnly = StampDto(at = "2026-11-28T00:00:00Z", hasTime = false)
+        val timed = StampDto(at = "2026-11-28T09:00:00Z", hasTime = true)
+        assertTrue(repeatNeedsClock("hours", "due_again", dateOnly, null))
+        assertTrue(repeatNeedsClock("minutes", "due_again", null, dateOnly))
+        assertTrue(!repeatNeedsClock("hours", "due_again", timed, null))
+        assertTrue(!repeatNeedsClock("days", "due_again", dateOnly, null))
+        assertTrue(repeatNeedsClock("minutes", "defer_another", timed, dateOnly))
+        assertTrue(!repeatNeedsClock("minutes", "defer_another", dateOnly, timed))
     }
 
     @Test

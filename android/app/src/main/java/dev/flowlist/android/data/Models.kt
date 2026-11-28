@@ -296,6 +296,37 @@ data class TaskView(
 val TaskDto.isActive: Boolean
     get() = !completed && trashedAt == null
 
+fun repeatWeekdayName(index: Int): String? = when (index % 7) {
+    0 -> "Sunday"
+    1 -> "Monday"
+    2 -> "Tuesday"
+    3 -> "Wednesday"
+    4 -> "Thursday"
+    5 -> "Friday"
+    else -> "Saturday"
+}
+
+fun repeatOrdinal(nth: Int): String = when (nth) {
+    1 -> "first"
+    2 -> "second"
+    3 -> "third"
+    4 -> "fourth"
+    else -> "fifth"
+}
+
+/// Hourly and minute rules advance the clock, so the anchor they schedule from
+/// must carry a time. A date-only anchor is refused instead of guessing one.
+fun repeatNeedsClock(
+    unit: String?,
+    mode: String,
+    due: StampDto?,
+    defer: StampDto?,
+): Boolean {
+    if (unit != "hours" && unit != "minutes") return false
+    val anchor = if (mode == "defer_another") defer ?: due else due ?: defer
+    return anchor != null && !anchor.hasTime
+}
+
 /// The Mac's row metadata for a repeat rule, e.g. "every 2 weeks (defer
 /// another)" or "every Monday and Friday after completion for 6 times". The
 /// row owns the glyph, so this is the label only.
@@ -310,32 +341,45 @@ fun repeatRowLabel(repeat: JsonElement?): String? {
         ?.distinct()
         ?.sorted()
         .orEmpty()
-    val cadence = if (days.isEmpty()) {
-        val noun = when (unit) {
-            "weeks" -> "week"
-            "months" -> "month"
-            "years" -> "year"
-            else -> "day"
+    val pattern = rule["pattern"] as? JsonObject
+    val patternKind = (pattern?.get("kind") as? JsonPrimitive)?.content
+    val months = if (every == 1) "every month" else "every $every months"
+    val cadence = when (patternKind) {
+        "nth_weekday" -> {
+            val nth = (pattern["nth"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 1
+            val weekday = (pattern["weekday"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 1
+            "the ${repeatOrdinal(nth)} ${repeatWeekdayName(weekday)} of $months"
         }
-        if (every == 1) "every $noun" else "every $every ${noun}s"
-    } else {
-        val names = days.map {
-            when (it) {
-                0 -> "Sunday"
-                1 -> "Monday"
-                2 -> "Tuesday"
-                3 -> "Wednesday"
-                4 -> "Thursday"
-                5 -> "Friday"
-                else -> "Saturday"
+        "last_weekend_day" -> "the last weekend day of $months"
+        else -> if (days.isEmpty()) {
+            val noun = when (unit) {
+                "minutes" -> "minute"
+                "hours" -> "hour"
+                "weeks" -> "week"
+                "months" -> "month"
+                "years" -> "year"
+                else -> "day"
             }
+            if (every == 1) "every $noun" else "every $every ${noun}s"
+        } else {
+            val names = days.map {
+                when (it) {
+                    0 -> "Sunday"
+                    1 -> "Monday"
+                    2 -> "Tuesday"
+                    3 -> "Wednesday"
+                    4 -> "Thursday"
+                    5 -> "Friday"
+                    else -> "Saturday"
+                }
+            }
+            val joined = when (names.size) {
+                1 -> names.first()
+                2 -> "${names[0]} and ${names[1]}"
+                else -> names.dropLast(1).joinToString(", ") + ", and " + names.last()
+            }
+            "every $joined"
         }
-        val joined = when (names.size) {
-            1 -> names.first()
-            2 -> "${names[0]} and ${names[1]}"
-            else -> names.dropLast(1).joinToString(", ") + ", and " + names.last()
-        }
-        "every $joined"
     }
     val schedule = if ((rule["schedule"] as? JsonPrimitive)?.content == "after_completion") {
         " after completion"

@@ -11,7 +11,7 @@ use crate::error::{Error, Result};
 use crate::ids::{ChecklistId, ContainerId, FolderId, PerspectiveId, ProjectId, TagId, TaskId};
 use crate::model::{
     ChecklistItem, DefaultNotification, Folder, Geo, IconSpec, Perspective, Priority, Project,
-    ProjectKind, ProjectStatus, RepeatRule, Tag, TagStatus, Task, TaskAlert,
+    ProjectKind, ProjectStatus, RepeatMode, RepeatRule, Tag, TagStatus, Task, TaskAlert,
     increment_repeat_title,
 };
 use crate::time::{Stamp, local_date, now};
@@ -765,6 +765,7 @@ impl Command {
                 if task.repeat.is_some() {
                     task.repeat_series = Some(task.id.clone());
                 }
+                ensure_repeat_has_clock(task.repeat.as_ref(), task.due, task.defer)?;
                 task.sequential = new_task.sequential;
                 task.modified_at = at;
                 let id = task.id.clone();
@@ -923,6 +924,7 @@ impl Command {
                     if let Some(parent) = patch.parent {
                         moved = Some((None, parent));
                     }
+                    ensure_repeat_has_clock(task.repeat.as_ref(), task.due, task.defer)?;
                     task.modified_at = at;
                     ensure_dates_in_order(task.due, task.defer)?;
                 }
@@ -2352,6 +2354,27 @@ fn remove_folder_tree(db: &mut Db, id: &FolderId) {
     }
     db.detach_container(&ContainerId::Folder(id.clone()));
     db.folders.remove(id);
+}
+
+/// Hourly and minute repeats advance the clock, so the date they schedule from
+/// must carry a time. A date-only task is refused rather than promoted to a
+/// guessed time.
+fn ensure_repeat_has_clock(
+    rule: Option<&RepeatRule>,
+    due: Option<Stamp>,
+    defer: Option<Stamp>,
+) -> Result<()> {
+    let Some(rule) = rule.filter(|rule| rule.uses_sub_day()) else {
+        return Ok(());
+    };
+    let anchor = match rule.mode {
+        RepeatMode::DueAgain => due.or(defer),
+        RepeatMode::DeferAnother => defer.or(due),
+    };
+    if anchor.is_some_and(|stamp| !stamp.has_time) {
+        return Err(Error::invalid("Add a time first"));
+    }
+    Ok(())
 }
 
 /// Move the given tasks and every task below them to Trash. Both plain

@@ -19,7 +19,8 @@ pub use perspective::{
 };
 pub use project::{Project, ProjectIcon, ProjectKind, ProjectStatus};
 pub use repeat::{
-    RepeatEnd, RepeatMode, RepeatOutcome, RepeatRule, RepeatSchedule, increment_repeat_title,
+    RepeatEnd, RepeatMode, RepeatOutcome, RepeatPattern, RepeatRule, RepeatSchedule,
+    increment_repeat_title,
 };
 pub use settings::{Settings, SidebarOptions};
 pub use tag::{Geo, Tag, TagStatus};

@@ -332,9 +332,11 @@ library:
   notification, adds relative and custom notifications through the Add
   Notification menu, checks the full-screen reminder and collapses the section.
 - `scripts/gui/inspector-sections-probe.sh` builds a repeat rule from the
-  editable interval, unit dropdown, weekday strip and segmented controls,
-  checks the centred tag plus and chip box, then edits a project's review
-  cadence and next review date and folds the Review section.
+  editable interval, unit dropdown, monthly pattern row, weekday strip and
+  segmented controls, checks that a date-only task rejects **Hours** with
+  **Add a time first** and that a timed task accepts the hourly rule, checks
+  the centred tag plus and chip box, then edits a project's review cadence and
+  next review date and folds the Review section.
 
 Both build the release binary first (`cargo build --release`) and compile the
 Swift helpers themselves.
