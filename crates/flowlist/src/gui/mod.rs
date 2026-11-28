@@ -424,6 +424,25 @@ fn menu_position(
     )
 }
 
+/// The same dropdown placement, but with its right edge on the chip's right
+/// edge. A chip that grows its label (View · Due · Columns) then expands its
+/// card to the left instead of dragging the card sideways.
+fn menu_position_right(
+    anchor: Bounds<gpui::Pixels>,
+    viewport: (f32, f32),
+    width: f32,
+    height: f32,
+) -> (f32, f32) {
+    let right = f32::from(anchor.origin.x) + f32::from(anchor.size.width);
+    let y = f32::from(anchor.origin.y) + f32::from(anchor.size.height) + 4.0;
+    (
+        (right - width)
+            .min((viewport.0 - width).max(0.0))
+            .max(0.0),
+        y.min((viewport.1 - height).max(0.0)).max(0.0),
+    )
+}
+
 /// Everything a view restores when it becomes active. Kept as a pure mapping
 /// so the per-view switch can be tested without building a window.
 struct RestoredViewState {
@@ -9939,7 +9958,7 @@ impl Render for FlowlistApp {
         if self.view_menu_open
             && let Some(anchor) = self.view_anchor.get()
         {
-            let (x, y) = menu_position(anchor, viewport, 360.0, 390.0);
+            let (x, y) = menu_position_right(anchor, viewport, 360.0, 390.0);
             root = root.child(fade_in(
                 "view-menu-fade",
                 div()
@@ -9954,7 +9973,7 @@ impl Render for FlowlistApp {
         if self.filter_menu_open
             && let Some(anchor) = self.filter_anchor.get()
         {
-            let (x, y) = menu_position(anchor, viewport, 230.0, 260.0);
+            let (x, y) = menu_position_right(anchor, viewport, 230.0, 260.0);
             root = root.child(fade_in(
                 "filter-menu-fade",
                 div()
@@ -10422,7 +10441,7 @@ mod tests {
     use super::{
         DATE_PICKER_HEIGHT, DATE_PICKER_WIDTH, DateField, View, accent_for, clock_dial_position,
         clock_hour_12, clock_hour_24, date_picker_position, effective_priority_filter,
-        first_of_month, picker_default_time, picker_stamp, stepped_time,
+        first_of_month, menu_position_right, picker_default_time, picker_stamp, stepped_time,
     };
     use chrono::{NaiveDate, NaiveTime};
     use flowlist_core::model::{BuiltinPerspective, Priority};
@@ -10669,6 +10688,40 @@ mod tests {
         assert_eq!(
             stepped_time(NaiveTime::from_hms_opt(12, 0, 0).unwrap(), 60),
             NaiveTime::from_hms_opt(13, 0, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn header_cards_anchor_their_right_edge_to_the_chip() {
+        // A 120px View chip ending at x=1220: the 360px card ends there too,
+        // so a longer chip label grows the card leftwards without moving it.
+        let anchor = Bounds {
+            origin: point(px(1100.0), px(60.0)),
+            size: size(px(120.0), px(26.0)),
+        };
+        let (x, y) = menu_position_right(anchor, (1254.0, 1000.0), 360.0, 390.0);
+        assert_eq!(x, 860.0);
+        assert_eq!(y, 90.0);
+
+        // A card wider than the space to the left clamps to the window edge
+        // instead of painting off screen.
+        let left = Bounds {
+            origin: point(px(10.0), px(60.0)),
+            size: size(px(80.0), px(26.0)),
+        };
+        assert_eq!(
+            menu_position_right(left, (1254.0, 1000.0), 360.0, 390.0).0,
+            0.0
+        );
+
+        // A chip too close to the right edge still leaves the card on screen.
+        let right = Bounds {
+            origin: point(px(1240.0), px(60.0)),
+            size: size(px(100.0), px(26.0)),
+        };
+        assert_eq!(
+            menu_position_right(right, (1254.0, 1000.0), 360.0, 390.0).0,
+            1254.0 - 360.0
         );
     }
 

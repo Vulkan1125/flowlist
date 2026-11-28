@@ -21,6 +21,12 @@
 - **Keyboard and menu polish.** Every layout choice saves immediately, and the
   Layout menu stays open while several fields or columns are toggled.
 
+### Bug fixes
+
+- **Header cards stay put.** The View and Filter cards now keep their right
+  edge on their chip, so a longer label such as `View · Due · Columns` grows
+  the card to the left instead of dragging it sideways.
+
 ## 0.10.3 — 2026-11-28
 
 ### What's new
