@@ -1471,6 +1471,20 @@ fun MainScreen(
             onDismiss = { perspectiveEditor = null },
             onSave = { draft ->
                 perspectiveEditor = null
+                // Keep an open view in step with the edit; the sync reply is
+                // authoritative but arrives a beat later.
+                if (editing != null && savedPerspective?.id == editing.id) {
+                    savedPerspective = editing.copy(
+                        name = draft.name,
+                        filter = draft.toFilter(),
+                        groupBy = draft.group,
+                        sort = draft.sort,
+                        showCompleted = draft.showCompleted,
+                        pinned = draft.pinned,
+                        icon = draft.icon,
+                        description = draft.description,
+                    )
+                }
                 scope.launch {
                     repository.savePerspective(
                         id = editing?.id.orEmpty(),
