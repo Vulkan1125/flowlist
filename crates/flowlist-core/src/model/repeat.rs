@@ -224,33 +224,6 @@ impl RepeatRule {
         format!("{every}, {origin}, scheduling {next}{end}.")
     }
 
-    /// One line under the ends controls: how many occurrences remain and,
-    /// where possible, the date of the last one.
-    pub fn ending_summary(&self, due: Option<Stamp>, defer: Option<Stamp>) -> Option<String> {
-        match self.end {
-            RepeatEnd::Never => None,
-            RepeatEnd::OnDate(date) => {
-                Some(format!("Ends on {}", date.format("%b %-d, %Y")))
-            }
-            RepeatEnd::AfterCount(limit) => {
-                let done = self.completed_count.min(limit);
-                let mut text = format!(
-                    "Ends after {limit} occurrence{}",
-                    if limit == 1 { "" } else { "s" }
-                );
-                if done > 0 {
-                    text.push_str(&format!(" · {done} done"));
-                }
-                if let Some(date) = self.projected_last_date(due, defer) {
-                    text.push_str(&format!(" · last on {}", date.format("%b %-d, %Y")));
-                } else if matches!(self.schedule, RepeatSchedule::AfterCompletion) {
-                    text.push_str(" · dates follow each completion");
-                }
-                Some(text)
-            }
-        }
-    }
-
     pub fn description(&self) -> String {
         let schedule = match self.schedule {
             RepeatSchedule::Fixed => String::new(),

@@ -204,7 +204,8 @@ The project editor also opens from the pencil beside a project's name. Status
 choices are Active, On Hold, Done and Dropped; Done and Dropped leave Browse
 and appear in Archive. **Complete with last action** marks the project done
 when its last task is ticked. **Archived** hides the project from Browse and
-shows it in Archive without changing its status; Settings → Library →
+shows it in Archive without changing its status; archived rows in Archive have
+an **Unarchive** action; Settings → Library →
 **Archive closed projects** does the same automatically for Done and Dropped
 projects.
 

@@ -358,6 +358,7 @@ fun MoreDestination(
     onPurge: (String) -> Unit,
     onReview: (ProjectDto) -> Unit,
     onProject: (ProjectDto) -> Unit,
+    onUnarchive: (ProjectDto) -> Unit,
     onNewTag: () -> Unit,
     onEditTag: (TagDto) -> Unit,
     onDeleteTag: (TagDto) -> Unit,
@@ -443,6 +444,11 @@ fun MoreDestination(
                             color = colors.ink,
                             modifier = Modifier.weight(1f),
                         )
+                        if (project.archived) {
+                            TextButton(onClick = { onUnarchive(project) }) {
+                                Text("Unarchive", color = colors.accent)
+                            }
+                        }
                         Text("$count", style = MaterialTheme.typography.labelMedium, color = colors.faint)
                     }
                     Hairline(Modifier.padding(start = 20.dp))

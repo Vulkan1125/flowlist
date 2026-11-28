@@ -896,6 +896,9 @@ fun MainScreen(
                             scope.launch { repository.reviewProject(projectItem) }
                         },
                         onProject = { projectItem -> project = projectItem },
+                        onUnarchive = { projectItem ->
+                            scope.launch { repository.setProjectArchived(projectItem, false) }
+                        },
                         onNewTag = { tagEditor = TagEditorTarget() },
                         onEditTag = { item -> tagEditor = TagEditorTarget(item, item.parent) },
                         onDeleteTag = { item ->
