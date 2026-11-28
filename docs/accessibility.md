@@ -122,14 +122,15 @@ still a gap.
 
 ### Dropdown menus and the new-project prompt
 
-The header reads **Available → View → Priorities**. Available is a check-mark
+The header reads **Available → View → Priorities**. Available is a quiet
 toggle. View and Priorities are dropdowns with a chevron at the right edge.
 View opens Sort, Group and Layout tabs, stays open while choices change, and
 `Esc` or an outside click closes it. Its card names the active sort, grouping
 and layout at the top, and the dot marks only a changed sort or grouping; a
-layout change stays quiet. Priorities opens All / High / Medium / Low and
-mirrors the sidebar's High / Medium / Low rows. **Completed** appears where a
-view can show finished work. When a typed project path does not exist, a
+layout change stays quiet. The Sort and Group lists scroll with a scrollbar
+when they overflow. Priorities opens All / High / Medium / Low and mirrors the
+sidebar's High / Medium / Low rows; it is omitted while a Priority view is
+open. **Completed** appears where a view can show finished work. When a typed project path does not exist, a
 Create project sheet asks first: `Enter` creates the project and files the
 task, `Esc` leaves the task unchanged.
 

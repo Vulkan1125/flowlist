@@ -107,13 +107,14 @@ The View menu stays open while choices change, and every change is saved to
 the view straight away. The header order is **Available**, **View**,
 **Priorities**:
 
-- **Available** is a one-click toggle. When it is on, a check mark sits at its
-  right edge.
+- **Available** is a one-click toggle.
 - **View** keeps a fixed width and shows a small dot only when the sort or
   grouping changes; a layout change is named inside the card but leaves the
-  chip quiet.
+  chip quiet. The Sort and Group lists gain a scrollbar when their options
+  overflow.
 - **Priorities** is a dropdown with a chevron. It selects All priorities,
-  High, Medium or Low and matches the sidebar's High / Medium / Low rows.
+  High, Medium or Low and matches the sidebar's High / Medium / Low rows. It
+  is hidden when the open view is itself a Priority view.
 
 **Completed** appears where a view can show finished work.
 
@@ -459,9 +460,9 @@ titles itself **Search** and ranks the closest matches first.
   means your drag-and-drop order; **None** means one flat list with no
   headings. **Layout** chooses Fluid or Columns rows, their density and the
   fields or columns the view shows.
-- **Available** keeps only tasks you can start now and shows a check mark when
-  on. **Priorities** opens All / High / Medium / Low. **Completed** shows or
-  hides finished work in project, folder and tag views.
+- **Available** keeps only tasks you can start now. **Priorities** opens All /
+  High / Medium / Low, and is hidden while a Priority view is open.
+  **Completed** shows or hides finished work in project, folder and tag views.
 - The choices are remembered per view.
 - **Settings → Workflow → Forecast tag** names a tag whose undated actions
   appear in Forecast without needing a date. **Show flagged undated tasks** does

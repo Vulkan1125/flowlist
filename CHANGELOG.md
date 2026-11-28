@@ -5,13 +5,14 @@
 ### What's new
 
 - **A leaner content toolbar.** The header now reads **Available → View →
-  Priorities**. Available is a toggle with a check mark when it is on; View
-  and Priorities are dropdowns with a chevron at their right edge. View holds
-  Sort, Group and Layout tabs, and keeps a fixed width with the active view
-  described inside its card. Priorities opens All / High / Medium / Low and
-  mirrors the sidebar's rows. **Completed** stays where a view can show
-  finished work, and context actions such as Hide past, Calendar and Planned
-  stay inline.
+  Priorities**. Available is a quiet toggle; View and Priorities are dropdowns
+  with a chevron at their right edge. View holds Sort, Group and Layout tabs,
+  keeps a fixed width and describes the active view inside its card. The Sort
+  and Group lists show a scrollbar when they overflow. Priorities opens All /
+  High / Medium / Low and mirrors the sidebar's rows; it is left out when the
+  open view is itself a Priority view. **Completed** stays where a view can
+  show finished work, and context actions such as Hide past, Calendar and
+  Planned stay inline.
 - **Per-view row layouts.** The **View** popover gives every view its own
   choice of **Fluid** rows, the existing wrapped layout, or **Columns**, one
   line per task. The choice is remembered per perspective.
@@ -23,7 +24,7 @@
   with optional Defer, Planned, Estimate and Checklist columns. Widths fit the
   window and inspector, and clicking a row still opens the inspector.
 - **Keyboard and menu polish.** Every layout choice saves immediately, and the
-  Layout menu stays open while several fields or columns are toggled.
+  View menu stays open while several fields or columns are toggled.
 
 ### Bug fixes
 

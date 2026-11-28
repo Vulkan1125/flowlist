@@ -85,6 +85,7 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "header_view_summary": "Default order and grouping",
   "header_view_dot": false,
   "header_priority_menu": false,
+  "header_priority_visible": true,
   "layout": "fluid",
   "density": "comfortable",
   "hidden_fields": [],
@@ -235,7 +236,9 @@ probe can assert the Settings toggle took effect. `layout`, `density`,
 `density:compact`, `field:project` and `column:due` to painted boxes.
 `header_priority_boxes` maps `chip`, `priority:all`, `priority:high`,
 `priority:medium` and `priority:low` the same way. `header_view_menu` and
-`header_priority_menu` say whether the View and Priorities dropdowns are open.
+`header_priority_menu` say whether the View and Priorities dropdowns are open;
+`header_priority_visible` is false while a Priority view is showing, since the
+view itself already is that filter.
 `header_view_tab` names the active View tab, and `header_view_summary` exposes
 the line inside the card. `header_view_label` stays fixed at `View`, and
 `header_view_dot` is true only for a changed sort or grouping, not a layout

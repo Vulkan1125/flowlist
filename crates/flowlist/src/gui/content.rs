@@ -7,7 +7,7 @@ use std::rc::Rc;
 use chrono::{Datelike, Duration, NaiveDate};
 use gpui::{
     AnyElement, Context, CursorStyle, DragMoveEvent, IntoElement, MouseButton, ScrollDelta,
-    SharedString, TextRun, Window, div, font, prelude::*, px,
+    SharedString, TextRun, Window, div, font, point, prelude::*, px,
 };
 
 use flowlist_core::command::{Command, ProjectPatch};
@@ -19,7 +19,10 @@ use flowlist_core::model::{
 use flowlist_core::query::{self, Group, TaskRow};
 use flowlist_core::time::{Stamp, format_duration, human_date, local_date, now};
 
-use super::drag::{DragForecastResize, DragTask, ghost, resize_ghost};
+use super::drag::{
+    DragForecastResize, DragTask, DragViewMenuScroll, ghost, resize_ghost,
+    view_menu_scroll_ghost,
+};
 use super::icons::{self, Icon};
 use super::widgets::TipExt;
 use super::{
@@ -1418,6 +1421,9 @@ impl FlowlistApp {
             None
         };
         let is_trash = matches!(self.view, View::Builtin(BuiltinPerspective::Trash));
+        // A Priority perspective is already the filter; repeating the
+        // dropdown beside View would only offer the same choice back.
+        let show_priority_chip = !matches!(self.view, View::Priority(_));
         div()
             .flex()
             .flex_col()
@@ -1547,7 +1553,7 @@ impl FlowlistApp {
                                         .id("only-available")
                                         .flex_shrink_0()
                                         .flow_tip(self, cx, theme, "Show next available task")
-                                        .child(check_chip(
+                                        .child(widgets::toggle_chip(
                                             theme,
                                             "Available",
                                             self.only_available,
@@ -1594,6 +1600,8 @@ impl FlowlistApp {
                                                         .retain(|key, _| key == "chip");
                                                     this.view_menu_open =
                                                         !this.view_menu_open && !suppress;
+                                                    this.view_tab_scroll
+                                                        .set_offset(point(px(0.), px(0.)));
                                                     this.priority_menu_open = false;
                                                     this.sidebar_menu = None;
                                                     cx.notify();
@@ -1609,7 +1617,8 @@ impl FlowlistApp {
                                             }
                                         })
                                 })
-                                .child({
+                                .when(show_priority_chip, |this| {
+                                    this.child({
                                     let anchor = self.priority_anchor.clone();
                                     let boxes = self.header_priority_boxes.clone();
                                     let active = self.priority_menu_open
@@ -1665,6 +1674,7 @@ impl FlowlistApp {
                                                 );
                                             }
                                         })
+                                    })
                                 })
                                 .when(
                                     self.completed_filter_applies() && !is_trash,
@@ -1868,7 +1878,11 @@ impl FlowlistApp {
                     .child(tab.label())
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.view_menu_tab = tab;
-                        this.view_boxes.borrow_mut().retain(|key, _| key == "chip");
+                        this.header_view_boxes
+                            .borrow_mut()
+                            .retain(|key, _| key == "chip");
+                        this.view_tab_scroll
+                            .set_offset(point(px(0.), px(0.)));
                         cx.notify();
                     })),
             );
@@ -1960,7 +1974,9 @@ impl FlowlistApp {
             .flex_col()
             .gap(px(1.))
             .max_h(px(300.))
-            .overflow_y_scroll();
+            .pr(px(8.))
+            .overflow_y_scroll()
+            .track_scroll(&self.view_tab_scroll);
         let options: Vec<Option<SortBy>> = vec![
             None,
             Some(SortBy::Manual),
@@ -2019,7 +2035,7 @@ impl FlowlistApp {
                     .on_click(cx.listener(move |this, _, _, cx| this.choose_sort(option, cx))),
             );
         }
-        list.into_any_element()
+        self.view_tab_scroll_area(theme, cx, list)
     }
 
     fn render_group_tab(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -2030,7 +2046,9 @@ impl FlowlistApp {
             .flex_col()
             .gap(px(1.))
             .max_h(px(300.))
-            .overflow_y_scroll();
+            .pr(px(8.))
+            .overflow_y_scroll()
+            .track_scroll(&self.view_tab_scroll);
         let options: Vec<Option<GroupBy>> = vec![
             None,
             Some(GroupBy::Project),
@@ -2089,7 +2107,118 @@ impl FlowlistApp {
                     .on_click(cx.listener(move |this, _, _, cx| this.choose_group(option, cx))),
             );
         }
-        list.into_any_element()
+        self.view_tab_scroll_area(theme, cx, list)
+    }
+
+    /// Wrap the scrolling Sort/Group list with a thin overlay scrollbar.
+    fn view_tab_scroll_area(
+        &self,
+        theme: super::theme::Theme,
+        cx: &mut Context<Self>,
+        list: impl IntoElement,
+    ) -> AnyElement {
+        div()
+            .relative()
+            .on_drag_move::<DragViewMenuScroll>(cx.listener(
+                |this, event: &DragMoveEvent<DragViewMenuScroll>, _, cx| {
+                    let Some(drag_offset) = this.view_tab_scroll_drag_grab.get() else {
+                        return;
+                    };
+                    let bounds = this.view_tab_scroll.bounds();
+                    let viewport = f32::from(bounds.size.height);
+                    let max_offset = f32::from(this.view_tab_scroll.max_offset().height);
+                    if viewport <= 0.0 || max_offset <= 0.0 {
+                        return;
+                    }
+                    let content = viewport + max_offset;
+                    let thumb_height =
+                        (viewport * viewport / content).clamp(24.0, viewport);
+                    let travel = (viewport - thumb_height).max(1.0);
+                    let pointer = f32::from(event.event.position.y - bounds.origin.y);
+                    let thumb_top = (pointer - drag_offset).clamp(0.0, travel);
+                    let scroll = (thumb_top / travel) * max_offset;
+                    this.view_tab_scroll.set_offset(point(px(0.), px(-scroll)));
+                    cx.notify();
+                },
+            ))
+            .child(list)
+            .child(self.view_tab_scrollbar(theme, cx))
+            .into_any_element()
+    }
+
+    fn view_tab_scrollbar(
+        &self,
+        theme: super::theme::Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        const THUMB_WIDTH: f32 = 5.0;
+        const TRACK_WIDTH: f32 = 12.0;
+        const PADDING: f32 = 3.0;
+        const MIN_THUMB: f32 = 24.0;
+
+        let handle = &self.view_tab_scroll;
+        let bounds = handle.bounds();
+        let viewport = f32::from(bounds.size.height);
+        let max_offset = f32::from(handle.max_offset().height);
+        if viewport <= 0.0 || max_offset <= 1.0 {
+            return div().into_any_element();
+        }
+        let scrolled = (-f32::from(handle.offset().y)).clamp(0.0, max_offset);
+        let content = viewport + max_offset;
+        let thumb_height = (viewport * viewport / content).clamp(MIN_THUMB, viewport);
+        let travel = (viewport - thumb_height).max(1.0);
+        let thumb_top = (scrolled / max_offset) * travel;
+        let thumb_top_window = f32::from(bounds.origin.y) + thumb_top;
+        let grab = self.view_tab_scroll_drag_grab.clone();
+        let thumb = div()
+            .id("view-menu-scroll-thumb")
+            .absolute()
+            .top(px(thumb_top))
+            .right(px(PADDING))
+            .w(px(THUMB_WIDTH))
+            .h(px(thumb_height))
+            .rounded_full()
+            .bg(theme.text_faint.opacity(0.55))
+            .hover(|style| style.bg(theme.text_dim))
+            .on_drag(DragViewMenuScroll, move |payload, position, window, cx| {
+                let pointer = f32::from(position.y);
+                let drag_offset = (pointer - thumb_top_window).clamp(0.0, thumb_height);
+                grab.set(Some(drag_offset));
+                view_menu_scroll_ghost(payload, position, window, cx)
+            });
+        div()
+            .id("view-menu-scroll-track")
+            .absolute()
+            .top_0()
+            .right_0()
+            .h_full()
+            .w(px(TRACK_WIDTH))
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    let pointer = f32::from(event.position.y);
+                    if pointer >= thumb_top_window && pointer <= thumb_top_window + thumb_height {
+                        return;
+                    }
+                    let bounds = this.view_tab_scroll.bounds();
+                    let viewport = f32::from(bounds.size.height);
+                    let max_offset = f32::from(this.view_tab_scroll.max_offset().height);
+                    if viewport <= 0.0 || max_offset <= 0.0 {
+                        return;
+                    }
+                    let content = viewport + max_offset;
+                    let thumb_height =
+                        (viewport * viewport / content).clamp(MIN_THUMB, viewport);
+                    let travel = (viewport - thumb_height).max(1.0);
+                    let pointer = f32::from(event.position.y - bounds.origin.y);
+                    let thumb_top = (pointer - thumb_height / 2.0).clamp(0.0, travel);
+                    let scroll = (thumb_top / travel) * max_offset;
+                    this.view_tab_scroll.set_offset(point(px(0.), px(-scroll)));
+                    cx.notify();
+                }),
+            )
+            .child(thumb)
+            .into_any_element()
     }
 
     /// The Layout tab: mode, density and the checkboxes that were previously
@@ -4419,32 +4548,6 @@ fn toolbar_chip(
             10.0,
             if active { theme.accent } else { theme.text_dim },
         ))
-}
-
-/// A toggle chip with a check mark at its right edge when it is on.
-fn check_chip(
-    theme: super::theme::Theme,
-    label: impl Into<String>,
-    active: bool,
-) -> impl IntoElement {
-    div()
-        .h(px(26.))
-        .px_2()
-        .flex()
-        .items_center()
-        .gap_1()
-        .rounded_md()
-        .border_1()
-        .border_color(if active { theme.accent } else { theme.border })
-        .bg(if active { theme.selection } else { theme.field })
-        .text_xs()
-        .text_color(if active { theme.accent } else { theme.text_dim })
-        .cursor_pointer()
-        .hover(|style| style.bg(theme.hover))
-        .child(label.into())
-        .when(active, |this| {
-            this.child(icons::icon(Icon::Check, 10.0, theme.accent))
-        })
 }
 
 /// The small checked square used by the Layout menu's field and column rows.

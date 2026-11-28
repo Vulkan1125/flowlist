@@ -757,6 +757,10 @@ pub struct FlowlistApp {
     /// The content-header View popover. Sorting, grouping and layout share it.
     view_menu_open: bool,
     view_menu_tab: ViewMenuTab,
+    /// The Sort and Group tab lists scroll together, with their own thin
+    /// scrollbar.
+    view_tab_scroll: ScrollHandle,
+    view_tab_scroll_drag_grab: Rc<Cell<Option<f32>>>,
     /// The Priorities dropdown beside View. It mirrors the sidebar's High /
     /// Medium / Low rows as a compact select.
     priority_menu_open: bool,
@@ -1299,6 +1303,8 @@ impl FlowlistApp {
             view_options,
             view_menu_open: false,
             view_menu_tab: ViewMenuTab::Sort,
+            view_tab_scroll: ScrollHandle::new(),
+            view_tab_scroll_drag_grab: Rc::new(Cell::new(None)),
             priority_menu_open: false,
             view_anchor: Rc::new(Cell::new(None)),
             hide_past_anchor: Rc::new(Cell::new(None)),
@@ -8591,6 +8597,7 @@ impl FlowlistApp {
             "header_view_summary": self.view_summary(),
             "header_view_dot": self.sort.is_some() || self.group.is_some(),
             "header_priority_menu": self.priority_menu_open,
+            "header_priority_visible": !matches!(self.view, View::Priority(_)),
             "header_view_anchor": self.view_anchor.get().is_some(),
             "header_priority_anchor": self.priority_anchor.get().is_some(),
             "header_view_boxes": self.header_view_boxes.borrow().clone(),

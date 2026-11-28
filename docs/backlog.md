@@ -699,11 +699,12 @@ integrations are tracked separately and are not part of this phase.
       project picker stays closed until the user types.
 - [x] New projects use the project icon by default; Folder remains one of the
       ten choices. Tasks converted to projects take the same default.
-- [x] The header order is Available, View, Priorities. Available is a
-      check-mark toggle; View and Priorities open anchored dropdowns, and the
-      same chip, an outside click or Escape closes them. View holds Sort,
-      Group and Layout tabs; Priorities mirrors All / High / Medium / Low.
-      Completed appears only where a view can show finished work.
+- [x] The header order is Available, View, Priorities. Available is a plain
+      toggle; View and Priorities open anchored dropdowns, and the same chip,
+      an outside click or Escape closes them. View holds Sort, Group and
+      Layout tabs with a scrollbar on the long lists; Priorities mirrors
+      All / High / Medium / Low but is hidden in a Priority view. Completed
+      appears only where a view can show finished work.
 - [x] Project creation sheets omit the corner close control because the footer
       already offers Cancel.
 - [x] Tooltips stay hidden for three seconds, and a click mutes the button's

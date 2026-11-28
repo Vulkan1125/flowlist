@@ -85,8 +85,8 @@ global.
 The view title and the Available / View / Priorities chips share one row; the
 subtitle sits on its own row. A view name that cannot fit beside the controls
 is omitted rather than clipped. View and Priorities open anchored menus with
-an outside-click scrim; Escape closes them. Available toggles a check mark at
-its right edge.
+an outside-click scrim; Escape closes them. Available is a plain toggle, and
+the Priorities chip is hidden while a Priority view is open.
 
 Grouping choices are project, folder, tag, due, defer, flagged and estimate.
 Sort choices are manual, due, defer, name, flagged, estimate, created and

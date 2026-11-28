@@ -225,6 +225,7 @@ assert d["content_rows"], "no task rows"
 assert d["header_view_label"] == "View", d["header_view_label"]
 assert d["header_view_summary"] == "Default order and grouping", d["header_view_summary"]
 assert d["header_view_dot"] is False, d["header_view_dot"]
+assert d["header_priority_visible"] is True, d["header_priority_visible"]
 print("  fresh view: fluid, comfortable, four default columns")
 PY
 shot fluid
