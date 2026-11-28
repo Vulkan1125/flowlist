@@ -75,9 +75,12 @@
   open shows no badge.
 - **Archive rows match the Mac.** Each archived project shows its icon, an
   **X of Y done** line, and its status with the same check, cross or pause.
-  **Reopen** returns Done and Dropped projects to Active in one undoable step,
-  **Unarchive** clears an explicit archive, and **Delete** uses the Browse
-  confirmation.
+  Swipe right to **Reopen** a Done or Dropped project, or to **Unarchive** an
+  explicitly archived one; swipe left to **Delete** through the Browse
+  confirmation. Both swipes tick the haptics.
+- **Swipe haptics.** Every swipe action now gives the completion tick:
+  complete, trash, restore, delete, reopen and unarchive. Settings → Tasks →
+  **Haptics** turns them off with the rest of the haptics.
 - **Full repeat rules.** The Android task editor now edits the interval,
   fixed versus after-completion, due-again versus defer-another, the weekday
   strip for day-based rules, and an end date or count, not just the unit.

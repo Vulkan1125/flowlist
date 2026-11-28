@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.Add
@@ -57,6 +59,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -145,6 +148,9 @@ internal val LowPriorityBlue = androidx.compose.ui.graphics.Color(0xFF3B82F6)
 /** Set while the list is in select mode; rows then toggle ids instead of opening. */
 class TaskSelection(val ids: Set<String>, val toggle: (String) -> Unit)
 val LocalTaskSelection = compositionLocalOf<TaskSelection?> { null }
+
+/// Settings → Tasks → Haptics gates the tick on completion, drag and swipe.
+val LocalHapticsEnabled = compositionLocalOf { true }
 
 /// Settings → Tasks can hide the metadata line under each task title.
 val LocalShowRowMetadata = compositionLocalOf { true }
@@ -405,18 +411,40 @@ fun SwipeTaskRow(
 ) {
     val colors = flow
     val selection = LocalTaskSelection.current
+    val haptics = LocalHapticFeedback.current
+    val hapticsEnabled = LocalHapticsEnabled.current
+    fun tick() {
+        if (hapticsEnabled) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+    }
+    // Material may confirm the same swipe twice while it settles; run the
+    // action once and replay the first answer for the duplicate.
+    var lastActionAt by remember { mutableStateOf(0L) }
+    var lastResult by remember { mutableStateOf(false) }
     val state = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    onToggle()
-                    true
+            if (value == SwipeToDismissBoxValue.Settled) {
+                false
+            } else {
+                val now = System.currentTimeMillis()
+                if (now - lastActionAt < 600) {
+                    lastResult
+                } else {
+                    lastActionAt = now
+                    val result = when (value) {
+                        SwipeToDismissBoxValue.StartToEnd -> {
+                            tick()
+                            onToggle()
+                            true
+                        }
+                        else -> {
+                            tick()
+                            onTrash()
+                            true
+                        }
+                    }
+                    lastResult = result
+                    result
                 }
-                SwipeToDismissBoxValue.EndToStart -> {
-                    onTrash()
-                    true
-                }
-                SwipeToDismissBoxValue.Settled -> false
             }
         },
     )

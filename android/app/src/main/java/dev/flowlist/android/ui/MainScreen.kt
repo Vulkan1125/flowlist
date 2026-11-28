@@ -893,6 +893,7 @@ fun MainScreen(
             LocalTaskDrag provides taskDrag,
             LocalTaskSelection provides selectionState,
             LocalShowRowMetadata provides !preferences.hideRowMetadata,
+            LocalHapticsEnabled provides preferences.haptics,
         ) {
         Row(
             modifier = Modifier

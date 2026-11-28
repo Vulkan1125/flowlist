@@ -572,7 +572,7 @@ private fun TaskSettings(preferences: AppPreferences, onChange: (AppPreferences)
     }
     Spacer(modifier = Modifier.height(14.dp))
     SettingsCard("Interaction") {
-        ToggleRow("Haptics", "A tap when a task is completed", preferences.haptics) {
+        ToggleRow("Haptics", "A tick on completion, drag and swipe actions", preferences.haptics) {
             onChange(preferences.copy(haptics = it))
         }
         ToggleRow("Swipe actions", "Right to complete, left to trash", preferences.swipeActions) {

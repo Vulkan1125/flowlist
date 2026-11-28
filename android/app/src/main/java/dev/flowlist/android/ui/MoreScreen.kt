@@ -73,6 +73,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -193,6 +195,15 @@ private fun TrashRow(
 ) {
     val colors = flow
     val selection = LocalTaskSelection.current
+    val haptics = LocalHapticFeedback.current
+    val hapticsEnabled = LocalHapticsEnabled.current
+    fun tick() {
+        if (hapticsEnabled) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+    }
+    // Material may confirm the same swipe twice while it settles; run the
+    // action once and replay the first answer for the duplicate.
+    var lastActionAt by remember { mutableStateOf(0L) }
+    var lastResult by remember { mutableStateOf(false) }
     val restoreRight = swipe != "restore_left"
     val swipeEnabled = selection == null && swipe != "off"
     val currentRestoreRight by rememberUpdatedState(restoreRight)
@@ -201,29 +212,38 @@ private fun TrashRow(
     val currentDelete by rememberUpdatedState(onDelete)
     val state = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            if (!currentSwipeEnabled) {
+            if (!currentSwipeEnabled || value == SwipeToDismissBoxValue.Settled) {
                 false
             } else {
-                when (value) {
-                    SwipeToDismissBoxValue.StartToEnd -> {
-                        if (currentRestoreRight) {
-                            currentRestore()
-                            true
-                        } else {
-                            currentDelete()
-                            false
+                val now = System.currentTimeMillis()
+                if (now - lastActionAt < 600) {
+                    lastResult
+                } else {
+                    lastActionAt = now
+                    val result = when (value) {
+                        SwipeToDismissBoxValue.StartToEnd -> {
+                            tick()
+                            if (currentRestoreRight) {
+                                currentRestore()
+                                true
+                            } else {
+                                currentDelete()
+                                false
+                            }
+                        }
+                        else -> {
+                            tick()
+                            if (currentRestoreRight) {
+                                currentDelete()
+                                false
+                            } else {
+                                currentRestore()
+                                true
+                            }
                         }
                     }
-                    SwipeToDismissBoxValue.EndToStart -> {
-                        if (currentRestoreRight) {
-                            currentDelete()
-                            false
-                        } else {
-                            currentRestore()
-                            true
-                        }
-                    }
-                    SwipeToDismissBoxValue.Settled -> false
+                    lastResult = result
+                    result
                 }
             }
         },
@@ -342,6 +362,176 @@ private fun TrashContent(
             }
             TextButton(onClick = onDelete) {
                 Text("Delete", color = colors.danger)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ArchiveProjectRow(
+    project: ProjectDto,
+    done: Int,
+    total: Int,
+    restoreLabel: String?,
+    onOpen: () -> Unit,
+    onRestore: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val colors = flow
+    val haptics = LocalHapticFeedback.current
+    val hapticsEnabled = LocalHapticsEnabled.current
+    val currentRestoreLabel by rememberUpdatedState(restoreLabel)
+    val currentRestore by rememberUpdatedState(onRestore)
+    val currentDelete by rememberUpdatedState(onDelete)
+    fun tick() {
+        if (hapticsEnabled) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+    }
+    // Material may confirm the same swipe twice while it settles; run the
+    // action once and replay the first answer for the duplicate.
+    var lastActionAt by remember { mutableStateOf(0L) }
+    var lastResult by remember { mutableStateOf(false) }
+    val state = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.Settled) {
+                false
+            } else {
+                val now = System.currentTimeMillis()
+                if (now - lastActionAt < 600) {
+                    lastResult
+                } else {
+                    lastActionAt = now
+                    val result = when (value) {
+                        SwipeToDismissBoxValue.StartToEnd -> {
+                            if (currentRestoreLabel == null) {
+                                false
+                            } else {
+                                tick()
+                                currentRestore()
+                                // Snap back and let the list drop the row when
+                                // the new status arrives; dismissing here lets
+                                // the next row catch the tail of the gesture.
+                                false
+                            }
+                        }
+                        else -> {
+                            tick()
+                            currentDelete()
+                            false
+                        }
+                    }
+                    lastResult = result
+                    result
+                }
+            }
+        },
+    )
+    SwipeToDismissBox(
+        state = state,
+        enableDismissFromStartToEnd = restoreLabel != null,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            val start = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(if (start) colors.success else colors.danger)
+                    .padding(horizontal = 24.dp),
+                contentAlignment = if (start) Alignment.CenterStart else Alignment.CenterEnd,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = if (start) Icons.Rounded.Undo else Icons.Outlined.Delete,
+                        contentDescription = if (start) currentRestoreLabel else "Delete",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = if (start) currentRestoreLabel.orEmpty() else "Delete",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White,
+                    )
+                }
+            }
+        },
+    ) {
+        ArchiveProjectContent(
+            project = project,
+            done = done,
+            total = total,
+            onOpen = onOpen,
+        )
+    }
+}
+
+@Composable
+private fun ArchiveProjectContent(
+    project: ProjectDto,
+    done: Int,
+    total: Int,
+    onOpen: () -> Unit,
+) {
+    val colors = flow
+    val statusIcon = when (project.status) {
+        "done" -> Icons.Rounded.Check
+        "dropped" -> Icons.Rounded.Close
+        "on_hold" -> Icons.Rounded.Pause
+        else -> null
+    }
+    val statusColor = if (project.status == "done") colors.success else colors.faint
+    val statusLabel = when (project.status) {
+        "done" -> "Done"
+        "dropped" -> "Dropped"
+        "on_hold" -> "On Hold"
+        else -> "Active"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.background)
+            .clickable { onOpen() }
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = projectIcon(project.icon),
+            contentDescription = null,
+            tint = colors.faint,
+            modifier = Modifier.size(15.dp),
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                project.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "$done of $total done",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.faint,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                if (statusIcon != null) {
+                    Icon(
+                        imageVector = statusIcon,
+                        contentDescription = statusLabel,
+                        tint = statusColor,
+                        modifier = Modifier.size(12.dp),
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                }
+                Text(
+                    statusLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statusColor,
+                )
             }
         }
     }
@@ -476,98 +666,26 @@ fun MoreDestination(
                         it.project == project.id && it.trashedAt == null
                     }
                     val done = projectTasks.count { it.completed }
-                    val total = projectTasks.size
-                    val statusIcon = when (project.status) {
-                        "done" -> Icons.Rounded.Check
-                        "dropped" -> Icons.Rounded.Close
-                        "on_hold" -> Icons.Rounded.Pause
+                    val restoreLabel = when {
+                        project.archived && project.status == "active" -> "Unarchive"
+                        project.status != "active" -> "Reopen"
                         else -> null
                     }
-                    val statusColor = if (project.status == "done") colors.success else colors.faint
-                    val statusLabel = when (project.status) {
-                        "done" -> "Done"
-                        "dropped" -> "Dropped"
-                        "on_hold" -> "On Hold"
-                        else -> "Active"
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onProject(project) }
-                            .padding(horizontal = 20.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = projectIcon(project.icon),
-                            contentDescription = null,
-                            tint = colors.faint,
-                            modifier = Modifier.size(15.dp),
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                project.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = colors.ink,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "$done of $total done",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = colors.faint,
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                if (statusIcon != null) {
-                                    Icon(
-                                        imageVector = statusIcon,
-                                        contentDescription = statusLabel,
-                                        tint = statusColor,
-                                        modifier = Modifier.size(12.dp),
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                }
-                                Text(
-                                    statusLabel,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = statusColor,
-                                )
+                    ArchiveProjectRow(
+                        project = project,
+                        done = done,
+                        total = projectTasks.size,
+                        restoreLabel = restoreLabel,
+                        onOpen = { onProject(project) },
+                        onRestore = {
+                            if (restoreLabel == "Unarchive") {
+                                onUnarchive(project)
+                            } else {
+                                onReopen(project)
                             }
-                        }
-                        if (project.archived && project.status == "active") {
-                            TextButton(
-                                onClick = { onUnarchive(project) },
-                                contentPadding = PaddingValues(horizontal = 6.dp),
-                            ) {
-                                Text(
-                                    "Unarchive",
-                                    color = colors.accent,
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
-                            }
-                        }
-                        if (project.status != "active") {
-                            TextButton(
-                                onClick = { onReopen(project) },
-                                contentPadding = PaddingValues(horizontal = 6.dp),
-                            ) {
-                                Text(
-                                    "Reopen",
-                                    color = colors.accent,
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
-                            }
-                        }
-                        TextButton(
-                            onClick = { onDeleteProject(project) },
-                            contentPadding = PaddingValues(horizontal = 6.dp),
-                        ) {
-                            Text(
-                                "Delete",
-                                color = colors.danger,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        }
-                    }
+                        },
+                        onDelete = { onDeleteProject(project) },
+                    )
                     Hairline(Modifier.padding(start = 20.dp))
                 }
             }
