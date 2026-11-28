@@ -5,9 +5,11 @@
 ### What's new
 
 - **A leaner content toolbar.** Sort, Group and Layout now share one **View**
-  popover, and Available, Priority and Completed share one **Filter** popover.
-  The header keeps two fixed-width chips instead of five, with the active view
-  and filters described inside each card. Context actions such as Hide past,
+  popover with three tabs. **Available** and **Completed** stay as compact
+  filter chips, and High / Medium / Low priorities keep their sidebar rows
+  instead of repeating in the header. The View chip keeps a fixed width and
+  describes the active view inside its card; the dot only marks a changed
+  sort or grouping, not a layout change. Context actions such as Hide past,
   Calendar and Planned stay inline.
 - **Per-view row layouts.** The **View** popover gives every view its own
   choice of **Fluid** rows, the existing wrapped layout, or **Columns**, one
@@ -24,10 +26,10 @@
 
 ### Bug fixes
 
-- **Header cards stay put.** The View and Filter chips keep a fixed width, and
-  their cards open against the chip's right edge with a small inset. The
-  active sort, grouping, layout and filters now live inside the cards, so the
-  toolbar never shifts as the view changes.
+- **Header cards stay put.** The View chip keeps a fixed width, and its card
+  opens against the chip's right edge with a small inset. The active sort,
+  grouping and layout now live inside the card, so the toolbar never shifts
+  as the view changes and the layout no longer adds a dot.
 
 ## 0.10.3 — 2026-11-28
 

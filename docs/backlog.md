@@ -699,10 +699,10 @@ integrations are tracked separately and are not part of this phase.
       project picker stays closed until the user types.
 - [x] New projects use the project icon by default; Folder remains one of the
       ten choices. Tasks converted to projects take the same default.
-- [x] The View and Filter chips open anchored popovers; Escape, an outside
-      click or the same chip closes them, and only one is open at a time.
-      View holds Sort, Group and Layout tabs; Filter holds Available, Priority
-      and Completed.
+- [x] The View chip opens an anchored popover; Escape, an outside click or the
+      same chip closes it. View holds Sort, Group and Layout tabs. Available
+      and Completed stay as filter chips, and priorities keep their sidebar
+      rows instead of repeating in the header.
 - [x] Project creation sheets omit the corner close control because the footer
       already offers Cancel.
 - [x] Tooltips stay hidden for three seconds, and a click mutes the button's
@@ -713,7 +713,7 @@ integrations are tracked separately and are not part of this phase.
 - [x] The **Add task** action moved to the title bar as a labelled plus button
       that works from any view, so the content header keeps its full width for
       the view controls.
-- [x] The content header keeps the view title and View/Filter chips on one
+- [x] The content header keeps the view title and View/Available chips on one
       row, with the subtitle on its own row so it is never squeezed. A view
       name that cannot fit beside the controls is omitted rather than clipped
       to a few letters. Search moved to the title bar as a full field at every

@@ -55,7 +55,7 @@ same tooltip and keyboard route.
 
 The title bar holds the search field, centered on the content pane with the
 inspector's column reserved even when it is closed, so the content header keeps
-only the view title and Sort/Group/Filter chips on one row. A saved view's
+only the view title and View/Available chips on one row. A saved view's
 description sits below it; a view without a description skips that row. While a chip menu or a sheet is open it owns
 the pointer: hover and clicks cannot reach the rows behind it. Focusing search
 (`⌘F` or `/`) selects its contents; its × clears the query and keeps the field
@@ -122,15 +122,15 @@ still a gap.
 
 ### Dropdown menus and the new-project prompt
 
-The **View** chip opens Sort, Group and Layout tabs under one popover, and
-**Filter** collects Available, Priority and Completed. Clicking anywhere
-outside closes either menu, and `Esc` does the same. Both keep themselves open
-while choices change, so several changes can be made in one visit. Both chips
-keep a fixed width; the View card names the active sort/group/layout at the
-top, the Filter card names the active filters, and a count badge marks how
-many are on. The × on the Filter chip clears them. When a typed project path
-does not exist, a Create project sheet asks first: `Enter` creates the project
-and files the task, `Esc` leaves the task unchanged.
+The **View** chip opens Sort, Group and Layout tabs under one popover. It
+stays open while choices change, and `Esc` or an outside click closes it. The
+chip keeps a fixed width and the card names the active sort, grouping and
+layout at the top. The dot marks only a changed sort or grouping; a layout
+change stays quiet. **Available** sits beside View as a one-click filter, and
+**Completed** appears where a view can show finished work. Priorities keep
+their High / Medium / Low rows in the sidebar. When a typed project path does
+not exist, a Create project sheet asks first: `Enter` creates the project and
+files the task, `Esc` leaves the task unchanged.
 
 ### The View sheet
 

@@ -99,16 +99,17 @@ choice, so a compact project list and a roomy Today list can sit side by side.
   fit the window and the inspector. Clicking a row still opens the inspector;
   cells are not edited in place yet.
 
-![Fluid rows with the View and Filter chips in the header](images/gui-layout-fluid.png)
+![Fluid rows with the View and Available chips in the header](images/gui-layout-fluid.png)
 
 ![The same task in Columns mode](images/gui-layout-columns.png)
 
 The View menu stays open while choices change, and every change is saved to
-the view straight away. **Filter** in the same row collects **Available**,
-**Priority** and **Completed**. Both chips keep a fixed width: the View card
-shows the active order, grouping and layout at the top, and the Filter card
-names the active filters while a small count badge marks how many are on. The
-× on the Filter chip clears them in one step.
+the view straight away. The chip keeps a fixed width and shows a small dot
+only when the sort or grouping changes; a layout change is named inside the
+card but leaves the chip quiet. **Available** sits beside it as a one-click
+filter, and **Completed** appears where a view can show finished work.
+Priorities keep their own rows in the sidebar rather than repeating in the
+header.
 
 ## The inspector
 
@@ -452,9 +453,9 @@ titles itself **Search** and ranks the closest matches first.
   means your drag-and-drop order; **None** means one flat list with no
   headings. **Layout** chooses Fluid or Columns rows, their density and the
   fields or columns the view shows.
-- **Filter** collects **Available** (only tasks you can start now),
-  **Priority** and **Completed**. The card names the active filters, the chip
-  carries a count badge, and the × clears them.
+- **Available** keeps only tasks you can start now; **Completed** shows or
+  hides finished work in project, folder and tag views. Priorities are set
+  from the sidebar's High / Medium / Low rows.
 - The choices are remembered per view.
 - **Settings → Workflow → Forecast tag** names a tag whose undated actions
   appear in Forecast without needing a date. **Show flagged undated tasks** does

@@ -52,9 +52,9 @@ checks that `Esc` closes it without moving the main view.
 `scripts/gui/layout-probe.sh` opens the View popover, switches to its Layout
 tab, changes density and checks the painted row actually shrinks, hides one
 fluid field, switches to Columns, turns on the Defer column, checks the saved
-session and confirms a relaunch restores the same view's layout. It also opens
-Filter, turns Available on and clears it. Set `SHOT_DIR` to copy the Fluid and
-Columns screenshots out of the temporary directory.
+session and confirms a relaunch restores the same view's layout. It also
+checks that a layout change leaves the View dot off. Set `SHOT_DIR` to copy
+the Fluid and Columns screenshots out of the temporary directory.
 
 ## The test-state hook
 
@@ -79,20 +79,16 @@ Setting `FLOWLIST_TEST_STATE=/path/to/state.json` makes the window write:
   "modal_theme": null,
   "modal_close": true,
   "header_view_menu": false,
-  "header_filter_menu": false,
   "header_view_tab": "sort",
   "header_view_label": "View",
   "header_view_summary": "Default order and grouping",
-  "header_filter_label": "Filter",
-  "header_filter_summary": "No filters",
-  "header_active_filters": 0,
+  "header_view_dot": false,
   "layout": "fluid",
   "density": "comfortable",
   "hidden_fields": [],
   "columns": ["project", "tags", "due", "flag"],
   "sidebar_menu": "project:01M79...",
   "header_view_anchor": true,
-  "header_filter_anchor": true,
   "title_space": 80.0,
   "title_visible": true,
   "tip": "Show only the next available task (First Available)",
@@ -234,18 +230,15 @@ probe can assert the Settings toggle took effect. `layout`, `density`,
 `hidden_fields` and `columns` report the active view's row layout, and
 `header_view_boxes` maps `chip`, `tab:layout`, `mode:fluid`,
 `density:compact`, `field:project` and `column:due` to painted boxes.
-`header_filter_boxes` maps `chip`, `available`, `priority:high`, `completed`
-and `clear` the same way. `header_view_menu` and `header_filter_menu` say
-whether the two header menus are open, `header_view_tab` names the active View
-tab, and `header_view_summary`, `header_filter_summary` and
-`header_active_filters` expose the lines inside each card and the filter
-count. `header_view_label` and `header_filter_label` stay fixed at `View` and
-`Filter`. `sidebar_menu` names
+`header_view_menu` says whether the View popover is open, `header_view_tab`
+names its active tab, and `header_view_summary` exposes the line inside the
+card. `header_view_label` stays fixed at `View`, and `header_view_dot` is true
+only for a changed sort or grouping, not a layout change. `sidebar_menu` names
 the row a right-click menu belongs to (`builtin:inbox`, `project:<id>`,
-`tag:<id>`, …) or is null. `header_view_anchor` and `header_filter_anchor`
-confirm the chip bounds needed to position those menus were measured. `title_space` is the
-width the view title painted into on the last frame and `title_visible` says
-whether it was drawn at all: a name that cannot fit in full is omitted.
+`tag:<id>`, …) or is null. `header_view_anchor` confirms the chip bounds
+needed to position the menu were measured. `title_space` is the width the view
+title painted into on the last frame and `title_visible` says whether it was
+drawn at all: a name that cannot fit in full is omitted.
 Deleting a project from the sidebar sets `modal` to
 `Delete project` while the project still exists; a probe confirms it,
 presses Return and checks that the project's tasks moved to Trash. `modal_close` is
@@ -359,7 +352,8 @@ library:
   Notification menu, checks the full-screen reminder and collapses the section.
 - `scripts/gui/layout-probe.sh` covers the per-view View popover: Fluid
   default, Compact density, a hidden field, Columns mode, an optional column,
-  the Filter menu and the patch in `session.json` that survives a relaunch.
+  the quiet layout dot and the patch in `session.json` that survives a
+  relaunch.
 - `scripts/gui/inspector-sections-probe.sh` builds a repeat rule from the
   editable interval, unit dropdown, **Repeat on** dropdown, weekday strip and
   segmented controls, checks that a date-only task rejects **Hours** with the

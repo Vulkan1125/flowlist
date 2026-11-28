@@ -1546,6 +1546,11 @@ impl FlowlistApp {
                                     let anchor = self.view_anchor.clone();
                                     let boxes = self.header_view_boxes.clone();
                                     let custom = !self.view_is_default();
+                                    // Only an explicit sort or grouping gets
+                                    // the dot. Layout changes stay quiet; the
+                                    // View card names them when opened.
+                                    let order_changed =
+                                        self.sort.is_some() || self.group.is_some();
                                     let summary = self.view_summary();
                                     div()
                                         .flex_shrink_0()
@@ -1564,7 +1569,7 @@ impl FlowlistApp {
                                                     theme,
                                                     "View",
                                                     self.view_menu_open || custom,
-                                                    custom,
+                                                    order_changed,
                                                 ))
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     let suppress =
@@ -1574,7 +1579,6 @@ impl FlowlistApp {
                                                         .retain(|key, _| key == "chip");
                                                     this.view_menu_open =
                                                         !this.view_menu_open && !suppress;
-                                                    this.filter_menu_open = false;
                                                     this.sidebar_menu = None;
                                                     cx.notify();
                                                 })),
@@ -1589,127 +1593,44 @@ impl FlowlistApp {
                                             }
                                         })
                                 })
-                                .child({
-                                    let anchor = self.filter_anchor.clone();
-                                    let boxes = self.header_filter_boxes.clone();
-                                    let active = self.filter_menu_open || self.filter_is_active();
-                                    let can_clear = self.filter_is_active();
-                                    let count = self.active_filter_count();
-                                    let summary = self.filter_summary();
+                                .child(
                                     div()
+                                        .id("only-available")
                                         .flex_shrink_0()
-                                        .child(
+                                        .flow_tip(self, cx, theme, "Show next available task")
+                                        .child(widgets::toggle_chip(
+                                            theme,
+                                            "Available",
+                                            self.only_available,
+                                        ))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.toggle_only_available(cx)
+                                        })),
+                                )
+                                .when(
+                                    self.completed_filter_applies() && !is_trash,
+                                    |this| {
+                                        this.child(
                                             div()
-                                                .id("filter-menu")
+                                                .id("show-completed")
+                                                .flex_shrink_0()
                                                 .flow_tip(
                                                     self,
                                                     cx,
                                                     theme,
-                                                    format!("Filters — {summary}"),
+                                                    "Show or hide completed tasks",
                                                 )
-                                                .child(
-                                                    div()
-                                                        .h(px(26.))
-                                                        .w(px(96.))
-                                                        .px_2()
-                                                        .flex()
-                                                        .items_center()
-                                                        .justify_center()
-                                                        .gap_1()
-                                                        .rounded_md()
-                                                        .border_1()
-                                                        .border_color(if active {
-                                                            theme.accent
-                                                        } else {
-                                                            theme.border
-                                                        })
-                                                        .bg(if active {
-                                                            theme.selection
-                                                        } else {
-                                                            theme.field
-                                                        })
-                                                        .text_xs()
-                                                        .text_color(if active {
-                                                            theme.accent
-                                                        } else {
-                                                            theme.text_dim
-                                                        })
-                                                        .cursor_pointer()
-                                                        .hover(|style| style.bg(theme.hover))
-                                                        .child("Filter")
-                                                        .when(self.filter_is_active(), |this| {
-                                                            this.child(
-                                                                div()
-                                                                    .min_w(px(14.))
-                                                                    .h(px(14.))
-                                                                    .px(px(3.))
-                                                                    .rounded_full()
-                                                                    .bg(theme.accent)
-                                                                    .text_color(theme.raised)
-                                                                    .text_size(px(9.))
-                                                                    .flex()
-                                                                    .items_center()
-                                                                    .justify_center()
-                                                                    .child(count.to_string()),
-                                                            )
-                                                        })
-                                                        .when(can_clear, |this| {
-                                                            this.child(
-                                                                div()
-                                                                    .id("filter-clear")
-                                                                    .flex()
-                                                                    .items_center()
-                                                                    .justify_center()
-                                                                    .size(px(14.))
-                                                                    .rounded_sm()
-                                                                    .hover(|style| {
-                                                                        style.bg(theme.raised)
-                                                                    })
-                                                                    .flow_tip(
-                                                                        self,
-                                                                        cx,
-                                                                        theme,
-                                                                        "Clear filters",
-                                                                    )
-                                                                    .child(icons::icon(
-                                                                        Icon::Close,
-                                                                        9.0,
-                                                                        theme.accent,
-                                                                    ))
-                                                                    .on_click(cx.listener(
-                                                                        |this, _, _, cx| {
-                                                                            cx.stop_propagation();
-                                                                            this.clear_filters(cx);
-                                                                        },
-                                                                    )),
-                                                            )
-                                                        })
-                                                        .id("filter-chip")
-                                                        .on_click(cx.listener(|this, _, _, cx| {
-                                                            let suppress = std::mem::take(
-                                                                &mut this.filter_closed_on_up,
-                                                            );
-                                                            this.header_filter_boxes
-                                                                .borrow_mut()
-                                                                .retain(|key, _| key == "chip");
-                                                            this.filter_menu_open =
-                                                                !this.filter_menu_open && !suppress;
-                                                            this.view_menu_open = false;
-                                                            this.sidebar_menu = None;
-                                                            cx.notify();
-                                                        })),
-                                                ),
+                                                .child(widgets::toggle_chip(
+                                                    theme,
+                                                    "Completed",
+                                                    self.show_completed,
+                                                ))
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.toggle_show_completed(cx)
+                                                })),
                                         )
-                                        .on_children_prepainted(move |bounds, _, _| {
-                                            if let Some(bounds) = bounds.first() {
-                                                anchor.set(Some(*bounds));
-                                                boxes.borrow_mut().insert(
-                                                    "chip".to_string(),
-                                                    bounds_box(bounds),
-                                                );
-                                            }
-                                        })
-                                })
+                                    },
+                                )
                             })
                             .when(is_trash, |this| {
                                 this.child(
@@ -2204,188 +2125,6 @@ impl FlowlistApp {
                 .child(columns),
         )
         .into_any_element()
-    }
-
-    /// One Filter popover holds Available, Priority and Completed, so the
-    /// header never grows a chip per filter.
-    pub(super) fn render_filter_menu(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let theme = self.theme;
-        let boxes = self.header_filter_boxes.clone();
-        let section = |label: &'static str| {
-            div()
-                .px_2()
-                .pt_2()
-                .pb_1()
-                .text_xs()
-                .font_weight(gpui::FontWeight::SEMIBOLD)
-                .text_color(theme.text_faint)
-                .child(label)
-        };
-        let mut menu = div()
-            .w(px(230.))
-            .flex()
-            .flex_col()
-            .gap(px(1.))
-            .p_1()
-            .rounded_lg()
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.raised)
-            .shadow_lg();
-        menu = menu.child(
-            div()
-                .px_2()
-                .pt_1()
-                .pb_1()
-                .text_xs()
-                .text_color(theme.text_faint)
-                .child(self.filter_summary()),
-        );
-        menu = menu.child(section("Availability"));
-        let key = "available".to_string();
-        let sink = boxes.clone();
-        menu = menu.child(
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .mx_1()
-                .px_1()
-                .py_1()
-                .rounded_sm()
-                .text_xs()
-                .text_color(if self.only_available {
-                    theme.text
-                } else {
-                    theme.text_dim
-                })
-                .cursor_pointer()
-                .hover(|style| style.bg(theme.hover))
-                .on_children_prepainted(move |bounds, _, _| {
-                    if let Some(bounds) = bounds.first() {
-                        sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
-                    }
-                })
-                .id("filter-available")
-                .child(layout_check(theme, self.only_available))
-                .child("Available")
-                .on_click(cx.listener(|this, _, _, cx| this.toggle_only_available(cx))),
-        );
-        menu = menu.child(section("Priority"));
-        let options: [Option<Priority>; 4] = [
-            None,
-            Some(Priority::High),
-            Some(Priority::Medium),
-            Some(Priority::Low),
-        ];
-        for option in options {
-            let selected = self.priority_filter == option;
-            let (slug, label) = match option {
-                None => ("all", "All priorities".to_string()),
-                Some(priority) => (priority.slug(), priority.label().to_string()),
-            };
-            let key = format!("priority:{slug}");
-            let sink = boxes.clone();
-            menu = menu.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .mx_1()
-                    .px_1()
-                    .py_1()
-                    .rounded_sm()
-                    .text_xs()
-                    .text_color(if selected {
-                        theme.accent
-                    } else {
-                        theme.text_dim
-                    })
-                    .bg(if selected {
-                        theme.selection
-                    } else {
-                        theme.clear
-                    })
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .on_children_prepainted(move |bounds, _, _| {
-                        if let Some(bounds) = bounds.first() {
-                            sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
-                        }
-                    })
-                    .id(super::sid(format!("filter-priority:{slug}")))
-                    .child(label)
-                    .when(selected, |this| {
-                        this.child(icons::icon(Icon::Check, 11.0, theme.accent))
-                    })
-                    .on_click(
-                        cx.listener(move |this, _, _, cx| this.choose_priority_filter(option, cx)),
-                    ),
-            );
-        }
-        if self.completed_filter_applies() {
-            menu = menu.child(section("Completed"));
-            let key = "completed".to_string();
-            let sink = boxes.clone();
-            menu = menu.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .mx_1()
-                    .px_1()
-                    .py_1()
-                    .rounded_sm()
-                    .text_xs()
-                    .text_color(if self.show_completed {
-                        theme.text
-                    } else {
-                        theme.text_dim
-                    })
-                    .cursor_pointer()
-                    .hover(|style| style.bg(theme.hover))
-                    .on_children_prepainted(move |bounds, _, _| {
-                        if let Some(bounds) = bounds.first() {
-                            sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
-                        }
-                    })
-                    .id("filter-completed")
-                    .child(layout_check(theme, self.show_completed))
-                    .child("Show completed")
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_show_completed(cx))),
-            );
-        }
-        if self.filter_is_active() {
-            let key = "clear".to_string();
-            let sink = boxes.clone();
-            menu = menu
-                .child(div().mx_2().my_1().h(px(1.)).bg(theme.border_soft))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .mx_1()
-                        .px_1()
-                        .py_1()
-                        .rounded_sm()
-                        .text_xs()
-                        .text_color(theme.text_dim)
-                        .cursor_pointer()
-                        .hover(|style| style.bg(theme.hover))
-                        .on_children_prepainted(move |bounds, _, _| {
-                            if let Some(bounds) = bounds.first() {
-                                sink.borrow_mut().insert(key.clone(), bounds_box(bounds));
-                            }
-                        })
-                        .id("filter-clear-all")
-                        .child(icons::icon(Icon::Close, 10.0, theme.text_faint))
-                        .child("Clear filters")
-                        .on_click(cx.listener(|this, _, _, cx| this.clear_filters(cx))),
-                );
-        }
-        menu
     }
 
     fn render_capture_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {

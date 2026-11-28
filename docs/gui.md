@@ -11,7 +11,7 @@ routes and tooltips see [accessibility.md](accessibility.md).
 | --- | --- |
 | Title bar | app name, back/forward arrows, search, **Add task**, theme, help |
 | Sidebar | perspectives, priorities, library folders and projects, saved views, tags |
-| Content | the selected view, its Sort/Group/Filter chips, and the task rows |
+| Content | the selected view, its View/Available chips, and the task rows |
 | Inspector | details for the selected task or project, toggled with `i` or `⌘I` |
 
 The window is full-height glass; the macOS traffic lights sit over the header
@@ -82,10 +82,10 @@ global.
 
 ### Content header
 
-The view title and Sort / Group / Filter chips share one row; the subtitle sits
+The view title and the View / Available chips share one row; the subtitle sits
 on its own row. A view name that cannot fit beside the controls is omitted
-rather than clipped. Chips open anchored menus with an outside-click scrim.
-Only one chip menu is open at a time; Escape closes it.
+rather than clipped. View opens an anchored menu with an outside-click scrim;
+Escape closes it. Priorities keep their sidebar rows instead of a header chip.
 
 Grouping choices are project, folder, tag, due, defer, flagged and estimate.
 Sort choices are manual, due, defer, name, flagged, estimate, created and
