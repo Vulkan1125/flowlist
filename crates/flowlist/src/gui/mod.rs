@@ -59,7 +59,8 @@ use flowlist_core::command::{
 use flowlist_core::db::{ContainerPosition, DateConflict, Db, OrderKey, Position};
 use flowlist_core::ids::{ChecklistId, ContainerId, FolderId, ProjectId, TagId, TaskId};
 use flowlist_core::model::{
-    BuiltinPerspective, GroupBy, Priority, ProjectKind, ProjectStatus, SortBy, TagStatus, TaskAlert,
+    BuiltinPerspective, GroupBy, Priority, ProjectKind, ProjectStatus, RepeatEnd, SortBy, TagStatus,
+    TaskAlert,
 };
 use flowlist_core::parse::{parse_duration, parse_quick, parse_stamp};
 use flowlist_core::paths::DataPaths;
@@ -259,6 +260,8 @@ pub(super) enum DateField {
     Planned,
     Due,
     Reminder,
+    /// The end date of the selected task's repeat rule.
+    RepeatEnd,
     /// A date typed into a perspective rule. `second` selects the end of a
     /// Between range; the rule id keeps the calendar attached to the right row.
     RuleDate {
@@ -292,6 +295,7 @@ impl DateField {
             DateField::Planned => EditField::Planned,
             DateField::Due => EditField::Due,
             DateField::Reminder => EditField::Reminder,
+            DateField::RepeatEnd => EditField::Repeat,
             DateField::RuleDate { .. } => EditField::Due,
         }
     }
@@ -302,6 +306,7 @@ impl DateField {
             DateField::Planned => "planned",
             DateField::Due => "due",
             DateField::Reminder => "reminder",
+            DateField::RepeatEnd => "repeat-end",
             DateField::RuleDate { .. } => "rule-date",
         }
     }
@@ -312,6 +317,7 @@ impl DateField {
             DateField::Planned => "Planned",
             DateField::Due => "Due",
             DateField::Reminder => "Reminder",
+            DateField::RepeatEnd => "Repeat ends",
             DateField::RuleDate { .. } => "Rule date",
         }
     }
@@ -322,6 +328,7 @@ impl DateField {
             DateField::Planned => "No planned date",
             DateField::Due => "No due date",
             DateField::Reminder => "No reminder time",
+            DateField::RepeatEnd => "No end date",
             DateField::RuleDate { .. } => "Pick a date",
         }
     }
@@ -333,6 +340,7 @@ impl DateField {
             DateField::Planned => Icon::PlannedDate,
             DateField::Due => Icon::DueDate,
             DateField::Reminder => Icon::Clock,
+            DateField::RepeatEnd => Icon::Calendar,
             DateField::RuleDate { .. } => Icon::Calendar,
         }
     }
@@ -417,6 +425,7 @@ fn picker_default_time(
         DateField::Due | DateField::Planned => due.unwrap_or(fallback),
         DateField::Defer => defer.unwrap_or(fallback),
         DateField::Reminder => due.unwrap_or(fallback),
+        DateField::RepeatEnd => due.unwrap_or(fallback),
         DateField::RuleDate { .. } => due.unwrap_or(fallback),
     }
 }
@@ -664,6 +673,7 @@ pub struct FlowlistApp {
     defer_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     planned_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     reminder_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
+    repeat_end_anchor: Rc<Cell<Option<Bounds<gpui::Pixels>>>>,
     rule_date_anchors: Rc<RefCell<BTreeMap<String, Bounds<gpui::Pixels>>>>,
     /// Which date field's calendar is open, the month on screen and the day
     /// the arrow keys point at. `date_picker_time` is the time that will be
@@ -1181,6 +1191,7 @@ impl FlowlistApp {
             defer_anchor: Rc::new(Cell::new(None)),
             planned_anchor: Rc::new(Cell::new(None)),
             reminder_anchor: Rc::new(Cell::new(None)),
+            repeat_end_anchor: Rc::new(Cell::new(None)),
             rule_date_anchors: Rc::new(RefCell::new(BTreeMap::new())),
             date_picker: None,
             date_picker_month: forecast_month,
@@ -3982,6 +3993,7 @@ impl FlowlistApp {
             DateField::Planned => self.planned_anchor.clone(),
             DateField::Due => self.due_anchor.clone(),
             DateField::Reminder => self.reminder_anchor.clone(),
+            DateField::RepeatEnd => self.repeat_end_anchor.clone(),
             DateField::RuleDate { .. } => self.due_anchor.clone(),
         }
     }
@@ -3995,6 +4007,10 @@ impl FlowlistApp {
             DateField::Planned => task.planned,
             DateField::Due => task.due,
             DateField::Reminder => task.reminder_at,
+            DateField::RepeatEnd => task.repeat.as_ref().and_then(|rule| match rule.end {
+                RepeatEnd::OnDate(date) => Some(Stamp::date_only(date)),
+                _ => None,
+            }),
             DateField::RuleDate { rule, second } => {
                 let form = match &self.modal {
                     Some(modals::Modal::Perspective { form }) => form,
@@ -4227,6 +4243,19 @@ impl FlowlistApp {
             cx.notify();
             return;
         };
+        if let DateField::RepeatEnd = field {
+            self.date_picker = None;
+            self.date_picker_time = None;
+            self.date_picker_step = DatePickerStep::Calendar;
+            self.date_picker_unit = ClockUnit::Hour;
+            let rule = self.store.db().tasks.get(&id).and_then(|task| task.repeat.clone());
+            if let Some(mut rule) = rule {
+                rule.end = RepeatEnd::OnDate(date);
+                self.set_task_repeat(&id, Some(rule), cx);
+            }
+            cx.notify();
+            return;
+        }
         if let DateField::RuleDate { rule, second } = field {
             self.date_picker = None;
             self.date_picker_time = None;
@@ -4268,6 +4297,7 @@ impl FlowlistApp {
                 patch.reminder_at = Some(Some(stamp));
                 patch.reminder_match_due = Some(false);
             }
+            DateField::RepeatEnd => unreachable!("handled before the task patch"),
             DateField::RuleDate { .. } => unreachable!("handled before the task patch"),
         }
         let conflicts =
@@ -4318,6 +4348,21 @@ impl FlowlistApp {
         let Some(field) = self.date_picker else {
             return;
         };
+        if let DateField::RepeatEnd = field {
+            self.date_picker = None;
+            self.date_picker_time = None;
+            self.date_picker_step = DatePickerStep::Calendar;
+            self.date_picker_unit = ClockUnit::Hour;
+            if let Some(id) = self.selected_one() {
+                let rule = self.store.db().tasks.get(&id).and_then(|task| task.repeat.clone());
+                if let Some(mut rule) = rule {
+                    rule.end = RepeatEnd::Never;
+                    self.set_task_repeat(&id, Some(rule), cx);
+                }
+            }
+            cx.notify();
+            return;
+        }
         if let DateField::RuleDate { rule, second } = field {
             self.date_picker = None;
             self.date_picker_time = None;
@@ -4375,6 +4420,7 @@ impl FlowlistApp {
             DateField::Planned => patch.planned = Some(None),
             DateField::Due => patch.due = Some(None),
             DateField::Reminder => patch.reminder_at = Some(None),
+            DateField::RepeatEnd => unreachable!("handled before the task patch"),
             DateField::RuleDate { rule, second } => {
                 if let Some(modal) = self.modal.as_mut() {
                     if let modals::Modal::Perspective { form } = modal {
@@ -8426,6 +8472,7 @@ impl FlowlistApp {
             DateField::Planned => "planned",
             DateField::Due => "due",
             DateField::Reminder => "reminder",
+            DateField::RepeatEnd => "repeat-end",
             DateField::RuleDate { .. } => "rule-date",
         }));
         state["date_picker_time"] = serde_json::json!(

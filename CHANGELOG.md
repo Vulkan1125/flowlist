@@ -12,8 +12,10 @@
   project menu archives without changing status, and Settings → Library has
   **Archive closed projects**.
 - **Full repeat rules.** The Android task editor now edits the interval,
-  fixed versus after-completion, due-again versus defer-another, and an end
-  date or count, not just the unit.
+  fixed versus after-completion, due-again versus defer-another, the weekday
+  strip for day-based rules, and an end date or count, not just the unit.
+- **Repeat ends on the Mac.** The Mac repeat section now has the same Ends
+  row as the phone: Never, On date or After N.
 
 ### Android reminders
 

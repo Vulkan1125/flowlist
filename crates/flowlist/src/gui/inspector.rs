@@ -10,8 +10,8 @@ use std::collections::BTreeSet;
 use flowlist_core::command::{Command, ProjectPatch, TaskPatch};
 use flowlist_core::ids::{ChecklistId, TaskId};
 use flowlist_core::model::{
-    AlertEvent, DefaultNotification, IconSpec, Priority, ProjectKind, ProjectStatus, RepeatMode,
-    RepeatRule, RepeatSchedule,
+    AlertEvent, DefaultNotification, IconSpec, Priority, ProjectKind, ProjectStatus, RepeatEnd,
+    RepeatMode, RepeatRule, RepeatSchedule,
 };
 use flowlist_core::parse::{parse_duration, parse_stamp};
 use flowlist_core::time::{IntervalUnit, Stamp, format_duration, human_date, local_date, now};
@@ -364,7 +364,7 @@ fn inherited_date_suffix(
         DateField::Defer => task.defer,
         DateField::Planned => task.planned,
         DateField::Due => task.due,
-        DateField::Reminder | DateField::RuleDate { .. } => return None,
+        DateField::Reminder | DateField::RepeatEnd | DateField::RuleDate { .. } => return None,
     };
     if own.is_some() {
         return None;
@@ -383,7 +383,7 @@ fn inherited_date_suffix(
             DateField::Defer => ancestor.defer,
             DateField::Planned => ancestor.planned,
             DateField::Due => ancestor.due,
-            DateField::Reminder | DateField::RuleDate { .. } => None,
+            DateField::Reminder | DateField::RepeatEnd | DateField::RuleDate { .. } => None,
         };
         if value.is_some() {
             return Some("with parent");
@@ -397,7 +397,7 @@ fn inherited_date_suffix(
         DateField::Defer => project.defer,
         DateField::Planned => project.planned,
         DateField::Due => project.due,
-        DateField::Reminder | DateField::RuleDate { .. } => None,
+        DateField::Reminder | DateField::RepeatEnd | DateField::RuleDate { .. } => None,
     });
     value.is_some().then_some("with project")
 }
@@ -2135,7 +2135,7 @@ impl FlowlistApp {
         body.into_any_element()
     }
 
-    fn set_task_repeat(&mut self, id: &TaskId, rule: Option<RepeatRule>, cx: &mut Context<Self>) {
+    pub(super) fn set_task_repeat(&mut self, id: &TaskId, rule: Option<RepeatRule>, cx: &mut Context<Self>) {
         self.execute(Command::UpdateTask {
             id: id.clone(),
             patch: TaskPatch {
@@ -2177,6 +2177,7 @@ impl FlowlistApp {
             .unwrap_or(IntervalUnit::Weeks);
         let mode = rule.as_ref().map(|rule| rule.mode).unwrap_or_default();
         let schedule = rule.as_ref().map(|rule| rule.schedule).unwrap_or_default();
+        let end = rule.as_ref().map(|rule| rule.end.clone()).unwrap_or_default();
         let weekdays_selected = rule
             .as_ref()
             .is_some_and(|rule| !rule.selected_weekdays().is_empty());
@@ -2319,6 +2320,176 @@ impl FlowlistApp {
                         cx,
                     )),
             );
+            body = body.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.text_faint)
+                            .child("Ends"),
+                    )
+                    .child(segmented_row(
+                        theme,
+                        "repeat-end",
+                        &[("never", "Never"), ("date", "On date"), ("count", "After N")],
+                        match &end {
+                            RepeatEnd::Never => 0,
+                            RepeatEnd::OnDate(_) => 1,
+                            RepeatEnd::AfterCount(_) => 2,
+                        },
+                        self.theme_boxes.clone(),
+                        {
+                            let current_rule = rule.clone();
+                            let end_id = id.clone();
+                            move |this: &mut FlowlistApp, index, cx| {
+                                if let Some(current) = &current_rule {
+                                    this.update_task_repeat(
+                                        &end_id,
+                                        current,
+                                        |rule| {
+                                            rule.end = match index {
+                                                1 => RepeatEnd::OnDate(match rule.end {
+                                                    RepeatEnd::OnDate(date) => date,
+                                                    _ => local_date(now()),
+                                                }),
+                                                2 => RepeatEnd::AfterCount(match rule.end {
+                                                    RepeatEnd::AfterCount(count) => count,
+                                                    _ => 3,
+                                                }),
+                                                _ => RepeatEnd::Never,
+                                            };
+                                        },
+                                        cx,
+                                    );
+                                }
+                            }
+                        },
+                        cx,
+                    )),
+            );
+            if let RepeatEnd::OnDate(date) = &end {
+                let anchor = self.repeat_end_anchor.clone();
+                let probe_boxes = self.theme_boxes.clone();
+                body = body.child(
+                    div()
+                        .on_children_prepainted(move |bounds, _, _| {
+                            if let Some(bounds) = bounds.first() {
+                                anchor.set(Some(*bounds));
+                                probe_boxes.borrow_mut().insert(
+                                    "repeat-end-date".to_string(),
+                                    [
+                                        f32::from(bounds.origin.x),
+                                        f32::from(bounds.origin.y),
+                                        f32::from(bounds.size.width),
+                                        f32::from(bounds.size.height),
+                                    ],
+                                );
+                            }
+                        })
+                        .id("repeat-end-date")
+                        .px_2()
+                        .py_1()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.field)
+                        .text_sm()
+                        .text_color(theme.text)
+                        .cursor_pointer()
+                        .hover(|style| style.bg(theme.hover))
+                        .child(format!("Ends on {}", date.format("%b %-d, %Y")))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.open_date_picker(DateField::RepeatEnd, cx);
+                        })),
+                );
+            }
+            if let RepeatEnd::AfterCount(count) = &end {
+                let count = *count;
+                let down_rule = rule.clone();
+                let up_rule = rule.clone();
+                let down_id = id.clone();
+                let up_id = id.clone();
+                body = body.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("After"),
+                        )
+                        .child(
+                            div()
+                                .on_children_prepainted(
+                                    self.theme_probe("repeat-end-count-down".to_string()),
+                                )
+                                .id("repeat-end-count-down")
+                                .px_2()
+                                .py_1()
+                                .rounded_md()
+                                .bg(theme.field)
+                                .cursor_pointer()
+                                .child("−")
+                                .on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        if let Some(current) = &down_rule {
+                                            this.update_task_repeat(
+                                                &down_id,
+                                                current,
+                                                |rule| {
+                                                    rule.end = RepeatEnd::AfterCount(
+                                                        count.saturating_sub(1).max(1),
+                                                    )
+                                                },
+                                                cx,
+                                            );
+                                        }
+                                    },
+                                )),
+                        )
+                        .child(div().text_sm().child(count.to_string()))
+                        .child(
+                            div()
+                                .on_children_prepainted(
+                                    self.theme_probe("repeat-end-count-up".to_string()),
+                                )
+                                .id("repeat-end-count-up")
+                                .px_2()
+                                .py_1()
+                                .rounded_md()
+                                .bg(theme.field)
+                                .cursor_pointer()
+                                .child("+")
+                                .on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        if let Some(current) = &up_rule {
+                                            this.update_task_repeat(
+                                                &up_id,
+                                                current,
+                                                |rule| {
+                                                    rule.end = RepeatEnd::AfterCount(
+                                                        (count + 1).min(999),
+                                                    )
+                                                },
+                                                cx,
+                                            );
+                                        }
+                                    },
+                                )),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.text_faint)
+                                .child("times"),
+                        ),
+                );
+            }
             if let Some(rule) = &rule {
                 body = body.child(
                     div()

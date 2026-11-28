@@ -121,6 +121,9 @@ import dev.flowlist.android.data.StampDto
 import dev.flowlist.android.data.TagDto
 import dev.flowlist.android.data.TaskDto
 import dev.flowlist.android.data.TaskEdit
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import dev.flowlist.android.data.repeatRuleJson
@@ -273,7 +276,11 @@ fun TaskEditSheet(
     val repeatEndCount = repeatEndValue?.toIntOrNull() ?: 3
     val repeatCompleted = (repeatObject?.get("completed_count") as? JsonPrimitive)
         ?.content?.toIntOrNull() ?: 0
-    val repeatWeekdays = repeatObject?.get("weekdays")
+    val repeatWeekdaysJson = repeatObject?.get("weekdays")
+    val repeatWeekdays = (repeatWeekdaysJson as? JsonArray)
+        ?.mapNotNull { (it as? JsonPrimitive)?.content?.toIntOrNull() }
+        ?.toSet()
+        .orEmpty()
     var showRepeatEndPicker by remember { mutableStateOf(false) }
 
     fun setRule(
@@ -284,6 +291,7 @@ fun TaskEditSheet(
         endKind: String = repeatEndKind,
         endDate: String? = repeatEndValue,
         endCount: Int = repeatEndCount,
+        weekdays: JsonElement? = repeatWeekdaysJson,
     ) {
         if (unit == null) {
             repeat = null
@@ -298,7 +306,7 @@ fun TaskEditSheet(
             endDate = endDate,
             endCount = endCount,
             completedCount = repeatCompleted,
-            weekdays = repeatWeekdays,
+            weekdays = weekdays,
         )
     }
 
@@ -581,6 +589,41 @@ fun TaskEditSheet(
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.ink,
                     )
+                }
+                if (repeatUnit == "days") {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        listOf(
+                            0 to "Sun",
+                            1 to "Mon",
+                            2 to "Tue",
+                            3 to "Wed",
+                            4 to "Thu",
+                            5 to "Fri",
+                            6 to "Sat",
+                        ).forEach { (day, label) ->
+                            PriorityPill(label, day in repeatWeekdays, colors.accent) {
+                                val next = if (day in repeatWeekdays) {
+                                    repeatWeekdays - day
+                                } else {
+                                    repeatWeekdays + day
+                                }
+                                val json = if (next.isEmpty()) {
+                                    JsonNull
+                                } else {
+                                    kotlinx.serialization.json.buildJsonArray {
+                                        next.sorted().forEach { add(JsonPrimitive(it)) }
+                                    }
+                                }
+                                setRule(weekdays = json)
+                            }
+                        }
+                    }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Label("Schedule")
