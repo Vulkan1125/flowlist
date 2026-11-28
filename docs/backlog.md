@@ -188,8 +188,9 @@ integrations are tracked separately and are not part of this phase.
       already-handled alarm to fire.
 - [x] **Overlay permission onboarding** — turning on Full-screen reminders now
       opens **Display over other apps** when the permission is missing.
-- [ ] **Reminder notification actions** — put Dismiss and Snooze on the alarm
-      card so the shade can handle a reminder without opening it.
+- [x] **Reminder notification actions** — the alarm card now carries Dismiss
+      and Snooze buttons. Snooze uses the saved length, reschedules the alarm,
+      dismisses the other device and closes the reminder.
 - [ ] **Simultaneous reminders** — queue alarms instead of replacing the open
       overlay with the newest one, or add the Mac's Full-screen list.
 - [ ] **Per-reminder media pause** — the Pause media switch is global; allow a

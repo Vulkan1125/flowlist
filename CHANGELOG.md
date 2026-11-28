@@ -9,6 +9,9 @@
   snooze no longer leaves an old alarm to fire on an idle phone.
 - **Overlay permission at the switch.** Turning on Full-screen reminders opens
   the **Display over other apps** screen when the permission is missing.
+- **Dismiss and Snooze on the alarm card.** The reminder notification handles
+  both without opening the full screen; snooze uses the saved length,
+  reschedules the alarm and clears the other device.
 
 ## 0.10.1 — 2026-11-27
 

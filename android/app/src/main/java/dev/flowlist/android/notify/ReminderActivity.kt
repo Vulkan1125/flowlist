@@ -1,6 +1,9 @@
 package dev.flowlist.android.notify
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -80,6 +83,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import dev.flowlist.android.FlowlistApplication
@@ -104,6 +108,7 @@ import kotlin.math.roundToInt
 /** The alarm-style task reminder. Shown over the lock screen by a full-screen intent. */
 class ReminderActivity : ComponentActivity() {
     private var audioFocusRequest: AudioFocusRequest? = null
+    private var closeReceiver: BroadcastReceiver? = null
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -135,6 +140,19 @@ class ReminderActivity : ComponentActivity() {
         val title = intent.getStringExtra("title") ?: "Task due"
         val project = intent.getStringExtra("project")
         val dueAt = intent.getLongExtra("due_at", System.currentTimeMillis())
+        // The notification's Dismiss and Snooze buttons close this window.
+        val close = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.getStringExtra("task_id") == taskId) finish()
+            }
+        }
+        closeReceiver = close
+        ContextCompat.registerReceiver(
+            this,
+            close,
+            IntentFilter(ReminderActionReceiver.ACTION_CLOSE),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         TaskReminders.markFired(this, taskId)
         getSystemService(android.app.NotificationManager::class.java)?.cancel(taskId.hashCode())
         // The alarm is scheduled from the last synced snapshot. If the Mac
@@ -149,6 +167,7 @@ class ReminderActivity : ComponentActivity() {
                     finish()
                     return@launch
                 }
+                if (isFinishing || isDestroyed) return@launch
                 present(taskId, title, project, dueAt)
             }
         }
@@ -279,6 +298,8 @@ class ReminderActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        closeReceiver?.let { runCatching { unregisterReceiver(it) } }
+        closeReceiver = null
         audioFocusRequest?.let {
             getSystemService(AudioManager::class.java)?.abandonAudioFocusRequest(it)
         }
