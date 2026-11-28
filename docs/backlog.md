@@ -191,11 +191,13 @@ integrations are tracked separately and are not part of this phase.
 - [x] **Reminder notification actions** — the alarm card now carries Dismiss
       and Snooze buttons. Snooze uses the saved length, reschedules the alarm,
       dismisses the other device and closes the reminder.
-- [x] **Simultaneous reminders** — alarms queue in the overlay service and
-      each card is shown in turn, so a second task due at the same minute no
-      longer replaces the first.
-- [ ] **Per-reminder media pause** — the Pause media switch is global; allow a
-      single reminder to keep playing.
+- [x] **Simultaneous reminders** — tasks due together merge into one card
+      that says how many are due, with a read-only **View all** list and one
+      **Dismiss all** button. Later alarms stay silent and there is no
+      per-task marking on the batch card.
+- [x] **Media pause stays FSR-only** — the Pause media switch applies to
+      full-screen reminders only; regular due summaries never take audio focus.
+      There is no per-reminder override.
 - [ ] **Android docs refresh** — `android/README.md` still describes the old
       week-strip reminder and calls the default theme Todoist; update it for the
       overlay, media pause, snooze and cross-device sync.

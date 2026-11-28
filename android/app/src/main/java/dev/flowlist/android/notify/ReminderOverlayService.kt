@@ -14,6 +14,8 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowInsetsController
 import android.view.WindowManager
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.app.NotificationManagerCompat
@@ -50,8 +52,9 @@ import kotlinx.coroutines.launch
  * allowed to raise an activity on the lock screen; this is the sanctioned way
  * to cover an app such as YouTube, and it needs "display over other apps".
  *
- * Several tasks can come due in the same minute. Their alarms queue here and
- * each card is shown in turn, so one reminder never hides another.
+ * Several tasks can come due in the same minute. They merge into one card
+ * that says how many are due; it has no per-task complete or snooze controls,
+ * and later alarms stay silent instead of ringing one after another.
  */
 class ReminderOverlayService :
     Service(),
@@ -70,6 +73,9 @@ class ReminderOverlayService :
     private val store = ViewModelStore()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val pending = ArrayDeque<Pending>()
+    private val batchCount = mutableStateOf(0)
+    private val showBatchList = mutableStateOf(false)
+    private val batchItems = mutableStateListOf<ReminderBatchItem>()
     private var current: Pending? = null
     private var windowManager: WindowManager? = null
     private var overlay: ComposeView? = null
@@ -105,14 +111,22 @@ class ReminderOverlayService :
             return START_NOT_STICKY
         }
         TaskReminders.markFired(this, reminder.id)
-        // The same alarm can arrive twice; keep one copy in the queue.
+        // The same alarm can arrive twice; keep one copy in the batch.
         if (current?.id == reminder.id || pending.any { it.id == reminder.id }) {
             return START_NOT_STICKY
         }
+        active = true
         if (current == null) {
+            batchCount.value = 1
             present(reminder)
         } else {
             pending.addLast(reminder)
+            batchCount.value = 1 + pending.size
+            refreshBatchItems()
+            // The receiver stays quiet for later alarms; make sure a card it
+            // posted before this service was marked active does not linger.
+            NotificationManagerCompat.from(this).cancel(reminder.id.hashCode())
+            updateBatchNotification()
         }
         return START_NOT_STICKY
     }
@@ -122,6 +136,9 @@ class ReminderOverlayService :
     /// reminder after the phone last synced.
     private fun present(reminder: Pending) {
         current = reminder
+        batchCount.value = 1
+        showBatchList.value = false
+        refreshBatchItems()
         startForeground(
             reminder.id.hashCode(),
             buildReminderNotification(
@@ -141,27 +158,75 @@ class ReminderOverlayService :
             showOverlay(reminder)
             if (!polling) {
                 polling = true
-                pollRemoteDismissal()
+                pollRemoteDismissals()
             }
         }
     }
 
-    /// Close the card on screen and move to the next task due at the same
-    /// time, or stop once the queue is empty.
+    /// Close a single reminder or move to the next if one is waiting.
     private fun finishCurrent() {
         val done = current ?: return
-        overlay?.let { view ->
-            runCatching { windowManager?.removeView(view) }
-        }
-        overlay = null
-        current = null
+        removeOverlay()
         NotificationManagerCompat.from(this).cancel(done.id.hashCode())
+        current = null
         val next = pending.removeFirstOrNull()
         if (next != null) {
+            batchCount.value = 1 + pending.size
             present(next)
         } else {
+            batchCount.value = 0
+            refreshBatchItems()
             stopSelf()
         }
+    }
+
+    /// Dismiss the whole batch (and the Mac's matching reminders).
+    private fun dismissBatch() {
+        val all = buildList {
+            current?.let { add(it) }
+            addAll(pending)
+        }
+        current = null
+        pending.clear()
+        batchCount.value = 0
+        showBatchList.value = false
+        refreshBatchItems()
+        NotificationManagerCompat.from(this).cancel(BATCH_ID)
+        all.forEach { NotificationManagerCompat.from(this).cancel(it.id.hashCode()) }
+        CoroutineScope(Dispatchers.IO).launch {
+            all.forEach { repository.dismissReminder(it.id) }
+        }
+        stopSelf()
+    }
+
+    private fun refreshBatchItems() {
+        batchItems.clear()
+        current?.let { reminder ->
+            batchItems.add(
+                ReminderBatchItem(
+                    id = reminder.id,
+                    title = reminder.title,
+                    project = reminder.project,
+                    dueAt = reminder.dueAt,
+                ),
+            )
+        }
+        pending.forEach { reminder ->
+            batchItems.add(
+                ReminderBatchItem(
+                    id = reminder.id,
+                    title = reminder.title,
+                    project = reminder.project,
+                    dueAt = reminder.dueAt,
+                ),
+            )
+        }
+    }
+
+    private fun updateBatchNotification() {
+        val count = batchCount.value
+        current?.let { NotificationManagerCompat.from(this).cancel(it.id.hashCode()) }
+        startForeground(BATCH_ID, buildBatchNotification(this, count))
     }
 
     private fun showOverlay(reminder: Pending) {
@@ -194,49 +259,67 @@ class ReminderOverlayService :
                         androidx.compose.ui.graphics.Color.Transparent
                     },
                 ) {
-                    ReminderScreen(
-                        title = reminder.title,
-                        project = reminder.project,
-                        dueAt = reminder.dueAt,
-                        initialSnoozeMinutes = preferences.snoozeMinutes,
-                        lightContent = lightContent,
-                        onComplete = {
-                            CoroutineScope(Dispatchers.IO).launch {
-                                repository.dismissReminder(reminder.id)
-                                repository.complete(reminder.id, true)
-                            }
-                            finishCurrent()
-                        },
-                        onSnooze = { minutes ->
-                            CoroutineScope(Dispatchers.IO).launch {
-                                repository.dismissReminder(reminder.id)
-                            }
-                            TaskReminders.snooze(
-                                this@ReminderOverlayService,
-                                reminder.id,
-                                reminder.title,
-                                reminder.project,
-                                minutes,
+                    if (batchCount.value > 1) {
+                        if (showBatchList.value) {
+                            ReminderBatchListScreen(
+                                items = batchItems.toList(),
+                                lightContent = lightContent,
+                                onBack = { showBatchList.value = false },
+                                onDismiss = { dismissBatch() },
                             )
-                            finishCurrent()
-                        },
-                        onOpen = {
-                            startActivity(
-                                Intent(this@ReminderOverlayService, MainActivity::class.java).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                                        Intent.FLAG_ACTIVITY_CLEAR_TOP
-                                    putExtra("tab", "today")
-                                },
+                        } else {
+                            ReminderBatchScreen(
+                                count = batchCount.value,
+                                lightContent = lightContent,
+                                onViewAll = { showBatchList.value = true },
+                                onDismiss = { dismissBatch() },
                             )
-                            finishCurrent()
-                        },
-                        onDismiss = {
-                            CoroutineScope(Dispatchers.IO).launch {
-                                repository.dismissReminder(reminder.id)
-                            }
-                            finishCurrent()
-                        },
-                    )
+                        }
+                    } else {
+                        ReminderScreen(
+                            title = reminder.title,
+                            project = reminder.project,
+                            dueAt = reminder.dueAt,
+                            initialSnoozeMinutes = preferences.snoozeMinutes,
+                            lightContent = lightContent,
+                            onComplete = {
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    repository.dismissReminder(reminder.id)
+                                    repository.complete(reminder.id, true)
+                                }
+                                finishCurrent()
+                            },
+                            onSnooze = { minutes ->
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    repository.dismissReminder(reminder.id)
+                                }
+                                TaskReminders.snooze(
+                                    this@ReminderOverlayService,
+                                    reminder.id,
+                                    reminder.title,
+                                    reminder.project,
+                                    minutes,
+                                )
+                                finishCurrent()
+                            },
+                            onOpen = {
+                                startActivity(
+                                    Intent(this@ReminderOverlayService, MainActivity::class.java).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                            Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                        putExtra("tab", "today")
+                                    },
+                                )
+                                finishCurrent()
+                            },
+                            onDismiss = {
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    repository.dismissReminder(reminder.id)
+                                }
+                                finishCurrent()
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -275,6 +358,13 @@ class ReminderOverlayService :
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
     }
 
+    private fun removeOverlay() {
+        overlay?.let { view ->
+            runCatching { windowManager?.removeView(view) }
+        }
+        overlay = null
+    }
+
     /// Match the status and navigation bar icons to the reminder's type, so
     /// they stay legible now that the window paints underneath them.
     private fun applySystemBarAppearance(view: View, lightContent: Boolean) {
@@ -295,15 +385,57 @@ class ReminderOverlayService :
         }
     }
 
-    private fun pollRemoteDismissal() {
+    private fun pollRemoteDismissals() {
         scope.launch {
             while (isActive) {
                 delay(1500)
-                val active = current ?: continue
+                val all = buildList {
+                    current?.let { add(it) }
+                    addAll(pending)
+                }
+                if (all.isEmpty()) continue
                 val dismissed = runCatching { repository.dismissedReminders() }
                     .getOrDefault(emptySet())
-                if (active.id in dismissed) finishCurrent()
+                val hit = all.firstOrNull { it.id in dismissed } ?: continue
+                if (batchCount.value > 1) {
+                    removeFromBatch(hit)
+                } else {
+                    finishCurrent()
+                }
             }
+        }
+    }
+
+    private fun removeFromBatch(hit: Pending) {
+        NotificationManagerCompat.from(this).cancel(hit.id.hashCode())
+        if (hit.id == current?.id) {
+            current = pending.removeFirstOrNull()
+        } else {
+            pending.firstOrNull { it.id == hit.id }?.let { pending.remove(it) }
+            // The removed task may have been in the batch order above current;
+            // current is unaffected.
+        }
+        if (current == null) {
+            batchCount.value = 0
+            refreshBatchItems()
+            stopSelf()
+            return
+        }
+        batchCount.value = 1 + pending.size
+        refreshBatchItems()
+        if (batchCount.value > 1) {
+            updateBatchNotification()
+        } else {
+            // Only one is left: bring back the normal card with its controls.
+            showBatchList.value = false
+            val active = current ?: return
+            NotificationManagerCompat.from(this).cancel(BATCH_ID)
+            removeOverlay()
+            startForeground(
+                active.id.hashCode(),
+                buildReminderNotification(this, active.id, active.title, active.project, active.dueAt),
+            )
+            showOverlay(active)
         }
     }
 
@@ -334,20 +466,29 @@ class ReminderOverlayService :
         // foreground state first so the alarm card leaves the shade with the
         // reminder instead of lingering.
         runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+        active = false
         scope.cancel()
-        overlay?.let { view ->
-            runCatching { windowManager?.removeView(view) }
-        }
-        overlay = null
+        removeOverlay()
         windowManager = null
         audioFocusRequest?.let {
             getSystemService(AudioManager::class.java)?.abandonAudioFocusRequest(it)
         }
         audioFocusRequest = null
         current?.let { NotificationManagerCompat.from(this).cancel(it.id.hashCode()) }
+        NotificationManagerCompat.from(this).cancel(BATCH_ID)
         current = null
         pending.clear()
+        batchCount.value = 0
+        showBatchList.value = false
+        batchItems.clear()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         super.onDestroy()
+    }
+
+    companion object {
+        /// True while a reminder card owns the screen, so later alarms can be
+        /// added to the batch without posting another ringing notification.
+        @Volatile
+        var active = false
     }
 }

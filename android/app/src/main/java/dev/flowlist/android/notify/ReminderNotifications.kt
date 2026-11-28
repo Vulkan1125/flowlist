@@ -9,6 +9,9 @@ import dev.flowlist.android.MainActivity
 import dev.flowlist.android.R
 import dev.flowlist.android.data.PreferencesStore
 
+/** Notification id for the summary card when several reminders are due. */
+const val BATCH_ID = 0x464C42
+
 /** The high-priority alarm notification, shared by the receiver and overlay. */
 fun buildReminderNotification(
     context: Context,
@@ -73,5 +76,33 @@ fun buildReminderNotification(
         .setFullScreenIntent(fullScreen, true)
         .addAction(R.drawable.ic_stat_flowlist, "Dismiss", dismiss)
         .addAction(R.drawable.ic_stat_flowlist, snoozeLabel, snooze)
+        .build()
+}
+
+
+/** One silent summary for a batch of reminders due together. */
+fun buildBatchNotification(context: Context, count: Int): android.app.Notification {
+    val openApp = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        putExtra("tab", "today")
+    }
+    val content = PendingIntent.getActivity(
+        context,
+        BATCH_ID,
+        openApp,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+    val title = if (count == 1) "1 reminder due" else "$count reminders due"
+    return NotificationCompat.Builder(context, TaskReminders.CHANNEL)
+        .setSmallIcon(R.drawable.ic_stat_flowlist)
+        .setContentTitle(title)
+        .setContentText("Open Flowlist to review them.")
+        .setCategory(NotificationCompat.CATEGORY_ALARM)
+        .setPriority(NotificationCompat.PRIORITY_MAX)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setOnlyAlertOnce(true)
+        .setSilent(true)
+        .setContentIntent(content)
+        .setAutoCancel(false)
         .build()
 }

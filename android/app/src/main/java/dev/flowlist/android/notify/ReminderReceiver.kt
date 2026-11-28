@@ -15,6 +15,23 @@ class ReminderReceiver : BroadcastReceiver() {
         val dueAt = intent.getLongExtra("due_at", System.currentTimeMillis())
         TaskReminders.markFired(context, taskId)
 
+        // A reminder card is already on screen: add this task to the batch
+        // silently instead of ringing one alarm after another.
+        if (ReminderOverlayService.active) {
+            runCatching {
+                androidx.core.content.ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, ReminderOverlayService::class.java).apply {
+                        putExtra("task_id", taskId)
+                        putExtra("title", title)
+                        putExtra("project", project)
+                        putExtra("due_at", dueAt)
+                    },
+                )
+            }
+            return
+        }
+
         if (!DueNotifications.canPost(context)) return
         TaskReminders.ensureChannel(context)
 
@@ -33,6 +50,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val keyguard = context.getSystemService(android.app.KeyguardManager::class.java)
         val canOverlay = android.provider.Settings.canDrawOverlays(context)
         if (keyguard?.isKeyguardLocked == false && canOverlay) {
+            ReminderOverlayService.active = true
             runCatching {
                 androidx.core.content.ContextCompat.startForegroundService(
                     context,
@@ -43,6 +61,8 @@ class ReminderReceiver : BroadcastReceiver() {
                         putExtra("due_at", dueAt)
                     },
                 )
+            }.onFailure {
+                ReminderOverlayService.active = false
             }
         }
 
